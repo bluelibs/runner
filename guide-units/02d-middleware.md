@@ -3,7 +3,7 @@
 Middleware wraps tasks and resources so cross-cutting behavior stays explicit and reusable instead of leaking into business logic.
 
 ```typescript
-import { r } from "@bluelibs/runner";
+import { errors, r } from "@bluelibs/runner";
 
 type AuthConfig = { requiredRole: string };
 
@@ -134,7 +134,7 @@ const authMiddleware = r.middleware
   .run(async ({ task, next }, _deps, config) => {
     const input = task.input;
     if (input.user.role !== config.requiredRole) {
-      throw new Error("Insufficient permissions");
+      throw errors.genericError.new({ message: "Insufficient permissions" });
     }
 
     const output = await next(input);
@@ -226,7 +226,7 @@ Notes:
 import { middleware, r, resources } from "@bluelibs/runner";
 
 const expensiveTask = r
-  .task("app.tasks.expensive")
+  .task("expensiveTask")
   .middleware([
     middleware.task.cache.with({
       // lru-cache options by default
@@ -243,7 +243,7 @@ const expensiveTask = r
 
 // Resource-level cache configuration
 const app = r
-  .resource("app.cache")
+  .resource("app")
   .register([
     resources.cache.with({
       totalBudgetBytes: 50 * 1024 * 1024, // Shared 50MB budget across built-in task caches
@@ -269,7 +269,7 @@ Node includes an official Redis-backed cache provider built on top of the option
 import { middleware, r, resources } from "@bluelibs/runner/node";
 
 const cachedTask = r
-  .task("app.tasks.cached")
+  .task("cachedTask")
   .middleware([
     middleware.task.cache.with({
       ttl: 60 * 1000,
@@ -311,7 +311,7 @@ import { r, resources } from "@bluelibs/runner";
 import Redis from "ioredis";
 
 const redis = r
-  .resource<{ url: string }>("app.resources.redis")
+  .resource<{ url: string }>("redis")
   .init(async ({ url }) => new Redis(url))
   .dispose(async (client) => client.disconnect())
   .build();
@@ -350,7 +350,7 @@ class RedisCache {
 }
 
 const redisCacheProvider = r
-  .resource("app.resources.cacheProvider.redis")
+  .resource("redisCacheProvider")
   .dependencies({ redis })
   .init(async (_config, { redis }) => {
     return async ({ options }) => new RedisCache(redis, options.ttl);
@@ -376,7 +376,7 @@ import { middleware, r } from "@bluelibs/runner";
 const cacheJournalKeys = middleware.task.cache.journalKeys;
 
 const cacheLogger = r.middleware
-  .task("app.middleware.cacheLogger")
+  .task("cacheLogger")
   .run(async ({ task, next, journal }) => {
     const result = await next(task.input);
     const wasHit = journal.get(cacheJournalKeys.hit);
@@ -386,7 +386,7 @@ const cacheLogger = r.middleware
   .build();
 
 const myTask = r
-  .task("app.tasks.cached")
+  .task("cachedTask")
   .middleware([cacheLogger, middleware.task.cache.with({ ttl: 60000 })])
   .run(async () => "result")
   .build();
@@ -409,7 +409,7 @@ const dbLimit = middleware.task.concurrency.with({
 });
 
 const heavyTask = r
-  .task("app.tasks.heavy")
+  .task("heavyTask")
   .middleware([limitMiddleware])
   .run(async () => {
     // Max 5 of these will run in parallel
@@ -431,7 +431,7 @@ Trip repeated failures early. When an external service starts failing, the circu
 import { middleware, r } from "@bluelibs/runner";
 
 const resilientTask = r
-  .task("app.tasks.remoteCall")
+  .task("remoteCall")
   .middleware([
     middleware.task.circuitBreaker.with({
       failureThreshold: 5, // Trip after 5 failures
@@ -461,7 +461,7 @@ import { middleware, r } from "@bluelibs/runner";
 const circuitBreakerJournalKeys = middleware.task.circuitBreaker.journalKeys;
 
 const myTask = r
-  .task("app.tasks.monitored")
+  .task("monitoredTask")
   .middleware([
     middleware.task.circuitBreaker.with({
       failureThreshold: 5,
@@ -486,7 +486,7 @@ import { middleware, r } from "@bluelibs/runner";
 
 // Debounce: Run only after 500ms of inactivity
 const saveTask = r
-  .task("app.tasks.save")
+  .task("saveTask")
   .middleware([middleware.task.debounce.with({ ms: 500 })])
   .run(async (data) => {
     // Assuming db is available in the closure
@@ -496,7 +496,7 @@ const saveTask = r
 
 // Throttle: Run at most once every 1000ms
 const logTask = r
-  .task("app.tasks.log")
+  .task("logTask")
   .middleware([middleware.task.throttle.with({ ms: 1000 })])
   .run(async (msg) => {
     console.log(msg);
@@ -514,10 +514,10 @@ const logTask = r
 Define what happens when a task fails. Fallback middleware lets you return a default value or execute an alternative path gracefully.
 
 ```typescript
-import { middleware, r } from "@bluelibs/runner";
+import { errors, middleware, r } from "@bluelibs/runner";
 
 const getPrice = r
-  .task("app.tasks.getPrice")
+  .task("getPrice")
   .middleware([
     middleware.task.fallback.with({
       // Can be a static value, a function, or another task
@@ -543,7 +543,7 @@ import { middleware, r } from "@bluelibs/runner";
 const fallbackJournalKeys = middleware.task.fallback.journalKeys;
 
 const fallbackLogger = r.middleware
-  .task("app.middleware.fallbackLogger")
+  .task("fallbackLogger")
   .run(async ({ task, next, journal }) => {
     const result = await next(task.input);
     const wasActivated = journal.get(fallbackJournalKeys.active);
@@ -554,13 +554,13 @@ const fallbackLogger = r.middleware
   .build();
 
 const myTask = r
-  .task("app.tasks.withFallback")
+  .task("taskWithFallback")
   .middleware([
     fallbackLogger,
     middleware.task.fallback.with({ fallback: "default" }),
   ])
   .run(async () => {
-    throw new Error("Primary failed");
+    throw errors.genericError.new({ message: "Primary failed" });
   })
   .build();
 ```
@@ -573,7 +573,7 @@ Protect your system from abuse by limiting the number of requests in a specific 
 import { middleware, r } from "@bluelibs/runner";
 
 const sensitiveTask = r
-  .task("app.tasks.login")
+  .task("loginTask")
   .middleware([
     middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
@@ -603,7 +603,7 @@ import { middleware, r } from "@bluelibs/runner";
 const rateLimitJournalKeys = middleware.task.rateLimit.journalKeys;
 
 const myTask = r
-  .task("app.tasks.rateLimited")
+  .task("rateLimitedTask")
   .middleware([middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
   .run(async (_input, _deps, context) => {
     const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
@@ -625,11 +625,11 @@ Fail fast when a task must run inside a specific async context. This middleware 
 import { r } from "@bluelibs/runner";
 
 const RequestContext = r
-  .asyncContext<{ requestId: string }>("app.asyncContexts.request")
+  .asyncContext<{ requestId: string }>("requestContext")
   .build();
 
 const getAuditTrail = r
-  .task("app.tasks.getAuditTrail")
+  .task("getAuditTrail")
   // Shortcut: creates middleware.task.requireContext with this context
   .middleware([RequestContext.require()])
   .run(async () => {
@@ -645,11 +645,11 @@ If you prefer the explicit middleware form, which is useful in documentation and
 import { middleware, r } from "@bluelibs/runner";
 
 const TenantContext = r
-  .asyncContext<{ tenantId: string }>("app.asyncContexts.tenant")
+  .asyncContext<{ tenantId: string }>("tenantContext")
   .build();
 
 const listProjects = r
-  .task("app.tasks.listProjects")
+  .task("listProjects")
   .middleware([middleware.task.requireContext.with({ context: TenantContext })])
   .run(async () => {
     const { tenantId } = TenantContext.use();
@@ -676,7 +676,7 @@ When things go wrong but are likely to work on a subsequent attempt, the built-i
 import { middleware, r } from "@bluelibs/runner";
 
 const flakyApiCall = r
-  .task("app.tasks.flakyApiCall")
+  .task("flakyApiCall")
   .middleware([
     middleware.task.retry.with({
       retries: 5, // Try up to 5 times
@@ -705,7 +705,7 @@ It also works on resources, which is especially useful for startup initializatio
 import { middleware, r } from "@bluelibs/runner";
 
 const database = r
-  .resource<{ connectionString: string }>("app.db")
+  .resource<{ connectionString: string }>("database")
   .middleware([
     middleware.resource.retry.with({
       retries: 4,
@@ -731,7 +731,7 @@ import { middleware, r } from "@bluelibs/runner";
 const retryJournalKeys = middleware.task.retry.journalKeys;
 
 const myTask = r
-  .task("app.tasks.retryable")
+  .task("retryableTask")
   .middleware([middleware.task.retry.with({ retries: 5 })])
   .run(async (_input, _deps, context) => {
     const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
@@ -751,7 +751,7 @@ The built-in timeout middleware prevents operations from hanging indefinitely by
 import { middleware, r } from "@bluelibs/runner";
 
 const apiTask = r
-  .task("app.tasks.externalApi")
+  .task("externalApiTask")
   .middleware([
     // Works for tasks and resources via middleware.resource.timeout
     middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
@@ -764,7 +764,7 @@ const apiTask = r
 
 // Combine with retry for robust error handling
 const resilientTask = r
-  .task("app.tasks.resilient")
+  .task("resilientTask")
   .middleware([
     // Order matters here. Imagine a big onion.
     // Works for resources as well via middleware.resource.retry
@@ -802,7 +802,7 @@ Resource timeouts help prevent startup hangs when a dependency never becomes rea
 import { middleware, r } from "@bluelibs/runner";
 
 const messageBroker = r
-  .resource("app.broker")
+  .resource("broker")
   .middleware([
     middleware.resource.timeout.with({ ttl: 15000 }),
     middleware.resource.retry.with({ retries: 2 }),
@@ -873,7 +873,7 @@ Combine them in the correct order. Like an onion, the outer layers handle broade
 import { r } from "@bluelibs/runner";
 
 const resilientTask = r
-  .task("app.tasks.ultimateResilience")
+  .task("ultimateResilience")
   .middleware([
     // Outer layer: Fallback (the absolute Plan B if everything below fails)
     middleware.task.fallback.with({
@@ -905,8 +905,6 @@ Best practices for orchestration:
 3. **Retry wraps Timeout**: Ensure the timeout applies to the _individual_ attempt, so the retry logic can kick in when one attempt hangs.
 4. **Fallback last**: The fallback should be the very last thing that happens if the entire resilience stack fails.
 
-> **runtime:** "Resilience Orchestration: layering defense-in-depth like a paranoid onion. I'm counting your turns, checking the circuit, spinning the retry wheel, and holding a stopwatch—all so you can sleep through a minor server fire."
-
 ### Middleware Interception
 
 Use interception when behavior must wrap the middleware composition layer globally or target a single middleware across all its uses.
@@ -925,7 +923,7 @@ Register interceptors during resource `init` before the runtime locks.
 import { r, resources } from "@bluelibs/runner";
 
 const observabilityInstaller = r
-  .resource("app.observability")
+  .resource("observability")
   .dependencies({
     middlewareManager: resources.middlewareManager,
     logger: resources.logger,
@@ -955,5 +953,3 @@ middlewareManager.interceptMiddleware(authMiddleware, async (next, input) => {
 ```
 
 For context enforcement, use `middleware.task.requireContext.with({ context })` to assert that a specific `IAsyncContext` is present before a task runs. If the context is missing, the task fails immediately with `middlewareContextRequiredError`.
-
-> **runtime:** "Middleware: the onion pattern, except every layer has opinions and a config object. I peel them in order, cry a little, and hand you the result."

@@ -6,15 +6,27 @@
 
 Runner is a TypeScript-first toolkit for building an `app` out of small, typed building blocks. You can find more details and a visual overview at [runner.bluelibs.com](https://runner.bluelibs.com/).
 
-- **Tasks**: async functions with explicit `dependencies`, middleware, and input/output validation
-- **Resources**: singletons with `init`/`dispose` lifecycle (databases, clients, servers, caches)
+- **Tasks**: async business actions with explicit `dependencies`, middleware, and input/output validation
+- **Resources**: singletons with a four-phase lifecycle: `init`, `ready`, `cooldown`, `dispose`
 - **Reliability Middleware**: built-in `retry`, `timeout`, `circuitBreaker`, `cache`, and `rateLimit`
 - **Remote Lanes**: cross-process execution (the "Distributed Monolith") with zero call-site changes
 - **Durable Workflows**: persistent, crash-recoverable async logic for Node.js
 - **Events & hooks**: typed signals and subscribers for decoupling
-- **Runtime control**: run, observe, test, and dispose your `app` predictably
+- **Runtime control**: run, observe, test, pause, recover, and dispose your `app` predictably
 
 The goal is simple: keep dependencies explicit, keep lifecycle predictable, and make your runtime easy to control in production and in tests.
+
+## Versioning & Support
+
+Runner follows a simple support policy so teams can plan upgrades without guesswork.
+
+- **`6.x`**: actively maintained. New features, improvements, bug fixes, and documentation updates land here first.
+- **`5.x`**: LTS through **December 31, 2026**. Critical fixes and important maintenance can continue there, but new development is focused on `6.x`.
+
+If you are starting a new project, use `6.x`.
+If you are on `5.x`, you have a stable upgrade window through the end of 2026.
+
+See [Support & Release Policy](./readmes/ENTERPRISE.md) for the full versioning and support policy.
 
 <p align="center">
 <a href="https://github.com/bluelibs/runner/actions/workflows/ci.yml"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
@@ -26,49 +38,50 @@ The goal is simple: keep dependencies explicit, keep lifecycle predictable, and 
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { z } from "zod";
 
-// resources are singletons with lifecycle management and async construction
-const db = r
-  .resource("app.db")
-  .init(async () => {
-    const conn = await postgres.connect(process.env.DB_URL);
-    return conn;
-  })
+const userCreated = r
+  .event<{ id: string; email: string }>("userCreated")
   .build();
 
-const mailer = r
-  .resource("app.mailer")
-  .init(async () => ({
-    sendWelcome: async (email: string) => {
-      console.log(`Sending welcome email to ${email}`);
-    },
-  }))
+const userStore = r
+  .resource("userStore")
+  .init(async () => new Map<string, { id: string; email: string }>())
   .build();
 
-// Define a task with dependencies, middleware, and zod validation
 const createUser = r
-  .task("users.create")
-  .dependencies({ db, mailer })
-  .middleware([middleware.task.retry.with({ retries: 3 })])
-  .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
-  .run(async (input, { db, mailer }) => {
-    const user = await db.users.insert(input);
-    await mailer.sendWelcome(user.email);
+  .task<{ email: string }>("createUser")
+  .dependencies({ userStore, userCreated })
+  .run(async (input, { userStore, userCreated }) => {
+    const user = { id: "user-1", email: input.email };
+
+    userStore.set(user.id, user);
+    await userCreated(user);
+
     return user;
   })
   .build();
 
-// Compose resources and run your application
+const sendWelcomeEmail = r
+  .hook("sendWelcomeEmail")
+  .on(userCreated)
+  .run(async (event) => {
+    console.log(`Welcome ${event.data.email}`);
+  })
+  .build();
+
 const app = r
-  .resource("app") // top-level app resource
-  .register([db, mailer, createUser]) // register all elements
+  .resource("app")
+  .register([userStore, createUser, sendWelcomeEmail])
   .build();
 
 const runtime = await run(app);
-await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
-// await runtime.dispose() when you are done.
+await runtime.runTask(createUser, { email: "ada@example.com" });
+await runtime.dispose();
 ```
+
+This example is intentionally runnable with only `@bluelibs/runner`, `typescript`, and `tsx`.
+
+> **Note:** User-defined ids are local ids. Prefer `createUser`, `userStore`, and `sendWelcomeEmail`. Runner composes canonical ids such as `app.tasks.createUser` at runtime.
 
 ---
 

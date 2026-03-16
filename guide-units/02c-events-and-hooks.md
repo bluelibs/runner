@@ -1,6 +1,6 @@
 ## Events and Hooks
 
-Events let different parts of your app communicate without direct references. Hooks subscribe to those events so producers stay decoupled from listeners.
+Events let different parts of your app communicate without direct references. Hooks subscribe to those events so producers stay decoupled from downstream reactions.
 
 ```typescript
 import { Match, r } from "@bluelibs/runner";
@@ -36,15 +36,15 @@ const app = r
   .build();
 ```
 
-**What you just learned**: Events are typed signals, hooks subscribe to them, and tasks emit events through dependency injection. Producers stay decoupled from listeners.
+**What you just learned**: Events are typed signals, hooks subscribe to them, and tasks emit events through dependency injection. Producers stay decoupled from hook execution.
 
 Events follow a few core rules that keep the system predictable:
 
 - events carry typed payloads validated by `.payloadSchema()`
 - hooks subscribe with `.on(event)` or `.on(onAnyOf(...))`
-- `.order(priority)` controls listener priority
+- `.order(priority)` controls hook priority
 - wildcard `.on("*")` listens to all events except those tagged with `tags.excludeFromGlobalHooks`
-- `event.stopPropagation()` prevents downstream listeners from running
+- `event.stopPropagation()` prevents downstream hooks from running
 
 ### Hooks
 
@@ -116,7 +116,7 @@ For transactional events, fail-fast rollback semantics are enforced regardless o
 
 ### Event Cancellation
 
-Injected event emitters accept a cooperative signal, and listeners receive it as `event.signal` when the emission is cancellation-aware:
+Injected event emitters accept a cooperative signal, and hooks receive it as `event.signal` when the emission is cancellation-aware:
 
 ```typescript
 const controller = new AbortController();
@@ -129,9 +129,9 @@ Cancellation behavior:
 - `signal` is optional
 - top-level callers can pass `emit(payload, { signal })`
 - with execution context enabled, nested task and event dependency calls can inherit the ambient execution signal automatically
-- sequential events stop admitting new listeners once cancelled
+- sequential events stop admitting new hooks once cancelled
 - parallel events let the current batch settle, then stop before the next batch
-- transactional events roll back already-completed listeners before the cancellation escapes
+- transactional events roll back already-completed hooks before the cancellation escapes
 
 `event.signal` stays `undefined` until a real source is explicitly provided or inherited from the current execution. Internal framework code can call `eventManager.emit(event, payload, { source, signal })` when it needs explicit source control.
 
@@ -183,9 +183,11 @@ const logAllEventsHook = r
   .build();
 ```
 
-Use `tags.excludeFromGlobalHooks` when an event should stay out of wildcard listeners.
+Use `tags.excludeFromGlobalHooks` when an event should stay out of wildcard hooks.
 
 ```typescript
+import { tags, r } from "@bluelibs/runner";
+
 const internalEvent = r
   .event("internalEvent")
   .tags([tags.excludeFromGlobalHooks])
@@ -242,7 +244,7 @@ const systemReadyHook = r
 
 ### `stopPropagation()`
 
-Use `stopPropagation()` when a higher-priority hook must prevent later listeners from running.
+Use `stopPropagation()` when a higher-priority hook must prevent later hooks from running.
 
 ```typescript
 // Assuming: criticalAlert is an event defined elsewhere.
@@ -271,7 +273,7 @@ Always await the `next` function and pass the correct arguments.
 import { r, resources } from "@bluelibs/runner";
 
 const eventTelemetry = r
-  .resource("app.eventTelemetry")
+  .resource("eventTelemetry")
   .dependencies({
     eventManager: resources.eventManager,
     logger: resources.logger,
@@ -298,5 +300,3 @@ const eventTelemetry = r
   })
   .build();
 ```
-
-> **runtime:** "Events and hooks: the pub/sub contract where nobody reads the terms. You emit, I deliver, hooks react, and somehow the welcome email always fires twice in staging."

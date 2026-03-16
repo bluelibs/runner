@@ -1,198 +1,122 @@
 ## Observability Strategy (Logs, Metrics, and Traces)
 
-Runner gives you primitives for all three observability signals:
+Runner gives you integration points for the three core observability signals:
 
-- **Logs**: structured application/runtime events via `resources.logger`
-- **Metrics**: numeric health and performance indicators from your resources/tasks/middleware
-- **Traces**: distributed timing and call-path correlation using your tracing stack (for example OpenTelemetry)
+- **Logs**: structured runtime and business events through `resources.logger`
+- **Metrics**: counters, timers, and gauges you record from interceptors, tasks, and resources
+- **Traces**: correlation ids and execution boundaries that you can bridge into your tracing stack
 
-Use all three together. Logs explain what happened, metrics tell you when it is happening repeatedly, and traces show where latency accumulates.
-Runner provides the integration points (interceptors, context propagation, structured logs), while tracer backends are installed and configured by your application.
+Use all three together. Logs explain what happened, metrics tell you whether it keeps happening, and traces show where latency and failures accumulate.
 
-For resource-level operational status, Runner also supports optional async `resource.health(...)` probes and aggregates them through `resources.health.getHealth(...)` and `runtime.getHealth(...)`. Only resources that explicitly opt in are counted, and sleeping lazy resources are skipped, which keeps the report aligned with the checks you actually trust.
+For resource-level operational status, Runner also supports optional `resource.health(...)` probes and aggregates them through `resources.health.getHealth(...)` and `runtime.getHealth(...)`. Health is opt-in and intentionally separate from logs/metrics/traces.
 
 ### Naming Conventions
 
 Keep names stable and low-cardinality:
 
-- **Metric names**: `{domain}_{unit}` or `{domain}_{action}_{unit}` (for example: `tasks_duration_ms`, `queue_wait_ms`, `http_requests_total`)
-- **Metric labels**: prefer bounded values (`task_id`, `result`, `env`), avoid user ids/emails/request bodies
-- **Trace spans**: `{component}:{operation}` (for example: `task:app.tasks.createUser`, `resource:app.db.init`)
-- **Log source**: always include a stable `source` (task/resource id)
+- **Metric names**: `{domain}_{action}_{unit}` such as `tasks_total`, `tasks_duration_ms`, `http_requests_total`
+- **Metric labels**: bounded values such as `task_id`, `result`, `env`, `dependency`
+- **Trace span names**: `{component}:{operation}` such as `task:createUser` or `resource:database.init`
+- **Log source**: a stable component id or subsystem name such as `createUser`, `database`, or `billing.http`
 
-### Baseline Production Dashboard
-
-At minimum, chart these for every service:
-
-- Request/task throughput (`requests_total`, `tasks_total`)
-- Error rate (`requests_failed_total` / `tasks_failed_total`)
-- Latency percentiles (`p50`, `p95`, `p99`)
-- Resource saturation (queue depth, semaphore utilization, event-loop lag)
-- Dependency health (database/cache/external API failure and latency)
-
-### Baseline Alerts
-
-Start with practical, non-noisy alerts:
-
-- Error rate above threshold for 5+ minutes
-- P95 latency above SLO for 10+ minutes
-- No successful requests/tasks for a critical service window
-- Dependency outage (consecutive failures crossing a threshold)
-- Event-loop lag sustained above operational limit
-
-### Correlation Checklist
-
-For incident response, ensure each signal can be joined:
-
-- Emit `requestId` / `correlationId` in logs
-- Attach task/resource ids to spans and logs
-- Keep metric labels aligned with the same service/component ids
-
----
+Avoid user ids, emails, payload bodies, or request paths with unbounded values as labels. Cardinality explosions are very educational right until they start billing you.
 
 ## Logging
 
-_Structured logging with predictable shape and pluggable transports_
-
-Runner ships a structured logger with consistent fields, onLog hooks, and multiple print strategies so you can pipe logs to consoles or external transports without custom glue.
+Runner ships a structured logger with consistent fields, print controls, and `onLog(...)` hooks for custom transports.
 
 ### Basic Logging
 
 ```typescript
-import { r } from "@bluelibs/runner";
+import { resources, r, run } from "@bluelibs/runner";
 
 const app = r
   .resource("app")
   .dependencies({ logger: resources.logger })
   .init(async (_config, { logger }) => {
-    logger.info("Starting business process"); //  Visible by default
-    logger.warn("This might take a while"); //  Visible by default
-    logger.error("Oops, something went wrong", {
-      //  Visible by default
-      error: new Error("Database connection failed"),
+    await logger.info("Starting business process");
+    await logger.warn("This may take a while");
+    await logger.error("Database connection failed", {
+      error: new Error("Connection refused"),
     });
-    logger.critical("System is on fire", {
-      //  Visible by default
-      data: { temperature: "9000°C" },
+    await logger.critical("System is on fire", {
+      data: { subsystem: "billing" },
     });
-    logger.debug("Debug information"); //  Hidden by default
-    logger.trace("Very detailed trace"); //  Hidden by default
-
-    logger.onLog(async (log) => {
-      // Sub-loggers instantiated .with() share the same log callbacks.
-      // Catch logs
-    });
+    await logger.debug("Debug details");
+    await logger.trace("Very detailed trace");
   })
   .build();
 
-run(app, {
+await run(app, {
   logs: {
-    printThreshold: "info", // use null to disable printing, and hook into onLog(), if in 'test' mode default is null unless specified
-    printStrategy: "pretty", // you also have "plain", "json" and "json-pretty" with circular dep safety for JSON formatting.
-    bufferLogs: false, // Starts sending out logs only after the system emits the ready event. Useful for when you're sending them out.
+    printThreshold: "info",
+    printStrategy: "pretty",
+    bufferLogs: true,
   },
 });
 ```
 
+`bufferLogs: true` buffers log output until startup completes. Leave it `false` when you want logs printed as they happen during bootstrap.
+
 ### Log Levels
 
-The logger supports six log levels with increasing severity:
+The logger supports six levels:
 
-| Level      | Severity | When to Use                                 | Color   |
-| ---------- | -------- | ------------------------------------------- | ------- |
-| `trace`    | 0        | Ultra-detailed debugging info               | Gray    |
-| `debug`    | 1        | Development and debugging information       | Cyan    |
-| `info`     | 2        | General information about normal operations | Green   |
-| `warn`     | 3        | Something's not right, but still working    | Yellow  |
-| `error`    | 4        | Errors that need attention                  | Red     |
-| `critical` | 5        | System-threatening issues                   | Magenta |
+| Level      | Use for                                           |
+| ---------- | ------------------------------------------------- |
+| `trace`    | Ultra-detailed debugging                          |
+| `debug`    | Development-time diagnostics                      |
+| `info`     | Normal lifecycle and business progress            |
+| `warn`     | Degraded but still functioning behavior           |
+| `error`    | Failures that need attention                      |
+| `critical` | System-threatening failures or emergency fallback |
 
-```typescript
-// All log levels are available as methods
-logger.trace("Ultra-detailed debugging info");
-logger.debug("Development debugging");
-logger.info("Normal operation");
-logger.warn("Something's fishy");
-logger.error("Houston, we have a problem");
-logger.critical("DEFCON 1: Everything is broken");
-```
+### Print Controls
+
+Use `run(app, { logs })` to control console output:
+
+| Option           | Meaning                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| `printThreshold` | Lowest printed level. Use `null` to disable console printing entirely.                   |
+| `printStrategy`  | `"pretty"`, `"plain"`, `"json"`, or `"json_pretty"`.                                     |
+| `bufferLogs`     | When `true`, buffer logs until startup completes, then flush them in order.              |
+
+> **Note:** In `NODE_ENV=test`, Runner defaults `logs.printThreshold` to `null`. If you want test logs printed, set `logs.printThreshold` explicitly.
 
 ### Structured Logging
 
-The logger accepts rich, structured data that makes debugging actually useful:
-
-```typescript
-const userTask = r
-  .task("createUser")
-  .dependencies({ logger: resources.logger })
-  .run(async (input, { logger }) => {
-    // Basic message
-    logger.info("Creating new user");
-
-    // With structured data
-    logger.info("User creation attempt", {
-      source: userTask.id,
-      data: {
-        email: input.email,
-        registrationSource: "web",
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    // With error information
-    try {
-      // Replace with your own persistence/service call
-      const user = await Promise.resolve({
-        id: "user-1",
-        email: input.email,
-      });
-      logger.info("User created successfully", {
-        data: { userId: user.id, email: user.email },
-      });
-    } catch (error) {
-      const safeError =
-        error instanceof Error ? error : new Error(String(error));
-
-      logger.error("User creation failed", {
-        error: safeError,
-        data: {
-          attemptedEmail: input.email,
-        },
-      });
-    }
-  })
-  .build();
-```
-
-### Add Structured Logging Early
-
-When production visibility is weak, structured task logging is usually the first policy worth adding.
+Structured data makes logs useful after the adrenaline hits.
 
 ```typescript
 import { resources, r } from "@bluelibs/runner";
 
-const chargeCard = async (input: { orderId: string; amount: number }) => ({
-  id: `txn:${input.orderId}`,
-});
-
-const processPayment = r
-  .task("processPayment")
+const createUser = r
+  .task<{ email: string }>("createUser")
   .dependencies({ logger: resources.logger })
-  .run(async (input: { orderId: string; amount: number }, { logger }) => {
-    await logger.info("Processing payment", {
-      data: { orderId: input.orderId, amount: input.amount },
+  .run(async (input, { logger }) => {
+    await logger.info("User creation attempt", {
+      source: "createUser",
+      data: {
+        email: input.email,
+        registrationSource: "web",
+      },
     });
 
     try {
-      const result = await chargeCard(input);
-      await logger.info("Payment successful", {
-        data: { transactionId: result.id },
+      const user = await Promise.resolve({
+        id: "user-1",
+        email: input.email,
       });
-      return result;
+
+      await logger.info("User created successfully", {
+        data: { userId: user.id },
+      });
+
+      return user;
     } catch (error) {
-      await logger.error("Payment failed", {
+      await logger.error("User creation failed", {
         error,
-        data: { orderId: input.orderId, amount: input.amount },
+        data: { attemptedEmail: input.email },
       });
       throw error;
     }
@@ -200,347 +124,230 @@ const processPayment = r
   .build();
 ```
 
-This keeps operational context close to the business action without inventing ad hoc logging conventions per task.
-
 ### Context-Aware Logging
 
-Create logger instances with bound context for consistent metadata across related operations:
+Use `logger.with(...)` when a request, tenant, or workflow needs stable metadata across multiple log calls.
 
 ```typescript
-const RequestContext = r
-  .asyncContext<{ requestId: string; userId: string }>("request")
+import { resources, r } from "@bluelibs/runner";
+
+const requestContext = r
+  .asyncContext<{ requestId: string; userId: string }>("requestContext")
   .build();
 
-const requestHandler = r
-  .task("handleRequest")
+const handleRequest = r
+  .task<{ path: string }>("handleRequest")
   .dependencies({ logger: resources.logger })
-  .run(async (requestData, { logger }) => {
-    const request = RequestContext.use();
+  .run(async (input, { logger }) => {
+    const request = requestContext.use();
 
-    // Create a contextual logger with bound metadata with source and context
     const requestLogger = logger.with({
-      // Logger already comes with the source set. You can override it or add more context as needed.
-      source: requestHandler.id,
+      source: "http.request",
       additionalContext: {
         requestId: request.requestId,
         userId: request.userId,
       },
     });
 
-    // All logs from this logger will include the bound context
-    requestLogger.info("Processing request", {
-      data: { endpoint: requestData.path },
-    });
-
-    requestLogger.debug("Validating input", {
-      data: { inputSize: JSON.stringify(requestData).length },
-    });
-
-    // Context is automatically included in all log events
-    requestLogger.error("Request processing failed", {
-      error: new Error("Invalid input"),
-      data: { stage: "validation" },
+    await requestLogger.info("Processing request", {
+      data: { path: input.path },
     });
   })
   .build();
 ```
 
-### Integration with Winston
+### Transport Hooks
 
-Want to use Winston as your transport? No problem - integrate it seamlessly:
+`logger.onLog(...)` is the simplest bridge to external sinks such as Winston, Datadog, OTLP exporters, or a custom transport resource.
 
 ```typescript
-import winston from "winston";
-import { r } from "@bluelibs/runner";
+import { resources, r } from "@bluelibs/runner";
 
-// Create Winston logger, put it in a resource if used from various places.
-const winstonLogger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json(),
-  ),
-  transports: [
-    new winston.transports.File({ filename: "error.log", level: "error" }),
-    new winston.transports.File({ filename: "combined.log" }),
-    new winston.transports.Console({
-      format: winston.format.simple(),
-    }),
-  ],
-});
-
-// Bridge BlueLibs logs to Winston using hooks
-const winstonBridgeResource = r
-  .resource("winstonBridge")
+// Assuming `shipLogToCollector` is your transport function.
+const logShipping = r
+  .resource("logShipping")
   .dependencies({ logger: resources.logger })
   .init(async (_config, { logger }) => {
-    // Map log levels (BlueLibs -> Winston)
-    const levelMapping = {
-      trace: "silly",
-      debug: "debug",
-      info: "info",
-      warn: "warn",
-      error: "error",
-      critical: "error", // Winston doesn't have critical, use error
-    };
-
-    logger.onLog((log) => {
-      // Convert Runner log to Winston format
-      const winstonMeta = {
-        source: log.source,
-        timestamp: log.timestamp,
-        data: log.data,
-        context: log.context,
-        ...(log.error && { error: log.error }),
-      };
-
-      const winstonLevel = levelMapping[log.level] || "info";
-      winstonLogger.log(winstonLevel, log.message, winstonMeta);
+    logger.onLog(async (log) => {
+      await shipLogToCollector(log);
     });
   })
   .build();
 ```
 
-### Custom Log Formatters
+## Metrics
 
-Want to customize how logs are printed? You can override the print behavior:
+Runner does not ship a metrics backend. The intended pattern is: install counters/timers in interceptors, then publish them to Prometheus, OpenTelemetry metrics, StatsD, or your own telemetry service.
 
-```typescript
-// Custom logger with JSON output
-class JSONLogger extends Logger {
-  print(log: ILog) {
-    console.log(
-      JSON.stringify(
-        {
-          timestamp: log.timestamp.toISOString(),
-          level: log.level.toUpperCase(),
-          source: log.source,
-          message: log.message,
-          data: log.data,
-          context: log.context,
-          error: log.error,
-        },
-        null,
-        2,
-      ),
-    );
-  }
-}
-
-// Custom logger resource
-const customLogger = r
-  .resource("customLogger")
-  .init(
-    async () =>
-      new JSONLogger({
-        printThreshold: "info",
-        printStrategy: "json",
-        bufferLogs: false,
-      }),
-  )
-  .build();
-
-// Or you could simply add it as "resources.logger" and override the default logger
-```
-
-### Log Structure
-
-Every log event contains:
+### Task Metrics with `taskRunner.intercept(...)`
 
 ```typescript
-interface ILog {
-  level: LogLevels; // "trace" | "debug" | "info" | "warn" | "error" | "critical"
-  source?: string; // Where the log came from
-  message: unknown; // The main log message (can be object or string)
-  timestamp: Date; // When the log was created
-  error?: {
-    // Structured error information
-    name: string;
-    message: string;
-    stack?: string;
-  };
-  data?: Record<string, unknown>; // Additional structured data, it's about the log itself
-  context?: Record<string, unknown>; // Bound context from logger.with(), it's about the context in which the log was created
-}
-```
+import { resources, r } from "@bluelibs/runner";
 
-## Debug Resource
-
-_Debug hooks for tasks, resources, and events without shipping extra overhead when disabled_
-
-The Debug Resource instruments the execution pipeline so you can trace task/resource lifecycle, inputs/outputs, and events. When not registered it stays out of the hot path; when enabled you can pick exactly which signals to record.
-
-### Quick Start with Debug
-
-```typescript
-run(app, { debug: "verbose" });
-```
-
-### Debug Levels
-
-**"normal"** - Balanced visibility for development:
-
-- Task and resource lifecycle events
-- Event emissions
-- Hook executions
-- Error tracking
-- Performance timing data
-
-**"verbose"** - Detailed visibility for deep debugging:
-
-- All "normal" features plus:
-- Task input/output logging
-- Resource configuration and results
-
-**Custom Configuration**:
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const app = r
-  .resource("app")
-  .register([
-    resources.debug.with({
-      logTaskInput: true,
-      logTaskOutput: false,
-      logResourceConfig: true,
-      logResourceValue: false,
-      logEventEmissionOnRun: true,
-      logEventEmissionInput: false,
-      // ... other fine-grained options
-    }),
-  ])
-  .build();
-```
-
-### Accessing Debug Levels Programmatically
-
-The debug configuration levels can be accessed via `debug.levels`:
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-// Use in custom configurations
-const customConfig = {
-  ...debug.levels.normal, // or .verbose
-  logTaskInput: true, // Override specific settings
+type Metrics = {
+  increment: (
+    name: string,
+    labels?: Record<string, string>,
+  ) => Promise<void> | void;
+  observe: (
+    name: string,
+    value: number,
+    labels?: Record<string, string>,
+  ) => Promise<void> | void;
 };
 
-// Register with custom configuration
-const app = r
-  .resource("app")
-  .register([resources.debug.with(customConfig)])
+const metrics = r
+  .resource<Metrics>("metrics")
+  .init(async () => ({
+    increment: async () => {},
+    observe: async () => {},
+  }))
   .build();
-```
 
-### Per-Component Debug Configuration
+const taskMetrics = r
+  .resource("taskMetrics")
+  .dependencies({
+    taskRunner: resources.taskRunner,
+    metrics,
+  })
+  .init(async (_config, { taskRunner, metrics }) => {
+    taskRunner.intercept(async (next, input) => {
+      const startedAt = Date.now();
+      const labels = { task_id: input.task.definition.id };
 
-Use debug tags to configure debugging on individual components, when you're interested in just a few verbose ones.
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const criticalTask = r
-  .task("critical")
-  .tags([tags.debug.with("verbose")])
-  .run(async (input) => {
-    // This task will have verbose debug logging
-    return await processPayment(input);
+      try {
+        const result = await next(input);
+        await metrics.increment("tasks_total", { ...labels, result: "ok" });
+        await metrics.observe(
+          "tasks_duration_ms",
+          Date.now() - startedAt,
+          labels,
+        );
+        return result;
+      } catch (error) {
+        await metrics.increment("tasks_total", { ...labels, result: "error" });
+        await metrics.observe(
+          "tasks_duration_ms",
+          Date.now() - startedAt,
+          labels,
+        );
+        throw error;
+      }
+    });
   })
   .build();
 ```
 
-### Integration with Run Options
+This keeps metrics policy in one place and avoids duplicating timer logic in every task.
+
+### Event Metrics with `eventManager.intercept(...)`
+
+```typescript
+import { resources, r } from "@bluelibs/runner";
+
+const eventMetrics = r
+  .resource("eventMetrics")
+  .dependencies({
+    eventManager: resources.eventManager,
+    metrics,
+  })
+  .init(async (_config, { eventManager, metrics }) => {
+    eventManager.intercept(async (next, emission) => {
+      const labels = { event_id: emission.definition.id };
+      await metrics.increment("events_emitted_total", labels);
+      return next(emission);
+    });
+  })
+  .build();
+```
+
+## Traces
+
+Runner does not include a tracer backend, but it does provide the execution metadata needed to correlate work across nested task and event calls.
+
+### Correlation via `executionContext`
+
+Enable execution context at runtime when you want correlation ids and inherited execution signals:
 
 ```typescript
 import { run } from "@bluelibs/runner";
 
-// Debug options at startup
-const { store, dispose } = await run(app, {
-  debug: "verbose", // Enable debug globally
-});
-
-// Access the runtime store for introspection
-console.log(`Tasks registered: ${store.tasks.size}`);
-console.log(`Events registered: ${store.events.size}`);
-```
-
-### Performance Impact
-
-The debug resource is designed for zero production overhead:
-
-- **Disabled**: No performance impact whatsoever
-- **Enabled**: Minimal overhead (~0.1ms per operation)
-- **Filtering**: System components are automatically excluded from debug logs
-- **Buffering**: Logs are batched for better performance
-
-### Debugging Tips & Best Practices
-
-Use Structured Data Liberally
-
-```typescript
-// Bad - hard to search and filter
-await logger.error(`Failed to process user ${userId} order ${orderId}`);
-
-// Good - searchable and filterable
-await logger.error("Order processing failed", {
-  data: {
-    userId,
-    orderId,
-    step: "payment",
-    paymentMethod: "credit_card",
-  },
+const runtime = await run(app, {
+  executionContext: { frames: "off", cycleDetection: false },
 });
 ```
 
-Include Context in Errors
+Then read the current execution context from inside tasks, hooks, or interceptors:
 
 ```typescript
-// Include relevant context with errors
-try {
-  await processPayment(order);
-} catch (error) {
-  await logger.error("Payment processing failed", {
-    error,
-    data: {
-      orderId: order.id,
-      amount: order.total,
-      currency: order.currency,
-      paymentMethod: order.paymentMethod,
-      attemptNumber: order.paymentAttempts,
-    },
-  });
-}
+import { asyncContexts, resources, r } from "@bluelibs/runner";
+
+const traceAwareTask = r
+  .task("traceAwareTask")
+  .dependencies({ logger: resources.logger })
+  .run(async (_input, { logger }) => {
+    const execution = asyncContexts.execution.tryUse();
+
+    await logger.info("Running task", {
+      data: {
+        correlationId: execution?.correlationId,
+      },
+    });
+  })
+  .build();
 ```
 
-Use Different Log Levels Appropriately
+### Bridging to a Tracer
+
+Install tracing bridges during resource `init()` so they wrap the full runtime pipeline:
 
 ```typescript
-// Good level usage
-await logger.debug("Cache hit", { data: { key, ttl: remainingTTL } });
-await logger.info("User logged in", { data: { userId, loginMethod } });
-await logger.warn("Rate limit approaching", {
-  data: { current: 95, limit: 100 },
+import { asyncContexts, resources, r } from "@bluelibs/runner";
+
+// Assuming `tracer` is your tracing SDK instance.
+const tracing = r
+  .resource("tracing")
+  .dependencies({ taskRunner: resources.taskRunner })
+  .init(async (_config, { taskRunner }) => {
+    taskRunner.intercept(async (next, input) => {
+      const execution = asyncContexts.execution.tryUse();
+      const span = tracer.startSpan(`task:${input.task.definition.id}`, {
+        attributes: {
+          correlationId: execution?.correlationId,
+          taskId: input.task.definition.id,
+        },
+      });
+
+      try {
+        return await next(input);
+      } catch (error) {
+        span.recordException(error);
+        throw error;
+      } finally {
+        span.end();
+      }
+    });
+  })
+  .build();
+```
+
+This pattern keeps tracing backend choice in your app while Runner provides the stable runtime boundaries.
+
+## Debug Resource
+
+`debug` is Runner's built-in runtime instrumentation surface. Use it when you want to inspect lifecycle, middleware, task, or hook behavior without changing application code.
+
+```typescript
+await run(app, {
+  debug: "normal",
+  logs: { printThreshold: "debug", printStrategy: "pretty" },
 });
-await logger.error("Database connection failed", {
-  error,
-  data: { attempt: 3 },
-});
-await logger.critical("System out of memory", { data: { available: "0MB" } });
 ```
 
-Create Domain-Specific Loggers
+Common modes:
 
-```typescript
-// Create loggers with domain context
-const paymentLogger = logger.with({ source: "payment.processor" });
-const authLogger = logger.with({ source: "auth.service" });
-const emailLogger = logger.with({ source: "email.service" });
+- `debug: "normal"` for lifecycle and execution flow
+- `debug: "verbose"` when you also want more detailed payload-level inspection
+- `debug: { ...partialConfig }` for targeted instrumentation
 
-// Use throughout your domain
-await paymentLogger.info("Processing payment", { data: paymentData });
-await authLogger.warn("Failed login attempt", { data: { email, ip } });
-```
-
-> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+Use `debug` for temporary diagnosis, not as a substitute for durable logs or metrics.

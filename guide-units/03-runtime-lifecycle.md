@@ -8,7 +8,7 @@ The `run()` function is your application's entry point. It initializes all resou
 import { r, run } from "@bluelibs/runner";
 
 const ping = r
-  .task("ping.task")
+  .task("ping")
   .run(async () => "pong")
   .build();
 
@@ -90,7 +90,7 @@ Pass as the second argument to `run(app, options)`.
 | Option             | Type                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `debug`            | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                                                               |
-| `logs`             | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                                                      |
+| `logs`             | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json_pretty`, `plain`). `bufferLogs` buffers log printing until initialization completes when enabled.                                                                                                                                                                                                                                                                                 |
 | `errorBoundary`    | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                                             |
 | `shutdownHooks`    | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` signal handlers for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                                         |
 | `dispose`          | `object`                                        | Shutdown configuration. Defaults to `{ totalBudgetMs: 30_000, drainingBudgetMs: 20_000, cooldownWindowMs: 0 }`. `totalBudgetMs` caps the bounded waits inside shutdown, not lifecycle hook completion; time spent in `cooldown()` still reduces the remaining budget for `cooldownWindowMs` and drain waiting. `drainingBudgetMs` caps the in-flight task/event drain wait once `disposing` begins. `cooldownWindowMs` is an optional short bounded post-cooldown window before `disposing`; leave it at `0` to skip the wait, or raise it when you want to keep the broader `coolingDown` admission policy open a bit longer before `disposing` narrows admissions.           |
@@ -160,7 +160,7 @@ await run(app, { debug: "normal", logs: { printThreshold: "debug" } });
 - Verbose investigations:
 
 ```typescript
-await run(app, { debug: "verbose", logs: { printStrategy: "json-pretty" } });
+await run(app, { debug: "verbose", logs: { printStrategy: "json_pretty" } });
 ```
 
 - CI validation (no side effects):
@@ -282,7 +282,7 @@ const connectToDatabase = async (): Promise<DbConnection> => {
 };
 
 const database = r
-  .resource("app.database")
+  .resource("database")
   .init(async () => {
     const conn = await connectToDatabase();
     console.log("Database connected");
@@ -295,7 +295,7 @@ const database = r
   .build();
 
 const server = r
-  .resource<{ port: number }>("app.server")
+  .resource<{ port: number }>("server")
   .dependencies({ database })
   .context(() => ({ isReady: true as boolean }))
   .init(async ({ port }, { database }) => {
@@ -400,8 +400,6 @@ const { dispose, logger } = await run(app, {
 });
 ```
 
-> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I'm speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
-
 ## Unhandled Errors
 
 The `onUnhandledError` callback is invoked by Runner whenever an error escapes normal handling. It receives a structured payload you can ship to logging/telemetry and decide mitigation steps.
@@ -450,5 +448,3 @@ await run(app, {
 - Save critical state before shutdown
 - Notify load balancers and health checks
 - Stop accepting new work before cleaning up
-
-> **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."

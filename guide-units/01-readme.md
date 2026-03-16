@@ -4,38 +4,52 @@ This page is the shortest path from "what is Runner?" to "I ran it once and I tr
 
 **New to Runner?** Here's the absolute minimum you need to know:
 
-1. **Tasks** are your business logic functions (with dependencies and middleware)
-2. **Resources** are shared services (database, config, clients) with lifecycle (`init` / `dispose`)
-3. **You compose everything** under an `app` resource with `.register([...])`
-4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()` first, plus more runtime helpers as you grow (`emitEvent()`, resource getters)
+1. **Tasks** are your business logic functions with dependencies, middleware, and validation.
+2. **Resources** are shared services with a four-phase lifecycle: `init`, `ready`, `cooldown`, `dispose`.
+3. **You compose everything** under an `app` resource with `.register([...])`.
+4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()` first, then more runtime helpers as you grow.
 
 ---
 
 ## Quick Start
 
-This is the fastest way to run the TypeScript example at the top of this README:
+This is the fastest way to run the TypeScript example at the top of this README.
 
-0. Confirm prerequisites from [Prerequisites](#prerequisites) (Node `18+`, TypeScript `5.6+` recommended)
-
-1. Install dependencies:
+1. Confirm prerequisites from [Prerequisites](#prerequisites) (Node `22+`, TypeScript `5.6+` recommended).
+2. Install dependencies:
 
 ```bash
 npm i @bluelibs/runner
 npm i -D typescript tsx
 ```
 
-2. Copy the example into `index.ts`
-3. Run it:
+3. Copy the example above into `index.ts`.
+4. Run it:
 
 ```bash
 npx tsx index.ts
 ```
 
-**What you now have**: a working `Runtime` and the smallest useful Runner execution path.
+**What you now have**: a working `runtime`, explicit dependency wiring, and the smallest useful Runner execution path.
 
-> **Tip:** If you prefer an end-to-end example with HTTP, OpenAPI, and persistence, jump to the examples below.
-> **Tip:** User-defined ids are local ids. Use `send-email` or `userStore`, not dotted ids like `app.tasks.sendEmail`.
-> **Boundary:** Advanced features such as Durable Workflows and server-side Remote Lanes are Node-only.
+> **Tip:** User-defined ids are local ids. Use `createUser` or `userStore`, not dotted ids like `app.tasks.createUser`.
+> **Platform Note:** Advanced features such as Durable Workflows and server-side Remote Lanes are Node-only.
+
+### Local Ids vs Canonical Runtime Ids
+
+You write local ids in definitions:
+
+- `task("createUser")`
+- `resource("userStore")`
+- `event("userCreated")`
+
+Runner composes canonical runtime ids from ownership:
+
+- `app.tasks.createUser`
+- `app.userStore`
+- `app.events.userCreated`
+
+Prefer references such as `runTask(createUser, input)` over string ids whenever you can.
 
 ---
 
@@ -78,27 +92,25 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 
 ## Where To Go Next
 
-- **Complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md) (the full reference, composed from `guide-units/`)
+- **Complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md).
 - **Popular guide sections**:
   - [Tasks](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#tasks)
   - [Resources](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#resources)
   - [Middleware](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#middleware)
   - [Testing](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#testing)
-  - [Troubleshooting](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#troubleshooting)
-- **API reference**: Browse the [TypeDoc documentation](https://bluelibs.github.io/runner/)
-- **Token-friendly overview**: Read [AI.md](./readmes/AI.md)
+  - [Observability](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#observability-strategy-logs-metrics-and-traces)
+- **API reference**: Browse the [TypeDoc documentation](https://bluelibs.github.io/runner/).
+- **Token-friendly overview**: Read [AI.md](./readmes/AI.md).
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
   - [Remote Lanes](./readmes/REMOTE_LANES.md)
 - **Releases and upgrades**:
   - [GitHub Releases](https://github.com/bluelibs/runner/releases)
   - [Support & Release Policy](./readmes/ENTERPRISE.md)
-- **Operational baseline**:
-  - [Production Readiness](./readmes/FULL_GUIDE.md#observability-strategy-logs-metrics-and-traces)
-- **Multi-platform architecture**: Read [MULTI_PLATFORM.md](./readmes/MULTI_PLATFORM.md)
+- **Multi-platform architecture**: Read [MULTI_PLATFORM.md](./readmes/MULTI_PLATFORM.md).
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see [LICENSE.md](./LICENSE.md).
+This project is licensed under the MIT License. See [LICENSE.md](./LICENSE.md).

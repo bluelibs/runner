@@ -50,8 +50,9 @@ Two operational modes:
 
 `parse()` ergonomics:
 
-- `serializer.parse(payload)` is an alias of `serializer.deserialize(payload)`.
-- `serializer.parse(payload, { schema })` is an ergonomic shorthand for "deserialize + validate/parse with schema".
+- `serializer.parse(payload)` is the ergonomic tree-style alias when you do not need to emphasize graph semantics.
+- `serializer.parse(payload, { schema })` remains a shorthand for "deserialize + validate/parse with schema".
+- when circular references or graph reconstruction matter, prefer the explicit `serialize()` / `deserialize()` names in examples and production code
 
 ```typescript
 import { Match, Serializer } from "@bluelibs/runner";
@@ -905,7 +906,7 @@ class CreateUserInput {
 }
 
 const createUser = r
-  .task("app.tasks.createUser")
+  .task("createUser")
   .inputSchema(CreateUserInput)
   .run(async (input) => ({ id: "user-1", ...input }))
   .build();

@@ -5,6 +5,8 @@ For HTTP servers, split shutdown work into two phases:
 - `cooldown()`: stop new intake immediately.
 - `dispose()`: finish teardown after Runner (task/event) drain and lifecycle hooks complete.
 
+> **Platform Note:** The HTTP examples in this section use Express and Node's HTTP server APIs, so they run on Node.js.
+
 ```typescript
 import express from "express";
 import type { Server } from "node:http";
@@ -17,7 +19,7 @@ type ServerContext = {
 };
 
 const httpServer = r
-  .resource<{ port: number }>("app.http.server")
+  .resource<{ port: number }>("httpServer")
   .context<ServerContext>(() => ({
     app: express(),
     listener: null,
@@ -74,7 +76,7 @@ Tasks can also declare a fail-fast policy around critical resources:
 
 ```typescript
 const writeOrder = r
-  .task("app.tasks.writeOrder")
+  .task("writeOrder")
   .tags([tags.failWhenUnhealthy.with([db])])
   .run(async (input) => persistOrder(input))
   .build();
@@ -278,7 +280,7 @@ You mark tasks with `tags.cron.with({...})` (alias: `resources.cron.tag.with({..
 import { r } from "@bluelibs/runner";
 
 const sendDigest = r
-  .task("app.tasks.sendDigest")
+  .task("sendDigest")
   .tags([
     tags.cron.with({
       expression: "0 9 * * *",
@@ -332,8 +334,6 @@ Best practices:
 - Use `timezone` explicitly for business schedules to avoid DST surprises.
 - Use `onError: "stop"` only when repeated failure should disable the schedule.
 - Keep cron tasks thin; delegate heavy logic to regular tasks for reuse/testing.
-
-> **runtime:** "Cron: because 'I'll remember to run it every morning' is how scripts become folklore. I set the timer, you make the task idempotent, and we both sleep better."
 
 ---
 
@@ -476,8 +476,6 @@ While `Semaphore` and `Queue` provide powerful manual control, Runner often wrap
 
 **What you just learned**: Utilities are the building blocks; Middleware is the blueprint for common resilience patterns.
 
-> **runtime:** "I provide the bricks and the mortar. You decide if you're building a fortress or just a very complicated way to trip over your own feet. Use the middleware for common paths; use the utilities when you want to play architect."
-
 ---
 
 ## Queue
@@ -549,10 +547,7 @@ const processLargeDataset = queue.run(async (signal) => {
   const items = await fetchLargeDataset();
 
   for (const item of items) {
-    // Check for cancellation before processing each item
-    if (signal.aborted) {
-      throw new Error("Operation was cancelled");
-    }
+    signal.throwIfAborted();
 
     await processItem(item);
   }
@@ -629,7 +624,7 @@ signal.throwIfAborted();
 // Alternative: Check signal.aborted for custom handling
 if (signal.aborted) {
   cleanup();
-  throw new Error("Operation cancelled");
+  signal.throwIfAborted();
 }
 ```
 
@@ -671,5 +666,3 @@ q.on("start", ({ taskId }) => console.log(`task ${taskId} started`));
 await q.run(async () => "ok");
 await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
-
-> **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."

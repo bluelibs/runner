@@ -5,7 +5,7 @@ Typed Runner errors are declared once and can be used in two ways:
 - recommended app/runtime usage: register them and inject them through dependencies
 - local/helper usage: call `.new()`, `.throw()`, or `.is()` directly on the built helper even outside `run(...)`
 
-Registering an error makes it part of the Runner definition graph, so it can be injected, discovered, and referenced declaratively via `.throws(...)`. The helper itself does not require a running container for local construction or `.is()` checks.
+Registering an error makes it part of the Runner definition graph, so it can be injected, discovered, and referenced declaratively via `.throws(...)`. The helper itself does not require a running runtime for local construction or `.is()` checks.
 
 The injected value is the error helper itself, exposing:
 
@@ -133,5 +133,3 @@ Recommended practice:
 - do not assume `.throws(...)` alone makes an error injectable; injection still depends on registration
 
 For dependency cycle detection, use the canonical helper name `circularDependencyError`.
-
-> **runtime:** "Typed errors: because 'Error: something went wrong' is the stack trace equivalent of a shrug emoji. Give your errors a name, a code, and a remediation plan—future-you will mass an appreciation card at 2 AM."

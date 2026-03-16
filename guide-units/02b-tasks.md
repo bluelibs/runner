@@ -62,7 +62,7 @@ Validation runs before/after the task body. Invalid input or output throws immed
 ### Two Ways to Call Tasks
 
 1. `runTask(task, input)` for production and integration flows through the full runtime pipeline
-2. `task.run(input, mockDeps)` for isolated unit tests
+2. `task.run(input, mockDeps)` for isolated unit tests when you only want the task body
 
 ```typescript
 const testResult = await sendEmail.run(
@@ -70,6 +70,8 @@ const testResult = await sendEmail.run(
   { emailService: mockEmailService, logger: mockLogger },
 );
 ```
+
+Direct `.run(...)` calls skip runtime validation, middleware, lifecycle wiring, execution context propagation, and health-gated admission checks.
 
 ### When Something Should Be a Task
 
@@ -199,7 +201,7 @@ export const timeoutMiddleware = r.middleware
   .build();
 ```
 
-Prefer `context.signal` for task code and listener code. It stays `undefined` until a real cancellation source is present. Use journal keys only when middleware layers need to share execution-local control surfaces such as the timeout controller.
+Prefer `context.signal` for task code and hook code. It stays `undefined` until a real cancellation source is present. Use journal keys only when middleware layers need to share execution-local control surfaces such as the timeout controller.
 
 ### Task Cancellation
 
@@ -258,10 +260,10 @@ Available APIs:
 `taskRunner.intercept(...)` is the replacement for old middleware catch-all behavior:
 
 ```typescript
-import { r } from "@bluelibs/runner";
+import { r, resources } from "@bluelibs/runner";
 
 const telemetryInstaller = r
-  .resource("app.telemetry")
+  .resource("telemetry")
   .dependencies({
     taskRunner: resources.taskRunner,
     logger: resources.logger,
@@ -301,14 +303,14 @@ Task interceptors (`task.intercept()`) allow resources to dynamically modify tas
 import { r, run } from "@bluelibs/runner";
 
 const calculatorTask = r
-  .task("app.tasks.calculator")
+  .task("calculator")
   .run(async (input: { value: number }) => {
     return { result: input.value + 1 };
   })
   .build();
 
 const interceptorResource = r
-  .resource("app.interceptor")
+  .resource("interceptor")
   .dependencies({ calculatorTask })
   .init(async (_config, { calculatorTask }) => {
     calculatorTask.intercept(async (next, input) => {
@@ -323,7 +325,7 @@ You can inspect which resources installed local interceptors through an injected
 
 ```typescript
 const inspector = r
-  .resource("app.inspector")
+  .resource("inspector")
   .dependencies({ calculatorTask })
   .init(async (_config, { calculatorTask }) => {
     const owners = calculatorTask.getInterceptingResourceIds();
@@ -335,5 +337,3 @@ const inspector = r
 
 For lifecycle-owned timers inside tasks or resources, depend on `resources.timers`.
 `timers.setTimeout()` and `timers.setInterval()` stop accepting new timers once `cooldown()` starts and are cleared during `dispose()`.
-
-> **runtime:** "Tasks: glorified functions with a resume, a chaperone, and a journal. But at least they show up in the logs when something goes wrong—unlike that anonymous arrow function in line 47."

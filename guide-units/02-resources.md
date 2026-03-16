@@ -265,7 +265,7 @@ const feature = r
 
 ```typescript
 const advancedService = r
-  .resource("app.services.advanced")
+  .resource("advancedService")
   .dependencies((_config, mode) => ({
     database,
     logger,
@@ -577,7 +577,7 @@ They are not a substitute for retry/circuit-breaker logic when a registered depe
 import { r } from "@bluelibs/runner";
 
 const registerUser = r
-  .task("app.tasks.registerUser")
+  .task("registerUser")
   .dependencies({
     database, // Required - task fails if missing
     analytics: analyticsService.optional(), // Optional - undefined if missing
@@ -613,7 +613,7 @@ For components that accept config (like resources), you can compute dependencies
 
 ```typescript
 const analyticsAdapter = r
-  .resource<{ enableAnalytics?: boolean }>("app.services.analyticsAdapter")
+  .resource<{ enableAnalytics?: boolean }>("analyticsAdapter")
   .dependencies((config) => ({
     database,
     // Only include analytics when enabled in resource config
@@ -668,7 +668,7 @@ Override direction is downstream-only: declare `.overrides([...])` from the reso
 import { r } from "@bluelibs/runner";
 
 const productionEmailer = r
-  .resource("app.emailer")
+  .resource("emailer")
   .init(async () => new SMTPEmailer())
   .build();
 
@@ -765,7 +765,3 @@ r.resource("test")
 ```
 
 If multiple overrides target the same id, Runner rejects the graph with a duplicate-target override error outside `test` mode. In `test` mode, duplicates are allowed so a wrapper harness can replace a deeper mock, and the outermost declaring resource wins. Overriding something not registered still throws, with a remediation hint.
-
-> **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
-
-> **runtime:** "Resources: I nurse them to life, let them work, then mercifully pull the plug in reverse order. It's a lot like IT support, except I actually follow the runbook."

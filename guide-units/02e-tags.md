@@ -122,6 +122,17 @@ Tag matches are not just metadata snapshots.
 
 Use `tag.startup()` when startup ordering matters: wrapping a tag with `.startup()` in `dependencies` ensures the tag accessor is ready during bootstrap before the resource dependency graph runs, rather than resolving during normal dependency resolution.
 
+### When to Use Tags
+
+Use tags when you want discovery or policy over a changing set of definitions:
+
+- route registration
+- startup auto-registration
+- policy groups such as health gating or internal-only components
+- framework extensions that should discover tasks/resources without direct references
+
+Prefer direct dependencies when one component already knows the exact collaborator it needs.
+
 ### Tag Extraction and Processing
 
 Tags can also be queried directly against definitions.
@@ -188,12 +199,12 @@ import { r } from "@bluelibs/runner";
 
 // r.tag<Config, InputContract, OutputContract>
 const authorizedTag = r
-  .tag<void, { userId: string }, void>("app.tags.authorized")
+  .tag<void, { userId: string }, void>("authorizedTag")
   .build();
 
 // Works: task input is a superset of the contract
 const validTask = r
-  .task("app.tasks.dashboard")
+  .task("dashboard")
   .tags([authorizedTag])
   .run(async (input: { userId: string; view: "full" | "mini" }) => {
     return { data: "..." };
@@ -202,7 +213,7 @@ const validTask = r
 
 // Compile error: task input is missing userId
 const invalidTask = r
-  .task("app.tasks.public")
+  .task("publicDashboard")
   .tags([authorizedTag])
   // @ts-expect-error - input doesn't satisfy contract { userId: string }
   .run(async (input: { view: "full" }) => {
@@ -215,11 +226,11 @@ Output contracts work the same way:
 
 ```typescript
 const searchableTag = r
-  .tag<void, void, { id: string; title: string }>("app.tags.searchable")
+  .tag<void, void, { id: string; title: string }>("searchableTag")
   .build();
 
 const productTask = r
-  .task("app.products.get")
+  .task("getProduct")
   .tags([searchableTag])
   .run(async (id: string) => ({
     id,
@@ -240,11 +251,11 @@ const databaseTag = r
     void,
     { connectionString: string },
     { connect(): Promise<void> }
-  >("app.tags.database")
+  >("databaseTag")
   .build();
 
 const validDb = r
-  .resource("app.db")
+  .resource("database")
   .tags([databaseTag])
   .init(async (config) => ({
     async connect() {
@@ -257,7 +268,3 @@ const validDb = r
 If you use `.inputSchema` or `.resultSchema`, their shapes must be supersets of any contract tag contracts.
 
 Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.
-
-> **runtime:** "Type Contracts: The prenup of code. 'If you want to use my authorizedTag, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
-
-> **runtime:** "Tags: metadata with a mission. You stick labels on everything, I index them, and at startup someone finally discovers why three tasks share a route prefix. It's like naming your pets—except these ones actually come when called."
