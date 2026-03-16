@@ -117,6 +117,9 @@ export async function disposeRunArtifacts(
     input.onBeforeStoreDispose();
     await input.store.dispose();
   } finally {
+    // Safety nets and shutdown hooks must be released even if store disposal
+    // fails, otherwise a broken shutdown can leave process-level observers
+    // hanging around and interfering with later runs.
     input.takeUnhookProcessSafetyNets()?.();
     input.takeUnhookShutdown()?.();
   }

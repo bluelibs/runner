@@ -9,6 +9,7 @@ import { cancellationError } from "../errors";
  */
 export class BootstrapCoordinator {
   private shutdownRequested = false;
+  private shutdownReason: string | undefined;
   private completed = false;
   private succeededFlag = false;
   private resolveCompletion!: () => void;
@@ -20,8 +21,9 @@ export class BootstrapCoordinator {
     });
   }
 
-  requestShutdown(): void {
+  requestShutdown(reason?: string): void {
     this.shutdownRequested = true;
+    this.shutdownReason ??= reason;
   }
 
   /**
@@ -32,8 +34,13 @@ export class BootstrapCoordinator {
     if (!this.shutdownRequested) {
       return;
     }
+
+    const reason = this.shutdownReason
+      ? `Operation cancelled: ${this.shutdownReason} during bootstrap (${phase}).`
+      : `Operation cancelled: shutdown requested during bootstrap (${phase}).`;
+
     cancellationError.throw({
-      reason: `Operation cancelled: shutdown requested during bootstrap (${phase}).`,
+      reason,
     });
   }
 

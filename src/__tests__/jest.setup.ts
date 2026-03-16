@@ -3,7 +3,7 @@ import {
   __disposeActiveRunResultsForTests,
   __disposeActiveRunResultsForTestsExcept,
   __snapshotActiveRunResultsForTests,
-} from "../run";
+} from "../runtime/activeRunResultsForTests";
 import {
   __resetProcessHooksForTests,
   __waitForProcessHooksIdleForTests,

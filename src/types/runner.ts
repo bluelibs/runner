@@ -178,6 +178,11 @@ export type RunOptions = {
    */
   shutdownHooks?: boolean;
   /**
+   * External shutdown trigger for the runtime lifecycle.
+   * Aborting this signal starts graceful disposal without affecting ambient execution signals.
+   */
+  signal?: AbortSignal;
+  /**
    * Shutdown disposal configuration.
    */
   dispose?: DisposeOptions;
@@ -234,6 +239,8 @@ export type ResolvedRunOptions = {
   errorBoundary: boolean;
   /** Whether signal-based graceful shutdown hooks are installed. */
   shutdownHooks: boolean;
+  /** Optional external shutdown trigger captured for this runtime instance. */
+  signal?: AbortSignal;
   dispose: {
     /** Total shutdown budget in milliseconds. */
     totalBudgetMs: number;

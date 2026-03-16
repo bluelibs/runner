@@ -75,4 +75,13 @@ describe("BootstrapCoordinator", () => {
       coordinator.throwIfShutdownRequested("override processing"),
     ).toThrow(/override processing/);
   });
+
+  it("preserves the shutdown reason when bootstrap cancellation is external", () => {
+    const coordinator = new BootstrapCoordinator();
+    coordinator.requestShutdown("outer shutdown");
+
+    expect(() =>
+      coordinator.throwIfShutdownRequested("root initialization"),
+    ).toThrow(/outer shutdown during bootstrap \(root initialization\)/);
+  });
 });

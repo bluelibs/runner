@@ -22,9 +22,7 @@ describe("cache middleware coverage", () => {
       ttl: 123,
       ttlAutopurge: true,
     });
-    expect(resolved.keyBuilder("task", { ok: true })).toBe(
-      'task-{"ok":true}',
-    );
+    expect(resolved.keyBuilder("task", { ok: true })).toBe('task-{"ok":true}');
   });
 
   it("keeps raw task ids unchanged when no canonical task marker is present", async () => {

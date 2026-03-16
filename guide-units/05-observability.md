@@ -75,11 +75,11 @@ The logger supports six levels:
 
 Use `run(app, { logs })` to control console output:
 
-| Option           | Meaning                                                                                  |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| `printThreshold` | Lowest printed level. Use `null` to disable console printing entirely.                   |
-| `printStrategy`  | `"pretty"`, `"plain"`, `"json"`, or `"json_pretty"`.                                     |
-| `bufferLogs`     | When `true`, buffer logs until startup completes, then flush them in order.              |
+| Option           | Meaning                                                                     |
+| ---------------- | --------------------------------------------------------------------------- |
+| `printThreshold` | Lowest printed level. Use `null` to disable console printing entirely.      |
+| `printStrategy`  | `"pretty"`, `"plain"`, `"json"`, or `"json_pretty"`.                        |
+| `bufferLogs`     | When `true`, buffer logs until startup completes, then flush them in order. |
 
 > **Note:** In `NODE_ENV=test`, Runner defaults `logs.printThreshold` to `null`. If you want test logs printed, set `logs.printThreshold` explicitly.
 
