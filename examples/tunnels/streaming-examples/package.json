@@ -7,10 +7,10 @@
     "run:duplex": "tsx src/duplex.ts"
   },
   "dependencies": {
-    "@bluelibs/runner": "^5.2.0"
+    "@bluelibs/runner": "file:../../.."
   },
   "devDependencies": {
-    "@bluelibs/runner-dev": "^5.0.0",
+    "@bluelibs/runner-dev": "../../../runner-dev",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   }
