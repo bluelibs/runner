@@ -65,6 +65,22 @@ This example assumes the `mongodb` package is installed and `DATABASE_URL` is se
 
 **What you just learned**: Resources define `init` for creation and `dispose` for cleanup. Dependencies are declared explicitly, and the builder pattern produces a frozen definition.
 
+```mermaid
+stateDiagram-v2
+    [*] --> init : run(app)
+    init --> ready : dependencies satisfied
+    ready --> Runtime : events.ready emitted
+    Runtime --> cooldown : dispose() or signal
+    cooldown --> dispose : drain complete
+    dispose --> [*]
+
+    init : Create the resource value\nDependencies are available here
+    ready : Start ingress (HTTP, consumers)\nStartup wiring is complete
+    Runtime : Serving\nTasks, events, hooks active
+    cooldown : Stop accepting new work\nIn‑flight work continues
+    dispose : Final teardown\nReverse dependency order
+```
+
 When you want operator-facing health data, keep the probe small and explicit:
 
 ```typescript
@@ -300,6 +316,25 @@ const runtime = await run(app, {
 ```
 
 This speeds up boot times when multiple resources (like DBs or queues) don't depend on each other.
+
+```mermaid
+gantt
+    title Parallel Initialization Waves (lifecycleMode: "parallel")
+    dateFormat X
+    axisFormat %s
+
+    section Wave 1
+    Database         :w1a, 0, 3
+    Cache            :w1b, 0, 2
+
+    section Wave 2
+    UserService (needs DB)  :w2a, 3, 5
+
+    section Wave 3
+    App (needs all)         :w3a, 5, 6
+```
+
+Independent resources in the same wave initialize concurrently. Each wave waits for the previous wave to complete before starting.
 
 ### Circular Type Dependencies (TypeScript)
 

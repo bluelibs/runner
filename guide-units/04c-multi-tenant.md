@@ -47,6 +47,27 @@ const projects = await tenant.provide({ tenantId: "acme" }, async () =>
 This pattern keeps tenant identity in async context instead of global mutable state.
 The flow is: ingress provides the tenant, tenant-sensitive tasks require it, downstream code reads it, and middleware such as `cache` uses it to partition internal keys.
 
+```mermaid
+sequenceDiagram
+    participant Ingress as HTTP / RPC Ingress
+    participant Tenant as tenant.provide()
+    participant MW as Middleware (cache, rateLimit)
+    participant Task as Task .run()
+    participant Code as Business Code
+
+    Ingress->>Tenant: provide({ tenantId: "acme" })
+    activate Tenant
+    Tenant->>MW: runTask(listProjects)
+    Note over MW: Keys prefixed with "acme:"
+    MW->>Task: next(input)
+    Task->>Code: tenant.use()
+    Code-->>Task: { tenantId: "acme" }
+    Task-->>MW: result
+    MW-->>Tenant: result
+    deactivate Tenant
+    Tenant-->>Ingress: result
+```
+
 Use the built-in tenant accessor in two modes:
 
 - strict: `tenant.use()` when tenant context must exist, throws if not.

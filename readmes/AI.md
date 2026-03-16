@@ -169,6 +169,7 @@ Important run options:
 - `lazy: true`: keep startup-unused resources asleep until `getLazyResourceValue(...)` wakes them, then run their `ready()` when they initialize
 - `lifecycleMode: "parallel"`: preserve dependency ordering, but run same-wave lifecycle hooks in parallel
 - `shutdownHooks: true`: install graceful `SIGINT` / `SIGTERM` hooks; signals during bootstrap cancel startup and roll back initialized resources
+- `signal: AbortSignal`: let an outer owner start graceful runtime disposal without feeding ambient execution cancellation
 - `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control bounded shutdown timing
 - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`
 - `executionContext: true | { ... }`: enable correlation ids and inherited execution signals, with optional frame tracking and cycle detection
@@ -239,6 +240,7 @@ const app = r
 - Prefer task input schemas for business validation. Keep the handler focused on HTTP adaptation and error mapping.
 - Require request-local business state with `r.asyncContext(...).require()` so missing context fails fast.
 - Use an explicit `disposeRunner()` helper only in tests, local scripts, or environments where you truly control teardown.
+- If an external host owns shutdown, prefer `run(app, { signal, shutdownHooks: false })` over forwarding that signal into business execution.
 - See `examples/aws-lambda-quickstart` for examples.
 
 ## Resources
@@ -449,7 +451,7 @@ Built-in resilience middleware:
 
 Important config surfaces:
 
-- `cache.with({ ttl, max, ttlAutopurge, keyBuilder })`
+- `cache.with({ ttl, max, ttlAutopurge, keyBuilder, tenantScope })`
 - `concurrency.with({ limit, key?, semaphore? })`
 - `circuitBreaker.with({ failureThreshold, resetTimeout })`
 - `debounce.with({ ms, keyBuilder? })`
@@ -462,10 +464,12 @@ Important config surfaces:
 Operational notes:
 
 - Register `resources.cache` in a parent resource before using task cache middleware.
+- `cache.keyBuilder(taskId, input)` may return either a plain key string or `{ cacheKey, refs? }`.
+- Call `resources.cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `rateLimit`, `debounce`, and `throttle` default to `taskId` partitioning. Pass `keyBuilder(taskId, input)` to partition by user, tenant, request context, or similar keys.
-- When `tenantScope` is active, Runner prefixes internal middleware keys with `<tenantId>:`.
+- When `tenantScope` is active, Runner prefixes internal middleware keys with `<tenantId>:`. Cache refs are scoped the same way as cache keys.
 - Resource `retry` and `timeout` use the same semantics on `middleware.resource.*`.
 
 Built-in journal keys exist for middleware introspection, for example cache hits, retry attempts, circuit-breaker state, and timeout abort controllers.
@@ -726,6 +730,27 @@ Key rules:
 - `tags.failWhenUnhealthy.with([db, cache])` blocks task execution only when one of those resources reports `unhealthy`.
   `degraded` still runs, bootstrap-time task calls are not gated, and sleeping lazy resources stay skipped.
 - Tags are often the cleanest way to implement route discovery, cron scheduling, cache warmers, or internal policies without manual registries.
+
+Depending on a tag injects a typed accessor over all matching definitions. The accessor is grouped by kind (`tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, `errors`); task matches expose `definition`, `config`, and runtime `run(...)`, while resource matches expose `definition`, `config`, and runtime `value`.
+
+Use a normal tag dependency when the accessor can resolve as part of the normal dependency graph. Use `tag.startup()` when the accessor must exist earlier, while Runner is building the startup dependency tree during bootstrap.
+
+```ts
+import { r } from "@bluelibs/runner";
+
+const warmup = r.tag("warmup").for(["tasks"]).build();
+
+const boot = r
+  .resource("boot")
+  .dependencies({
+    runtimeWarmups: warmup,
+    startupWarmups: warmup.startup(),
+  })
+  .build();
+
+// `runtimeWarmups` resolves in the normal dependency graph.
+// `startupWarmups` resolves earlier, in the startup dependency tree.
+```
 
 Cron:
 

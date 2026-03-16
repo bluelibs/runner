@@ -9,6 +9,7 @@ describe("cache middleware coverage branches", () => {
       has: jest.fn(async () => false),
       set: jest.fn(async () => undefined),
       clear: jest.fn(async () => undefined),
+      invalidateRefs: jest.fn(async () => 0),
     };
     const cache = {
       map: new Map([["legacy-task-id", cacheInstance]]),

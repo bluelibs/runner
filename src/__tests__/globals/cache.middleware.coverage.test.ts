@@ -36,7 +36,13 @@ describe("cache middleware coverage", () => {
     expect(result).toBe("fresh-value");
     expect(next).toHaveBeenCalledWith({ ok: true });
     expect(get).toHaveBeenCalledWith(`${rawTaskId}-{"ok":true}`);
-    expect(set).toHaveBeenCalledWith(`${rawTaskId}-{"ok":true}`, "fresh-value");
+    expect(set).toHaveBeenCalledWith(
+      `${rawTaskId}-{"ok":true}`,
+      "fresh-value",
+      {
+        refs: [],
+      },
+    );
     expect(journal.set).toHaveBeenCalledWith(journalKeys.hit, false, {
       override: true,
     });

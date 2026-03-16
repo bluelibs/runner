@@ -4,8 +4,10 @@ import {
   type CacheFactoryOptions,
   type CacheProvider,
   type CacheProviderInput,
+  type CacheRef,
   type ICacheProvider,
   type SharedCacheBudgetState,
+  isBuiltInCacheProvider,
 } from "./cache.shared";
 import { defineResource } from "../../definers/defineResource";
 import {
@@ -16,13 +18,24 @@ import {
 import { extractResourceAndConfig } from "../../tools/extractResourceAndConfig";
 import { Match } from "../../tools/check";
 import { validationError } from "../../errors";
-import { cacheMiddleware } from "./cache.middleware";
+import {
+  cacheMiddleware,
+  resolveCacheMiddlewareConfig,
+} from "./cache.middleware";
 import { isResource, isResourceWithConfig } from "../../define";
+import { storeResource } from "../resources/store.resource";
+import { isSameDefinition } from "../../tools/isSameDefinition";
+import { normalizeCacheRefs, toStableTaskId } from "./cache.key";
+import { applyTenantScopeToKey } from "./tenantScope.shared";
+import type { TenantScopeConfig } from "./tenantScope.shared";
+import type { Store } from "../../models/Store";
 
 export type {
+  CacheEntryMetadata,
   CacheFactoryOptions,
   CacheProvider,
   CacheProviderInput,
+  CacheRef,
   ICacheProvider,
 } from "./cache.shared";
 
@@ -46,13 +59,30 @@ export interface CacheResourceConfig {
   totalBudgetBytes?: number;
 }
 
-export type CacheResourceValue = {
+/**
+ * Runtime value exposed by `resources.cache`.
+ */
+export interface CacheResourceValue {
+  /** Active task-scoped cache instances for the current runtime. */
   map: Map<string, ICacheProvider>;
+  /** In-flight provider creations keyed by stable task id. */
   pendingCreates: Map<string, Promise<ICacheProvider>>;
+  /** Factory used to create task-scoped cache providers. */
   cacheProvider: CacheProvider;
+  /** Optional shared budget enabled for built-in in-memory providers. */
   totalBudgetBytes?: number;
+  /** Shared in-memory budget bookkeeping for built-in providers. */
   sharedBudget?: SharedCacheBudgetState;
+  /** Default inherited cache options for task-scoped providers. */
   defaultOptions: CacheFactoryOptions;
+  /** Delete cache entries indexed by one or more semantic refs. */
+  invalidateRefs(refs: CacheRef | readonly CacheRef[]): Promise<number>;
+}
+
+type CacheInvalidationTarget = {
+  cacheOptions: CacheFactoryOptions;
+  taskId: string;
+  tenantScope: TenantScopeConfig | undefined;
 };
 
 const cacheFactoryOptionsPattern = Match.Where(
@@ -85,7 +115,10 @@ export const cacheProviderResource: CacheProviderResourceDefinition =
 export const cacheResource = defineResource<
   CacheResourceConfig,
   Promise<CacheResourceValue>,
-  { cacheProvider: typeof cacheProviderResource }
+  {
+    cacheProvider: typeof cacheProviderResource;
+    store: typeof storeResource;
+  }
 >({
   id: "cache",
   configSchema: cacheResourceConfigPattern,
@@ -96,14 +129,15 @@ export const cacheResource = defineResource<
   dependencies: (config: CacheResourceConfig) => {
     if (config.provider) {
       const { resource } = extractResourceAndConfig(config.provider);
-      return { cacheProvider: resource };
+      return { cacheProvider: resource, store: storeResource };
     }
 
     return {
       cacheProvider: cacheProviderResource,
+      store: storeResource,
     };
   },
-  init: async (config: CacheResourceConfig, { cacheProvider }) => {
+  init: async (config: CacheResourceConfig, { cacheProvider, store }) => {
     if (typeof cacheProvider !== "function") {
       validationError.throw({
         subject: "Cache provider",
@@ -116,20 +150,51 @@ export const cacheResource = defineResource<
     const sharedBudget = config?.totalBudgetBytes
       ? createSharedCacheBudgetState(config.totalBudgetBytes)
       : undefined;
+    const defaultOptions: CacheFactoryOptions = {
+      ttl: 10 * 1000,
+      max: 100,
+      ttlAutopurge: true,
+      ...(config?.defaultOptions ?? {}),
+    };
+    const cacheTargets = getCacheEnabledTaskIds(store, defaultOptions);
 
-    return {
+    const cacheValue: CacheResourceValue = {
       map: new Map<string, ICacheProvider>(),
       pendingCreates: new Map<string, Promise<ICacheProvider>>(),
       cacheProvider,
       totalBudgetBytes: config?.totalBudgetBytes,
       sharedBudget,
-      defaultOptions: {
-        ttl: 10 * 1000,
-        max: 100,
-        ttlAutopurge: true,
-        ...(config?.defaultOptions ?? {}),
+      defaultOptions,
+      invalidateRefs: async (refs) => {
+        const baseRefs = normalizeCacheRefs(refs);
+
+        if (baseRefs.length === 0) {
+          return 0;
+        }
+
+        let deletedCount = 0;
+
+        for (const target of cacheTargets) {
+          const scopedRefs = baseRefs.map((ref) =>
+            applyTenantScopeToKey(ref, target.tenantScope),
+          );
+          const cacheInstance = await getCacheInstanceForInvalidation(
+            cacheValue,
+            target,
+          );
+
+          if (!cacheInstance) {
+            continue;
+          }
+
+          deletedCount += await cacheInstance.invalidateRefs(scopedRefs);
+        }
+
+        return deletedCount;
       },
     };
+
+    return cacheValue;
   },
   dispose: async (cache) => {
     cache.pendingCreates?.clear();
@@ -161,4 +226,56 @@ export function createCacheInstance({
   };
 
   return cache.cacheProvider(input);
+}
+
+async function getCacheInstanceForInvalidation(
+  cache: CacheResourceValue,
+  target: CacheInvalidationTarget,
+) {
+  const existing = cache.map.get(target.taskId);
+
+  if (existing) {
+    return existing;
+  }
+
+  if (isBuiltInCacheProvider(cache.cacheProvider)) {
+    return undefined;
+  }
+
+  return createCacheInstance({
+    cache,
+    cacheOptions: target.cacheOptions,
+    taskId: target.taskId,
+  });
+}
+
+function getCacheEnabledTaskIds(
+  store: Store,
+  defaultOptions: CacheFactoryOptions,
+): CacheInvalidationTarget[] {
+  const taskTargets = new Map<string, CacheInvalidationTarget>();
+
+  for (const { task } of store.tasks.values()) {
+    const cacheAttachment = task.middleware.find((middleware) =>
+      isSameDefinition(middleware, cacheMiddleware),
+    );
+
+    if (!cacheAttachment) {
+      continue;
+    }
+
+    const taskId = toStableTaskId(task.id);
+    const resolvedConfig = resolveCacheMiddlewareConfig(
+      cacheAttachment.config,
+      defaultOptions,
+    );
+
+    taskTargets.set(taskId, {
+      cacheOptions: resolvedConfig.cacheOptions,
+      taskId,
+      tenantScope: cacheAttachment.config?.tenantScope,
+    });
+  }
+
+  return [...taskTargets.values()];
 }

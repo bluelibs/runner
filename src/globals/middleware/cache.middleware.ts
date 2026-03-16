@@ -4,6 +4,11 @@ import { safeStringify } from "../../models/utils/safeStringify";
 import { Match } from "../../tools/check";
 import { loggerResource } from "../resources/logger.resource";
 import {
+  normalizeCacheKeyBuilderResult,
+  toStableTaskId,
+  type CacheKeyBuilderResult,
+} from "./cache.key";
+import {
   applyTenantScopeToKey,
   tenantScopePattern,
   type TenantScopedMiddlewareConfig,
@@ -20,19 +25,27 @@ export {
   createCacheInstance,
 } from "./cache.resource";
 export type {
+  CacheEntryMetadata,
   CacheFactoryOptions,
   CacheProvider,
   CacheProviderInput,
   CacheProviderResource,
   CacheResourceConfig,
   CacheResourceValue,
+  CacheRef,
   ICacheProvider,
 } from "./cache.resource";
+export type { CacheKeyBuilderResult } from "./cache.key";
 
 type CacheMiddlewareConfig = CacheFactoryOptions &
   TenantScopedMiddlewareConfig & {
-    keyBuilder?: (taskId: string, input: unknown) => string;
+    keyBuilder?: (taskId: string, input: any) => CacheKeyBuilderResult;
   };
+
+type ResolvedCacheMiddlewareConfig = {
+  cacheOptions: CacheFactoryOptions;
+  keyBuilder: (taskId: string, input: any) => CacheKeyBuilderResult;
+};
 
 const cacheMiddlewareConfigPattern = Match.ObjectIncluding({
   keyBuilder: Match.Optional(Function),
@@ -74,18 +87,29 @@ export const journalKeys = {
   hit: journalHelper.createKey<boolean>("runner.middleware.task.cache.hit"),
 } as const;
 
-const defaultKeyBuilder = (taskId: string, input: unknown) =>
+const defaultKeyBuilder = (taskId: string, input: unknown): string =>
   `${taskId}-${safeStringify(input)}`;
 
-function toStableTaskId(taskId: string): string {
-  const taskMarker = ".tasks.";
-  const markerIndex = taskId.indexOf(taskMarker);
+export function resolveCacheMiddlewareConfig(
+  config: CacheMiddlewareConfig | undefined,
+  defaultOptions: CacheFactoryOptions,
+): ResolvedCacheMiddlewareConfig {
+  const mergedConfig: CacheMiddlewareConfig = {
+    keyBuilder: defaultKeyBuilder,
+    ttl: 10 * 1000,
+    max: 100,
+    ttlAutopurge: true,
+    ...config,
+  };
+  const { keyBuilder, tenantScope, ...cacheOptions } = mergedConfig;
 
-  if (markerIndex === -1) {
-    return taskId;
-  }
-
-  return taskId.slice(markerIndex + taskMarker.length);
+  return {
+    keyBuilder: keyBuilder ?? defaultKeyBuilder,
+    cacheOptions: {
+      ...defaultOptions,
+      ...cacheOptions,
+    },
+  };
 }
 
 export const cacheMiddleware = defineTaskMiddleware({
@@ -97,23 +121,14 @@ export const cacheMiddleware = defineTaskMiddleware({
   }),
   async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
     const { cache, logger } = deps;
-
-    config = {
-      keyBuilder: defaultKeyBuilder,
-      ttl: 10 * 1000,
-      max: 100,
-      ttlAutopurge: true,
-      ...config,
-    };
+    const resolvedConfig = resolveCacheMiddlewareConfig(
+      config,
+      cache.defaultOptions,
+    );
 
     const taskId = toStableTaskId(task!.definition.id);
     let cacheHolderForTask = cache.map.get(taskId)!;
     if (!cacheHolderForTask) {
-      const { keyBuilder, ...lruOptions } = config;
-      const cacheOptions = {
-        ...cache.defaultOptions,
-        ...lruOptions,
-      };
       const pendingCreate = cache.pendingCreates.get(taskId);
 
       if (pendingCreate) {
@@ -121,7 +136,7 @@ export const cacheMiddleware = defineTaskMiddleware({
       } else {
         const createPromise = createCacheInstance({
           cache,
-          cacheOptions,
+          cacheOptions: resolvedConfig.cacheOptions,
           taskId,
         })
           .then((instance) => {
@@ -136,9 +151,12 @@ export const cacheMiddleware = defineTaskMiddleware({
       }
     }
 
-    const key = applyTenantScopeToKey(
-      config.keyBuilder!(taskId, task!.input),
-      config.tenantScope,
+    const cacheKey = normalizeCacheKeyBuilderResult(
+      resolvedConfig.keyBuilder(taskId, task!.input),
+    );
+    const key = applyTenantScopeToKey(cacheKey.cacheKey, config.tenantScope);
+    const refs = cacheKey.refs.map((ref) =>
+      applyTenantScopeToKey(ref, config.tenantScope),
     );
 
     const cachedValue = await cacheHolderForTask.get(key);
@@ -156,13 +174,13 @@ export const cacheMiddleware = defineTaskMiddleware({
     const result = await next(task!.input);
 
     try {
-      await cacheHolderForTask.set(key, result);
+      await cacheHolderForTask.set(key, result, { refs });
     } catch (error) {
       await logger?.error(
         "Cache middleware write failed; returning fresh result.",
         {
           taskId,
-          data: { key },
+          data: { key, refs },
           error: error instanceof Error ? error : new Error(String(error)),
         },
       );

@@ -36,6 +36,25 @@ Key rules that keep the middleware model predictable:
 - task middleware can attach only to tasks or `subtree.tasks.middleware`
 - resource middleware can attach only to resources or `subtree.resources.middleware`
 
+```mermaid
+flowchart LR
+    Request(["runTask()"])
+    MW_A["Middleware A\n(outermost, listed first)"]
+    MW_B["Middleware B\n(listed second)"]
+    Task["Task .run()"]
+
+    Request --> MW_A
+    MW_A -->|"next()"| MW_B
+    MW_B -->|"next()"| Task
+    Task -->|result| MW_B
+    MW_B -->|result| MW_A
+    MW_A -->|result| Request
+
+    style MW_A fill:#9C27B0,color:#fff
+    style MW_B fill:#7B1FA2,color:#fff
+    style Task fill:#4CAF50,color:#fff
+```
+
 ### Task and Resource Middleware
 
 The two middleware channels serve different wrapping targets:
@@ -155,18 +174,18 @@ If you use multiple contract middleware, their contracts combine.
 
 Runner ships with built-in middleware for common reliability, admission-control, caching, and context-enforcement concerns:
 
-| Middleware     | Config                                    | Notes                                                                     |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`   |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                               |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                     |
-| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key   |
-| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends       |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                                  |
-| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"      |
-| requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                |
-| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`  |
+| Middleware     | Config                                    | Notes                                                                                 |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; `keyBuilder` may return a string or `{ cacheKey, refs }` |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                                           |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                                 |
+| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key               |
+| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends                   |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                              |
+| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"                  |
+| requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution             |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                            |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`              |
 
 Resource equivalents:
 
@@ -206,6 +225,18 @@ interface CacheProviderInput {
 type CacheProviderFactory = (
   input: CacheProviderInput,
 ) => Promise<ICacheProvider>;
+
+interface ICacheProvider {
+  get(key: string): unknown | Promise<unknown>;
+  set(
+    key: string,
+    value: unknown,
+    metadata?: { refs?: readonly string[] },
+  ): unknown | Promise<unknown>;
+  clear(): void | Promise<void>;
+  invalidateRefs(refs: readonly string[]): number | Promise<number>;
+  has?(key: string): boolean | Promise<boolean>;
+}
 ```
 
 Notes:
@@ -218,6 +249,8 @@ Notes:
 - Node also ships with `resources.redisCacheProvider`, which supports `totalBudgetBytes` with Redis-backed storage.
 - Custom providers should enforce their own backend budget policy when `input.totalBudgetBytes` is provided.
 - `keyBuilder` is middleware-only and is not passed to the provider.
+- When `keyBuilder(...)` returns `{ cacheKey, refs }`, middleware passes those refs to `set(..., metadata)` for provider-side indexing.
+- `resources.cache.invalidateRefs(ref | ref[])` fans out across cache-enabled tasks and deletes matching entries.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
 #### Default Usage
@@ -255,6 +288,52 @@ const app = r
   ])
   .build();
 ```
+
+#### Ref-Based Invalidation
+
+Use semantic refs when multiple cached tasks should be refreshed after the same write.
+
+```typescript
+import { middleware, r, resources } from "@bluelibs/runner";
+
+const CacheRefs = {
+  user(id: string) {
+    return `user:${id}` as const;
+  },
+};
+
+const getUser = r
+  .task<{ userId: string; includeTeams?: boolean }>("getUser")
+  .middleware([
+    middleware.task.cache.with({
+      ttl: 60_000,
+      keyBuilder: (_taskId, input) => ({
+        cacheKey: `user:${input.userId}:teams:${input.includeTeams ? "1" : "0"}`,
+        refs: [CacheRefs.user(input.userId)],
+      }),
+    }),
+  ])
+  .run(async (input) => {
+    return await doExpensiveCalculation(input.userId);
+  })
+  .build();
+
+const updateUser = r
+  .task<{ userId: string }>("updateUser")
+  .dependencies({ cache: resources.cache })
+  .run(async (input, { cache }) => {
+    await saveUser(input.userId);
+    await cache.invalidateRefs(CacheRefs.user(input.userId)); // or array of refs for multiple invalidations
+    return { ok: true };
+  })
+  .build();
+```
+
+Notes:
+
+- `keyBuilder(taskId, input)` may return either a plain string or `{ cacheKey, refs? }`.
+- Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`.
+- Refs follow the same `tenantScope` policy as the cache key, so tenant-aware caches invalidate only their own tenant-scoped entries by default.
 
 `totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
 
@@ -328,7 +407,11 @@ class RedisCache {
     return value ? JSON.parse(value) : undefined;
   }
 
-  async set(key: string, value: unknown): Promise<void> {
+  async set(
+    key: string,
+    value: unknown,
+    _metadata?: { refs?: readonly string[] },
+  ): Promise<void> {
     const payload = JSON.stringify(value);
     if (this.ttlMs && this.ttlMs > 0) {
       await this.client.setex(
@@ -339,6 +422,10 @@ class RedisCache {
       return;
     }
     await this.client.set(this.prefix + key, payload);
+  }
+
+  async invalidateRefs(_refs: readonly string[]): Promise<number> {
+    return 0;
   }
 
   async clear(): Promise<void> {
@@ -450,6 +537,19 @@ const resilientTask = r
 2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
 4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
+
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED
+    CLOSED --> OPEN : failures >= threshold
+    OPEN --> HALF_OPEN : resetTimeout elapsed
+    HALF_OPEN --> CLOSED : trial succeeds
+    HALF_OPEN --> OPEN : trial fails
+
+    CLOSED : Requests flow through\nFailure counter tracks errors
+    OPEN : All requests fail fast\nCircuitBreakerOpenError thrown
+    HALF_OPEN : One trial request allowed\nDecides next state
+```
 
 **Why would you need this?** For alerting, you want to know when the circuit opens to alert on-call engineers.
 
@@ -846,7 +946,10 @@ const getUser = r
   .middleware([
     middleware.task.cache.with({
       ttl: 60_000,
-      keyBuilder: (_taskId, input) => `user:${input.id}`,
+      keyBuilder: (_taskId, input) => ({
+        cacheKey: `user:${input.id}`,
+        refs: [`user:${input.id}`],
+      }),
     }),
   ])
   .run(async (input, { db }) => {
@@ -859,7 +962,7 @@ const getUser = r
 
 > **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. If that key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
-> **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant value is `acme`. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
+> **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant value is `acme`. Cache refs are scoped with the same policy. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
 
 ### Resilience Orchestration
 
@@ -868,6 +971,32 @@ In production, one resilience strategy is rarely enough. Runner allows you to co
 A task that calls a remote API might fail due to network blips (needs **Retry**), hang indefinitely (needs **Timeout**), slam the API during traffic spikes (needs **Rate Limit**), or keep failing if the API is down (needs **Circuit Breaker**).
 
 Combine them in the correct order. Like an onion, the outer layers handle broader concerns, while inner layers handle specific execution details.
+
+```mermaid
+flowchart TB
+    subgraph stack ["Recommended Middleware Stack"]
+        direction TB
+        F["fallback\n(Plan B if everything fails)"]
+        RL["rateLimit\n(reject if over quota)"]
+        CB["circuitBreaker\n(fail fast if service is down)"]
+        R["retry\n(retry transient failures)"]
+        T["timeout\n(per-attempt deadline)"]
+        Task["Task .run()"]
+
+        F --> RL
+        RL --> CB
+        CB --> R
+        R --> T
+        T --> Task
+    end
+
+    style F fill:#607D8B,color:#fff
+    style RL fill:#FF9800,color:#fff
+    style CB fill:#f44336,color:#fff
+    style R fill:#2196F3,color:#fff
+    style T fill:#9C27B0,color:#fff
+    style Task fill:#4CAF50,color:#fff
+```
 
 ```typescript
 import { r } from "@bluelibs/runner";

@@ -7,6 +7,7 @@ describe("cache middleware stable task id coverage", () => {
       has: jest.fn(async () => false),
       set: jest.fn(async () => undefined),
       clear: jest.fn(async () => undefined),
+      invalidateRefs: jest.fn(async () => 0),
     };
     const deps = {
       cache: {

@@ -63,6 +63,110 @@ describe("tenantScope middleware support", () => {
     await runtime.dispose();
   });
 
+  it("scopes cache ref invalidation by tenant by default", async () => {
+    let callCount = 0;
+
+    const task = defineTask({
+      id: "tenant-cache-ref-task",
+      middleware: [
+        cacheMiddleware.with({
+          ttl: 60_000,
+          keyBuilder: (_taskId: string, input: { userId: string }) => ({
+            cacheKey: `user:${input.userId}`,
+            refs: [`user:${input.userId}`],
+          }),
+        }),
+      ],
+      run: async (input: { userId: string }) =>
+        `${input.userId}-${++callCount}`,
+    });
+
+    const app = defineResource({
+      id: "tenant-cache-ref-app",
+      register: [cacheResource, task],
+      dependencies: { task, cache: cacheResource },
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+    const cache = runtime.getResourceValue(cacheResource);
+
+    await asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      runtime.runTask(task, { userId: "u1" }),
+    );
+    await asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      runtime.runTask(task, { userId: "u1" }),
+    );
+
+    await asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      cache.invalidateRefs("user:u1"),
+    );
+
+    await expect(
+      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+        runtime.runTask(task, { userId: "u1" }),
+      ),
+    ).resolves.toBe("u1-3");
+    await expect(
+      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+        runtime.runTask(task, { userId: "u1" }),
+      ),
+    ).resolves.toBe("u1-2");
+
+    await runtime.dispose();
+  });
+
+  it('uses the target cache policy when invalidating refs with tenantScope: "off"', async () => {
+    let callCount = 0;
+
+    const task = defineTask({
+      id: "tenant-cache-ref-off-task",
+      middleware: [
+        cacheMiddleware.with({
+          ttl: 60_000,
+          tenantScope: "off",
+          keyBuilder: (_taskId: string, input: { userId: string }) => ({
+            cacheKey: `user:${input.userId}`,
+            refs: [`user:${input.userId}`],
+          }),
+        }),
+      ],
+      run: async (input: { userId: string }) =>
+        `${input.userId}-${++callCount}`,
+    });
+
+    const app = defineResource({
+      id: "tenant-cache-ref-off-app",
+      register: [cacheResource, task],
+      dependencies: { task, cache: cacheResource },
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+    const cache = runtime.getResourceValue(cacheResource);
+
+    await asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      runtime.runTask(task, { userId: "u1" }),
+    );
+    await asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      runtime.runTask(task, { userId: "u1" }),
+    );
+
+    expect(callCount).toBe(1);
+
+    await asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      cache.invalidateRefs("user:u1"),
+    );
+
+    await expect(
+      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+        runtime.runTask(task, { userId: "u1" }),
+      ),
+    ).resolves.toBe("u1-2");
+
+    await runtime.dispose();
+  });
+
   it("isolates rate limits by tenant by default", async () => {
     const task = defineTask({
       id: "tenant-rate-limit-task",

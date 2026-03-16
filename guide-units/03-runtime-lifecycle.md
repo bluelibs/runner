@@ -207,6 +207,20 @@ Practical effect for HTTP resources:
 - Let already in-flight request work finish during the drain budget window.
 - In `drained`, business admissions are fully closed; resource cleanup/disposal starts.
 
+```mermaid
+stateDiagram-v2
+    [*] --> running
+    running --> coolingDown : dispose() or signal
+    coolingDown --> disposing : cooldown done + optional window
+    disposing --> drained : in‑flight work drained
+    drained --> [*] : resources disposed
+
+    running : Admit all task/event calls
+    coolingDown : Business admissions stay open\ncooldown() runs, then optional cooldownWindowMs
+    disposing : Reject fresh external admissions\nAllow in‑flight continuations + allowlisted origins
+    drained : All business admissions blocked\nLifecycle events fire, then resource disposal
+```
+
 ### Resource `cooldown()` in Shutdown
 
 `resource.cooldown(...)` is a pre-drain ingress-stop hook. It runs during `coolingDown`, before any optional `dispose.cooldownWindowMs` window, before `disposing`, before `events.disposing`, and before drain waiting.
@@ -381,6 +395,41 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 7. transition to `drained`
 8. `events.drained` (lifecycle-bypassed, awaited)
 9. fully awaited resource disposal
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant Runner
+    participant Resources
+
+    App->>Runner: dispose()
+    activate Runner
+
+    rect rgb(255, 243, 224)
+        Note over Runner: coolingDown — business admissions open
+        Runner->>Resources: cooldown() (reverse dependency order)
+        Resources-->>Runner: ingress stopped
+        Note over Runner: optional cooldownWindowMs wait
+    end
+
+    rect rgb(255, 224, 224)
+        Note over Runner: disposing — admissions narrowed
+        Runner->>Runner: events.disposing
+        Runner->>Runner: drain in‑flight work (drainingBudgetMs)
+    end
+
+    rect rgb(224, 224, 255)
+        Note over Runner: drained — all business admissions blocked
+        Runner->>Runner: events.drained (lifecycle‑bypassed)
+        Runner->>Resources: dispose() (reverse dependency order)
+        Resources-->>Runner: cleaned up
+    end
+
+    Runner-->>App: shutdown complete
+    deactivate Runner
+
+    Note over App,Resources: totalBudgetMs caps the bounded waits,\nnot lifecycle hook completion
+```
 
 Important: hooks registered on `events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
 

@@ -38,6 +38,39 @@ const app = r
 
 **What you just learned**: Events are typed signals, hooks subscribe to them, and tasks emit events through dependency injection. Producers stay decoupled from hook execution.
 
+```mermaid
+sequenceDiagram
+    participant Task
+    participant EventManager
+    participant H1 as Hook (order: 1)
+    participant H2 as Hook (order: 2)
+    participant H3 as Hook (order: 2)
+
+    Task->>EventManager: emit(event, payload)
+    activate EventManager
+    Note over EventManager: validate payload, sort by priority
+
+    EventManager->>H1: run (sequential, order 1)
+    H1-->>EventManager: done
+
+    alt parallel: false (default)
+        EventManager->>H2: run (sequential, order 2)
+        H2-->>EventManager: done
+        EventManager->>H3: run (sequential, order 2)
+        H3-->>EventManager: done
+    else parallel: true
+        par same-priority batch
+            EventManager->>H2: run (order 2)
+            EventManager->>H3: run (order 2)
+        end
+        H2-->>EventManager: done
+        H3-->>EventManager: done
+    end
+
+    EventManager-->>Task: emission complete
+    deactivate EventManager
+```
+
 Events follow a few core rules that keep the system predictable:
 
 - events carry typed payloads validated by `.payloadSchema()`
@@ -88,6 +121,29 @@ Transactional behavior:
 - `transactional + parallel` is invalid
 - `transactional + tags.eventLane` is invalid
 
+```mermaid
+sequenceDiagram
+    participant EM as EventManager
+    participant A as Hook A
+    participant B as Hook B
+    participant C as Hook C
+
+    EM->>A: run
+    A-->>EM: undo_A
+    EM->>B: run
+    B-->>EM: undo_B
+    EM->>C: run
+    C->>C: throws error
+
+    Note over EM,C: Rollback in reverse order
+    EM->>B: undo_B()
+    B-->>EM: rolled back
+    EM->>A: undo_A()
+    A-->>EM: rolled back
+
+    EM->>EM: throw aggregated error
+```
+
 ### Parallel Event Execution
 
 By default, hooks run sequentially in priority order.
@@ -132,6 +188,24 @@ Cancellation behavior:
 - sequential events stop admitting new hooks once cancelled
 - parallel events let the current batch settle, then stop before the next batch
 - transactional events roll back already-completed hooks before the cancellation escapes
+
+```mermaid
+flowchart TD
+    Signal["signal.abort()"] --> Mode{Execution mode?}
+
+    Mode -->|sequential| Seq["Stop admitting\nnew hooks immediately"]
+    Mode -->|parallel| Par["Let current batch settle,\nthen stop before next batch"]
+    Mode -->|transactional| Tx["Roll back completed hooks,\nthen propagate cancellation"]
+
+    Seq --> Done[Emission ends]
+    Par --> Done
+    Tx --> Done
+
+    style Signal fill:#FF9800,color:#fff
+    style Seq fill:#4CAF50,color:#fff
+    style Par fill:#2196F3,color:#fff
+    style Tx fill:#9C27B0,color:#fff
+```
 
 `event.signal` stays `undefined` until a real source is explicitly provided or inherited from the current execution. Internal framework code can call `eventManager.emit(event, payload, { source, signal })` when it needs explicit source control.
 
