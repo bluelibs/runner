@@ -145,6 +145,56 @@ describe("createHttpSmartClient - multipart", () => {
     // The correct format uses a separate filename parameter as asserted above.
   });
 
+  it("escapes quotes and backslashes in multipart disposition values", async () => {
+    let capturedBody = Buffer.alloc(0);
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
+      const env = { ok: true, result: "OK" };
+      const res = Readable.from([
+        Buffer.from(new Serializer().stringify(env), "utf8"),
+      ]);
+
+      const sink = new Writable({
+        write(chunk, _enc, next) {
+          capturedBody = Buffer.concat([
+            capturedBody,
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)),
+          ]);
+          next();
+        },
+        final(next) {
+          next();
+        },
+      }) as any;
+      sink.on = (_: any, __: any) => sink;
+      sink.setTimeout = () => sink;
+      sink.destroy = () => undefined;
+
+      setImmediate(() =>
+        cb(asIncoming(res, { "content-type": "application/json" })),
+      );
+      return sink;
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: new Serializer(),
+    });
+    const file = createNodeFile(
+      { name: 'payload\\"name.txt', type: "text/plain" },
+      { stream: Readable.from("hi") },
+      'F\\\\"Q',
+    );
+
+    const out = await client.task("upload", { file } as any);
+    expect(out).toBe("OK");
+
+    await new Promise((resolve) => setImmediate(resolve));
+    const text = capturedBody.toString("utf8");
+    expect(text).toContain(
+      'Content-Disposition: form-data; name="file:F\\\\\\\\\\"Q"; filename="payload\\\\\\"name.txt"',
+    );
+  });
+
   it("coerces both Buffer and string chunks in encoder loop", async () => {
     let captured = Buffer.alloc(0);
     jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {

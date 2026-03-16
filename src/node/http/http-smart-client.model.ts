@@ -255,7 +255,7 @@ async function postJson<T = any>(
 }
 
 function escapeHeaderValue(value: string): string {
-  return value.replace(/"/g, '\\"');
+  return value.replace(/[\\"]/g, "\\$&").replace(/[\r\n]+/g, " ");
 }
 
 function encodeMultipart(
