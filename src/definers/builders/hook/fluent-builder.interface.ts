@@ -6,14 +6,20 @@ import type {
   IHookDefinition,
   ITaskMeta,
   HookTagType,
+  HookArrayOnTarget,
+  HookOnPredicate,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
+import type { IsolationSubtreeFilter } from "../../../types/resource";
 
 /** Valid event targets for hook's .on() method */
 export type ValidOnTarget =
   | "*"
   | IEventDefinition<any>
-  | readonly IEventDefinition<any>[];
+  | readonly IEventDefinition<any>[]
+  | IsolationSubtreeFilter
+  | HookOnPredicate
+  | readonly HookArrayOnTarget[];
 
 /** Resolved TOn when valid, or `any` when undefined (build will throw at runtime) */
 export type ResolvedOn<TOn> = TOn extends ValidOnTarget ? TOn : any;

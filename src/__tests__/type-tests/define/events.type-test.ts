@@ -1,6 +1,14 @@
-import { defineEvent, defineHook, defineTask } from "../../../define";
+import {
+  defineEvent,
+  defineHook,
+  defineResource,
+  defineTag,
+  defineTask,
+} from "../../../define";
+import type { IEvent } from "../../../defs";
 import { isOneOf, onAnyOf } from "../../../types/event";
 import type { HookRevertFn } from "../../../types/hook";
+import { subtreeOf } from "../../../";
 
 // Type-only tests for define event and hook typing.
 
@@ -38,6 +46,79 @@ import type { HookRevertFn } from "../../../types/hook";
       // @ts-expect-error
       deps.task2;
     },
+  });
+}
+
+// Scenario: selector-based hook targets widen payload typing and keep "*" standalone.
+{
+  const selectorTag = defineTag({
+    id: "define-selector-tag",
+  });
+  const subtreeEvent = defineEvent<{ subtree: string }>({
+    id: "define-selector-subtree-event",
+    transactional: true,
+  });
+  const exactEvent = defineEvent<{ exact: string }>({
+    id: "define-selector-exact-event",
+  });
+  const ownerResource = defineResource({
+    id: "define-selector-owner",
+    register: [subtreeEvent],
+  });
+
+  defineHook({
+    id: "define-selector-subtree-hook",
+    on: subtreeOf(ownerResource),
+    run: async (event) => {
+      event.data.anythingGoes;
+    },
+  });
+
+  defineHook({
+    id: "define-selector-predicate-hook",
+    on: (event: IEvent<any>) => selectorTag.exists(event),
+    run: async (event) => {
+      event.data.anythingGoes;
+    },
+  });
+
+  defineHook({
+    id: "define-selector-mixed-hook",
+    on: [exactEvent, subtreeOf(ownerResource)],
+    run: async () => {},
+  });
+
+  defineHook({
+    id: "define-selector-mixed-payload-hook",
+    on: [exactEvent, (event: IEvent<any>) => selectorTag.exists(event)],
+    run: async (event) => {
+      event.data.anythingGoes;
+    },
+  });
+
+  defineHook({
+    id: "define-selector-tx-runtime-only",
+    on: subtreeOf(ownerResource),
+    run: async () => {},
+  });
+
+  defineHook({
+    id: "define-selector-tx-mixed-runtime-only",
+    on: [subtreeEvent, (event: IEvent<any>) => event.id === subtreeEvent.id],
+    run: async () => {},
+  });
+
+  defineHook({
+    id: "define-selector-event-subtree-explicit",
+    on: subtreeOf(ownerResource, { types: ["event"] }),
+    run: async () => {},
+  });
+
+  defineHook({
+    id: "define-selector-invalid-wildcard-array",
+    // @ts-expect-error wildcard must stay standalone
+    on: [exactEvent, "*"] as const,
+    run: async () => {},
   });
 }
 

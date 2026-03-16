@@ -345,14 +345,24 @@ For lifecycle-owned timers, prefer `resources.timers` inside a task or resource:
 
 ## Events and Hooks
 
-Events decouple producers from listeners. Hooks subscribe with `.on(event)` or `.on(onAnyOf(...))`.
-Passing arrays directly is invalid.
+Events decouple producers from listeners. Hooks subscribe with:
+
+- `.on(event)` for one exact event
+- `.on(onAnyOf(...))` for tuple-friendly exact-event unions
+- `.on(subtreeOf(resource))` for all visible events in a resource subtree
+- `.on((event) => boolean)` for bootstrap-time predicate matching over registered events
+- `.on([...])` to mix exact events, `subtreeOf(...)`, and predicates
+
+Literal `"*"` stays standalone and cannot be used inside arrays.
 
 Key rules:
 
 - `.order(priority)` controls execution order. Lower numbers run first.
 - `event.stopPropagation()` prevents downstream hooks from running.
 - `.on("*")` listens to all visible events except those tagged with `tags.excludeFromGlobalHooks`.
+- Selector-based hooks (`subtreeOf(...)`, predicates, or arrays containing them) resolve once at bootstrap and subscribe only to events visible to the hook on the `listening` channel.
+- Exact direct event refs still fail fast on visibility violations; selector matches that are not visible are skipped.
+- Selector-based hooks trade away payload autocomplete. Exact event refs and exact event tuples keep strong payload inference.
 - `.parallel(true)` allows concurrent same-priority listeners.
 - `.transactional(true)` makes listeners reversible. Each executed hook must return an async undo closure.
 

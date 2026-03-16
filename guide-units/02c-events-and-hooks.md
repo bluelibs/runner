@@ -41,7 +41,7 @@ const app = r
 Events follow a few core rules that keep the system predictable:
 
 - events carry typed payloads validated by `.payloadSchema()`
-- hooks subscribe with `.on(event)` or `.on(onAnyOf(...))`
+- hooks subscribe with exact events, `onAnyOf(...)`, `subtreeOf(resource)`, predicates, or arrays mixing those selector forms
 - `.order(priority)` controls hook priority
 - wildcard `.on("*")` listens to all events except those tagged with `tags.excludeFromGlobalHooks`
 - `event.stopPropagation()` prevents downstream hooks from running
@@ -194,9 +194,44 @@ const internalEvent = r
   .build();
 ```
 
+`tags.excludeFromGlobalHooks` affects only literal wildcard hooks. Explicit selector-based hooks such as `subtreeOf(...)` and predicates can still match those events when they are otherwise visible.
+
+### Selector-Based Hook Targets
+
+Hooks can subscribe structurally at bootstrap time:
+
+```typescript
+import { defineHook, subtreeOf, tags } from "@bluelibs/runner";
+
+const subtreeListener = defineHook({
+  id: "subtreeListener",
+  on: subtreeOf(featureResource),
+  run: async (event) => {
+    console.log(event.id);
+  },
+});
+
+const taggedListener = defineHook({
+  id: "taggedListener",
+  on: (event) => tags.audit.exists(event),
+  run: async (event) => {
+    console.log(event.id);
+  },
+});
+```
+
+Selector rules:
+
+- selectors resolve once against registered canonical event definitions during bootstrap
+- selector matches are narrowed to events the hook may listen to on the `listening` channel
+- exact direct event refs still fail fast when visibility is violated
+- arrays may mix exact events, `subtreeOf(...)`, and predicates, but `"*"` must remain standalone
+- selector-based hooks lose payload autocomplete because the final matched set is runtime-resolved
+- exact event refs and `onAnyOf(...)` keep the usual payload inference
+
 ### Listening to Multiple Events
 
-Use `onAnyOf()` for tuple-friendly inference and `isOneOf()` as a runtime guard.
+Use `onAnyOf()` for tuple-friendly exact-event inference and `isOneOf()` as a runtime guard.
 
 ```typescript
 import { Match, isOneOf, onAnyOf, r } from "@bluelibs/runner";

@@ -18,13 +18,13 @@ import {
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
-import { eventNotFoundError } from "../errors";
 import { Logger } from "./Logger";
 import { ResourceLifecycleMode } from "../types/runner";
 import { DependencyExtractor } from "./dependency-processor/DependencyExtractor";
 import { HookEventBuffer } from "./dependency-processor/HookEventBuffer";
 import { ResourceScheduler } from "./dependency-processor/ResourceScheduler";
 import { ExecutionContextStore } from "./ExecutionContextStore";
+import { resolveHookTargets } from "./hook/resolveHookTargets";
 
 /**
  * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
@@ -351,8 +351,6 @@ export class DependencyProcessor {
     for (const hookStoreElement of this.store.hooks.values()) {
       const hook = hookStoreElement.hook;
       if (hook.on) {
-        const eventDefinition = hook.on;
-
         const handler = async (receivedEvent: IEventEmission<any>) => {
           if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {
             this.enqueueBufferedHookEvent(hook.id, receivedEvent);
@@ -369,31 +367,44 @@ export class DependencyProcessor {
         const order = hook.order ?? 0;
         const hookListenerId = hook.id;
 
-        if (eventDefinition === "*") {
+        if (hook.on === "*") {
           this.eventManager.addGlobalListener(handler, {
             order,
             id: hookListenerId,
           });
-        } else if (Array.isArray(eventDefinition)) {
-          const resolvedEvents = (eventDefinition as IEvent[]).map((event) => {
-            const eventId = this.store.findIdByDefinition(event);
-            const storeEvent = this.store.events.get(eventId);
-            if (storeEvent === undefined) {
-              eventNotFoundError.throw({ id: eventId });
-            }
-            return storeEvent!.event;
-          });
-          this.eventManager.addListener(resolvedEvents, handler, {
-            order,
-            id: hookListenerId,
-          });
         } else {
-          const eventId = this.store.findIdByDefinition(eventDefinition);
-          const storeEvent = this.store.events.get(eventId);
-          if (storeEvent === undefined) {
-            eventNotFoundError.throw({ id: eventId });
+          const resolvedEvents = resolveHookTargets({
+            context: {
+              resolveDefinitionId: (reference) =>
+                this.store.lookup.resolveCandidateId(reference),
+              getEventById: (id) => this.store.events.get(id)?.event,
+              getRegisteredEvents: () =>
+                Array.from(this.store.events.values(), ({ event }) => event),
+              getResourceById: (id) => this.store.resources.get(id)?.resource,
+              isWithinResourceSubtree: (resourceId, itemId) =>
+                this.store.isItemWithinResourceSubtree(resourceId, itemId),
+              getAccessViolation: (targetId, consumerId, channel) =>
+                this.store.getAccessViolation(targetId, consumerId, channel),
+            },
+            hookId: hook.id,
+            on: hook.on,
+          }).map((entry) => entry.event);
+
+          if (resolvedEvents.length === 0) {
+            // Selector-based hooks may resolve to no visible events after
+            // bootstrap narrowing, in which case no listener should be attached.
+            continue;
           }
-          this.eventManager.addListener(storeEvent!.event as IEvent, handler, {
+
+          if (resolvedEvents.length === 1) {
+            this.eventManager.addListener(resolvedEvents[0], handler, {
+              order,
+              id: hookListenerId,
+            });
+            continue;
+          }
+
+          this.eventManager.addListener(resolvedEvents, handler, {
             order,
             id: hookListenerId,
           });

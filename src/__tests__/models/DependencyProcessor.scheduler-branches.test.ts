@@ -438,7 +438,7 @@ describe("DependencyProcessor scheduler branches", () => {
     );
 
     expect(() => processor.attachListeners()).toThrow(
-      /Definition "dependency-processor-missing-array-event" not found/i,
+      /Event "dependency-processor-missing-array-event" not found/i,
     );
   });
 
@@ -470,7 +470,7 @@ describe("DependencyProcessor scheduler branches", () => {
     );
 
     expect(() => processor.attachListeners()).toThrow(
-      /Definition "dependency-processor-missing-single-event" not found/i,
+      /Event "dependency-processor-missing-single-event" not found/i,
     );
   });
 });

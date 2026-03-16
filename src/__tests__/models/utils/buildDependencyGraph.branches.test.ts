@@ -235,6 +235,13 @@ describe("buildDependencyGraph branch coverage", () => {
         }
         return id;
       },
+      resolveHookTargets: (hook: { on: unknown }) => {
+        const targetId = resolveDefinitionId(hook.on);
+        const event = targetId
+          ? fakeRegistry.events.get(targetId)?.event
+          : undefined;
+        return event ? [{ event, provenance: "exact" as const }] : [];
+      },
     };
 
     expect(() =>
@@ -295,6 +302,57 @@ describe("buildDependencyGraph branch coverage", () => {
         `tag:${tag.id}:${taggedTask.id}`
       ]?.id,
     ).toBe(taggedTask.id);
+  });
+
+  it("skips selector-resolved source events that are missing from the registered event graph", () => {
+    const registeredEvent = defineEvent({
+      id: "graph-branch-selector-registered-event",
+    });
+    const missingSourceEvent = defineEvent({
+      id: "graph-branch-selector-missing-source-event",
+    });
+    const dependentEvent = defineEvent({
+      id: "graph-branch-selector-dependent-event",
+    });
+
+    const graph = buildEventEmissionGraph({
+      hooks: new Map([
+        [
+          "graph-branch-selector-hook",
+          {
+            hook: {
+              id: "graph-branch-selector-hook",
+              on: () => true,
+              dependencies: { dependentEvent },
+            },
+          },
+        ],
+      ]),
+      events: new Map([
+        [registeredEvent.id, { event: registeredEvent }],
+        [dependentEvent.id, { event: dependentEvent }],
+      ]),
+      tasks: new Map(),
+      resources: new Map(),
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      visibilityTracker: {
+        isAccessible: () => true,
+        getOwnerResourceId: () => undefined,
+        isWithinResourceSubtree: () => false,
+      },
+      resolveDefinitionId,
+      resolveHookTargets: () => [
+        { event: missingSourceEvent, provenance: "selector" as const },
+        { event: registeredEvent, provenance: "selector" as const },
+      ],
+    } as any);
+
+    expect(
+      graph.find((node) => node.id === registeredEvent.id)?.dependencies[
+        dependentEvent.id
+      ]?.id,
+    ).toBe(dependentEvent.id);
   });
 
   it("covers subtree middleware dedupe and missing-node guards", () => {

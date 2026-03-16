@@ -2,6 +2,7 @@ import {
   IEvent,
   IEventEmissionCallOptions,
   IResource,
+  IsolationChannel,
   ITag,
   RegisterableItem,
   TagDependencyAccessor,
@@ -54,6 +55,7 @@ import { Match, check } from "../tools/check/engine";
 import { StoreLookup, resolveRequestedIdFromStore } from "./StoreLookup";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import { resolveExecutionContextConfig } from "../tools/resolveExecutionContextConfig";
+import type { AccessViolation } from "./VisibilityTracker";
 
 // Re-export types for backward compatibility
 export type {
@@ -167,8 +169,29 @@ export class Store {
   public isItemVisibleToConsumer(
     targetId: string,
     consumerId: string,
+    channel: IsolationChannel = "dependencies",
   ): boolean {
-    return this.registry.visibilityTracker.isAccessible(targetId, consumerId);
+    return this.registry.visibilityTracker.isAccessible(
+      targetId,
+      consumerId,
+      channel,
+    );
+  }
+
+  /**
+   * Returns the concrete visibility/isolation violation for a target-consumer
+   * pair when one exists.
+   */
+  public getAccessViolation(
+    targetId: string,
+    consumerId: string,
+    channel: IsolationChannel = "dependencies",
+  ): AccessViolation | null {
+    return this.registry.visibilityTracker.getAccessViolation(
+      targetId,
+      consumerId,
+      channel,
+    );
   }
 
   /**

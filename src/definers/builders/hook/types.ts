@@ -1,8 +1,8 @@
 import type {
   DependencyMapType,
-  IEventDefinition,
   IHookDefinition,
   ITaskMeta,
+  OnType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -14,11 +14,7 @@ import type { ThrowsList } from "../../../types/error";
  */
 export type BuilderState<
   TDeps extends DependencyMapType,
-  TOn extends
-    | "*"
-    | IEventDefinition<any>
-    | readonly IEventDefinition<any>[]
-    | undefined,
+  TOn extends OnType | undefined,
   TMeta extends ITaskMeta,
 > = Readonly<
   Omit<

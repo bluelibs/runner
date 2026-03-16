@@ -36,6 +36,10 @@ import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
 import type { RunnerMode } from "../types/runner";
+import {
+  resolveHookTargets,
+  type HookTargetResolutionEntry,
+} from "./hook/resolveHookTargets";
 
 /**
  * Any object reference used as a definition identity key.
@@ -423,6 +427,38 @@ export class StoreRegistry {
    */
   buildEventEmissionGraph() {
     return buildEmissionGraph(this);
+  }
+
+  /**
+   * Resolves a hook's `on` declaration into concrete registered events using
+   * canonical ids plus current listening-visibility rules.
+   */
+  resolveHookTargets(
+    hook: Pick<IHook<any, any, any>, "id" | "on">,
+  ): HookTargetResolutionEntry[] {
+    if (!hook.on || hook.on === "*") {
+      return [];
+    }
+
+    return resolveHookTargets({
+      context: {
+        resolveDefinitionId: (reference) => this.resolveDefinitionId(reference),
+        getEventById: (id) => this.events.get(id)?.event,
+        getRegisteredEvents: () =>
+          Array.from(this.events.values(), ({ event }) => event),
+        getResourceById: (id) => this.resources.get(id)?.resource,
+        isWithinResourceSubtree: (resourceId, itemId) =>
+          this.visibilityTracker.isWithinResourceSubtree(resourceId, itemId),
+        getAccessViolation: (targetId, consumerId, channel) =>
+          this.visibilityTracker.getAccessViolation(
+            targetId,
+            consumerId,
+            channel,
+          ),
+      },
+      hookId: hook.id,
+      on: hook.on,
+    });
   }
 
   getTagAccessor<TTag extends ITag<any, any, any>>(

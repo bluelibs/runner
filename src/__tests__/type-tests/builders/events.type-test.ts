@@ -1,4 +1,5 @@
 import { r } from "../../../";
+import type { IEvent } from "../../../defs";
 import { isOneOf, onAnyOf } from "../../../types/event";
 import type { IEventEmitReport } from "../../../types/event";
 import type { HookRevertFn } from "../../../types/hook";
@@ -40,6 +41,62 @@ import type { HookRevertFn } from "../../../types/hook";
       // @ts-expect-error
       deps.task2x;
     })
+    .build();
+}
+
+// Scenario: selector-based hook targets widen payload typing and keep "*" standalone.
+{
+  const selectorTag = r.tag("builder-selector-tag").build();
+  const subtreeEvent = r
+    .event("builder-selector-subtree-event")
+    .transactional()
+    .build();
+  const exactEvent = r.event("builder-selector-exact-event").build();
+  const ownerResource = r
+    .resource("builder-selector-owner")
+    .register([subtreeEvent])
+    .build();
+
+  r.hook("builder-selector-subtree-hook")
+    .on(r.subtreeOf(ownerResource))
+    .run(async (event) => {
+      event.data.anythingGoes;
+    })
+    .build();
+
+  r.hook("builder-selector-predicate-hook")
+    .on((event: IEvent<any>) => selectorTag.exists(event))
+    .run(async (event) => {
+      event.data.anythingGoes;
+    })
+    .build();
+
+  r.hook("builder-selector-mixed-hook")
+    .on([exactEvent, r.subtreeOf(ownerResource)])
+    .run(async (event) => {
+      event.data.anythingGoes;
+    })
+    .build();
+
+  r.hook("builder-selector-tx-runtime-only")
+    .on(r.subtreeOf(ownerResource))
+    .run(async () => {})
+    .build();
+
+  r.hook("builder-selector-tx-mixed-runtime-only")
+    .on([subtreeEvent, (event: IEvent<any>) => event.id === subtreeEvent.id])
+    .run(async () => {})
+    .build();
+
+  r.hook("builder-selector-event-subtree-explicit")
+    .on(r.subtreeOf(ownerResource, { types: ["event"] }))
+    .run(async () => {})
+    .build();
+
+  r.hook("builder-selector-invalid-wildcard-array")
+    // @ts-expect-error wildcard must stay standalone
+    .on([exactEvent, "*"] as const)
+    .run(async () => {})
     .build();
 }
 

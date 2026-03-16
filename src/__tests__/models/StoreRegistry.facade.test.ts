@@ -341,4 +341,21 @@ describe("StoreRegistry facade delegates", () => {
       ),
     ).toEqual([task.id]);
   });
+
+  it("returns an empty resolution set for hooks without explicit targets or wildcard targets", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+
+    expect(
+      registry.resolveHookTargets({
+        id: "registry-empty-hook",
+        on: undefined,
+      }),
+    ).toEqual([]);
+    expect(
+      registry.resolveHookTargets({
+        id: "registry-wildcard-hook",
+        on: "*",
+      }),
+    ).toEqual([]);
+  });
 });

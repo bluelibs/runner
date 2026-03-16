@@ -62,6 +62,44 @@ describe("Store", () => {
     ).toBe(true);
   });
 
+  it("should expose access-violation helper methods with the default dependencies channel", () => {
+    const hiddenTask = defineTask({
+      id: "store-visibility-hidden-task",
+      run: async () => "hidden",
+    });
+    const consumerTask = defineTask({
+      id: "store-visibility-consumer-task",
+      run: async () => "consumer",
+    });
+    const owner = defineResource({
+      id: "store-visibility-owner",
+      register: [hiddenTask],
+      isolate: { exports: [] },
+      async init() {
+        return "owner";
+      },
+    });
+    const root = defineResource({
+      id: "store-visibility-root",
+      register: [owner, consumerTask],
+      async init() {
+        return "root";
+      },
+    });
+
+    store.initializeStore(root, {}, runtimeResult);
+
+    expect(
+      store.getAccessViolation(
+        store.findIdByDefinition(hiddenTask),
+        store.findIdByDefinition(consumerTask),
+      ),
+    ).toMatchObject({
+      kind: "visibility",
+      targetOwnerResourceId: store.findIdByDefinition(owner),
+    });
+  });
+
   it("should enter shutdown lockdown once and keep it idempotent", () => {
     expect(store.isInShutdownLockdown()).toBe(false);
     store.enterShutdownLockdown();

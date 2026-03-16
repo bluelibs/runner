@@ -197,6 +197,34 @@ const listener = r
   .build();
 ```
 
+Hooks also support selector-style subscriptions:
+
+```ts
+const subtreeListener = r
+  .hook("hooks.subtree")
+  .on(r.subtreeOf(featureResource))
+  .run(async (event) => {
+    // selector-based hooks trade payload autocomplete for broader matching
+    console.log(event.id);
+  })
+  .build();
+
+const predicateListener = r
+  .hook("hooks.predicate")
+  .on((event) => auditTag.exists(event))
+  .run(async (event) => {
+    console.log(event.id);
+  })
+  .build();
+```
+
+Selector notes:
+
+- selectors resolve once at bootstrap against registered events
+- selector matches are narrowed to events visible to the hook
+- exact event refs still fail fast when visibility is violated
+- arrays may mix exact events, `r.subtreeOf(...)`, and predicates, but `"*"` must stay standalone
+
 Register and emit via a resource:
 
 ```ts

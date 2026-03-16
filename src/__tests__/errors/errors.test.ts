@@ -114,7 +114,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Definition "non-existent-event" not found.',
+      'Event "non-existent-event" not found.',
     );
   });
 
