@@ -1,9 +1,32 @@
 import {
   cacheMiddleware,
   journalKeys,
+  resolveCacheMiddlewareConfig,
 } from "../../globals/middleware/cache.middleware";
 
 describe("cache middleware coverage", () => {
+  it("falls back to the default key builder when config explicitly sets keyBuilder to undefined", () => {
+    const resolved = resolveCacheMiddlewareConfig(
+      {
+        keyBuilder: undefined,
+        ttl: 123,
+      },
+      {
+        allowStale: true,
+      },
+    );
+
+    expect(resolved.cacheOptions).toEqual({
+      allowStale: true,
+      max: 100,
+      ttl: 123,
+      ttlAutopurge: true,
+    });
+    expect(resolved.keyBuilder("task", { ok: true })).toBe(
+      'task-{"ok":true}',
+    );
+  });
+
   it("keeps raw task ids unchanged when no canonical task marker is present", async () => {
     const get = jest.fn(async () => undefined);
     const set = jest.fn(async () => undefined);
