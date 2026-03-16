@@ -177,10 +177,10 @@ function resolvePredicateEvents(
   const resolvedTargets: HookTargetResolutionEntry[] = [];
 
   for (const event of context.getRegisteredEvents()) {
-    if (!predicate(event)) {
+    if (context.getAccessViolation(event.id, hookId, "listening")) {
       continue;
     }
-    if (context.getAccessViolation(event.id, hookId, "listening")) {
+    if (!predicate(event)) {
       continue;
     }
 

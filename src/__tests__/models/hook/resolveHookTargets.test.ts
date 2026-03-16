@@ -140,6 +140,37 @@ describe("resolveHookTargets", () => {
 
     expect(matches).toEqual([{ event, provenance: "selector" }]);
   });
+
+  it("does not invoke predicate selectors for inaccessible events", () => {
+    const accessibleEvent = defineEvent({
+      id: "hook-resolve-accessible-predicate-event",
+    });
+    const inaccessibleEvent = defineEvent({
+      id: "hook-resolve-inaccessible-predicate-event",
+    });
+    const predicate = jest.fn((event: { id: string }) => {
+      if (event.id === inaccessibleEvent.id) {
+        throw new Error("predicate should not receive inaccessible events");
+      }
+
+      return event.id === accessibleEvent.id;
+    });
+
+    const matches = resolveHookTargets({
+      context: createContext({
+        events: [accessibleEvent, inaccessibleEvent],
+        inaccessibleEventIds: [inaccessibleEvent.id],
+      }),
+      hookId: "hook-resolve-predicate-visibility-hook",
+      on: predicate,
+    });
+
+    expect(matches).toEqual([
+      { event: accessibleEvent, provenance: "selector" },
+    ]);
+    expect(predicate).toHaveBeenCalledTimes(1);
+    expect(predicate).toHaveBeenCalledWith(accessibleEvent);
+  });
 });
 
 function createContext(options?: {
