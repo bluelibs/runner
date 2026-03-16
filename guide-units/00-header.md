@@ -78,11 +78,11 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./readmes/AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
+| [AI-Friendly Docs](./readmes/AI.md)                                                                                 | Docs    | Compact summary (<10,000 tokens)    |
 | [Full Guide](./readmes/FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
 | [Support & Release Policy](./readmes/ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
-| [Example: AWS Lambda Quickstart](https://github.com/bluelibs/runner/tree/main/examples/aws-lambda-quickstart)        | Example | API Gateway + Lambda integration    |
+| [Example: AWS Lambda Quickstart](https://github.com/bluelibs/runner/tree/main/examples/aws-lambda-quickstart)       | Example | API Gateway + Lambda integration    |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
 
@@ -105,13 +105,13 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ## Platform Support (Quick Summary)
 
-| Capability                                             | Node.js | Browser | Edge | Notes                                      |
-| ------------------------------------------------------ | ------- | ------- | ---- | ------------------------------------------ |
-| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
+| Capability                                             | Node.js | Browser | Edge | Notes                                                                                        |
+| ------------------------------------------------------ | ------- | ------- | ---- | -------------------------------------------------------------------------------------------- |
+| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences                                                   |
 | Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires `AsyncLocalStorage`; Bun/Deno may support it via the universal build when available |
-| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
-| Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Explicit universal client for `fetch` runtimes |
-| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |
+| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                                                                             |
+| Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Explicit universal client for `fetch` runtimes                                               |
+| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP                                                               |
 
 ---
 
@@ -119,11 +119,11 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 Use these minimums before starting:
 
-| Requirement     | Minimum                 | Notes                                                                   |
-| --------------- | ----------------------- | ----------------------------------------------------------------------- |
-| Node.js         | `22.x+`                 | Enforced by `package.json#engines.node`                                 |
-| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
-| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
+| Requirement     | Minimum                 | Notes                                                          |
+| --------------- | ----------------------- | -------------------------------------------------------------- |
+| Node.js         | `22.x+`                 | Enforced by `package.json#engines.node`                        |
+| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository          |
+| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works         |
 | `fetch` runtime | Built-in or polyfilled  | Required for explicit remote lane clients (`createHttpClient`) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
