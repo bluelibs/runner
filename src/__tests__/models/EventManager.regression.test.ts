@@ -2,7 +2,7 @@ import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { EventManager } from "../../models/EventManager";
 import { ExecutionContextStore } from "../../models/ExecutionContextStore";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager regressions", () => {
@@ -67,9 +67,9 @@ describe("EventManager regressions", () => {
     await Promise.resolve();
     eventManager.dispose();
     if (!releaseFirstInterceptor) {
-      throw createMessageError(
-        "Expected first interceptor gate to be initialized",
-      );
+      throw genericError.new({
+        message: "Expected first interceptor gate to be initialized",
+      });
     }
     releaseFirstInterceptor();
     await emitPromise;
@@ -212,7 +212,7 @@ describe("EventManager regressions", () => {
     ).rejects.toThrow("Interceptors can call next() only once per emission.");
   });
 
-  it("does not treat distinct runtime hook instances as repetition cycle", async () => {
+  it("does not treat distinct canonical hook ids as repetition cycle", async () => {
     const eventManager = new EventManager({
       executionContextStore: new ExecutionContextStore({
         maxDepth: 100,
@@ -220,41 +220,32 @@ describe("EventManager regressions", () => {
       }),
     });
 
-    let currentHookPath = "root/first/shared-hook";
-    eventManager.bindStore({
-      createRuntimeSource: () =>
-        runtimeSource.hook("shared-hook", currentHookPath),
-      events: new Map() as any,
-      getRuntimeMetadata: () => {
-        throw createMessageError("getRuntimeMetadata should not be called");
-      },
-      resolveDefinitionId: () => undefined,
-      toRuntimeSource: (source) => source,
-    });
+    const secondHook = {
+      id: "root.second.shared-hook",
+      run: jest.fn(async () => undefined),
+    };
 
-    const hook = {
-      id: "shared-hook",
+    const firstHook = {
+      id: "root.first.shared-hook",
       run: jest.fn(async () => {
-        if (currentHookPath === "root/first/shared-hook") {
-          currentHookPath = "root/second/shared-hook";
-          await eventManager.executeHookWithInterceptors(
-            hook as any,
-            {} as any,
-            {},
-          );
-        }
+        await eventManager.executeHookWithInterceptors(
+          secondHook as any,
+          {} as any,
+          {},
+        );
         return undefined;
       }),
     };
 
     await expect(
-      eventManager.executeHookWithInterceptors(hook as any, {} as any, {}),
+      eventManager.executeHookWithInterceptors(firstHook as any, {} as any, {}),
     ).resolves.toBeUndefined();
 
-    expect(hook.run).toHaveBeenCalledTimes(2);
+    expect(firstHook.run).toHaveBeenCalledTimes(1);
+    expect(secondHook.run).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to definition hook id when runtime source path is missing", async () => {
+  it("uses the hook definition id as the hook source id", async () => {
     const eventManager = new EventManager({
       executionContextStore: new ExecutionContextStore({
         maxDepth: 100,
@@ -266,19 +257,6 @@ describe("EventManager regressions", () => {
       id: "pathless-hook",
       run: jest.fn(async () => undefined),
     };
-
-    eventManager.bindStore({
-      createRuntimeSource: () => ({
-        kind: "hook",
-        id: "pathless-hook",
-      }),
-      events: new Map() as any,
-      getRuntimeMetadata: () => {
-        throw createMessageError("getRuntimeMetadata should not be called");
-      },
-      resolveDefinitionId: () => undefined,
-      toRuntimeSource: (source) => source,
-    });
 
     await expect(
       eventManager.executeHookWithInterceptors(hook as any, {} as any, {}),

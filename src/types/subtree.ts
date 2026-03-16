@@ -4,6 +4,7 @@ import type { IEvent } from "./event";
 import type { IHook } from "./hook";
 import type { ITag } from "./tag";
 import type { ITask } from "./task";
+import type { RunnerMode } from "./runner";
 import type { IResourceMiddleware } from "./resourceMiddleware";
 import type { ITaskMiddleware } from "./taskMiddleware";
 import type { TaskMiddlewareAttachmentType } from "./taskMiddleware";
@@ -174,6 +175,7 @@ export type ResourceSubtreePolicyList =
 
 export type ResourceSubtreePolicyResolver<TConfig = unknown> = (
   config: TConfig,
+  mode?: RunnerMode,
 ) => ResourceSubtreePolicyList;
 
 export type ResourceSubtreePolicyInput<TConfig = unknown> =

@@ -220,7 +220,12 @@ describe("redis cache provider resource", () => {
       { ownsRedisClient: false, redis: null },
     );
 
-    await expect(provider({ ttl: 1_000 })).resolves.toBeInstanceOf(RedisCache);
+    await expect(
+      provider({
+        taskId: "tests-redis-provider-factory",
+        options: { ttl: 1_000 },
+      }),
+    ).resolves.toBeInstanceOf(RedisCache);
   });
 
   it("supports shared totalBudgetBytes across cached tasks", async () => {

@@ -32,11 +32,14 @@ describe("Security: Global hooks scoping", () => {
     });
 
     const rr = await run(app);
+    const publicEventId = rr.store.findIdByDefinition(publicEvent);
+    const internalEventId = rr.store.findIdByDefinition(internalEvent);
+
     await rr.emitEvent(publicEvent, { msg: "hello" });
     await rr.emitEvent(internalEvent, { msg: "secret" });
 
-    expect(seen).toContain("sec-events-public");
-    expect(seen).not.toContain("sec-events-internal");
+    expect(seen).toContain(publicEventId);
+    expect(seen).not.toContain(internalEventId);
     await rr.dispose();
   });
 });

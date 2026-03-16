@@ -128,6 +128,53 @@ describe("run lazy init mode behavior", () => {
     await runtime.dispose();
   });
 
+  it("blocks in-flight lazy wakeups from reaching ready once shutdown starts", async () => {
+    let releaseInit!: () => void;
+    const initGate = new Promise<void>((resolve) => {
+      releaseInit = resolve;
+    });
+    let initStarted = false;
+    const ready = jest.fn(async () => undefined);
+
+    const lazyResource = defineResource({
+      id: "init-mode-lazy-shutdown-race-resource",
+      async init() {
+        initStarted = true;
+        await initGate;
+        return "lazy-resource";
+      },
+      ready,
+    });
+
+    const app = defineResource({
+      id: "init-mode-lazy-shutdown-race-app",
+      register: [lazyResource],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      lazy: true,
+      shutdownHooks: false,
+    });
+
+    const wakeupPromise = runtime.getLazyResourceValue(lazyResource);
+
+    const initObserved = await waitFor(() => initStarted, 120);
+    expect(initObserved).toBe(true);
+
+    const disposePromise = runtime.dispose();
+    releaseInit();
+
+    await expect(wakeupPromise).rejects.toThrow(
+      /cannot be lazy-initialized because shutdown has already started/i,
+    );
+    expect(ready).toHaveBeenCalledTimes(0);
+
+    await disposePromise;
+  });
+
   it("getHealth skips startup-unused lazy resources", async () => {
     const lazyInit = jest.fn(async () => ({ ready: true }));
     const health = jest.fn(async (value: { ready: boolean } | undefined) => {

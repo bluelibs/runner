@@ -63,7 +63,7 @@ Runner is not trying to be the lowest-ceremony option for tiny scripts.
 
 Runner stays understandable because the runtime is built from a small set of definition types with explicit contracts.
 
-> **Naming rule:** User-defined ids are local ids and must not contain `.`. Prefer `send-email` or `user-store`. Dotted `runner.*` and `system.*` ids are reserved for framework internals.
+> **Naming rule:** User-defined ids are local ids and must not contain `.`. Prefer `send-email` or `user-store`.
 
 ```mermaid
 graph LR

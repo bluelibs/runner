@@ -4,26 +4,12 @@ import {
   registerRpcLaneHttpClientPreset,
   RpcLaneHttpClientConfig,
 } from "../../definers/builders/rpcLane";
+import {
+  createErrorRegistry,
+  createForwardingRpcLaneCommunicator,
+  resolveSerializer,
+} from "../../definers/builders/rpcLane/http-client.utils";
 import type { Store } from "../../models/Store";
-import type { IErrorHelper } from "../../types/error";
-import { Serializer } from "../../serializer";
-
-function createErrorRegistry(store?: Store): Map<string, IErrorHelper<any>> {
-  const map = new Map<string, IErrorHelper<any>>();
-  if (!store) return map;
-
-  for (const [id, helper] of store.errors) {
-    map.set(id, helper);
-  }
-
-  return map;
-}
-
-function resolveSerializer(dependencies: Record<string, unknown>) {
-  return (
-    (dependencies.serializer as Serializer | undefined) ?? new Serializer()
-  );
-}
 
 function registerPreset(
   id: "mixed" | "smart",
@@ -57,32 +43,9 @@ export function registerRpcLaneHttpPresetsForNode() {
       errorRegistry: createErrorRegistry(store),
     });
 
-    return {
-      task: async (
-        taskId: string,
-        input?: unknown,
-        options?: { headers?: Record<string, string> },
-      ) =>
-        options
-          ? client.task(taskId, input, options)
-          : client.task(taskId, input),
-      event: async (
-        eventId: string,
-        payload?: unknown,
-        options?: { headers?: Record<string, string> },
-      ) =>
-        options
-          ? client.event(eventId, payload, options)
-          : client.event(eventId, payload),
-      eventWithResult: async (
-        eventId: string,
-        payload?: unknown,
-        options?: { headers?: Record<string, string> },
-      ) =>
-        options
-          ? client.eventWithResult!(eventId, payload, options)
-          : client.eventWithResult!(eventId, payload),
-    };
+    return createForwardingRpcLaneCommunicator(client, {
+      strictEventWithResult: true,
+    });
   });
 
   registerPreset("smart", (config, dependencies) => {
@@ -98,31 +61,8 @@ export function registerRpcLaneHttpPresetsForNode() {
       errorRegistry: createErrorRegistry(store),
     });
 
-    return {
-      task: async (
-        taskId: string,
-        input?: unknown,
-        options?: { headers?: Record<string, string> },
-      ) =>
-        options
-          ? client.task(taskId, input, options)
-          : client.task(taskId, input),
-      event: async (
-        eventId: string,
-        payload?: unknown,
-        options?: { headers?: Record<string, string> },
-      ) =>
-        options
-          ? client.event(eventId, payload, options)
-          : client.event(eventId, payload),
-      eventWithResult: async (
-        eventId: string,
-        payload?: unknown,
-        options?: { headers?: Record<string, string> },
-      ) =>
-        options
-          ? client.eventWithResult!(eventId, payload, options)
-          : client.eventWithResult!(eventId, payload),
-    };
+    return createForwardingRpcLaneCommunicator(client, {
+      strictEventWithResult: true,
+    });
   });
 }

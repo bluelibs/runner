@@ -5,7 +5,7 @@ import type {
 } from "../../durable/core/interfaces/queue";
 import type { IDurableExecutionProcessor } from "../../durable/core/interfaces/service";
 import { DurableWorker } from "../../durable/core/DurableWorker";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
 
 class TestQueue implements IDurableQueue {
@@ -71,7 +71,7 @@ describe("durable: DurableWorker", () => {
     const queue = new TestQueue();
     const service: IDurableExecutionProcessor = {
       processExecution: jest.fn(async () => {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       }),
     };
 

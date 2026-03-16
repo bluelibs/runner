@@ -1,4 +1,4 @@
-import type { ThrowsList } from "../types/error";
+import type { NormalizedThrowsList, ThrowsList } from "../types/error";
 import { isError } from "../definers/tools";
 
 type ThrowOwner = {
@@ -21,27 +21,24 @@ function invalidThrowsEntryError(owner: ThrowOwner, item: unknown): Error {
           ? "object"
           : typeof item;
   return new Error(
-    `Invalid throws entry for ${owner.kind} ${owner.id}: expected error id string or Error helper, got ${got}`,
+    `Invalid throws entry for ${owner.kind} ${owner.id}: expected Error helper, got ${got}`,
   );
 }
 
-function toErrorIdList(owner: ThrowOwner, list: ThrowsList): readonly string[] {
+function toErrorIdList(
+  owner: ThrowOwner,
+  list: ThrowsList,
+): NormalizedThrowsList {
   const ids: string[] = [];
   const seen = new Set<string>();
 
   for (const item of list) {
-    let id: string;
-    if (typeof item === "string") {
-      if (item.trim().length === 0) {
-        throw invalidThrowsEntryError(owner, item);
-      }
-      id = item;
-    } else if (isError(item)) {
-      id = item.id;
-      if (typeof id !== "string" || id.trim().length === 0) {
-        throw invalidThrowsEntryError(owner, item);
-      }
-    } else {
+    if (!isError(item)) {
+      throw invalidThrowsEntryError(owner, item);
+    }
+
+    const id = item.id;
+    if (typeof id !== "string" || id.trim().length === 0) {
       throw invalidThrowsEntryError(owner, item);
     }
 
@@ -56,7 +53,7 @@ function toErrorIdList(owner: ThrowOwner, list: ThrowsList): readonly string[] {
 export function normalizeThrows(
   owner: ThrowOwner,
   throwsList: ThrowsList | undefined,
-): readonly string[] | undefined {
+): NormalizedThrowsList | undefined {
   if (throwsList === undefined) return undefined;
   return toErrorIdList(owner, throwsList);
 }

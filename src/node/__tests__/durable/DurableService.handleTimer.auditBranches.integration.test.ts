@@ -1,6 +1,6 @@
 import { DurableService } from "../../durable/core/DurableService";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 async function waitUntil(
   predicate: () => Promise<boolean>,
@@ -13,7 +13,7 @@ async function waitUntil(
       setTimeout(resolve, options.intervalMs),
     );
   }
-  throw createMessageError("Timed out waiting for condition");
+  throw genericError.new({ message: "Timed out waiting for condition" });
 }
 
 describe("durable: DurableService handleTimer audit branches", () => {

@@ -2,6 +2,7 @@ import { InterceptorRegistry } from "../../../models/middleware/InterceptorRegis
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
 import { ResourceMiddlewareComposer } from "../../../models/middleware/ResourceMiddlewareComposer";
 import { TaskMiddlewareComposer } from "../../../models/middleware/TaskMiddlewareComposer";
+import { ExecutionContextStore } from "../../../models/ExecutionContextStore";
 import { LifecycleAdmissionController } from "../../../models/runtime/LifecycleAdmissionController";
 import { defineResourceMiddleware } from "../../../define";
 import {
@@ -26,6 +27,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+      getExecutionContextStore: () => new ExecutionContextStore(null),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -62,6 +64,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+      getExecutionContextStore: () => new ExecutionContextStore(null),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -113,6 +116,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+      getExecutionContextStore: () => new ExecutionContextStore(null),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -156,6 +160,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+      getExecutionContextStore: () => new ExecutionContextStore(null),
     };
     const interceptorRegistry = new InterceptorRegistry();
     interceptorRegistry.addResourceMiddlewareInterceptor(
@@ -206,6 +211,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+      getExecutionContextStore: () => new ExecutionContextStore(null),
     };
     const interceptorRegistry = new InterceptorRegistry();
     interceptorRegistry.addResourceMiddlewareInterceptor(

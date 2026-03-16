@@ -140,8 +140,8 @@ export interface SerializerFieldOptions {
 }
 
 export type SerializerFieldDecorator = (
-  target: object | Function,
-  propertyKey: string | symbol,
+  value: undefined,
+  context: ClassFieldDecoratorContext<object, unknown>,
 ) => void;
 
 /**

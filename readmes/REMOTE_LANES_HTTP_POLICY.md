@@ -262,7 +262,7 @@ Server routes by `Content-Type`.
 - **Transport**: A Serializer-encoded map sent in `x-runner-context` header (applies to JSON, multipart, and octet-stream).
 - **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Filtered for size/serializability.
 - **Security**: Server only restores known registered contexts; invalid headers/entries are ignored.
-- **Gate**: Set `allowAsyncContext: false` on server rpc-lanes resources to disable server-side hydration of `x-runner-context` for selected ids.
+- **Gate**: Set `allowAsyncContext: false` on the relevant server RPC-lane binding to disable server-side hydration of `x-runner-context` as a legacy bridge when no lane `asyncContexts` allowlist is configured.
 
 ### Streaming
 

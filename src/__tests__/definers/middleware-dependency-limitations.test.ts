@@ -107,7 +107,7 @@ describe("Middleware Dependency Limitations", () => {
       await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
     });
 
-    it("should detect circular dependencies when global middleware depends on resource that uses the same middleware", async () => {
+    it("fails fast when a resource references an unregistered middleware instance with a registered duplicate id", async () => {
       const localMiddleware1 = defineResourceMiddleware({
         id: "local-middleware-1",
         run: async ({ next }) => {
@@ -133,7 +133,7 @@ describe("Middleware Dependency Limitations", () => {
         init: async () => "App initialized",
       });
 
-      await expect(run(app)).rejects.toThrow();
+      await expect(run(app)).rejects.toThrow(/not registered/i);
     });
   });
 
@@ -206,7 +206,7 @@ describe("Middleware Dependency Limitations", () => {
         init: async (_, { serviceB }) => serviceB,
       });
 
-      await expect(run(app)).rejects.toThrow();
+      await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
     });
   });
 
@@ -295,7 +295,7 @@ describe("Middleware Dependency Limitations", () => {
         init: async (_, { task }) => await task(),
       });
 
-      await expect(run(app)).rejects.toThrow();
+      await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
     });
   });
 

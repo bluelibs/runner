@@ -2,7 +2,7 @@ import { defineEvent, defineHook, defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 describe("nodeExposure Coverage - Events", () => {
   it("covers event not-found branches", async () => {
@@ -18,13 +18,14 @@ describe("nodeExposure Coverage - Events", () => {
       register: [okEvent, exposure],
     });
     const rr = await run(app);
+    const okEventId = rr.store.findIdByDefinition(okEvent);
     const handlers = await rr.getResourceValue(exposure as any);
 
     // method not allowed
     {
       const rrMock = createReqRes({
         method: "GET",
-        url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
+        url: `/__runner/event/${encodeURIComponent(okEventId)}`,
         headers: { "x-runner-token": "T" },
       });
       await handlers.handleEvent(rrMock.req, rrMock.res);
@@ -49,7 +50,7 @@ describe("nodeExposure Coverage - Events", () => {
       id: "coverage-event-error-hook",
       on: evt,
       run: async () => {
-        throw createMessageError("emit failure");
+        throw genericError.new({ message: "emit failure" });
       },
     });
     const exposure = rpcExposure.with({
@@ -63,10 +64,11 @@ describe("nodeExposure Coverage - Events", () => {
       register: [evt, hook, exposure],
     });
     const rr = await run(app);
+    const eventId = rr.store.findIdByDefinition(evt);
     const handlers = await rr.getResourceValue(exposure as any);
 
     const container = createReqRes({
-      url: `/__runner/event/${encodeURIComponent(evt.id)}`,
+      url: `/__runner/event/${encodeURIComponent(eventId)}`,
       headers: { "x-runner-token": "EVERR" },
       body: "{}",
     });

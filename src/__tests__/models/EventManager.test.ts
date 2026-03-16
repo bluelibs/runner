@@ -7,8 +7,8 @@ import {
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
-import { createMessageError } from "../../errors";
-import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
+import { cancellationError, genericError } from "../../errors";
+import { runtimeSource } from "../../types/runtimeSource";
 import { ExecutionContextStore } from "../../models/ExecutionContextStore";
 
 describe("EventManager", () => {
@@ -38,6 +38,27 @@ describe("EventManager", () => {
         timestamp: expect.any(Date),
       }),
     );
+  });
+
+  it("rejects immediately when emit() receives an already-aborted signal", async () => {
+    const controller = new AbortController();
+    const handler = jest.fn();
+    controller.abort("event cancelled");
+
+    eventManager.addListener(eventDefinition, handler);
+
+    try {
+      await eventManager.emit(eventDefinition, "testData", {
+        source: runtimeSource.runtime("test"),
+        signal: controller.signal,
+      });
+      fail("Expected emit() to reject on aborted signal");
+    } catch (error) {
+      expect(cancellationError.is(error)).toBe(true);
+      expect((error as Error).message).toContain("event cancelled");
+    }
+
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("should respect listener order", async () => {
@@ -260,66 +281,38 @@ describe("EventManager", () => {
     expect(handler2).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the original event definition when store resolution returns no id", () => {
-    const resolveEventDefinition = (
-      eventManager as unknown as {
-        resolveEventDefinition: <T>(eventDefinition: IEvent<T>) => IEvent<T>;
-      }
-    ).resolveEventDefinition.bind(eventManager);
-
-    eventManager.bindStore({
-      createRuntimeSource: () => runtimeSource.runtime("runtime.test"),
-      events: new Map(),
-      getRuntimeMetadata: (event: IEvent<unknown>) => ({
-        id: (event as IEvent<unknown>).id,
-        path: (event as IEvent<unknown>).id,
-        runtimeId: (event as IEvent<unknown>).id,
-      }),
-      resolveDefinitionId: () => undefined,
-      toRuntimeSource: (source: RuntimeCallSource) => source,
-    } as any);
-
-    expect(resolveEventDefinition(eventDefinition)).toBe(eventDefinition);
-  });
-
-  it("falls back to the original event definition when the resolved store entry is missing", () => {
-    const resolveEventDefinition = (
-      eventManager as unknown as {
-        resolveEventDefinition: <T>(eventDefinition: IEvent<T>) => IEvent<T>;
-      }
-    ).resolveEventDefinition.bind(eventManager);
-
-    eventManager.bindStore({
-      createRuntimeSource: () => runtimeSource.runtime("runtime.test"),
-      events: new Map(),
-      getRuntimeMetadata: () => ({
-        id: eventDefinition.id,
-        path: "events.canonical.testEvent",
-        runtimeId: "events.canonical.testEvent",
-      }),
-      resolveDefinitionId: () => "events.canonical.testEvent",
-      toRuntimeSource: (source: RuntimeCallSource) => source,
-    } as any);
-
-    expect(resolveEventDefinition(eventDefinition)).toBe(eventDefinition);
-  });
-
-  it("stamps a path on raw sources when emitting without a bound store", async () => {
+  it("preserves raw sources when emitting", async () => {
     const handler = jest.fn();
     eventManager.addListener(eventDefinition, handler);
 
     await eventManager.emit(eventDefinition, "testData", {
-      kind: "runtime",
-      id: "raw-source",
-    } as any);
+      source: {
+        kind: "runtime",
+        id: "raw-source",
+      },
+    });
 
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({
         source: {
           kind: "runtime",
           id: "raw-source",
-          path: "raw-source",
         },
+      }),
+    );
+  });
+
+  it("leaves event.signal undefined when emission has no cancellation source", async () => {
+    const handler = jest.fn();
+    eventManager.addListener(eventDefinition, handler);
+
+    await eventManager.emit(eventDefinition, "testData", {
+      source: runtimeSource.runtime("no-signal"),
+    });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signal: undefined,
       }),
     );
   });
@@ -416,7 +409,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw createMessageError("boom-1");
+        throw genericError.new({ message: "boom-1" });
       },
       { order: 0, id: "l2" },
     );
@@ -424,7 +417,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw createMessageError("boom-2");
+        throw genericError.new({ message: "boom-2" });
       },
       { order: 0, id: "l3" },
     );
@@ -477,7 +470,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw createMessageError("solo-bang");
+        throw genericError.new({ message: "solo-bang" });
       },
       { order: 0, id: "solo" },
     );
@@ -525,7 +518,7 @@ describe("EventManager", () => {
 
   it("should handle handler throwing an error", async () => {
     const handler = jest.fn().mockImplementation(() => {
-      throw createMessageError("Handler error");
+      throw genericError.new({ message: "Handler error" });
     });
 
     eventManager.addListener(eventDefinition, handler);
@@ -541,7 +534,7 @@ describe("EventManager", () => {
 
   it("should stop calling other handlers if one fails", async () => {
     const handler1 = jest.fn().mockImplementation(() => {
-      throw createMessageError("Handler error");
+      throw genericError.new({ message: "Handler error" });
     });
     const handler2 = jest.fn();
 
@@ -561,7 +554,7 @@ describe("EventManager", () => {
 
   it("should stop sequential handlers when the first-by-order fails", async () => {
     const first = jest.fn().mockImplementation(() => {
-      throw createMessageError("first failed");
+      throw genericError.new({ message: "first failed" });
     });
     const second = jest.fn();
 
@@ -583,21 +576,17 @@ describe("EventManager", () => {
   it("returns emission report when report=true", async () => {
     const ok = jest.fn();
     const fail = jest.fn(() => {
-      throw createMessageError("bad");
+      throw genericError.new({ message: "bad" });
     });
 
     eventManager.addListener(eventDefinition, ok, { order: 0, id: "ok" });
     eventManager.addListener(eventDefinition, fail, { order: 1, id: "fail" });
 
-    const report = await eventManager.emit(
-      eventDefinition,
-      "testData",
-      runtimeSource.runtime("test"),
-      {
-        report: true,
-        throwOnError: false,
-      },
-    );
+    const report = await eventManager.emit(eventDefinition, "testData", {
+      source: runtimeSource.runtime("test"),
+      report: true,
+      throwOnError: false,
+    });
 
     expect(report.totalListeners).toBe(2);
     expect(report.attemptedListeners).toBe(2);
@@ -617,7 +606,7 @@ describe("EventManager", () => {
       eventDefinition,
       () => {
         calls.push("first");
-        throw createMessageError("first-failure");
+        throw genericError.new({ message: "first-failure" });
       },
       { order: 0, id: "first" },
     );
@@ -632,20 +621,16 @@ describe("EventManager", () => {
       eventDefinition,
       () => {
         calls.push("third");
-        throw createMessageError("third-failure");
+        throw genericError.new({ message: "third-failure" });
       },
       { order: 2, id: "third" },
     );
 
     await expect(
-      eventManager.emit(
-        eventDefinition,
-        "testData",
-        runtimeSource.runtime("test"),
-        {
-          failureMode: EventEmissionFailureMode.Aggregate,
-        },
-      ),
+      eventManager.emit(eventDefinition, "testData", {
+        source: runtimeSource.runtime("test"),
+        failureMode: EventEmissionFailureMode.Aggregate,
+      }),
     ).rejects.toMatchObject({ name: "AggregateError" });
     expect(calls).toEqual(["first", "second", "third"]);
   });
@@ -654,28 +639,24 @@ describe("EventManager", () => {
     eventManager.addListener(
       eventDefinition,
       () => {
-        throw createMessageError("e1");
+        throw genericError.new({ message: "e1" });
       },
       { order: 0, id: "l1" },
     );
     eventManager.addListener(
       eventDefinition,
       () => {
-        throw createMessageError("e2");
+        throw genericError.new({ message: "e2" });
       },
       { order: 1, id: "l2" },
     );
 
-    const report = await eventManager.emit(
-      eventDefinition,
-      "testData",
-      runtimeSource.runtime("test"),
-      {
-        report: true,
-        throwOnError: false,
-        failureMode: EventEmissionFailureMode.Aggregate,
-      },
-    );
+    const report = await eventManager.emit(eventDefinition, "testData", {
+      source: runtimeSource.runtime("test"),
+      report: true,
+      throwOnError: false,
+      failureMode: EventEmissionFailureMode.Aggregate,
+    });
 
     expect(report.failedListeners).toBe(2);
     expect(report.errors).toHaveLength(2);
@@ -689,29 +670,25 @@ describe("EventManager", () => {
     eventManager.addListener(
       eventDefinition,
       () => {
-        throw createMessageError("single-aggregate-error");
+        throw genericError.new({ message: "single-aggregate-error" });
       },
       { order: 0, id: "only" },
     );
 
     await expect(
-      eventManager.emit(
-        eventDefinition,
-        "testData",
-        runtimeSource.runtime("test"),
-        {
-          failureMode: EventEmissionFailureMode.Aggregate,
-        },
-      ),
+      eventManager.emit(eventDefinition, "testData", {
+        source: runtimeSource.runtime("test"),
+        failureMode: EventEmissionFailureMode.Aggregate,
+      }),
     ).rejects.toThrow("single-aggregate-error");
   });
 
   it("throws first sequential listener failure and stops execution", async () => {
     const first = jest.fn().mockImplementation(() => {
-      throw createMessageError("first failed");
+      throw genericError.new({ message: "first failed" });
     });
     const second = jest.fn().mockImplementation(() => {
-      throw createMessageError("second failed");
+      throw genericError.new({ message: "second failed" });
     });
 
     eventManager.addListener(eventDefinition, first, { order: 1, id: "first" });
@@ -1127,7 +1104,7 @@ describe("EventManager", () => {
       payloadSchema: {
         parse: (data: any) => {
           if (!data || typeof data.x !== "number") {
-            throw createMessageError("Invalid");
+            throw genericError.new({ message: "Invalid" });
           }
           return data;
         },
@@ -1335,15 +1312,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      const report = await eventManager.emitLifecycle(
-        eventDefinition,
-        "orig",
-        runtimeSource.runtime("runtime-lifecycle"),
-        {
-          report: true,
-          throwOnError: false,
-        },
-      );
+      const report = await eventManager.emitLifecycle(eventDefinition, "orig", {
+        source: runtimeSource.runtime("runtime-lifecycle"),
+        report: true,
+        throwOnError: false,
+      });
 
       expect(handler).toHaveBeenCalledTimes(1);
       expect(report).toBeDefined();
@@ -1666,7 +1639,7 @@ describe("EventManager", () => {
 
     it("should handle interceptors that throw errors", async () => {
       const interceptor = jest.fn(async (_next, _event) => {
-        throw createMessageError("Interceptor error");
+        throw genericError.new({ message: "Interceptor error" });
       });
 
       eventManager.intercept(interceptor);
@@ -1686,7 +1659,7 @@ describe("EventManager", () => {
 
     it("should handle hook interceptors that throw errors", async () => {
       const interceptor = jest.fn(async (_next, _hook, _event) => {
-        throw createMessageError("Hook interceptor error");
+        throw genericError.new({ message: "Hook interceptor error" });
       });
 
       eventManager.interceptHook(interceptor);

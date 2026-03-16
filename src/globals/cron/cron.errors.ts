@@ -4,7 +4,7 @@ export const cronExecutionError = error<{
   taskId: string;
   expression: string;
   message: string;
-}>("runner.errors.cron.execution")
+}>("cron-execution")
   .format(
     ({ taskId, expression, message }) =>
       `Cron task \"${taskId}\" (${expression}) failed: ${message}`,

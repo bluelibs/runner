@@ -5,12 +5,13 @@ import type {
   IResourceMeta,
   IsolationPolicyInput,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceSubtreePolicyInput,
   ResourceTagType,
   TagType,
+  ResolveValidationSchemaInput,
   ValidationSchemaInput,
 } from "../../../defs";
 import {
@@ -20,6 +21,7 @@ import {
 } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
+import type { RunnerMode } from "../../../types/runner";
 import { defineResource } from "../../defineResource";
 import type {
   ResourceFluentBuilder,
@@ -27,7 +29,13 @@ import type {
   ResourceFluentBuilderBeforeInit,
 } from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
-import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
+import {
+  clone,
+  mergeArray,
+  mergeDependencies,
+  mergeOverrides,
+  mergeRegister,
+} from "./utils";
 import {
   createDisplaySubtreePolicy,
   mergeResourceSubtreeDeclarations,
@@ -77,7 +85,7 @@ export function makeResourceBuilder<
       TNewDeps extends DependencyMapType,
       TIsOverride extends boolean = false,
     >(
-      deps: TNewDeps | ((config: TConfig) => TNewDeps),
+      deps: TNewDeps | ((config: TConfig, mode: RunnerMode) => TNewDeps),
       options?: { override?: TIsOverride },
     ) {
       const override = options?.override ?? false;
@@ -117,9 +125,12 @@ export function makeResourceBuilder<
     },
     register(
       items:
-        | RegisterableItems
-        | Array<RegisterableItems>
-        | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+        | RegisterableItem
+        | Array<RegisterableItem>
+        | ((
+            config: TConfig,
+            mode: RunnerMode,
+          ) => RegisterableItem | Array<RegisterableItem>),
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
@@ -233,7 +244,14 @@ export function makeResourceBuilder<
         false
       >(next);
     },
-    configSchema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
+    configSchema<
+      TNewConfig = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      > = ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      >,
+    >(schema: TSchema) {
       const next = clone<
         TConfig,
         TValue,
@@ -242,7 +260,7 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware,
-        TNewConfig,
+        ResolveValidationSchemaInput<TNewConfig, TSchema>,
         TValue,
         TDeps,
         TContext,
@@ -251,7 +269,7 @@ export function makeResourceBuilder<
         TMiddleware
       >(state, { configSchema: schema });
       return makeResourceBuilder<
-        TNewConfig,
+        ResolveValidationSchemaInput<TNewConfig, TSchema>,
         TValue,
         TDeps,
         TContext,
@@ -261,10 +279,22 @@ export function makeResourceBuilder<
         false
       >(next);
     },
-    schema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
+    schema<
+      TNewConfig = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      > = ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      >,
+    >(schema: TSchema) {
       return builder.configSchema(schema);
     },
-    resultSchema<TResolved>(schema: ValidationSchemaInput<TResolved>) {
+    resultSchema<
+      TResolved = never,
+      TSchema extends ValidationSchemaInput<
+        [TResolved] extends [never] ? any : TResolved
+      > = ValidationSchemaInput<[TResolved] extends [never] ? any : TResolved>,
+    >(schema: TSchema) {
       const next = clone<
         TConfig,
         TValue,
@@ -274,7 +304,7 @@ export function makeResourceBuilder<
         TTags,
         TMiddleware,
         TConfig,
-        Promise<TResolved>,
+        Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
         TDeps,
         TContext,
         TMeta,
@@ -283,7 +313,7 @@ export function makeResourceBuilder<
       >(state, { resultSchema: schema });
       return makeResourceBuilder<
         TConfig,
-        Promise<TResolved>,
+        Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
         TDeps,
         TContext,
         TMeta,
@@ -466,10 +496,15 @@ export function makeResourceBuilder<
         THasInit
       >(next);
     },
-    overrides(o: Array<OverridableElements>, options?: { override?: boolean }) {
+    overrides(
+      o:
+        | Array<OverridableElements>
+        | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>),
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const next = clone(state, {
-        overrides: mergeArray(state.overrides, o, override),
+        overrides: mergeOverrides(state.overrides, o, override),
       });
       return makeResourceBuilder<
         TConfig,

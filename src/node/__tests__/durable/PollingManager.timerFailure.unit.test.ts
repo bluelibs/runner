@@ -13,14 +13,14 @@ import {
   TaskRegistry,
 } from "../../durable/core/managers";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
 
 class ThrowingQueue implements IDurableQueue {
   async enqueue<T>(
     _message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
   ): Promise<string> {
-    throw createMessageError("queue-down");
+    throw genericError.new({ message: "queue-down" });
   }
 
   async consume<T>(_handler: MessageHandler<T>): Promise<void> {}

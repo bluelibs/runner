@@ -11,14 +11,25 @@ import { getPlatform } from "./platform";
 import { runtimeSource } from "./types/runtimeSource";
 import {
   disposeRunArtifacts,
-  DisposeRunArtifactsInput,
   runShutdownDisposalLifecycle,
 } from "./tools/shutdownDisposalLifecycle";
 import { BootstrapCoordinator } from "./tools/BootstrapCoordinator";
 import { createRuntimeServices } from "./tools/createRuntimeServices";
 import { extractResourceAndConfig } from "./tools/extractResourceAndConfig";
-import { resolveExecutionContextConfig } from "./tools/resolveExecutionContextConfig";
 import { detectRunnerMode } from "./tools/detectRunnerMode";
+import { resolveExecutionContextConfig } from "./tools/resolveExecutionContextConfig";
+import { contextError } from "./errors";
+
+function resolveRegisteredEvent<TInput>(
+  store: {
+    findIdByDefinition(reference: unknown): string;
+    findDefinitionById(id: string): unknown;
+  },
+  eventDefinition: { id: string },
+): TInput {
+  const canonicalId = store.findIdByDefinition(eventDefinition);
+  return store.findDefinitionById(canonicalId) as TInput;
+}
 
 const activeRunResults = new Set<RunResult<any>>();
 
@@ -38,9 +49,6 @@ function normalizeRunOptions(options: RunOptions | undefined): Omit<
   });
   const dryRun = options?.dryRun ?? false;
   const lazy = options?.lazy ?? false;
-  const executionContext = resolveExecutionContextConfig(
-    options?.executionContext,
-  );
   const lifecycleMode =
     options?.lifecycleMode === ResourceLifecycleMode.Parallel
       ? ResourceLifecycleMode.Parallel
@@ -62,20 +70,26 @@ function normalizeRunOptions(options: RunOptions | undefined): Omit<
     dispose,
     onUnhandledErrorInput: options?.onUnhandledError,
     dryRun,
-    executionContext:
-      executionContext === null
-        ? null
-        : Object.freeze({
-            ...executionContext,
-            cycleDetection:
-              executionContext.cycleDetection === null
-                ? null
-                : Object.freeze({ ...executionContext.cycleDetection }),
-          }),
+    executionContext: resolveExecutionContextConfig(options?.executionContext),
     lazy,
     lifecycleMode,
     mode,
   };
+}
+
+function assertExecutionContextSupport(
+  executionContext: ResolvedRunOptions["executionContext"],
+): void {
+  if (!executionContext) {
+    return;
+  }
+
+  if (!getPlatform().hasAsyncLocalStorage()) {
+    contextError.throw({
+      details:
+        "Execution context requires AsyncLocalStorage and is not available in this environment.",
+    });
+  }
 }
 
 /**
@@ -107,6 +121,7 @@ export async function run<C, V extends Promise<any>>(
 ): Promise<RunResult<V extends Promise<infer U> ? U : V>> {
   await getPlatform().init();
   const normalizedOptions = normalizeRunOptions(options);
+  assertExecutionContextSupport(normalizedOptions.executionContext);
 
   // --- Service creation ---
   const { resource, config } = extractResourceAndConfig(
@@ -116,7 +131,6 @@ export async function run<C, V extends Promise<any>>(
   const services = createRuntimeServices({
     mode: normalizedOptions.mode,
     lifecycleMode: normalizedOptions.lifecycleMode,
-    executionContextConfig: normalizedOptions.executionContext,
     lazy: normalizedOptions.lazy,
     errorBoundary: normalizedOptions.errorBoundary,
     onUnhandledError: normalizedOptions.onUnhandledErrorInput,
@@ -138,12 +152,9 @@ export async function run<C, V extends Promise<any>>(
   const bootstrap = new BootstrapCoordinator();
   let unhookShutdown: (() => void) | undefined;
 
-  const disposeAll = async (
-    disposalBudget?: DisposeRunArtifactsInput["disposalBudget"],
-  ) => {
+  const disposeAll = async () => {
     await disposeRunArtifacts({
       store,
-      disposalBudget,
       takeUnhookProcessSafetyNets: () => {
         const current = unhookProcessSafetyNets;
         unhookProcessSafetyNets = undefined;
@@ -201,6 +212,7 @@ export async function run<C, V extends Promise<any>>(
   try {
     store.initializeStore(resource, config, runtimeResult, {
       debug: normalizedOptions.debug,
+      executionContext: normalizedOptions.executionContext,
     });
     bootstrap.throwIfShutdownRequested("store initialization");
 
@@ -243,7 +255,10 @@ export async function run<C, V extends Promise<any>>(
     await store.ready();
 
     await eventManager.emit(
-      globalEvents.ready,
+      resolveRegisteredEvent<typeof globalEvents.ready>(
+        store,
+        globalEvents.ready,
+      ),
       undefined,
       runtimeLifecycleSource,
     );

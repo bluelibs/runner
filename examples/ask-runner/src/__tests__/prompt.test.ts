@@ -12,7 +12,7 @@ describe("prompt helpers", () => {
       "Do not invent strengths, features, benchmarks, or guarantees. If the docs do not support a claim, say so explicitly.",
     );
     expect(prompt).toContain(
-      "Keep the final answer within about 10,000 characters.",
+      "Keep the final answer within about 5,000 characters.",
     );
     expect(prompt).toContain(
       "When a chart, flow, relationship map, timeline, or other illustration would help, use Mermaid fenced code blocks with the language tag written exactly as ```mermaid.",

@@ -10,7 +10,6 @@ import {
   symbolDefinitionIdentity,
   symbolEvent,
   symbolFilePath,
-  symbolRuntimeId,
 } from "./utilities";
 import { RuntimeCallSource } from "./runtimeSource";
 import {
@@ -30,11 +29,17 @@ export const EventEmissionFailureMode = {
 export type EventEmissionFailureMode =
   (typeof EventEmissionFailureMode)[keyof typeof EventEmissionFailureMode];
 
+/**
+ * Listener error enriched with hook metadata when available.
+ */
 export interface IEventListenerError extends Error {
   listenerId?: string;
   listenerOrder?: number;
 }
 
+/**
+ * Summary report returned when event emission runs in reporting mode.
+ */
 export interface IEventEmitReport {
   totalListeners: number;
   attemptedListeners: number;
@@ -45,6 +50,9 @@ export interface IEventEmitReport {
   errors: IEventListenerError[];
 }
 
+/**
+ * Runtime options for a single event emission.
+ */
 export interface IEventEmitOptions {
   /**
    * Controls error behavior during listener execution.
@@ -61,9 +69,32 @@ export interface IEventEmitOptions {
    * When true, `emit(...)`/dependency event emitter returns `IEventEmitReport`.
    */
   report?: boolean;
+  /**
+   * Cooperative cancellation signal for the emission lifecycle.
+   */
+  signal?: AbortSignal;
+}
+
+/**
+ * Low-level event emission call options used by runtime internals.
+ *
+ * Dependency-injected event emitters already know their source, so they only
+ * expose {@link IEventEmitOptions}. Lower-level APIs such as `EventManager`
+ * still need the caller to provide source metadata explicitly for lifecycle
+ * admission checks and execution tracing.
+ */
+export interface IEventEmissionCallOptions extends IEventEmitOptions {
+  /**
+   * Identifies who is emitting the event for admission control, tracing, and
+   * listener self-skip checks.
+   */
+  source: RuntimeCallSource;
 }
 
 // Helper to keep tuple inference intact for multi-event hooks
+/**
+ * Preserves tuple inference for hook subscriptions spanning multiple events.
+ */
 export function onAnyOf<T extends readonly IEventDefinition<any>[]>(
   ...defs: T
 ): T {
@@ -89,14 +120,20 @@ export function isOneOf<TDefs extends readonly IEventDefinition<any>[]>(
   return defs.some((definition) => definition.id === emission.id);
 }
 
+/**
+ * Declarative event definition contract.
+ */
 export interface IEventDefinition<TPayload = void> {
+  /** Stable event identifier within its owner subtree. */
   id: string;
+  /** Optional metadata used by docs and tooling. */
   meta?: IEventMeta;
   /**
    * Optional validation schema for runtime payload validation.
    * When provided, event payload will be validated when emitted.
    */
   payloadSchema?: ValidationSchemaInput<TPayload>;
+  /** Tags attached to the event for routing or policy decisions. */
   tags?: EventTagType[];
   /**
    * If true, listeners with the same priority run concurrently within a batch.
@@ -110,26 +147,28 @@ export interface IEventDefinition<TPayload = void> {
 }
 
 /**
- * The definioten of the event.
- * This is different from the event emission.
+ * Normalized runtime event definition.
+ *
+ * This describes the event itself, not a concrete emission instance.
  */
 export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   id: string;
   path?: string;
-  [symbolRuntimeId]?: string;
   /**
    * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
    */
   [symbolEvent]: true;
   [symbolFilePath]: string;
+  /** Normalized payload validation schema. */
   payloadSchema?: IValidationSchema<TPayload>;
   /** Return an optional dependency wrapper for this event. */
   optional: () => IOptionalDependency<IEvent<TPayload>>;
+  /** Normalized tags attached to the event. */
   tags: EventTagType[];
 }
 
 /**
- * This represents the object that is passed to event handlers
+ * Concrete event emission passed to hooks and wildcard listeners.
  */
 export interface IEventEmission<TPayload = any> {
   /**
@@ -146,6 +185,10 @@ export interface IEventEmission<TPayload = any> {
    * The timestamp when the event was created.
    */
   timestamp: Date;
+  /**
+   * Cooperative cancellation signal for this emission when one exists.
+   */
+  signal?: AbortSignal;
   /**
    * The source of the event. This can be useful for debugging.
    */
@@ -171,5 +214,4 @@ export interface IEventEmission<TPayload = any> {
    */
   tags: EventTagType[];
   [symbolDefinitionIdentity]?: object;
-  [symbolRuntimeId]?: string;
 }

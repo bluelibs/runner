@@ -1,4 +1,4 @@
-import type { DependencyMapType, RegisterableItems } from "../../defs";
+import type { DependencyMapType, RegisterableItem } from "../../defs";
 import * as utils from "../../define";
 import { validationError } from "../../errors";
 import type { StoreRegistry } from "../StoreRegistry";
@@ -110,7 +110,7 @@ export function resolveReferenceIds(
 export function resolveSubtreeMiddlewareReferenceIds<TEntry>(
   registry: StoreRegistry,
   entries: readonly TEntry[],
-  getAttachment: (entry: TEntry) => Pick<RegisterableItems, "id">,
+  getAttachment: (entry: TEntry) => Pick<RegisterableItem, "id">,
 ): string[] {
   return resolveReferenceIds(
     registry,

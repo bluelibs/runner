@@ -126,7 +126,6 @@ describe("durable: DurableResource", () => {
             ? [{ definition: taggedTask }]
             : [{ definition: untaggedTask }],
       })),
-      toPublicDefinition: jest.fn((definition) => definition),
     } as any;
 
     const durable = new DurableResource(
@@ -136,9 +135,13 @@ describe("durable: DurableResource", () => {
       runnerStore,
     );
 
-    expect(durable.getWorkflows()).toEqual([taggedTask]);
+    expect(durable.getWorkflows()).toEqual([
+      {
+        ...taggedTask,
+        path: taggedTask.id,
+      },
+    ]);
     expect(runnerStore.getTagAccessor).toHaveBeenCalledWith(durableWorkflowTag);
-    expect(runnerStore.toPublicDefinition).toHaveBeenCalledWith(taggedTask);
   });
 
   it("fails fast when workflow discovery APIs are missing from the runner store", () => {

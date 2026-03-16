@@ -60,7 +60,10 @@ function createTagBuilder<
 }
 
 /**
- * Entry point for creating a tag builder.
+ * Creates a fluent tag builder.
+ *
+ * Tags carry discovery and policy metadata, and this builder keeps target restrictions
+ * and config schema close to the declaration.
  */
 export function tagBuilder<
   TConfig = void,
@@ -75,4 +78,7 @@ export function tagBuilder<
   });
 }
 
+/**
+ * Shorthand for {@link tagBuilder}.
+ */
 export const tag = tagBuilder;

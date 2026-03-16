@@ -1,5 +1,4 @@
 import {
-  Match,
   defineAsyncContext,
   defineEvent,
   defineResource,
@@ -11,6 +10,7 @@ import {
   defineTaskMiddleware,
 } from "../..";
 import { defineError } from "../../definers/defineError";
+import { Match } from "../../decorators/legacy";
 
 class DecoratedSchema {
   value!: string;
@@ -59,10 +59,15 @@ describe("decorator schema shorthand", () => {
   });
 
   it("normalizes class shorthand for all non-fluent and fluent schema surfaces", async () => {
+    let receivedEventData: unknown;
+
     const task = defineTask({
       id: "tests-decorator-nonfluent-task",
       inputSchema: DecoratedSchema,
-      run: async (input: { value: string }) => input.value,
+      run: async (input) => {
+        expect(input).toBeInstanceOf(DecoratedSchema);
+        return input.value;
+      },
     });
 
     const event = defineEvent({
@@ -96,13 +101,19 @@ describe("decorator schema shorthand", () => {
     const TypedError = defineError<{ value: string }>({
       id: "tests-decorator-nonfluent-error",
       dataSchema: DecoratedSchema,
-      format: (data) => data.value,
+      format: (data) => {
+        expect(data).toBeInstanceOf(DecoratedSchema);
+        return data.value;
+      },
     });
 
     const cfgResource = defineResource({
       id: "tests-decorator-nonfluent-resource",
       configSchema: DecoratedSchema,
-      init: async (config: { value: string }) => config.value,
+      init: async (config) => {
+        expect(config).toBeInstanceOf(DecoratedSchema);
+        return config.value;
+      },
     });
 
     expect(typeof task.inputSchema?.parse).toBe("function");
@@ -125,7 +136,9 @@ describe("decorator schema shorthand", () => {
     const hook = r
       .hook("tests-decorator-nonfluent-hook")
       .on(event)
-      .run(async () => undefined)
+      .run(async (eventData) => {
+        receivedEventData = eventData.data;
+      })
       .build();
 
     const app = defineResource({
@@ -140,6 +153,7 @@ describe("decorator schema shorthand", () => {
     await expect(
       runtime.emitEvent(event, { value: "ok" }),
     ).resolves.toBeUndefined();
+    expect(receivedEventData).toBeInstanceOf(DecoratedSchema);
     await expect(
       runtime.emitEvent(event, { value: 1 } as any),
     ).rejects.toThrow();
@@ -188,7 +202,10 @@ describe("decorator schema shorthand", () => {
     const FluentError = r
       .error<{ value: string }>("tests-decorator-fluent-error")
       .dataSchema(DecoratedSchema)
-      .format((data) => data.value)
+      .format((data) => {
+        expect(data).toBeInstanceOf(DecoratedSchema);
+        return data.value;
+      })
       .build();
 
     expect(typeof fluentTask.inputSchema?.parse).toBe("function");
@@ -199,7 +216,53 @@ describe("decorator schema shorthand", () => {
     expect(typeof fluentTag.configSchema?.parse).toBe("function");
     expect(typeof fluentAsyncContext.configSchema?.parse).toBe("function");
     expect(() => FluentError.new({ value: 1 } as any)).toThrow();
+    expect(FluentError.new({ value: "ok" }).data).toBeInstanceOf(
+      DecoratedSchema,
+    );
+    expect(TypedError.new({ value: "ok" }).data).toBeInstanceOf(
+      DecoratedSchema,
+    );
+    expect(cfgResource.with({ value: "ok" }).config).toBeInstanceOf(
+      DecoratedSchema,
+    );
+    expect(fluentResource.with({ value: "ok" }).config).toBeInstanceOf(
+      DecoratedSchema,
+    );
 
     await runtime.dispose();
+  });
+
+  it("surfaces field-level custom messages through class shorthand schemas", async () => {
+    class CustomMessageSchema {
+      value!: string;
+    }
+
+    Match.Schema()(CustomMessageSchema);
+    Match.Field(
+      Match.WithMessage(
+        String,
+        ({ value }) => `value must be a string, received ${String(value)}`,
+      ),
+    )(CustomMessageSchema.prototype, "value");
+
+    const task = defineTask({
+      id: "tests-decorator-custom-message-task",
+      inputSchema: CustomMessageSchema,
+      run: async (input: { value: string }) => input.value,
+    });
+
+    const app = defineResource({
+      id: "tests-decorator-custom-message-app",
+      register: [task],
+    });
+    const runtime = await run(app);
+
+    try {
+      await expect(runtime.runTask(task, { value: 10 } as any)).rejects.toThrow(
+        "value must be a string, received 10",
+      );
+    } finally {
+      await runtime.dispose();
+    }
   });
 });

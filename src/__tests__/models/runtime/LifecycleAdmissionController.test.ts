@@ -79,7 +79,7 @@ describe("LifecycleAdmissionController", () => {
   it("keeps admissions open during coolingDown and applies resource allowlists only once disposing starts", () => {
     const controller = new LifecycleAdmissionController();
     const runtimeCall = runtimeSource.runtime("runtime-api");
-    const resourceCall = runtimeSource.resource("resource-a", "app.resource-a");
+    const resourceCall = runtimeSource.resource("app.resource-a");
 
     controller.beginCoolingDown();
 
@@ -129,14 +129,8 @@ describe("LifecycleAdmissionController", () => {
 
   it("admits explicitly allowed resource sources during disposing only", () => {
     const controller = new LifecycleAdmissionController();
-    const allowedResource = runtimeSource.resource(
-      "resource-a",
-      "app.resource-a",
-    );
-    const otherResource = runtimeSource.resource(
-      "resource-b",
-      "app.resource-b",
-    );
+    const allowedResource = runtimeSource.resource("app.resource-a");
+    const otherResource = runtimeSource.resource("app.resource-b");
 
     controller.beginDisposing();
 
@@ -152,7 +146,7 @@ describe("LifecycleAdmissionController", () => {
     expect(controller.canAdmitTask(allowedResource)).toBe(false);
   });
 
-  it("ignores shutdown resource allows outside disposing and falls back to resource id when path is missing", () => {
+  it("ignores shutdown resource allows outside disposing", () => {
     const controller = new LifecycleAdmissionController();
     const resourceSource = {
       kind: RuntimeCallSourceKind.Resource,
@@ -169,5 +163,23 @@ describe("LifecycleAdmissionController", () => {
 
     controller.allowShutdownResourceSource("resource-no-path");
     expect(controller.canAdmitTask(resourceSource)).toBe(true);
+  });
+
+  it("returns false immediately when waitForDrain receives a non-positive timeout", async () => {
+    const controller = new LifecycleAdmissionController();
+    let releaseTask: (() => void) | undefined;
+
+    const pendingTask = controller.trackTaskExecution(
+      runtimeSource.task("task-pending"),
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseTask = resolve;
+        }),
+    );
+
+    await expect(controller.waitForDrain(0)).resolves.toBe(false);
+
+    releaseTask?.();
+    await pendingTask;
   });
 });

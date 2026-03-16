@@ -227,7 +227,9 @@ describe("Optional dependencies", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow();
+    await expect(run(app)).rejects.toMatchObject({
+      id: "unknownItemType",
+    });
   });
 
   test("getDependentNodes accounts for optional deps in tasks and resources", async () => {
@@ -240,17 +242,22 @@ describe("Optional dependencies", () => {
     const usesTask = defineTask({
       id: "tests-optional-graph-usesTask",
       dependencies: { dep: depTask.optional() },
-      async run() {
-        return "x" as const;
+      async run(_input, deps) {
+        return (await deps.dep?.()) ?? "missing-task-dep";
       },
     });
 
-    const depRes = defineResource({ id: "tests-optional-graph-depRes" });
+    const depRes = defineResource({
+      id: "tests-optional-graph-depRes",
+      async init() {
+        return "resource-value" as const;
+      },
+    });
     const usesRes = defineResource({
       id: "tests-optional-graph-usesRes",
       dependencies: { r: depRes.optional() },
-      async init() {
-        return "ok" as const;
+      async init(_config, deps) {
+        return deps.r ?? "missing-resource-dep";
       },
     });
 
@@ -266,11 +273,9 @@ describe("Optional dependencies", () => {
       register: [app],
     });
     const rr = await run(harness);
-    // Indirectly exercise optional path in graph build by checking we can run tasks
-    // (store internals no longer exposed via test harness)
-    expect(typeof rr.runTask).toBe("function");
-    // We still validate by running a no-op task without throwing
-    await rr.runTask(usesTask);
+    await expect(rr.runTask(usesTask)).resolves.toBe("y");
+    expect(rr.getResourceValue(usesRes)).toBe("resource-value");
+    await rr.dispose();
   });
 
   it("task middleware should be able to depend on optional dependencies", async () => {

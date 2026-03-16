@@ -1,6 +1,7 @@
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
+  ResolveValidationSchemaInput,
   IResourceMiddlewareDefinition,
   IMiddlewareMeta,
   ResourceMiddlewareTagType,
@@ -71,14 +72,39 @@ export function makeResourceMiddlewareBuilder<
       );
     },
 
-    configSchema<TNew>(schema: ValidationSchemaInput<TNew>) {
-      const next = cloneRes<C, In, Out, D, TNew, In, Out, D>(state, {
+    configSchema<
+      TNew = never,
+      TSchema extends ValidationSchemaInput<
+        [TNew] extends [never] ? any : TNew
+      > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+    >(schema: TSchema) {
+      const next = cloneRes<
+        C,
+        In,
+        Out,
+        D,
+        ResolveValidationSchemaInput<TNew, TSchema>,
+        In,
+        Out,
+        D
+      >(state, {
         configSchema: schema,
       });
-      return makeResourceMiddlewareBuilder<TNew, In, Out, D, false>(next);
+      return makeResourceMiddlewareBuilder<
+        ResolveValidationSchemaInput<TNew, TSchema>,
+        In,
+        Out,
+        D,
+        false
+      >(next);
     },
 
-    schema<TNew>(schema: ValidationSchemaInput<TNew>) {
+    schema<
+      TNew = never,
+      TSchema extends ValidationSchemaInput<
+        [TNew] extends [never] ? any : TNew
+      > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+    >(schema: TSchema) {
       return builder.configSchema(schema);
     },
 

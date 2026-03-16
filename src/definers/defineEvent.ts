@@ -7,13 +7,39 @@ import {
   symbolOptionalDependency,
   IOptionalDependency,
 } from "../defs";
+import type {
+  InferValidationSchemaInput,
+  ValidationSchemaInput,
+} from "../types/utilities";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
-import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
+/**
+ * Defines an event.
+ *
+ * Events are typed signals, not executable work. Use this low-level API when you want
+ * to declare payload schema and delivery flags directly as an object.
+ */
+export function defineEvent<
+  TSchema extends ValidationSchemaInput<any>,
+  TTransactional extends boolean | undefined = boolean | undefined,
+  TParallel extends boolean | undefined = boolean | undefined,
+>(
+  config: Omit<
+    IEventDefinition<InferValidationSchemaInput<TSchema>>,
+    "payloadSchema"
+  > & {
+    payloadSchema: TSchema;
+    transactional?: TTransactional;
+    parallel?: TParallel;
+  },
+): IEvent<InferValidationSchemaInput<TSchema>> & {
+  parallel?: TParallel;
+  transactional?: TTransactional;
+};
 export function defineEvent<
   TPayload = void,
   TTransactional extends boolean | undefined = boolean | undefined,
@@ -32,9 +58,7 @@ export function defineEvent<TPayload = void>(
 ): IEvent<TPayload> {
   const callerFilePath = getCallerFile();
   const eventConfig = config;
-  assertDefinitionId("Event", eventConfig.id, {
-    allowReservedDottedNamespace: isFrameworkDefinitionMarked(eventConfig),
-  });
+  assertDefinitionId("Event", eventConfig.id);
   const payloadSchema = normalizeOptionalValidationSchema(
     eventConfig.payloadSchema,
     {

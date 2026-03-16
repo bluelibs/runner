@@ -1,4 +1,4 @@
-import type { MatchFailure } from "../errors";
+import type { MatchFailure, MatchMessageOverride } from "../errors";
 import type { InferMatchPattern } from "../types";
 
 export type PathSegment = string | number;
@@ -11,11 +11,12 @@ export type MatchContext = {
   failures: MatchFailure[];
   collectAll: boolean;
   activeComparisons: WeakMap<object, WeakSet<object>>;
+  messageOverride?: MatchMessageOverride;
 };
 
 export type WhereCondition<TGuarded = unknown> =
-  | ((value: unknown) => boolean)
-  | ((value: unknown) => value is TGuarded);
+  | ((value: unknown, parent?: unknown) => boolean)
+  | ((value: unknown, parent?: unknown) => value is TGuarded);
 
 // ── Regex constants shared by matching and JSON Schema conversion ────────────
 

@@ -41,7 +41,9 @@ describe("durable: workflow discovery", () => {
     const durableRuntime = runtime.getResourceValue(durable);
 
     const discovered = durableRuntime.getWorkflows();
-    expect(discovered.map((task) => task.id)).toEqual([taggedWorkflow.id]);
+    expect(discovered.map((task) => task.id)).toEqual([
+      runtime.store.findIdByDefinition(taggedWorkflow),
+    ]);
 
     await runtime.dispose();
   });

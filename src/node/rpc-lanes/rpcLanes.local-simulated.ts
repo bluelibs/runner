@@ -1,12 +1,12 @@
 import { AsyncResource } from "node:async_hooks";
 import type { IRpcLaneDefinition } from "../../defs";
+import type { IAsyncContext } from "../../types/asyncContext";
 import {
   symbolRpcLanePolicy,
   symbolRpcLaneRoutedBy,
 } from "../../types/symbols";
-import { withUserContexts } from "../exposure/handlers/contextWrapper";
 import {
-  buildAsyncContextHeader,
+  resolveRegistryAsyncContextIds,
   resolveLaneAsyncContextPolicy,
 } from "../remote-lanes/asyncContextAllowlist";
 import {
@@ -19,7 +19,6 @@ import {
   type RpcLanesRuntimeContext,
 } from "./rpcLanes.runtime.utils";
 import type { RpcLanesResourceConfig } from "./types";
-import { getRuntimeId } from "../../tools/runtimeMetadata";
 
 export function applyLocalSimulatedModeRouting(
   context: RpcLanesRuntimeContext,
@@ -59,8 +58,7 @@ export function applyLocalSimulatedModeRouting(
   }
 
   dependencies.eventManager.intercept(async (next, emission) => {
-    const resolvedEmissionEventId =
-      getRuntimeId(emission) ?? emission.path ?? emission.id;
+    const resolvedEmissionEventId = emission.id;
     const lane = resolved.eventLaneByEventId.get(resolvedEmissionEventId);
     if (!lane) {
       return next(emission);
@@ -103,34 +101,78 @@ function createLocalSimulatedScopeRunner(context: RpcLanesRuntimeContext) {
     fn: () => Promise<T>,
   ): Promise<T> => {
     const policy = resolveLocalSimulatedAsyncContextPolicy(lane);
-    const contextHeader = buildAsyncContextHeader({
+    const capturedContexts = captureSerializedAsyncContexts({
       allowList: policy.allowList,
       registry: store.asyncContexts,
-      serializer: dependencies.serializer,
     });
-    const req = {
-      headers: contextHeader ? { "x-runner-context": contextHeader } : {},
-    } as any;
 
     return await new Promise<T>((resolve, reject) => {
       localSimulatedScope.runInAsyncScope(() => {
         Promise.resolve(
-          withUserContexts(
-            req,
-            {
-              store,
-              serializer: dependencies.serializer,
-            },
+          applySerializedAsyncContexts(
+            capturedContexts,
             fn,
-            {
-              allowAsyncContext: policy.allowAsyncContext,
-              allowedAsyncContextIds: policy.allowList,
-            },
+            policy.allowAsyncContext,
           ),
         ).then(resolve, reject);
       });
     });
   };
+}
+
+function captureSerializedAsyncContexts(options: {
+  allowList: readonly string[] | undefined;
+  registry: ReadonlyMap<string, IAsyncContext<unknown>>;
+}): Array<{ context: IAsyncContext<unknown>; raw: string }> {
+  const resolvedIds = resolveRegistryAsyncContextIds(
+    options.registry,
+    options.allowList,
+  );
+  const captured: Array<{ context: IAsyncContext<unknown>; raw: string }> = [];
+
+  const idsToCapture =
+    resolvedIds === undefined
+      ? Array.from(options.registry.keys())
+      : Array.from(resolvedIds);
+
+  for (const id of idsToCapture) {
+    const context = options.registry.get(id);
+    if (!context) {
+      continue;
+    }
+
+    try {
+      captured.push({ context, raw: context.serialize(context.use()) });
+    } catch {
+      // Missing context in the current scope is expected for non-provided entries.
+    }
+  }
+
+  return captured;
+}
+
+async function applySerializedAsyncContexts<T>(
+  capturedContexts: Array<{ context: IAsyncContext<unknown>; raw: string }>,
+  fn: () => Promise<T>,
+  allowAsyncContext: boolean,
+): Promise<T> {
+  if (!allowAsyncContext || capturedContexts.length === 0) {
+    return fn();
+  }
+
+  let wrapped = fn;
+
+  for (const { context, raw } of capturedContexts) {
+    try {
+      const value = context.parse(raw);
+      const previous = wrapped;
+      wrapped = async () => await context.provide(value, previous);
+    } catch {
+      // Ignore per-context rehydration failures and continue with the rest.
+    }
+  }
+
+  return wrapped();
 }
 
 function verifyProduceToken(

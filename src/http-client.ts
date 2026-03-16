@@ -12,11 +12,20 @@ import {
   httpEventWithResultUnavailableError,
 } from "./errors";
 
+/**
+ * Bearer-style authentication configuration for the universal HTTP client.
+ */
 export interface HttpClientAuth {
   header?: string;
   token: string;
 }
 
+/**
+ * Configuration for {@link createHttpClient}.
+ *
+ * The universal client is JSON-first and can upload browser `Blob`/`File` values,
+ * but it does not support Node stream inputs.
+ */
 export interface HttpClientConfig {
   baseUrl: string;
   auth?: HttpClientAuth;
@@ -31,21 +40,24 @@ export interface HttpClientConfig {
   errorRegistry?: Map<string, IErrorHelper<any>>;
 }
 
+/**
+ * Minimal client contract for invoking exposed tasks and events over HTTP.
+ */
 export interface HttpClient {
   task<I = unknown, O = unknown>(
     id: string,
     input?: I,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<O>;
   event<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<void>;
   eventWithResult?<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<P>;
 }
 
@@ -115,6 +127,28 @@ function rethrowWithRegistry(
   throw e;
 }
 
+/**
+ * Creates a platform-neutral HTTP client for Runner task and event exposure.
+ *
+ * Use this client in browser or universal code paths. When you need Node-native
+ * streaming or multipart file support, switch to the Node entrypoint clients.
+ *
+ * The impact of choosing this client is portability: the same call site works in
+ * browser-oriented environments, but raw Node streams are intentionally rejected
+ * so unsupported transport behavior fails fast.
+ *
+ * @example
+ * ```ts
+ * import { Serializer, createHttpClient } from "@bluelibs/runner";
+ *
+ * const client = createHttpClient({
+ *   baseUrl: "https://api.example.com",
+ *   serializer: new Serializer(),
+ * });
+ *
+ * const user = await client.task("getUser", { id: "u1" });
+ * ```
+ */
 export function createHttpClient(cfg: HttpClientConfig): HttpClient {
   const baseUrl = cfg.baseUrl.replace(/\/$/, "");
   if (!baseUrl) {
@@ -142,6 +176,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     manifestText: string,
     files: ReturnType<typeof buildUniversalManifest>["webFiles"],
     headersOverride?: Record<string, string>,
+    signal?: AbortSignal,
   ) {
     const fd = new FormData();
     fd.append("__manifest", manifestText);
@@ -161,6 +196,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       method: "POST",
       body: fd,
       headers,
+      signal,
       // Security: prevent automatic redirects from forwarding auth headers.
       redirect: "error",
     });
@@ -173,7 +209,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async task<I, O>(
       id: string,
       input?: I,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
 
@@ -196,6 +232,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           manifestText,
           manifest.webFiles,
           options?.headers,
+          options?.signal,
         );
         try {
           return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
@@ -225,7 +262,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async event<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<void> {
       try {
         return await fetchClient.event<P>(id, payload, options);
@@ -237,7 +274,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async eventWithResult<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<P> {
       try {
         if (!fetchClient.eventWithResult) {

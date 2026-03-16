@@ -9,6 +9,7 @@ import type {
   ExposureFetchClient,
 } from "./remote-lanes/http/types";
 import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
+import { linkAbortSignals } from "./tools/abortSignals";
 export { normalizeError } from "./tools/normalizeError";
 export type {
   ExposureFetchAuthConfig,
@@ -23,6 +24,7 @@ async function postSerialized<T = any>(options: {
   url: string;
   body: unknown;
   headers: Record<string, string>;
+  signal?: AbortSignal;
   timeoutMs?: number;
   serializer: SerializerLike;
   onRequest?: (requestContext: {
@@ -36,6 +38,7 @@ async function postSerialized<T = any>(options: {
     url,
     body,
     headers,
+    signal,
     timeoutMs,
     serializer,
     onRequest,
@@ -44,6 +47,7 @@ async function postSerialized<T = any>(options: {
   const controller =
     timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
   let timeout: ReturnType<typeof setTimeout> | undefined;
+  const signalLink = linkAbortSignals([signal, controller?.signal]);
   try {
     if (controller) {
       timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -58,7 +62,7 @@ async function postSerialized<T = any>(options: {
       method: "POST",
       headers: reqHeaders,
       body: serializer.stringify(body),
-      signal: controller?.signal,
+      signal: signalLink.signal,
       // Security: prevent automatic redirects from forwarding auth headers.
       redirect: "error",
     });
@@ -123,6 +127,7 @@ async function postSerialized<T = any>(options: {
     }
   } finally {
     if (timeout) clearTimeout(timeout);
+    signalLink.cleanup();
   }
 }
 
@@ -173,7 +178,7 @@ export function createExposureFetch(
     async task<I, O>(
       id: string,
       input?: I,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
       const r: ProtocolEnvelope<O> = await postSerialized({
@@ -184,6 +189,7 @@ export function createExposureFetch(
           ...buildHeaders(),
           ...(options?.headers ?? {}),
         },
+        signal: options?.signal,
         timeoutMs: cfg?.timeoutMs,
         serializer: cfg.serializer,
         onRequest: cfg?.onRequest,
@@ -206,7 +212,7 @@ export function createExposureFetch(
     async event<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       const r: ProtocolEnvelope<void> = await postSerialized({
@@ -217,6 +223,7 @@ export function createExposureFetch(
           ...buildHeaders(),
           ...(options?.headers ?? {}),
         },
+        signal: options?.signal,
         timeoutMs: cfg?.timeoutMs,
         serializer: cfg.serializer,
         onRequest: cfg?.onRequest,
@@ -238,7 +245,7 @@ export function createExposureFetch(
     async eventWithResult<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<P> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       const r: ProtocolEnvelope<P> = await postSerialized({
@@ -249,6 +256,7 @@ export function createExposureFetch(
           ...buildHeaders(),
           ...(options?.headers ?? {}),
         },
+        signal: options?.signal,
         timeoutMs: cfg?.timeoutMs,
         serializer: cfg.serializer,
         onRequest: cfg?.onRequest,

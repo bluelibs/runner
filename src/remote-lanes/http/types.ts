@@ -27,12 +27,12 @@ export interface ExposureFetchClient {
   task<I = unknown, O = unknown>(
     id: string,
     input?: I,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<O>;
   event<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<void>;
   /**
    * Emits an event and returns the final payload as seen by the remote Runner.
@@ -42,6 +42,6 @@ export interface ExposureFetchClient {
   eventWithResult?<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<P>;
 }

@@ -7,7 +7,8 @@ interface TestGlobal {
   __ENV__?: any;
   process?: any;
   env?: any;
-  Deno?: unknown;
+  Deno?: { env?: { get?: (key: string) => string | undefined } } | unknown;
+  Bun?: { env?: Record<string, string | undefined> } | unknown;
   AsyncLocalStorage?: new <T>() => {
     getStore(): T | undefined;
     run<R>(store: T, callback: () => R): R;
@@ -25,6 +26,119 @@ describe("GenericUniversalPlatformAdapter", () => {
   describe("init", () => {
     it("should complete without error", async () => {
       await expect(adapter.init()).resolves.toBeUndefined();
+    });
+
+    it("short-circuits when async storage was already probed", async () => {
+      testGlobal.Deno = {};
+      (adapter as unknown as { alsProbed: boolean }).alsProbed = true;
+
+      await expect(adapter.init()).resolves.toBeUndefined();
+
+      delete testGlobal.Deno;
+    });
+
+    it("captures global AsyncLocalStorage during init for Deno", async () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+
+      testGlobal.Deno = {};
+      testGlobal.AsyncLocalStorage = class MockALS<T> {
+        getStore(): T | undefined {
+          return undefined;
+        }
+        run<R>(_store: T, callback: () => R): R {
+          return callback();
+        }
+      };
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      await expect(denoAdapter.init()).resolves.toBeUndefined();
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
+
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
+
+    it("captures global AsyncLocalStorage during init outside Deno too", async () => {
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+
+      testGlobal.AsyncLocalStorage = class MockALS<T> {
+        getStore(): T | undefined {
+          return undefined;
+        }
+        run<R>(_store: T, callback: () => R): R {
+          return callback();
+        }
+      };
+
+      const genericAdapter = new GenericUniversalPlatformAdapter();
+      await expect(genericAdapter.init()).resolves.toBeUndefined();
+      expect(genericAdapter.hasAsyncLocalStorage()).toBe(true);
+
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
+
+    it("falls back to async import during init when builtin lookup returns undefined", async () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+      const builtinSpy = jest
+        .spyOn(process, "getBuiltinModule")
+        .mockReturnValue(undefined);
+
+      testGlobal.Deno = {};
+      (testGlobal as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+        undefined;
+
+      jest.doMock("node:async_hooks", () => ({
+        AsyncLocalStorage: class MockALS<T> {
+          getStore(): T | undefined {
+            return undefined;
+          }
+          run<R>(_store: T, callback: () => R): R {
+            return callback();
+          }
+        },
+      }));
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      await expect(denoAdapter.init()).resolves.toBeUndefined();
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
+
+      jest.dontMock("node:async_hooks");
+      builtinSpy.mockRestore();
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
+
+    it("falls back to async import during init when process is unavailable", async () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+      const originalProcess = testGlobal.process;
+
+      testGlobal.Deno = {};
+      (testGlobal as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+        undefined;
+      delete testGlobal.process;
+
+      jest.doMock("node:async_hooks", () => ({
+        AsyncLocalStorage: class MockALS<T> {
+          getStore(): T | undefined {
+            return undefined;
+          }
+          run<R>(_store: T, callback: () => R): R {
+            return callback();
+          }
+        },
+      }));
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      await expect(denoAdapter.init()).resolves.toBeUndefined();
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
+
+      jest.dontMock("node:async_hooks");
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+      testGlobal.process = originalProcess;
     });
   });
 
@@ -207,11 +321,15 @@ describe("GenericUniversalPlatformAdapter", () => {
     const originalEnv = testGlobal.__ENV__;
     const originalProcess = testGlobal.process;
     const originalGlobalEnv = testGlobal.env;
+    const originalDeno = testGlobal.Deno;
+    const originalBun = testGlobal.Bun;
 
     afterEach(() => {
       testGlobal.__ENV__ = originalEnv;
       testGlobal.process = originalProcess;
       testGlobal.env = originalGlobalEnv;
+      testGlobal.Deno = originalDeno;
+      testGlobal.Bun = originalBun;
     });
 
     it("should return value from __ENV__ when available", () => {
@@ -232,6 +350,30 @@ describe("GenericUniversalPlatformAdapter", () => {
       expect(adapter.getEnv("TEST_KEY")).toBe("from-global-env");
     });
 
+    it("should return value from Deno.env.get when available", () => {
+      delete testGlobal.__ENV__;
+      delete testGlobal.process;
+      delete testGlobal.env;
+      testGlobal.Deno = {
+        env: {
+          get: (key: string) =>
+            key === "TEST_KEY" ? "from-deno-env" : undefined,
+        },
+      };
+
+      expect(adapter.getEnv("TEST_KEY")).toBe("from-deno-env");
+    });
+
+    it("should return value from Bun.env when available", () => {
+      delete testGlobal.__ENV__;
+      delete testGlobal.process;
+      delete testGlobal.env;
+      delete testGlobal.Deno;
+      testGlobal.Bun = { env: { TEST_KEY: "from-bun-env" } };
+
+      expect(adapter.getEnv("TEST_KEY")).toBe("from-bun-env");
+    });
+
     it("should return undefined when key is not found", () => {
       delete testGlobal.__ENV__;
       delete testGlobal.process;
@@ -241,8 +383,39 @@ describe("GenericUniversalPlatformAdapter", () => {
   });
 
   describe("hasAsyncLocalStorage", () => {
-    it("should return false outside Deno", () => {
-      expect(adapter.hasAsyncLocalStorage()).toBe(false);
+    it("should return false when no async local storage implementation exists", () => {
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+      const builtinSpy = jest
+        .spyOn(process, "getBuiltinModule")
+        .mockReturnValue(undefined);
+
+      (testGlobal as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+        undefined;
+
+      expect(new GenericUniversalPlatformAdapter().hasAsyncLocalStorage()).toBe(
+        false,
+      );
+
+      builtinSpy.mockRestore();
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
+
+    it("should return true outside Deno when AsyncLocalStorage is globally available", () => {
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+
+      testGlobal.AsyncLocalStorage = class MockALS<T> {
+        getStore(): T | undefined {
+          return undefined;
+        }
+        run<R>(_store: T, callback: () => R): R {
+          return callback();
+        }
+      };
+
+      const genericAdapter = new GenericUniversalPlatformAdapter();
+      expect(genericAdapter.hasAsyncLocalStorage()).toBe(true);
+
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
     });
 
     it("should return true in Deno when AsyncLocalStorage is available", () => {
@@ -309,17 +482,69 @@ describe("GenericUniversalPlatformAdapter", () => {
       testGlobal.Deno = originalDeno;
       testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
     });
+
+    it("returns false when builtin async_hooks lookup throws in Deno", () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+      const builtinSpy = jest
+        .spyOn(process, "getBuiltinModule")
+        .mockImplementation(() => {
+          throw new Error("boom");
+        });
+
+      testGlobal.Deno = {};
+      (testGlobal as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+        undefined;
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(false);
+
+      builtinSpy.mockRestore();
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
+
+    it("returns false when builtin async_hooks lookup returns undefined in Deno", () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+      const builtinSpy = jest
+        .spyOn(process, "getBuiltinModule")
+        .mockReturnValue(undefined);
+
+      testGlobal.Deno = {};
+      (testGlobal as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+        undefined;
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(false);
+
+      builtinSpy.mockRestore();
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
   });
 
   describe("createAsyncLocalStorage", () => {
     it("should return object with throwing methods", () => {
-      const als = adapter.createAsyncLocalStorage();
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+      const builtinSpy = jest
+        .spyOn(process, "getBuiltinModule")
+        .mockReturnValue(undefined);
+
+      (testGlobal as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+        undefined;
+
+      const als =
+        new GenericUniversalPlatformAdapter().createAsyncLocalStorage();
 
       expect(typeof als.getStore).toBe("function");
       expect(typeof als.run).toBe("function");
 
       expect(() => als.getStore()).toThrow();
       expect(() => als.run(undefined as unknown as any, () => {})).toThrow();
+
+      builtinSpy.mockRestore();
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
     });
 
     it("should create a working ALS instance in Deno when available", () => {
@@ -349,6 +574,33 @@ describe("GenericUniversalPlatformAdapter", () => {
       expect(result).toEqual({ id: "deno" });
 
       testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
+
+    it("should create a working ALS instance outside Deno when globally available", () => {
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+
+      testGlobal.AsyncLocalStorage = class MockALS<T> {
+        private store: T | undefined;
+        getStore(): T | undefined {
+          return this.store;
+        }
+        run<R>(store: T, callback: () => R): R {
+          const previous = this.store;
+          this.store = store;
+          try {
+            return callback();
+          } finally {
+            this.store = previous;
+          }
+        }
+      };
+
+      const genericAdapter = new GenericUniversalPlatformAdapter();
+      const als = genericAdapter.createAsyncLocalStorage<{ id: string }>();
+      const result = als.run({ id: "bun-ish" }, () => als.getStore());
+      expect(result).toEqual({ id: "bun-ish" });
+
       testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
     });
   });

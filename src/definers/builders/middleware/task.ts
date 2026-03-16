@@ -1,6 +1,7 @@
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
+  ResolveValidationSchemaInput,
   ITaskMiddlewareDefinition,
   IMiddlewareMeta,
   TaskMiddlewareTagType,
@@ -69,14 +70,39 @@ export function makeTaskMiddlewareBuilder<
       return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps, false>(next);
     },
 
-    configSchema<TNew>(schema: ValidationSchemaInput<TNew>) {
-      const next = cloneTask<C, In, Out, D, TNew, In, Out, D>(state, {
+    configSchema<
+      TNew = never,
+      TSchema extends ValidationSchemaInput<
+        [TNew] extends [never] ? any : TNew
+      > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+    >(schema: TSchema) {
+      const next = cloneTask<
+        C,
+        In,
+        Out,
+        D,
+        ResolveValidationSchemaInput<TNew, TSchema>,
+        In,
+        Out,
+        D
+      >(state, {
         configSchema: schema,
       });
-      return makeTaskMiddlewareBuilder<TNew, In, Out, D, false>(next);
+      return makeTaskMiddlewareBuilder<
+        ResolveValidationSchemaInput<TNew, TSchema>,
+        In,
+        Out,
+        D,
+        false
+      >(next);
     },
 
-    schema<TNew>(schema: ValidationSchemaInput<TNew>) {
+    schema<
+      TNew = never,
+      TSchema extends ValidationSchemaInput<
+        [TNew] extends [never] ? any : TNew
+      > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+    >(schema: TSchema) {
       return builder.configSchema(schema);
     },
 

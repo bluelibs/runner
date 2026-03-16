@@ -16,6 +16,7 @@ import {
 
 describe("Platform Abstraction", () => {
   afterEach(() => {
+    jest.restoreAllMocks();
     resetPlatform(); // Reset to auto-detection after each test
   });
 
@@ -425,6 +426,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should test hasAsyncLocalStorage universal case", () => {
+    jest.spyOn(process, "getBuiltinModule").mockReturnValue(undefined);
     const universalAdapter = new PlatformAdapter("universal");
     expect(universalAdapter.hasAsyncLocalStorage()).toBe(false);
   });

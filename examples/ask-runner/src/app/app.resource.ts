@@ -2,10 +2,10 @@ import { r } from "@bluelibs/runner";
 
 import { aiDocsPrompt } from "./ai/ai-docs.resource";
 import { askRunnerBudgetMiddleware } from "./ai/ask-runner.middleware";
-import { askRunnerTask } from "./ai/ask-runner.task";
-import { openAiSemaphore } from "./ai/ask-runner.task";
-import { streamAskRunnerTask } from "./ai/ask-runner.task";
 import { openAiClient } from "./ai/openai.resource";
+import { openAiSemaphore } from "./ai/openai-semaphore.resource";
+import { askRunnerTask } from "./ai/ask-runner.task";
+import { streamAskRunnerTask } from "./ai/stream-ask-runner.task";
 import { budgetLedger } from "./budget/budget-ledger.resource";
 import { appConfig } from "./config/app-config.resource";
 import {

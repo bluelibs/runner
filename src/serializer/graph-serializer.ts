@@ -3,6 +3,7 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
+import { genericError } from "../errors";
 import type {
   SerializedValue,
   SerializationContext,
@@ -90,7 +91,9 @@ export const serializeValue = (
 
     // Functions are intentionally non-serializable (code execution risk + non-portable).
     if (valueType === "function") {
-      throw new TypeError(`Cannot serialize value of type "${valueType}"`);
+      throw genericError.new({
+        message: `Cannot serialize value of type "${valueType}"`,
+      });
     }
 
     // Symbols are non-JSON primitives; the registry provides safe encodings (Symbol.for + well-known).

@@ -6,7 +6,7 @@ describe("event errors", () => {
       frame: {
         kind: "event",
         id: "e1",
-        source: { kind: "hook", id: "h1", path: "hooks/h1" },
+        source: { kind: "hook", id: "hooks.h1" },
       },
       repetitions: 3,
       maxRepetitions: 3,
@@ -19,12 +19,12 @@ describe("event errors", () => {
         {
           kind: "hook",
           id: "h1",
-          source: { kind: "hook", id: "h1", path: "hooks/h1" },
+          source: { kind: "hook", id: "hooks.h1" },
         },
         {
           kind: "event",
           id: "e1",
-          source: { kind: "hook", id: "h1", path: "hooks/h1" },
+          source: { kind: "hook", id: "hooks.h1" },
         },
       ],
     });

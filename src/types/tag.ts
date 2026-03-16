@@ -12,10 +12,16 @@ import {
   symbolTagConfiguredFrom,
 } from "./utilities";
 
+/**
+ * Minimal shape for definitions that carry tags.
+ */
 export interface ITaggable {
   tags: TagType[];
 }
 
+/**
+ * Definition kinds a tag may legally attach to.
+ */
 export type TagTarget =
   | "tasks"
   | "resources"
@@ -25,14 +31,20 @@ export type TagTarget =
   | "resourceMiddlewares"
   | "errors";
 
+/**
+ * Declarative tag definition contract.
+ */
 export interface ITagDefinition<
   TConfig = void,
   _TEnforceInputContract = void,
   _TEnforceOutputContract = void,
   _TAllowedTargets extends TagTarget | void = void,
 > {
+  /** Stable tag identifier. */
   id: string;
+  /** Optional metadata used by docs and tooling. */
   meta?: ITagMeta;
+  /** Optional validation schema for configured tag payloads. */
   configSchema?: ValidationSchemaInput<TConfig>;
   /**
    * Utilizing config at definition level stores its defaults
@@ -45,6 +57,11 @@ export interface ITagDefinition<
   targets?: readonly TagTarget[];
 }
 
+/**
+ * Normalized runtime tag definition.
+ *
+ * Tags carry discovery metadata and may also encode input/output contracts.
+ */
 export interface ITag<
   TConfig = void,
   TEnforceInputContract = void,
@@ -60,20 +77,21 @@ export interface ITag<
     >,
     IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   /**
-   * A special validation property.
-   * It resolves to `true` if TConfig only has optional keys, otherwise `false`.
+   * Type-level helper used by builder overloads when tag config is fully optional.
    */
   readonly __configHasOnlyOptionalKeys: RequiredKeys<TConfig> extends never
     ? true
     : false;
   /**
-   * Type-only phantom used to filter tags by allowed target in builder APIs.
-   * Optional so it has zero runtime requirements.
+   * Type-level helper used to constrain tag usage to allowed definition kinds.
    */
   readonly __allowedTagTargets?: TAllowedTargets;
 
+  /** Default configuration stored on the tag definition itself. */
   config?: TConfig;
+  /** Normalized validation schema for configured tag payloads. */
   configSchema?: IValidationSchema<TConfig>;
+  /** Normalized metadata attached to this tag. */
   meta: ITagMeta;
   /**
    * Checks if the tag exists in a taggable or a list of tags.
@@ -116,6 +134,9 @@ export interface ITag<
   [symbolTag]: true;
 }
 
+/**
+ * Helper alias for tags whose config is entirely optional.
+ */
 export type ITagWithOptionalConfig<
   _TValue,
   TEnforceInputContract,
@@ -130,6 +151,9 @@ export type ITagWithOptionalConfig<
   readonly __configHasOnlyOptionalKeys: true;
 };
 
+/**
+ * Configured tag instance returned by `tag.with(...)`.
+ */
 export interface ITagConfigured<
   TConfig = void,
   TEnforceInputContract = void,
@@ -151,6 +175,9 @@ export interface ITagConfigured<
   config: TConfig;
 }
 
+/**
+ * Any tag value that can appear in a `tags: [...]` array.
+ */
 export type TagType =
   | ITag<void, any, any, any>
   | ITagWithOptionalConfig<any, any, any, any>
@@ -172,6 +199,9 @@ export type TagTypeFor<TTarget extends TagTarget> = FilterTagByTarget<
   TTarget
 >;
 
+/**
+ * Compile-time guard ensuring a tag list is valid for a specific definition kind.
+ */
 export type EnsureTagsForTarget<
   TTarget extends TagTarget,
   TTags extends readonly TagType[],

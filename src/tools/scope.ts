@@ -1,4 +1,4 @@
-import type { RegisterableItems, IsolationSubtreeFilter } from "../defs";
+import type { RegisterableItem, IsolationSubtreeFilter } from "../defs";
 
 /**
  * The four interaction channels that `scope()` controls.
@@ -37,7 +37,7 @@ export type IsolationWildcard = typeof ISOLATION_WILDCARD;
  * `"system.*"` / `"app.resources.*"` for segment-based matches.
  */
 export type IsolationScopeTarget =
-  | RegisterableItems
+  | RegisterableItem
   | IsolationSubtreeFilter
   | IsolationWildcard
   | string;

@@ -1,5 +1,4 @@
 import { defineResource } from "../../definers/defineResource";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import {
   runResultDisposedError,
   runtimeHealthDuringBootstrapError,
@@ -12,29 +11,27 @@ export const healthResource = defineResource<
   void,
   Promise<IHealthReporter>,
   { store: typeof storeResource }
->(
-  markFrameworkDefinition({
-    id: "runner.health",
-    dependencies: { store: storeResource },
-    init: async (_config, { store }) => {
-      return new HealthReporter(store, {
-        ensureAvailable: () => {
-          if (!store.isLocked) {
-            runtimeHealthDuringBootstrapError.throw();
-          }
+>({
+  id: "health",
+  dependencies: { store: storeResource },
+  init: async (_config, { store }) => {
+    return new HealthReporter(store, {
+      ensureAvailable: () => {
+        if (!store.isLocked) {
+          runtimeHealthDuringBootstrapError.throw();
+        }
 
-          if (store.isDisposalStarted()) {
-            runResultDisposedError.throw();
-          }
-        },
-        isSleepingResource: (resourceId) =>
-          store.resources.get(resourceId)!.isInitialized !== true,
-      }) as IHealthReporter;
-    },
-    meta: {
-      title: "Health Reporter",
-      description:
-        "Read-only resource health aggregation for in-resource diagnostics and operator-facing probes.",
-    },
-  }),
-);
+        if (store.isDisposalStarted()) {
+          runResultDisposedError.throw();
+        }
+      },
+      isSleepingResource: (resourceId) =>
+        store.resources.get(resourceId)!.isInitialized !== true,
+    }) as IHealthReporter;
+  },
+  meta: {
+    title: "Health Reporter",
+    description:
+      "Read-only resource health aggregation for in-resource diagnostics and operator-facing probes.",
+  },
+});

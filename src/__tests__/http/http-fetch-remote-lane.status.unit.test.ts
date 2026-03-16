@@ -1,7 +1,7 @@
 import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("http-fetch-remote-lane.resource - HTTP status handling", () => {
   it("throws HTTP_ERROR when non-2xx response body is not serializer-parsable", async () => {
@@ -104,7 +104,9 @@ describe("http-fetch-remote-lane.resource - HTTP status handling", () => {
       serializer: new Serializer(),
     });
 
-    await expect(client.task("t.id", { a: 1 })).rejects.toThrow();
+    await expect(client.task("t.id", { a: 1 })).rejects.toThrow(
+      "Invalid JSON payload.",
+    );
   });
 
   it("keeps typed-envelope behavior for non-2xx JSON responses", async () => {
@@ -130,7 +132,9 @@ describe("http-fetch-remote-lane.resource - HTTP status handling", () => {
     const helper = {
       id: "tests-errors-status",
       throw: (data: any) => {
-        throw createMessageError("typed-status:" + String(data?.code));
+        throw genericError.new({
+          message: "typed-status:" + String(data?.code),
+        });
       },
       is: () => false,
       toString: () => "",

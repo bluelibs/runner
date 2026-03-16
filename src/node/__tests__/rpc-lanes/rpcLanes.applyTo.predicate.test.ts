@@ -92,7 +92,9 @@ describe("rpcLanes applyTo predicate", () => {
     const runtime = await run(app);
     await runtime.runTask(emitTask as any);
     expect(eventCapture).toHaveBeenCalledTimes(1);
-    expect(eventCapture.mock.calls[0]?.[0]).toBe(event.id);
+    expect(eventCapture.mock.calls[0]?.[0]).toBe(
+      runtime.store.findIdByDefinition(event),
+    );
     await runtime.dispose();
   });
 

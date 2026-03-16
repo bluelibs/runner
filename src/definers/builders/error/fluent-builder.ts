@@ -2,11 +2,12 @@ import type {
   DefaultErrorType,
   EnsureTagsForTarget,
   ErrorTagType,
+  ResolveValidationSchemaInput,
   IErrorMeta,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineError } from "../../defineError";
-import { markFrameworkDefinition } from "../../markFrameworkDefinition";
 import type { ErrorFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone, mergeArray } from "./utils";
@@ -26,33 +27,48 @@ const assertHttpCode = (value: number): void => {
  */
 export function makeErrorBuilder<TData extends DefaultErrorType>(
   state: BuilderState<TData>,
-  framework = false,
 ): ErrorFluentBuilder<TData> {
-  const builder: ErrorFluentBuilder<TData> = {
+  const builder = {
     id: state.id,
 
     httpCode(code: number) {
       assertHttpCode(code);
       const next = clone(state, { httpCode: code });
-      return makeErrorBuilder(next, framework);
+      return makeErrorBuilder(next);
     },
 
-    serialize(fn) {
+    serialize(fn: (data: TData) => string) {
       const next = clone(state, { serialize: fn });
-      return makeErrorBuilder(next, framework);
+      return makeErrorBuilder(next);
     },
 
-    parse(fn) {
+    parse(fn: (raw: string) => TData) {
       const next = clone(state, { parse: fn });
-      return makeErrorBuilder(next, framework);
+      return makeErrorBuilder(next);
     },
 
-    dataSchema(schema) {
-      const next = clone(state, { dataSchema: schema });
-      return makeErrorBuilder(next, framework);
+    dataSchema<
+      TNewData extends DefaultErrorType = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewData] extends [never] ? any : TNewData
+      > = ValidationSchemaInput<[TNewData] extends [never] ? any : TNewData>,
+    >(schema: TSchema) {
+      const next = clone(state as BuilderState<any>, {
+        dataSchema: schema,
+      }) as BuilderState<
+        ResolveValidationSchemaInput<TNewData, TSchema> & DefaultErrorType
+      >;
+      return makeErrorBuilder<
+        ResolveValidationSchemaInput<TNewData, TSchema> & DefaultErrorType
+      >(next);
     },
 
-    schema(schema) {
+    schema<
+      TNewData extends DefaultErrorType = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewData] extends [never] ? any : TNewData
+      > = ValidationSchemaInput<[TNewData] extends [never] ? any : TNewData>,
+    >(schema: TSchema) {
       return builder.dataSchema(schema);
     },
 
@@ -64,55 +80,43 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
       const next = clone(state, {
         tags: mergeArray(state.tags ?? [], t, override),
       });
-      return makeErrorBuilder(next, framework);
+      return makeErrorBuilder(next);
     },
 
     format(fn: (data: TData) => string) {
       const next = clone(state, { format: fn });
-      return makeErrorBuilder(next, framework);
+      return makeErrorBuilder(next);
     },
 
     remediation(advice: string | ((data: TData) => string)) {
       const next = clone(state, { remediation: advice });
-      return makeErrorBuilder(next, framework);
+      return makeErrorBuilder(next);
     },
 
     meta<TNewMeta extends IErrorMeta>(m: TNewMeta) {
       const next = clone(state, { meta: m });
-      return makeErrorBuilder(next, framework);
+      return makeErrorBuilder(next);
     },
 
     build() {
       return deepFreeze(
         defineError<TData>(
-          framework
-            ? markFrameworkDefinition({
-                id: state.id,
-                httpCode: state.httpCode,
-                serialize: state.serialize,
-                parse: state.parse,
-                dataSchema: state.dataSchema,
-                format: state.format,
-                remediation: state.remediation,
-                meta: state.meta,
-                tags: state.tags,
-              })
-            : {
-                id: state.id,
-                httpCode: state.httpCode,
-                serialize: state.serialize,
-                parse: state.parse,
-                dataSchema: state.dataSchema,
-                format: state.format,
-                remediation: state.remediation,
-                meta: state.meta,
-                tags: state.tags,
-              },
+          {
+            id: state.id,
+            httpCode: state.httpCode,
+            serialize: state.serialize,
+            parse: state.parse,
+            dataSchema: state.dataSchema,
+            format: state.format,
+            remediation: state.remediation,
+            meta: state.meta,
+            tags: state.tags,
+          },
           state.filePath,
         ),
       );
     },
   };
 
-  return builder;
+  return builder as ErrorFluentBuilder<TData>;
 }

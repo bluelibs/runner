@@ -309,11 +309,11 @@ describe("IsolationPolicyValidator coverage", () => {
 
   it("resolves scope string selectors against registered ids", () => {
     const ctx = createValidatorContext({
-      registeredIds: ["system.runtime", "system.eventManager"],
+      registeredIds: ["runtime", "eventManager"],
     });
 
     const normalized = normalizeIsolationEntries(ctx, {
-      entries: [scope("system.*" as any)],
+      entries: [scope(["runtime", "eventManager"] as any)],
       onInvalidEntry: () => {
         throw new Error("invalid");
       },
@@ -323,10 +323,7 @@ describe("IsolationPolicyValidator coverage", () => {
     });
 
     expect(normalized).toEqual([
-      scope([
-        { id: "system.runtime" } as any,
-        { id: "system.eventManager" } as any,
-      ]),
+      scope([{ id: "runtime" } as any, { id: "eventManager" } as any]),
     ]);
   });
 
@@ -535,7 +532,7 @@ describe("IsolationPolicyValidator coverage", () => {
 
     expectThrownErrorId(
       () => validateIsolationPolicies(ctx),
-      "runner.errors.isolationUnknownTarget",
+      "isolationUnknownTarget",
     );
   });
 
@@ -553,7 +550,7 @@ describe("IsolationPolicyValidator coverage", () => {
 
     expectThrownErrorId(
       () => validateIsolationPolicies(ctx),
-      "runner.errors.isolationInvalidEntry",
+      "isolationInvalidEntry",
     );
   });
 });

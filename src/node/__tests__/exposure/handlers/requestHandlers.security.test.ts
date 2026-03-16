@@ -3,8 +3,15 @@ import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import { error } from "../../../../definers/builders/error";
 import { useExposureContext } from "../../../exposure/requestContext";
-import { cancellationError, createMessageError } from "../../../../errors";
+import { cancellationError, genericError } from "../../../../errors";
 import { createReqRes } from "./security.test.utils";
+
+function exposureTaskId(
+  runtime: { store: { findIdByDefinition(reference: unknown): string } },
+  task: unknown,
+): string {
+  return runtime.store.findIdByDefinition(task);
+}
 
 describe("requestHandlers - Security", () => {
   describe("Authentication", () => {
@@ -27,7 +34,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: "{}",
         });
@@ -61,7 +68,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: "{}",
         });
@@ -95,7 +102,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: {
             "content-type": "application/json",
             "x-runner-token": "secret-token-123",
@@ -132,7 +139,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: {
             "content-type": "application/json",
             "x-runner-token": "wrong-token",
@@ -165,7 +172,7 @@ describe("requestHandlers - Security", () => {
       try {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: {
             "content-type": "application/json",
             "x-runner-token": { some: "object" } as any,
@@ -204,7 +211,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: {
             "content-type": "application/json",
             origin: "https://evil.com",
@@ -243,7 +250,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: {
             "content-type": "application/json",
             origin: "https://trusted.com",
@@ -289,7 +296,7 @@ describe("requestHandlers - Security", () => {
         });
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: largeBody,
         });
@@ -323,7 +330,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const { req, res } = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
         });
         setImmediate(() => {
@@ -358,7 +365,7 @@ describe("requestHandlers - Security", () => {
       try {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "multipart/form-data; boundary=---X" },
         });
         setImmediate(() => {
@@ -382,7 +389,7 @@ describe("requestHandlers - Security", () => {
       const t = defineTask<void, Promise<void>>({
         id: "tests-security-error-masking",
         async run() {
-          throw createMessageError("SECRET_DATA");
+          throw genericError.new({ message: "SECRET_DATA" });
         },
       });
       const exposure = rpcExposure.with({
@@ -400,7 +407,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: "{}",
         });
@@ -436,7 +443,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: "{}",
         });
@@ -473,7 +480,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: "{}",
         });
@@ -509,7 +516,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: "{}",
         });
@@ -525,7 +532,7 @@ describe("requestHandlers - Security", () => {
       const t = defineTask<void, Promise<void>>({
         id: "tests-security-error-nocode",
         async run() {
-          throw createMessageError("plain");
+          throw genericError.new({ message: "plain" });
         },
       });
       const exposure = rpcExposure.with({
@@ -542,7 +549,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: "{}",
         });
@@ -574,7 +581,7 @@ describe("requestHandlers - Security", () => {
       try {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "multipart/form-data; boundary=---X" },
         });
         setImmediate(() => {
@@ -621,7 +628,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
         });
         setImmediate(() => transport.req.emit("aborted"));
@@ -677,7 +684,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/octet-stream" },
         });
         setImmediate(() => transport.req.emit("aborted"));
@@ -712,7 +719,7 @@ describe("requestHandlers - Security", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": `multipart/form-data; boundary=----jest` },
         });
         setImmediate(() =>

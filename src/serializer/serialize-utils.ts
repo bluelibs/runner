@@ -1,5 +1,6 @@
+import { genericError } from "../errors";
 import type { TypeDefinition } from "./types";
-import type { SerializedTypeRecord, SerializedValue } from "./types";
+import type { SerializedValue } from "./types";
 import type { TypeRegistry } from "./type-registry";
 import { isUnsafeKey } from "./validation";
 
@@ -35,21 +36,14 @@ export const serializeRecordEntries = <TSerializedValue>(
   return record;
 };
 
-export function serializeTypeRecord(
-  typeDef: TypeDefinition<unknown, unknown>,
-  value: unknown,
-  excludedTypeIds: string[],
-  serializeNested: (value: unknown) => SerializedValue,
-): SerializedTypeRecord;
-
-export function serializeTypeRecord<TSerializedValue>(
+export function serializeTypeRecord<TSerializedValue = SerializedValue>(
   typeDef: TypeDefinition<unknown, unknown>,
   value: unknown,
   excludedTypeIds: string[],
   serializeNested: (value: unknown) => TSerializedValue,
 ): { __type: string; value: TSerializedValue };
 
-export function serializeTypeRecord<TSerializedValue>(
+export function serializeTypeRecord<TSerializedValue = SerializedValue>(
   typeDef: TypeDefinition<unknown, unknown>,
   value: unknown,
   excludedTypeIds: string[],
@@ -67,21 +61,14 @@ export function serializeTypeRecord<TSerializedValue>(
   }
 }
 
-export function serializeSymbolValue(
-  value: symbol,
-  excludedTypeIds: string[],
-  typeRegistry: TypeRegistry,
-  serializeNested: (value: unknown) => SerializedValue,
-): SerializedValue;
-
-export function serializeSymbolValue<TSerializedValue>(
+export function serializeSymbolValue<TSerializedValue = SerializedValue>(
   value: symbol,
   excludedTypeIds: string[],
   typeRegistry: TypeRegistry,
   serializeNested: (value: unknown) => TSerializedValue,
 ): { __type: string; value: TSerializedValue };
 
-export function serializeSymbolValue<TSerializedValue>(
+export function serializeSymbolValue<TSerializedValue = SerializedValue>(
   value: symbol,
   excludedTypeIds: string[],
   typeRegistry: TypeRegistry,
@@ -89,7 +76,10 @@ export function serializeSymbolValue<TSerializedValue>(
 ): { __type: string; value: TSerializedValue } {
   const typeDef = typeRegistry.findTypeDefinition(value, excludedTypeIds);
   if (!typeDef) {
-    throw new TypeError('Cannot serialize value of type "symbol"');
+    throw genericError.new({
+      message: 'Cannot serialize value of type "symbol"',
+    });
   }
+
   return serializeTypeRecord(typeDef, value, excludedTypeIds, serializeNested);
 }

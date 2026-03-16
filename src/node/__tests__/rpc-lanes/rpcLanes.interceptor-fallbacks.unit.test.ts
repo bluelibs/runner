@@ -89,10 +89,55 @@ describe("rpc-lanes interceptor fallback branches", () => {
       interceptor(next, {
         id: "raw-event",
         data: { value: 1 },
+        signal: new AbortController().signal,
         source: runtimeSource.task("rpc-lanes-network-raw-id.source"),
       }),
     ).resolves.toBeUndefined();
-    expect(communicator.event).toHaveBeenCalledWith("raw-event", { value: 1 });
+    expect(communicator.event).toHaveBeenCalledWith(
+      "raw-event",
+      { value: 1 },
+      expect.objectContaining({
+        signal: expect.any(Object),
+      }),
+    );
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("keeps local-simulated task execution working when allowlisted async context ids are missing", async () => {
+    const serializer = new Serializer();
+    const lane = {
+      id: "rpc-lanes-local-simulated-missing-async-context",
+      asyncContexts: ["missing-context-id"],
+      policy: {},
+    };
+    const run = jest.fn(async (input: unknown) => input);
+    const taskEntry = { task: { id: "app.tasks.echo", run } };
+    const context = {
+      config: {
+        topology: {
+          bindings: [{ lane }],
+        },
+      },
+      resolved: {
+        taskLaneByTaskId: new Map([[taskEntry.task.id, lane]]),
+        eventLaneByEventId: new Map(),
+      },
+      dependencies: {
+        store: {
+          tasks: new Map([[taskEntry.task.id, taskEntry]]),
+          events: new Map(),
+          asyncContexts: new Map(),
+        },
+        eventManager: { intercept: jest.fn() },
+        serializer,
+      },
+      resourceId: RPC_LANES_RESOURCE_ID,
+    };
+
+    applyLocalSimulatedModeRouting(context as any);
+    const result = await taskEntry.task.run({ value: 1 });
+
+    expect(result).toEqual({ value: 1 });
+    expect(run).toHaveBeenCalledWith({ value: 1 }, undefined, undefined);
   });
 });

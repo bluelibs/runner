@@ -1,4 +1,5 @@
-import { Match, RunnerError } from "../..";
+import { RunnerError, type MatchCompiledSchema } from "../..";
+import { Match } from "../../decorators/legacy";
 import { defineError } from "../../definers/defineError";
 import {
   normalizeOptionalValidationSchema,
@@ -50,7 +51,10 @@ describe("schema normalization helpers", () => {
       subject: "Task input",
     });
 
-    expect(classSchema.parse({ value: "ok" })).toEqual({ value: "ok" });
+    const parsedClass = classSchema.parse({ value: "ok" });
+
+    expect(parsedClass).toBeInstanceOf(DecoratedSchema);
+    expect(parsedClass).toEqual({ value: "ok" });
     expect(() => classSchema.parse({ value: 1 } as any)).toThrow();
 
     const objectSchema = normalizeValidationSchema(
@@ -59,10 +63,20 @@ describe("schema normalization helpers", () => {
         definitionId: "tests-normalize-object",
         subject: "Task input",
       },
-    );
+    ) as MatchCompiledSchema<{ value: StringConstructor }>;
 
     expect(objectSchema.parse({ value: "ok" })).toEqual({ value: "ok" });
     expect(() => objectSchema.parse({ value: 1 } as any)).toThrow();
+    expect(objectSchema.test({ value: "ok" })).toBe(true);
+    expect(objectSchema.toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        value: { type: "string" },
+      },
+      required: ["value"],
+      additionalProperties: false,
+    });
 
     const functionSchema = normalizeValidationSchema(
       ((value: unknown) => typeof value === "string") as any,
@@ -108,6 +122,17 @@ describe("schema normalization helpers", () => {
       ),
     ).toThrow("Anonymous");
   });
+
+  it("reuses existing compiled Match schemas without recompiling", () => {
+    const compiled = Match.compile({ value: String });
+
+    const normalized = normalizeValidationSchema(compiled, {
+      definitionId: "tests-normalize-compiled",
+      subject: "Task input",
+    });
+
+    expect(normalized).toBe(compiled);
+  });
 });
 
 describe("defineError schema normalization", () => {
@@ -142,23 +167,25 @@ describe("defineError schema normalization", () => {
     expect(decoratedError.new({ value: "ok" }).data).toEqual({ value: "ok" });
     expect(() => decoratedError.new({ value: 1 } as any)).toThrow();
 
-    expect(() =>
-      defineError<{ value: string }>({
-        id: "tests-error-schema-undecorated",
-        dataSchema: UndecoratedSchema as any,
-        format: (data) => data.value,
-      }),
-    ).toThrow("@Match.Schema()");
+    const undecoratedError = defineError<{ value: string }>({
+      id: "tests-error-schema-undecorated",
+      dataSchema: UndecoratedSchema as any,
+      format: (data) => data.value,
+    });
+
+    expect(() => undecoratedError.new({ value: "nope" })).toThrow(
+      "@Match.Schema()",
+    );
 
     const trulyAnonymousClass = (0, eval)("(class { value; })");
 
-    expect(() =>
-      defineError<{ value: string }>({
-        id: "tests-error-schema-undecorated-anonymous",
-        dataSchema: trulyAnonymousClass as any,
-        format: (data) => data.value,
-      }),
-    ).toThrow("Anonymous");
+    const anonymousError = defineError<{ value: string }>({
+      id: "tests-error-schema-undecorated-anonymous",
+      dataSchema: trulyAnonymousClass as any,
+      format: (data) => data.value,
+    });
+
+    expect(() => anonymousError.new({ value: "nope" })).toThrow("Anonymous");
   });
 
   it("handles null and parse-key pattern fallbacks", () => {

@@ -8,7 +8,7 @@ export const rpcLaneOwnershipConflictError = error<
     currentOwnerId: string;
     attemptedOwnerId: string;
   } & DefaultErrorType
->("runner.errors.rpcLane.ownershipConflict")
+>("rpcLane-ownershipConflict")
   .format(
     ({ taskId, currentOwnerId, attemptedOwnerId }) =>
       `Task "${taskId}" is already routed by rpc-lanes resource "${currentOwnerId}". Resource "${attemptedOwnerId}" cannot route it again. Ensure each task is owned by a single rpc-lanes router.`,
@@ -22,7 +22,7 @@ export const rpcLaneOwnershipConflictError = error<
 // Task not registered in Store (internal invariant)
 export const taskNotRegisteredError = error<
   { taskId: string } & DefaultErrorType
->("runner.errors.taskNotRegistered")
+>("taskNotRegistered")
   .format(
     ({ taskId }) =>
       `Task "${taskId}" is not registered in the Store. This is an internal error; ensure the task is registered before execution.`,

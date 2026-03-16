@@ -4,7 +4,7 @@ import {
   EventHandlerType,
   IEvent,
   IEventEmission,
-  IEventEmitOptions,
+  IEventEmissionCallOptions,
   IEventEmitReport,
 } from "../defs";
 import {
@@ -13,12 +13,10 @@ import {
   shutdownLockdownError,
   validationError,
 } from "../errors";
+import { isMatchError } from "../tools/check/errors";
+import { EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS } from "../types/executionContext";
 import { IHook } from "../types/hook";
-import {
-  RuntimeCallSource,
-  RuntimeCallSourceKind,
-  runtimeSource,
-} from "../types/runtimeSource";
+import { RuntimeCallSource, runtimeSource } from "../types/runtimeSource";
 import {
   EventEmissionInterceptor,
   HandlerOptionsDefaults,
@@ -29,32 +27,31 @@ import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import { type ExecutionFrame } from "../types/executionContext";
-import { EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS } from "../types/executionContext";
 import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 import {
   createAggregateError,
   createEmptyReport,
 } from "./event/EmissionExecutor";
+import { throwCancellationErrorFromSignal } from "../tools/abortSignals";
 import {
   LifecycleAdmissionController,
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
-import type { Store } from "./Store";
-import { getRuntimeId } from "../tools/runtimeMetadata";
 
-type EventEmissionInternalOptions = IEventEmitOptions & {
+type EventEmissionInternalOptions = IEventEmissionCallOptions & {
   allowLifecycleBypass?: boolean;
 };
 
-type EventManagerStoreBindings = Pick<
-  Store,
-  | "createRuntimeSource"
-  | "events"
-  | "getRuntimeMetadata"
-  | "resolveDefinitionId"
-  | "toRuntimeSource"
->;
+type EventEmissionRequest = RuntimeCallSource | IEventEmissionCallOptions;
+type EventEmissionCallResult<TRequest extends EventEmissionRequest> =
+  TRequest extends { report: true } ? IEventEmitReport : void;
+
+function hasEmissionSource(
+  value: EventEmissionRequest,
+): value is IEventEmissionCallOptions {
+  return "source" in value;
+}
 
 /**
  * EventManager handles event emission, listener registration, and event processing.
@@ -68,7 +65,6 @@ export class EventManager {
   private readonly registry: ListenerRegistry;
   private readonly executionContextStore: ExecutionContextStore;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
-  private store?: EventManagerStoreBindings;
 
   #isLocked = false;
 
@@ -78,10 +74,7 @@ export class EventManager {
   }) {
     this.executionContextStore =
       options?.executionContextStore ??
-      new ExecutionContextStore({
-        createCorrelationId: () => "event-manager",
-        cycleDetection: EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
-      });
+      new ExecutionContextStore(EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS);
     this.registry = new ListenerRegistry();
     this.lifecycleAdmissionController =
       options?.lifecycleAdmissionController ??
@@ -105,54 +98,53 @@ export class EventManager {
     this.#isLocked = true;
   }
 
-  public bindStore(store: EventManagerStoreBindings): void {
-    this.store = store;
-  }
-
   // ---- Emission API ----
 
-  async emit<TInput>(
+  /**
+   * Emits an event through the normal runtime admission path.
+   */
+  async emit<
+    TInput,
+    TRequest extends EventEmissionRequest = IEventEmissionCallOptions,
+  >(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: RuntimeCallSource,
-  ): Promise<void>;
-  async emit<TInput>(
-    eventDefinition: IEvent<TInput>,
-    data: TInput,
-    source: RuntimeCallSource,
-    options: IEventEmitOptions & { report: true },
-  ): Promise<IEventEmitReport>;
-  async emit<TInput>(
-    eventDefinition: IEvent<TInput>,
-    data: TInput,
-    source: RuntimeCallSource,
-    options?: IEventEmitOptions,
-  ): Promise<void | IEventEmitReport>;
-  async emit<TInput>(
-    eventDefinition: IEvent<TInput>,
-    data: TInput,
-    source: RuntimeCallSource,
-    options?: IEventEmitOptions,
-  ): Promise<void | IEventEmitReport> {
-    const result = await this.emitCore(eventDefinition, data, source, options);
-    if (options?.report) return result.report;
+    request: TRequest,
+  ): Promise<EventEmissionCallResult<TRequest>> {
+    const options = this.resolveEmissionRequest(request);
+    const result = await this.emitCore(eventDefinition, data, options);
+    if (options.report) {
+      return result.report as EventEmissionCallResult<TRequest>;
+    }
+
+    return undefined as EventEmissionCallResult<TRequest>;
   }
 
   /**
    * Emits a lifecycle event that bypasses shutdown admission checks.
-   * Used internally during the dispose sequence.
+   *
+   * This is intentionally narrower than `emit()`: it exists for framework
+   * lifecycle events that must still fire while the runtime is already in the
+   * disposing phase. Business events should keep using `emit()`.
    */
-  async emitLifecycle<TInput>(
+  async emitLifecycle<
+    TInput,
+    TRequest extends EventEmissionRequest = IEventEmissionCallOptions,
+  >(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: RuntimeCallSource,
-    options?: IEventEmitOptions,
-  ): Promise<void | IEventEmitReport> {
-    const result = await this.emitCore(eventDefinition, data, source, {
+    request: TRequest,
+  ): Promise<EventEmissionCallResult<TRequest>> {
+    const options = this.resolveEmissionRequest(request);
+    const result = await this.emitCore(eventDefinition, data, {
       ...options,
       allowLifecycleBypass: true,
     });
-    if (options?.report) return result.report;
+    if (options.report) {
+      return result.report as EventEmissionCallResult<TRequest>;
+    }
+
+    return undefined as EventEmissionCallResult<TRequest>;
   }
 
   /**
@@ -162,9 +154,10 @@ export class EventManager {
   async emitWithResult<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: RuntimeCallSource,
+    request: EventEmissionRequest,
   ): Promise<TInput> {
-    const result = await this.emitCore(eventDefinition, data, source);
+    const options = this.resolveEmissionRequest(request);
+    const result = await this.emitCore(eventDefinition, data, options);
     return result.emission.data as TInput;
   }
 
@@ -188,8 +181,7 @@ export class EventManager {
       filter: options.filter,
       id: options.id,
     });
-    const eventId = this.resolveEventMetadata(event).runtimeId;
-    this.registry.addListener(eventId, newListener);
+    this.registry.addListener(event.id, newListener);
   }
 
   addGlobalListener(
@@ -212,9 +204,7 @@ export class EventManager {
   }
 
   hasListeners<T>(eventDefinition: IEvent<T>): boolean {
-    return this.registry.hasListeners(
-      this.resolveEventDefinition(eventDefinition),
-    );
+    return this.registry.hasListeners(eventDefinition);
   }
 
   // ---- Interceptor API ----
@@ -237,8 +227,6 @@ export class EventManager {
     event: IEventEmission<any>,
     computedDependencies: DependencyValuesType<any>,
   ): Promise<any> {
-    const hookId = hook.id;
-
     const baseExecute = async (
       hookToExecute: IHook<any, any>,
       eventForHook: IEventEmission<any>,
@@ -250,13 +238,11 @@ export class EventManager {
         ? composeInterceptors(this.hookInterceptors, baseExecute)
         : baseExecute;
 
-    const hookSource: RuntimeCallSource =
-      this.store?.createRuntimeSource(RuntimeCallSourceKind.Hook, hook) ??
-      runtimeSource.hook(hookId);
+    const hookSource: RuntimeCallSource = runtimeSource.hook(hook.id);
 
     const hookFrame: ExecutionFrame = {
       kind: "hook",
-      id: hookSource.path ?? hookId,
+      id: hookSource.id,
       source: hookSource,
       timestamp: Date.now(),
     };
@@ -285,20 +271,33 @@ export class EventManager {
   }
 
   /**
+   * Normalizes the 3rd argument into the merged call-options shape used
+   * internally. A bare source stays supported as a convenience shorthand.
+   */
+  private resolveEmissionRequest(
+    request: EventEmissionRequest,
+  ): IEventEmissionCallOptions {
+    if (hasEmissionSource(request)) {
+      return request;
+    }
+
+    return { source: request };
+  }
+
+  /**
    * Core emission pipeline shared by emit(), emitLifecycle(), and emitWithResult().
    */
   private async emitCore<TInput>(
     eventDef: IEvent<TInput>,
     inputData: TInput,
-    rawSource: RuntimeCallSource,
-    options?: EventEmissionInternalOptions,
+    options: EventEmissionInternalOptions,
   ): Promise<{
     emission: IEventEmission<TInput>;
     report: IEventEmitReport;
     executionContext?: ReturnType<ExecutionContextStore["getSnapshot"]>;
   }> {
     if (
-      !this.lifecycleAdmissionController.canAdmitEvent(rawSource, {
+      !this.lifecycleAdmissionController.canAdmitEvent(options.source, {
         allowLifecycleBypass: options?.allowLifecycleBypass === true,
       })
     ) {
@@ -311,11 +310,17 @@ export class EventManager {
       shutdownLockdownError.throw();
     }
 
-    const eventDefinition = this.resolveEventDefinition(eventDef);
-    const metadata = this.resolveEventMetadata(eventDefinition);
-    const source =
-      this.store?.toRuntimeSource(rawSource) ??
-      this.ensureSourcePath(rawSource);
+    const eventDefinition = eventDef;
+    const metadata = {
+      id: eventDefinition.id,
+      path: eventDefinition.id,
+    };
+    const source = options.source;
+    const signal = this.executionContextStore.resolveSignal(options.signal);
+
+    if (signal?.aborted) {
+      throwCancellationErrorFromSignal(signal);
+    }
 
     let data = inputData;
     if (eventDefinition.payloadSchema) {
@@ -343,6 +348,7 @@ export class EventManager {
         eventDefinition,
         metadata,
         data,
+        signal,
         source,
         identity,
       );
@@ -356,6 +362,8 @@ export class EventManager {
         };
       }
 
+      // The context keeps the deepest event object seen so interceptors can
+      // replace the emission wrapper while preserving execution reporting.
       const context = new EmissionContext<TInput>(
         eventDefinition,
         allListeners,
@@ -381,7 +389,7 @@ export class EventManager {
 
     const traceFrame: ExecutionFrame = {
       kind: "event",
-      id: metadata.runtimeId,
+      id: metadata.id,
       source,
       timestamp: Date.now(),
     };
@@ -392,6 +400,7 @@ export class EventManager {
         const result = await this.executionContextStore.runWithFrame(
           traceFrame,
           processEmission,
+          { signal },
         );
         return {
           emission: result.emission,
@@ -404,8 +413,9 @@ export class EventManager {
 
   private createEmission<TInput>(
     eventDefinition: IEvent<TInput>,
-    metadata: { id: string; path: string; runtimeId: string },
+    metadata: { id: string; path: string },
     data: TInput,
+    signal: AbortSignal | undefined,
     source: RuntimeCallSource,
     identity: object | undefined,
   ): EventEmissionImpl<TInput> {
@@ -414,11 +424,11 @@ export class EventManager {
       metadata.path,
       data,
       new Date(),
+      signal,
       source,
       eventDefinition.meta ? { ...eventDefinition.meta } : {},
       Boolean(eventDefinition.transactional),
       eventDefinition.tags.length > 0 ? [...eventDefinition.tags] : [],
-      metadata.runtimeId,
       identity,
     );
   }
@@ -455,6 +465,9 @@ export class EventManager {
     try {
       return eventDefinition.payloadSchema!.parse(data);
     } catch (error) {
+      if (isMatchError(error)) {
+        throw error;
+      }
       return validationError.throw({
         subject: "Event payload",
         id: eventId,
@@ -488,35 +501,6 @@ export class EventManager {
       report.errors,
       `${report.errors.length} listeners failed`,
     );
-  }
-
-  private resolveEventDefinition<T>(eventDefinition: IEvent<T>): IEvent<T> {
-    if (!this.store) return eventDefinition;
-
-    const resolvedId = this.store.resolveDefinitionId(eventDefinition);
-    if (!resolvedId) return eventDefinition;
-
-    const storeEvent = this.store.events.get(resolvedId);
-    return (storeEvent?.event ?? eventDefinition) as IEvent<T>;
-  }
-
-  private resolveEventMetadata<T>(eventDefinition: IEvent<T>) {
-    if (!this.store) {
-      return {
-        id: eventDefinition.id,
-        path: eventDefinition.path ?? eventDefinition.id,
-        runtimeId: getRuntimeId(eventDefinition) ?? eventDefinition.id,
-      };
-    }
-
-    return this.store.getRuntimeMetadata(eventDefinition);
-  }
-
-  private ensureSourcePath(source: RuntimeCallSource): RuntimeCallSource {
-    return {
-      ...source,
-      path: source.path ?? source.id,
-    };
   }
 }
 

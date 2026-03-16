@@ -29,9 +29,7 @@ function validateTransactionalEvents(ctx: ValidatorContext): void {
       });
     }
 
-    const hasEventLaneTag = event.tags.some(
-      (tag) => ctx.resolveReferenceId(tag) === globalTags.eventLane.id,
-    );
+    const hasEventLaneTag = globalTags.eventLane.exists(event);
     if (hasEventLaneTag) {
       transactionalEventLaneConflictError.throw({
         eventId: event.id,
@@ -43,16 +41,12 @@ function validateTransactionalEvents(ctx: ValidatorContext): void {
 
 function validateEventLaneRpcLaneMutualExclusion(ctx: ValidatorContext): void {
   for (const { event } of ctx.registry.events.values()) {
-    const hasEventLaneTag = event.tags.some(
-      (tag) => ctx.resolveReferenceId(tag) === globalTags.eventLane.id,
-    );
+    const hasEventLaneTag = globalTags.eventLane.exists(event);
     if (!hasEventLaneTag) {
       continue;
     }
 
-    const hasRpcLaneTag = event.tags.some(
-      (tag) => ctx.resolveReferenceId(tag) === globalTags.rpcLane.id,
-    );
+    const hasRpcLaneTag = globalTags.rpcLane.exists(event);
     if (!hasRpcLaneTag) {
       continue;
     }

@@ -5,7 +5,7 @@ import {
   concurrencyTaskMiddleware,
 } from "../../../globals/middleware/concurrency.middleware";
 import { Semaphore } from "../../../models/Semaphore";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -195,7 +195,7 @@ describe("Concurrency Middleware", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Concurrency middleware key "shared-lock-mismatch" is already registered with limit 1, but got 2',
+      'Concurrency middleware key "__global__:shared-lock-mismatch" is already registered with limit 1, but got 2',
     );
   });
 
@@ -277,7 +277,7 @@ describe("Concurrency Middleware", () => {
       run: async () => {
         callCount++;
         if (callCount === 1) {
-          throw createMessageError("Failed");
+          throw genericError.new({ message: "Failed" });
         }
         return "ok";
       },
@@ -315,7 +315,9 @@ describe("Concurrency Middleware", () => {
       dependencies: { task, state: concurrencyResource },
       async init(_, { task, state }) {
         await task();
-        trackedSemaphore = state.semaphoresByKey.get(key)?.semaphore;
+        trackedSemaphore = state.semaphoresByKey.get(
+          `__global__:${key}`,
+        )?.semaphore;
       },
     });
 

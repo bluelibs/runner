@@ -87,7 +87,7 @@ describe("Security: Post-init lockdown", () => {
     expect(() =>
       capturedTaskDep!.intercept((next: any, input: any) => next(input)),
     ).toThrow(
-      'Cannot register a task interceptor on task "sec-lock-task" from "sec-lock-taskIntercept-app"',
+      'Cannot register a task interceptor on task "sec-lock-taskIntercept-app.tasks.sec-lock-task" from "sec-lock-taskIntercept-app"',
     );
 
     await rr.dispose();

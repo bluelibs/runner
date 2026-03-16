@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
 import type { TypeDefinition } from "../../serializer/index";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -243,14 +243,18 @@ describe("Custom Type Tests", () => {
       const secondNode = deserialized.next;
       expect(secondNode).toBeDefined();
       if (!secondNode) {
-        throw createMessageError("Expected second node to be defined");
+        throw genericError.new({
+          message: "Expected second node to be defined",
+        });
       }
       expect(secondNode).toBeInstanceOf(LinkedListNode);
       expect(secondNode.value).toBe("B");
       const thirdNode = secondNode.next;
       expect(thirdNode).toBeDefined();
       if (!thirdNode) {
-        throw createMessageError("Expected third node to be defined");
+        throw genericError.new({
+          message: "Expected third node to be defined",
+        });
       }
       expect(thirdNode).toBeInstanceOf(LinkedListNode);
       expect(thirdNode.value).toBe("C");
@@ -276,7 +280,7 @@ describe("Custom Type Tests", () => {
       const nextNode = deserialized.next;
       expect(nextNode).toBeDefined();
       if (!nextNode) {
-        throw createMessageError("Expected next node to be defined");
+        throw genericError.new({ message: "Expected next node to be defined" });
       }
       expect(nextNode.value).toBe("B");
       expect(nextNode).toBe(deserialized.next);

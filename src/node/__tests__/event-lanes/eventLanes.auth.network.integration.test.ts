@@ -50,7 +50,7 @@ describe("eventLanes auth in network mode", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.remoteLanes.auth.signerMissing",
+      name: "remoteLanes-auth-signerMissing",
     });
   });
 
@@ -89,7 +89,7 @@ describe("eventLanes auth in network mode", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.remoteLanes.auth.verifierMissing",
+      name: "remoteLanes-auth-verifierMissing",
     });
   });
 
@@ -179,7 +179,7 @@ describe("eventLanes auth in network mode", () => {
 
     const runtime = await run(app);
     await expect(runtime.runTask(emitTask as any)).rejects.toMatchObject({
-      name: "runner.errors.remoteLanes.auth.signerMissing",
+      name: "remoteLanes-auth-signerMissing",
     });
     await runtime.dispose();
   });

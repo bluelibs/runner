@@ -20,7 +20,7 @@ import { IErrorHelper } from "./error";
 import type { IAsyncContext } from "./asyncContext";
 import type { ExecutionJournal } from "./executionJournal";
 import type { RuntimeCallSource } from "./runtimeSource";
-import type { MatchPattern } from "../tools/check";
+import type { InferMatchPattern, MatchPattern } from "../tools/check";
 
 export * from "./symbols";
 
@@ -49,6 +49,23 @@ export type ValidationSchemaInput<T = unknown> =
   | IValidationSchema<T>
   | MatchPattern
   | ValidationSchemaClassConstructor<T>;
+
+export type InferValidationSchemaInput<TSchema> = TSchema extends {
+  parse(input: unknown): infer TParsed;
+}
+  ? TParsed
+  : TSchema extends ValidationSchemaClassConstructor<infer TClass>
+    ? TClass
+    : TSchema extends MatchPattern
+      ? InferMatchPattern<TSchema>
+      : never;
+
+export type ResolveValidationSchemaInput<
+  TOverride,
+  TSchema extends ValidationSchemaInput<any>,
+> = [TOverride] extends [never]
+  ? InferValidationSchemaInput<TSchema>
+  : TOverride;
 
 /**
  * Core public TypeScript types for BlueLibs Runner.
@@ -179,6 +196,8 @@ export interface TaskCallOptions {
   journal?: ExecutionJournal;
   /** Source metadata used for lifecycle admission and tracing. */
   source?: RuntimeCallSource;
+  /** Cooperative cancellation signal for this task execution. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -306,7 +325,7 @@ export type ResourceDependencyValuesType<T extends DependencyMapType> = {
  * - Middleware
  * - Events
  */
-export type RegisterableItems =
+export type RegisterableItem =
   | IResourceWithConfig<any, any, any, any, any, any, any>
   | IResource<void, any, any, any, any, any, any> // For void configs
   | IResource<{ [K in any]?: any }, any, any, any, any, any, any> // For optional config

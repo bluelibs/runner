@@ -31,12 +31,12 @@ function validateItemDependencies(
   registry: StoreRegistry,
 ): void {
   for (const entry of collectDependencyEntries(registry)) {
-    validateReferenceIds(state, registry, {
+    validateReferenceIds(state, {
       consumerId: entry.consumerId,
       consumerType: entry.consumerType,
       channel: "dependencies",
       targetIds: resolveDependencyReferenceIds(registry, entry.dependencies),
-      targetType: (targetId) => getItemTypeLabel(registry, targetId),
+      targetType: (targetId: string) => getItemTypeLabel(registry, targetId),
     });
   }
 }
@@ -57,7 +57,7 @@ function validateHookEventVisibility(
           ? hook.on
           : [hook.on];
 
-    validateReferenceIds(state, registry, {
+    validateReferenceIds(state, {
       consumerId: hook.id,
       consumerType: "Hook",
       channel: "listening",
@@ -72,7 +72,7 @@ function validateTaggingVisibility(
   registry: StoreRegistry,
 ): void {
   for (const entry of collectTagEntries(registry)) {
-    validateReferenceIds(state, registry, {
+    validateReferenceIds(state, {
       consumerId: entry.consumerId,
       consumerType: entry.consumerType,
       channel: "tagging",
@@ -87,7 +87,7 @@ function validateMiddlewareVisibility(
   registry: StoreRegistry,
 ): void {
   for (const entry of collectMiddlewareVisibilityEntries(registry)) {
-    validateReferenceIds(state, registry, {
+    validateReferenceIds(state, {
       consumerId: entry.consumerId,
       consumerType: entry.consumerType,
       channel: "middleware",
@@ -99,7 +99,6 @@ function validateMiddlewareVisibility(
 
 function validateReferenceIds(
   state: VisibilityTrackerState,
-  registry: StoreRegistry,
   options: {
     consumerId: string;
     consumerType: string;
@@ -116,7 +115,7 @@ function validateReferenceIds(
       continue;
     }
 
-    throwAccessViolation(registry, {
+    throwAccessViolation({
       violation,
       targetId,
       targetType:
@@ -127,18 +126,15 @@ function validateReferenceIds(
   }
 }
 
-function throwAccessViolation(
-  registry: StoreRegistry,
-  data: {
-    violation: AccessViolation;
-    targetId: string;
-    targetType: string;
-    consumerId: string;
-    consumerType: string;
-  },
-): void {
+function throwAccessViolation(data: {
+  violation: AccessViolation;
+  targetId: string;
+  targetType: string;
+  consumerId: string;
+  consumerType: string;
+}): void {
   const { violation, targetId, targetType, consumerId, consumerType } = data;
-  const toDisplayId = (id: string): string => registry.getDisplayId(id);
+  const toDisplayId = (id: string): string => id;
   const displayTargetId = toDisplayId(targetId);
   const displayConsumerId = toDisplayId(consumerId);
 

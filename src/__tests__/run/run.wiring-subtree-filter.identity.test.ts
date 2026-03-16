@@ -2,7 +2,7 @@ import { defineResource, defineTask } from "../../define";
 import { subtreeOf } from "../../public";
 import { run } from "../../run";
 
-const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
+const POLICY_VIOLATION_ID = "isolationViolation";
 
 describe("subtreeOf() identity resolution", () => {
   it("resolves the original resource reference when sibling resources share a local id", async () => {

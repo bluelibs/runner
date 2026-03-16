@@ -6,7 +6,7 @@ export const isolateConflictError = error<
   {
     policyResourceId: string;
   } & DefaultErrorType
->("runner.errors.isolationConflict")
+>("isolationConflict")
   .format(
     ({ policyResourceId }) =>
       `Resource "${policyResourceId}" declares both "deny" and "only" in its isolate policy.`,
@@ -22,7 +22,7 @@ export const isolateInvalidEntryError = error<
     policyResourceId: string;
     entry: unknown;
   } & DefaultErrorType
->("runner.errors.isolationInvalidEntry")
+>("isolationInvalidEntry")
   .format(
     ({ policyResourceId }) =>
       `Resource "${policyResourceId}" declares an invalid isolate policy entry.`,
@@ -38,7 +38,7 @@ export const isolateUnknownTargetError = error<
     policyResourceId: string;
     targetId: string;
   } & DefaultErrorType
->("runner.errors.isolationUnknownTarget")
+>("isolationUnknownTarget")
   .format(
     ({ policyResourceId, targetId }) =>
       `Resource "${policyResourceId}" references unknown target "${targetId}" in its isolate policy.`,
@@ -54,7 +54,7 @@ export const isolateInvalidExportsError = error<
     policyResourceId: string;
     entry: unknown;
   } & DefaultErrorType
->("runner.errors.isolateInvalidExports")
+>("isolateInvalidExports")
   .format(
     ({ policyResourceId }) =>
       `Resource "${policyResourceId}" declares an invalid isolate exports value.`,
@@ -70,7 +70,7 @@ export const isolateExportsUnknownTargetError = error<
     policyResourceId: string;
     targetId: string;
   } & DefaultErrorType
->("runner.errors.isolateExportsUnknownTarget")
+>("isolateExportsUnknownTarget")
   .format(
     ({ policyResourceId, targetId }) =>
       `Resource "${policyResourceId}" exports unknown target "${targetId}" in its isolate policy.`,
@@ -92,7 +92,7 @@ export const isolateViolationError = error<
     matchedRuleId: string;
     channel: IsolationChannel;
   } & DefaultErrorType
->("runner.errors.isolationViolation")
+>("isolationViolation")
   .format(
     ({
       targetId,
@@ -144,7 +144,7 @@ export const subtreeValidationFailedError = error<
       message: string;
     }>;
   } & DefaultErrorType
->("runner.errors.subtreeValidationFailed")
+>("subtreeValidationFailed")
   .format(({ violations }) => {
     const lines = violations.map(
       (violation) =>
@@ -168,7 +168,7 @@ export const visibilityViolationError = error<
     consumerType: string;
     exportedIds: string[];
   } & DefaultErrorType
->("runner.errors.visibilityViolation")
+>("visibilityViolation")
   .format(
     ({ targetId, targetType, ownerResourceId, consumerId, consumerType }) =>
       `${targetType} "${targetId}" is internal to resource "${ownerResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,

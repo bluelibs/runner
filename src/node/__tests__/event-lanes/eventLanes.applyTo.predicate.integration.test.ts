@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { isSameDefinition, r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
@@ -34,7 +34,7 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > timeoutMs) {
-      throw createMessageError("waitUntil timed out");
+      throw genericError.new({ message: "waitUntil timed out" });
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -43,16 +43,14 @@ async function waitUntil(
 describe("eventLanes applyTo predicate", () => {
   it("routes predicate-matched events through lane producer transport", async () => {
     const queue = new RecordingQueue();
-    const event = r
-      .event<{ value: number }>("tests-event-lanes-apply-to-predicate-event")
-      .build();
+    const event = r.event<{ value: number }>("pred-event").build();
     const lane = r
-      .eventLane("tests-event-lanes-apply-to-predicate-lane")
+      .eventLane("pred-lane")
       .applyTo((candidate) => isSameDefinition(candidate, event))
       .build();
 
     const emitTask = r
-      .task("tests-event-lanes-apply-to-predicate-emit")
+      .task("pred-emit")
       .dependencies({ event })
       .run(async (_input, deps) => {
         await deps.event({ value: 1 });
@@ -60,7 +58,7 @@ describe("eventLanes applyTo predicate", () => {
       .build();
 
     const app = r
-      .resource("tests-event-lanes-apply-to-predicate-app")
+      .resource("pred-app")
       .register([
         event,
         emitTask,
@@ -76,9 +74,10 @@ describe("eventLanes applyTo predicate", () => {
 
     const runtime = await run(app);
     await runtime.runTask(emitTask);
+    const canonicalEventId = runtime.store.findIdByDefinition(event);
 
     await waitUntil(() => queue.enqueued.length === 1);
-    expect(queue.enqueued[0].eventId).toBe(event.id);
+    expect(queue.enqueued[0].eventId).toBe(canonicalEventId);
 
     await runtime.dispose();
   });
@@ -88,7 +87,7 @@ describe("eventLanes applyTo predicate", () => {
     const leftEvent = r.event<{ value: number }>("shared-event").build();
     const rightEvent = r.event<{ value: number }>("shared-event").build();
     const lane = r
-      .eventLane("tests-event-lanes-apply-to-predicate-shared-event-lane")
+      .eventLane("shared-lane")
       .applyTo((candidate) => isSameDefinition(candidate, rightEvent))
       .build();
 
@@ -96,7 +95,7 @@ describe("eventLanes applyTo predicate", () => {
     const rightResource = r.resource("right").register([rightEvent]).build();
 
     const emitTask = r
-      .task("tests-event-lanes-apply-to-predicate-shared-event-emit")
+      .task("shared-emit")
       .dependencies({ leftEvent, rightEvent })
       .run(async (_input, deps) => {
         await deps.leftEvent({ value: 1 });
@@ -105,7 +104,7 @@ describe("eventLanes applyTo predicate", () => {
       .build();
 
     const app = r
-      .resource("tests-event-lanes-apply-to-predicate-shared-event-app")
+      .resource("shared-app")
       .register([
         leftResource,
         rightResource,
@@ -122,9 +121,10 @@ describe("eventLanes applyTo predicate", () => {
 
     const runtime = await run(app);
     await runtime.runTask(emitTask);
+    const canonicalRightEventId = runtime.store.findIdByDefinition(rightEvent);
 
     await waitUntil(() => queue.enqueued.length === 1);
-    expect(queue.enqueued[0].eventId).toBe(rightEvent.id);
+    expect(queue.enqueued[0].eventId).toBe(canonicalRightEventId);
     expect(JSON.parse(queue.enqueued[0].payload)).toEqual({ value: 2 });
 
     await runtime.dispose();

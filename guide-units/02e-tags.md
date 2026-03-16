@@ -21,6 +21,9 @@ const getHealth = r
   .tags([httpRoute.with({ method: "GET", path: "/health" })])
   .run(async () => ({ ok: true }))
   .build();
+
+// Tags and definitions using them must be registered in a resource.
+const app = r.resource("app").register([httpRoute, getHealth]).build();
 ```
 
 **What you just learned**: Tags attach typed, schema-validated metadata to definitions. They turn runtime discovery from guesswork into a typed query.
@@ -119,6 +122,17 @@ Tag matches are not just metadata snapshots.
 
 Use `tag.startup()` when startup ordering matters: wrapping a tag with `.startup()` in `dependencies` ensures the tag accessor is ready during bootstrap before the resource dependency graph runs, rather than resolving during normal dependency resolution.
 
+### When to Use Tags
+
+Use tags when you want discovery or policy over a changing set of definitions:
+
+- route registration
+- startup auto-registration
+- policy groups such as health gating or internal-only components
+- framework extensions that should discover tasks/resources without direct references
+
+Prefer direct dependencies when one component already knows the exact collaborator it needs.
+
 ### Tag Extraction and Processing
 
 Tags can also be queried directly against definitions.
@@ -173,24 +187,84 @@ Tasks can also opt into runtime health gating with `tags.failWhenUnhealthy.with(
 
 ### Contract Tags
 
-Contract tags enforce task or resource typing without changing runtime behavior.
+Contract tags enforce input/output typing on any task or resource using them at compile time, without changing runtime behavior.
+
+A tag can declare:
+
+- **Input Contract**: any task using it must accept at least the specified input properties
+- **Output Contract**: any task using it must return at least the specified output properties
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-type InputType = { id: string };
-type OutputType = { name: string };
+// r.tag<Config, InputContract, OutputContract>
+const authorizedTag = r
+  .tag<void, { userId: string }, void>("authorizedTag")
+  .build();
 
-const userContract = r.tag<void, InputType, OutputType>("userContract").build();
+// Works: task input is a superset of the contract
+const validTask = r
+  .task("dashboard")
+  .tags([authorizedTag])
+  .run(async (input: { userId: string; view: "full" | "mini" }) => {
+    return { data: "..." };
+  })
+  .build();
 
-const profileTask = r
-  .task("getProfile")
-  .tags([userContract])
-  // if you use .inputSchema it must be a superset of userInput contract tag, same with resultSchema
-  .run(async (input) => ({ name: input.id + "Ada" }))
+// Compile error: task input is missing userId
+const invalidTask = r
+  .task("publicDashboard")
+  .tags([authorizedTag])
+  // @ts-expect-error - input doesn't satisfy contract { userId: string }
+  .run(async (input: { view: "full" }) => {
+    return { data: "..." };
+  })
   .build();
 ```
 
-Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.
+Output contracts work the same way:
 
-> **runtime:** "Tags: metadata with a mission. You stick labels on everything, I index them, and at startup someone finally discovers why three tasks share a route prefix. It's like naming your pets—except these ones actually come when called."
+```typescript
+const searchableTag = r
+  .tag<void, void, { id: string; title: string }>("searchableTag")
+  .build();
+
+const productTask = r
+  .task("getProduct")
+  .tags([searchableTag])
+  .run(async (id: string) => ({
+    id,
+    title: "Super Gadget",
+    price: 99.99, // extra fields are fine
+  }))
+  .build();
+```
+
+For **Resources**, contracts map to the resource shape:
+
+- **Input Contract** → enforced on the **resource configuration** (passed to `.with()` and `init`)
+- **Output Contract** → enforced on the **resource value** (returned from `init`)
+
+```typescript
+const databaseTag = r
+  .tag<
+    void,
+    { connectionString: string },
+    { connect(): Promise<void> }
+  >("databaseTag")
+  .build();
+
+const validDb = r
+  .resource("database")
+  .tags([databaseTag])
+  .init(async (config) => ({
+    async connect() {
+      /* ... */
+    },
+  }))
+  .build();
+```
+
+If you use `.inputSchema` or `.resultSchema`, their shapes must be supersets of any contract tag contracts.
+
+Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.

@@ -1,5 +1,7 @@
-import { MatchPatternError } from "./errors";
+import { createMatchPatternError } from "./errors";
+import { getDecoratorMetadataRecord } from "../../decorators/metadata";
 import { isClassConstructor, getClassChain } from "../typeChecks";
+import type { MatchPattern } from "./types";
 
 type ClassConstructor = abstract new (...args: never[]) => unknown;
 
@@ -11,19 +13,23 @@ export interface MatchSchemaOptions {
   exact?: boolean;
   schemaId?: string;
   base?: MatchSchemaBase;
+  errorPolicy?: "first" | "all";
+  /** @deprecated Use errorPolicy instead. */
+  throwAllErrors?: boolean;
 }
 
 export type MatchClassOptions = MatchSchemaOptions;
 
 interface ClassSchemaMetadata {
-  fields: Map<string, unknown>;
+  fields: Map<string, MatchPattern>;
   options: MatchSchemaOptions;
 }
 
-interface ClassSchemaDefinition {
+export interface ClassSchemaDefinition {
   pattern: Record<string, unknown>;
   exact: boolean;
   schemaId: string;
+  errorPolicy: "first" | "all";
 }
 
 interface CachedClassSchemaDefinition {
@@ -32,6 +38,11 @@ interface CachedClassSchemaDefinition {
 }
 
 const CLASS_SCHEMA_METADATA = new WeakMap<Function, ClassSchemaMetadata>();
+// Use the global registry so decorator writers/readers keep the same key even
+// when consumers mix top-level and subpath entrypoints in one process.
+const CLASS_SCHEMA_ES_METADATA = Symbol.for(
+  "@bluelibs/runner/check/class-schema-metadata",
+);
 const CLASS_SCHEMA_DEFINITION_CACHE = new WeakMap<
   Function,
   CachedClassSchemaDefinition
@@ -43,10 +54,26 @@ function ensureMetadata(target: Function): ClassSchemaMetadata {
   if (existing) return existing;
 
   const created: ClassSchemaMetadata = {
-    fields: new Map<string, unknown>(),
+    fields: new Map<string, MatchPattern>(),
     options: {},
   };
   CLASS_SCHEMA_METADATA.set(target, created);
+  return created;
+}
+
+function ensureEsMetadata(
+  metadata: Record<PropertyKey, unknown>,
+): ClassSchemaMetadata {
+  const existing = metadata[CLASS_SCHEMA_ES_METADATA];
+  if (existing !== undefined) {
+    return existing as ClassSchemaMetadata;
+  }
+
+  const created: ClassSchemaMetadata = {
+    fields: new Map<string, MatchPattern>(),
+    options: {},
+  };
+  metadata[CLASS_SCHEMA_ES_METADATA] = created;
   return created;
 }
 
@@ -64,7 +91,7 @@ function resolveSchemaBase(
 
   const resolved = baseOption();
   if (!isClassConstructor(resolved)) {
-    throw new MatchPatternError(
+    throw createMatchPatternError(
       `Bad pattern: Match.Schema({ base }) for ${owner.name || "Anonymous"} must resolve to a class constructor.`,
     );
   }
@@ -78,7 +105,7 @@ function ctorAsFunction(target: ClassConstructor): Function {
   return target as unknown as Function;
 }
 
-export function setClassSchemaOptions(
+export function setLegacyClassSchemaOptions(
   target: ClassConstructor,
   options: MatchSchemaOptions,
 ): void {
@@ -93,11 +120,74 @@ export function setClassSchemaOptions(
 export function setClassFieldPattern(
   target: ClassConstructor,
   propertyKey: string,
-  pattern: unknown,
+  pattern: MatchPattern,
 ): void {
   const metadata = ensureMetadata(ctorAsFunction(target));
   metadata.fields.set(propertyKey, pattern);
   bumpSchemaMetadataVersion();
+}
+
+export function setEsClassSchemaOptions(
+  metadataRecord: Record<PropertyKey, unknown>,
+  options: MatchSchemaOptions,
+): void {
+  const metadata = ensureEsMetadata(metadataRecord);
+  metadata.options = {
+    ...metadata.options,
+    ...options,
+  };
+  bumpSchemaMetadataVersion();
+}
+
+export function setEsClassFieldPattern(
+  metadataRecord: Record<PropertyKey, unknown>,
+  propertyKey: string,
+  pattern: MatchPattern,
+): void {
+  const metadata = ensureEsMetadata(metadataRecord);
+  metadata.fields.set(propertyKey, pattern);
+  bumpSchemaMetadataVersion();
+}
+
+export function setLegacyClassFieldPattern(
+  target: ClassConstructor,
+  propertyKey: string,
+  pattern: MatchPattern,
+): void {
+  const metadata = ensureMetadata(ctorAsFunction(target));
+  metadata.fields.set(propertyKey, pattern);
+  bumpSchemaMetadataVersion();
+}
+
+function getCombinedClassSchemaMetadata(
+  target: Function,
+): ClassSchemaMetadata | undefined {
+  const legacyMetadata = CLASS_SCHEMA_METADATA.get(target);
+  const metadataRecord = getDecoratorMetadataRecord(target);
+  const esMetadata = metadataRecord?.[CLASS_SCHEMA_ES_METADATA] as
+    | ClassSchemaMetadata
+    | undefined;
+
+  if (!legacyMetadata) {
+    return esMetadata;
+  }
+
+  if (!esMetadata) {
+    return legacyMetadata;
+  }
+
+  // Merge both stores so a class chain can mix legacy- and ES-decorated types
+  // without forcing the rest of the validation pipeline to care.
+  return {
+    fields: new Map<string, MatchPattern>([
+      ...legacyMetadata.fields.entries(),
+      ...esMetadata.fields.entries(),
+    ]),
+    options: {
+      ...legacyMetadata.options,
+      ...esMetadata.options,
+    },
+  };
 }
 
 function buildClassSchemaDefinition(
@@ -106,7 +196,7 @@ function buildClassSchemaDefinition(
 ): ClassSchemaDefinition {
   const fn = ctorAsFunction(target);
   if (activeTargets.has(fn)) {
-    throw new MatchPatternError(
+    throw createMatchPatternError(
       `Bad pattern: Match.Schema({ base }) contains a circular base chain at ${target.name || "Anonymous"}.`,
     );
   }
@@ -116,10 +206,11 @@ function buildClassSchemaDefinition(
   const fields: Record<string, unknown> = {};
   let exact = false;
   let schemaId = target.name || "Anonymous";
+  let errorPolicy: "first" | "all" = "first";
 
   try {
     for (const ctor of getClassChain(fn)) {
-      const metadata = CLASS_SCHEMA_METADATA.get(ctor);
+      const metadata = getCombinedClassSchemaMetadata(ctor);
       if (!metadata) continue;
 
       if (metadata.options.base) {
@@ -132,6 +223,7 @@ function buildClassSchemaDefinition(
         Object.assign(fields, baseDefinition.pattern);
         exact = baseDefinition.exact;
         schemaId = baseDefinition.schemaId;
+        errorPolicy = baseDefinition.errorPolicy;
       }
 
       for (const [key, pattern] of metadata.fields.entries()) {
@@ -145,12 +237,19 @@ function buildClassSchemaDefinition(
       if (metadata.options.schemaId && metadata.options.schemaId.length > 0) {
         schemaId = metadata.options.schemaId;
       }
+
+      if (metadata.options.errorPolicy !== undefined) {
+        errorPolicy = metadata.options.errorPolicy;
+      } else if (metadata.options.throwAllErrors !== undefined) {
+        errorPolicy = metadata.options.throwAllErrors ? "all" : "first";
+      }
     }
 
     return Object.freeze({
       pattern: Object.freeze({ ...fields }),
       exact,
       schemaId,
+      errorPolicy,
     });
   } finally {
     activeTargets.delete(fn);
@@ -177,7 +276,7 @@ export function getClassSchemaDefinition(
 
 export function hasClassSchemaMetadata(target: ClassConstructor): boolean {
   for (const ctor of getClassChain(ctorAsFunction(target))) {
-    if (CLASS_SCHEMA_METADATA.has(ctor)) {
+    if (getCombinedClassSchemaMetadata(ctor)) {
       return true;
     }
   }

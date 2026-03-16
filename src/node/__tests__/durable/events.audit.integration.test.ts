@@ -3,7 +3,7 @@ import { durableResource } from "../../durable/core/resource";
 import { durableEvents } from "../../durable/events";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 async function waitUntil(
   predicate: () => boolean | Promise<boolean>,
@@ -12,7 +12,7 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > options.timeoutMs) {
-      throw createMessageError("waitUntil timed out");
+      throw genericError.new({ message: "waitUntil timed out" });
     }
     await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
   }
@@ -113,7 +113,7 @@ describe("durable: audit runner events (integration)", () => {
         enabled: true,
         emitter: {
           emit: async () => {
-            throw createMessageError("boom");
+            throw genericError.new({ message: "boom" });
           },
         },
       },

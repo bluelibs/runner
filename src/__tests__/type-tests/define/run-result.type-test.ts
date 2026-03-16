@@ -208,10 +208,13 @@ void (async () => {
   const rr = await run(app, { mode: RunnerMode.PROD, executionContext: true });
   const runtimeMode: RunnerMode = rr.runOptions.mode;
   const printThreshold = rr.runOptions.logs.printThreshold;
+  const framesMode: "full" | "off" | undefined =
+    rr.runOptions.executionContext?.frames;
   const cycleDetection = rr.runOptions.executionContext?.cycleDetection;
   const maxDepth: number | undefined = cycleDetection?.maxDepth;
 
   void runtimeMode;
   void printThreshold;
+  void framesMode;
   void maxDepth;
 })();

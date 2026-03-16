@@ -31,18 +31,14 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     await run(app);
 
-    // Emit system-lifecycle events directly
-    // Simulate a system/lifecycle event by emitting ready via EventManager if necessary
-    // But our global listener skips system/lifecycle-tagged events during normal run already.
-    // We only assert that none of the captured info logs include [event] after boot.
-
     // Wait a tick for async handlers
     await new Promise((r) => setImmediate(r));
 
-    // Ensure no event log about [event] tests.* from system emission
     const infoLogs = logs.filter((l) => l.level === "info");
     expect(
-      infoLogs.some((l) => String(l.message).includes("[event] tests.")),
+      infoLogs.some((l) =>
+        String(l.message).includes("Event system.events.ready emitted"),
+      ),
     ).toBe(false);
   });
 
@@ -80,15 +76,15 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     await run(app);
 
-    // Ensure middleware did not log task start/completed lines for system-tagged task
-    const joined = messages.join("\n");
-    expect(joined.includes("[task] tests-system-task starting to run")).toBe(
-      false,
-    );
-    expect(joined.includes("[task] tests-system-task completed")).toBe(false);
+    expect(messages).not.toContain("Task tests-system-task is running...");
+    expect(
+      messages.some((message) =>
+        /Task tests-system-task completed in \d+ms/.test(message),
+      ),
+    ).toBe(false);
   });
 
-  it("does not log hook triggered/completed messages (system-tagged observability events are skipped)", async () => {
+  it("does not log system-tagged hook triggered/completed messages", async () => {
     const messages: string[] = [];
 
     const collector = defineResource({
@@ -104,10 +100,10 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     const userEvent = defineEvent<{ n: number }>({ id: "tests-user-event" });
 
-    // A normal hook listening to a user event
     const userHook = defineHook({
-      id: "tests-user-hook",
+      id: "tests-system-hook",
       on: userEvent,
+      tags: [globalTags.system],
       async run() {
         // no-op
       },
@@ -125,9 +121,8 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     await run(app);
 
-    const joined = messages.join("\n");
-    expect(joined.includes("[hook] tests-user-hook triggered")).toBe(false);
-    expect(joined.includes("[hook] tests-user-hook completed")).toBe(false);
+    expect(messages).not.toContain("Hook triggered for tests-system-hook");
+    expect(messages).not.toContain("Hook completed for tests-system-hook");
   });
 
   it("does not log system-tagged events via global event listener", async () => {

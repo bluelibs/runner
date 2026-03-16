@@ -1,5 +1,4 @@
 import { defineEvent, defineResource } from "../../../define";
-import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { run } from "../../../run";
 import { r } from "../../../public";
 import { rpcLanesResource } from "../../rpc-lanes";
@@ -23,12 +22,10 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
     const fakeEventLanesState = defineResource<
       { topology: unknown },
       Promise<null>
-    >(
-      markFrameworkDefinition({
-        id: EVENT_LANES_RESOURCE_ID,
-        init: async () => null,
-      }),
-    );
+    >({
+      id: EVENT_LANES_RESOURCE_ID,
+      init: async () => null,
+    });
 
     const app = defineResource({
       id: "tests-rpc-lanes-apply-to-event-lane-string-app",
@@ -61,7 +58,7 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      `Event "${event.id}" cannot be assigned to rpcLane "${lane.id}" because it is already assigned to an event lane.`,
+      /Event ".*tests-rpc-lanes-apply-to-event-lane-string-event" cannot be assigned to rpcLane "tests-rpc-lanes-apply-to-event-lane-string-rpc" because it is already assigned to an event lane\./,
     );
   });
 
@@ -87,12 +84,10 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
     const fakeEventLanesState = defineResource<
       { topology: unknown },
       Promise<null>
-    >(
-      markFrameworkDefinition({
-        id: EVENT_LANES_RESOURCE_ID,
-        init: async () => null,
-      }),
-    );
+    >({
+      id: EVENT_LANES_RESOURCE_ID,
+      init: async () => null,
+    });
 
     const app = defineResource({
       id: "tests-rpc-lanes-apply-to-event-lane-invalid-app",

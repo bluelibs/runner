@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { r, run, tags } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
@@ -39,7 +39,7 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > timeoutMs) {
-      throw createMessageError("waitUntil timed out");
+      throw genericError.new({ message: "waitUntil timed out" });
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }

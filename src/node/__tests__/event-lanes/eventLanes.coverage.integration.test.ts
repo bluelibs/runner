@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { events, r, resources, run, tags } from "../../..";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
@@ -65,7 +65,7 @@ class ManualCoverageQueue implements IEventLaneQueue {
 
   async deliver(message: EventLaneMessage): Promise<void> {
     if (!this.handler) {
-      throw createMessageError("Queue consumer not initialized");
+      throw genericError.new({ message: "Queue consumer not initialized" });
     }
     await this.handler(message);
   }
@@ -264,7 +264,9 @@ describe("event-lanes: additional coverage", () => {
 
     const cooldown = eventLanesResource.cooldown;
     if (!cooldown) {
-      throw createMessageError("eventLanesResource cooldown is missing");
+      throw genericError.new({
+        message: "eventLanesResource cooldown is missing",
+      });
     }
 
     await cooldown(
@@ -287,7 +289,9 @@ describe("event-lanes: additional coverage", () => {
 
     const dispose = eventLanesResource.dispose;
     if (!dispose) {
-      throw createMessageError("eventLanesResource dispose is missing");
+      throw genericError.new({
+        message: "eventLanesResource dispose is missing",
+      });
     }
 
     await dispose(

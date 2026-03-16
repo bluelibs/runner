@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { r, run, tags } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
@@ -34,7 +34,7 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > timeoutMs) {
-      throw createMessageError("waitUntil timed out");
+      throw genericError.new({ message: "waitUntil timed out" });
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -45,26 +45,21 @@ describe("eventLanes applyTo override IoC", () => {
     const queueA = new RecordingQueue();
     const queueB = new RecordingQueue();
 
-    const laneA = r
-      .eventLane("tests-event-lanes-apply-to-override-ioc-a")
-      .build();
+    const laneA = r.eventLane("ioc-a").build();
     const event = r
-      .event<{ value: number }>("tests-event-lanes-apply-to-override-ioc-event")
+      .event<{ value: number }>("ioc-event")
       .tags([tags.eventLane.with({ lane: laneA })])
       .build();
-    const laneB = r
-      .eventLane("tests-event-lanes-apply-to-override-ioc-b")
-      .applyTo([event])
-      .build();
+    const laneB = r.eventLane("ioc-b").applyTo([event]).build();
 
     const emitTask = r
-      .task("tests-event-lanes-apply-to-override-ioc-emit")
+      .task("ioc-emit")
       .dependencies({ event })
       .run(async (_input, deps) => deps.event({ value: 1 }))
       .build();
 
     const app = r
-      .resource("tests-event-lanes-apply-to-override-ioc-app")
+      .resource("ioc-app")
       .register([
         event,
         emitTask,
@@ -83,13 +78,14 @@ describe("eventLanes applyTo override IoC", () => {
 
     const runtime = await run(app);
     await runtime.runTask(emitTask);
+    const canonicalEventId = runtime.store.findIdByDefinition(event);
 
     await waitUntil(
       () => queueA.enqueued.length + queueB.enqueued.length === 1,
     );
     expect(queueA.enqueued.length).toBe(0);
     expect(queueB.enqueued.length).toBe(1);
-    expect(queueB.enqueued[0].eventId).toBe(event.id);
+    expect(queueB.enqueued[0].eventId).toBe(canonicalEventId);
 
     await runtime.dispose();
   });

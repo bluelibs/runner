@@ -14,7 +14,7 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateInvalidExports",
+      id: "isolateInvalidExports",
     });
   });
 
@@ -30,7 +30,7 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateInvalidExports",
+      id: "isolateInvalidExports",
     });
   });
 
@@ -48,7 +48,7 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateInvalidExports",
+      id: "isolateInvalidExports",
     });
   });
 
@@ -64,7 +64,7 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateInvalidExports",
+      id: "isolateInvalidExports",
     });
   });
 
@@ -92,7 +92,7 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateInvalidExports",
+      id: "isolateInvalidExports",
     });
   });
 });

@@ -3,6 +3,7 @@ import {
   resultSchemaValidationError,
 } from "../../errors";
 import type { IValidationSchema } from "../../defs";
+import { isMatchError } from "../../tools/check/errors";
 import { normalizeError } from "../../tools/normalizeError";
 
 /**
@@ -25,6 +26,9 @@ export class ValidationHelper {
     try {
       return schema.parse(value);
     } catch (error) {
+      if (isMatchError(error)) {
+        throw error;
+      }
       return inputSchemaValidationError.throw({
         subject: `${type} input`,
         id,
@@ -48,6 +52,9 @@ export class ValidationHelper {
     try {
       return schema.parse(value);
     } catch (error) {
+      if (isMatchError(error)) {
+        throw error;
+      }
       return resultSchemaValidationError.throw({
         subject: `${type} result`,
         id,

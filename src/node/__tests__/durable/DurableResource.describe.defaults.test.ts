@@ -1,5 +1,5 @@
 import { r, resources, run, tags } from "../../node";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("durable: describe() defaults", () => {
   it("uses durableWorkflowTag.defaults when describe() input is omitted", async () => {
@@ -249,7 +249,7 @@ describe("durable: describe() defaults", () => {
     const cloneSpy = jest
       .spyOn(globalThis, "structuredClone")
       .mockImplementation(() => {
-        throw createMessageError("error-clone-failure");
+        throw genericError.new({ message: "error-clone-failure" });
       });
 
     try {

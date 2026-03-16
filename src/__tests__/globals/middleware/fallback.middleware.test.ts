@@ -1,7 +1,7 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { fallbackTaskMiddleware } from "../../../globals/middleware/fallback.middleware";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("Fallback Middleware", () => {
   it("requires fallback to be provided", () => {
@@ -13,7 +13,7 @@ describe("Fallback Middleware", () => {
       id: "fallback-value",
       middleware: [fallbackTaskMiddleware.with({ fallback: "fallback-value" })],
       run: async () => {
-        throw createMessageError("Original error");
+        throw genericError.new({ message: "Original error" });
       },
     });
 
@@ -64,7 +64,7 @@ describe("Fallback Middleware", () => {
         }),
       ],
       run: async (_input: string) => {
-        throw createMessageError("fail");
+        throw genericError.new({ message: "fail" });
       },
     });
 
@@ -92,7 +92,7 @@ describe("Fallback Middleware", () => {
       id: "fallback-task",
       middleware: [fallbackTaskMiddleware.with({ fallback: planB })],
       run: async (_input: string) => {
-        throw createMessageError("fail");
+        throw genericError.new({ message: "fail" });
       },
     });
 

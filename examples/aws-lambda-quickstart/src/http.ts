@@ -1,9 +1,19 @@
 import { AnyApiGatewayEvent } from "./types/aws";
+import { getValidationIssues, isValidationError } from "./validation";
 
 export type APIGatewayProxyResult = {
   statusCode: number;
   headers: Record<string, string>;
   body: string;
+};
+
+export type ParsedApiGatewayEvent<TBody = unknown> = {
+  method: string;
+  path: string;
+  headers: Record<string, string | undefined>;
+  rawBody: string | undefined;
+  body: TBody | undefined;
+  contentType: string;
 };
 
 export const corsHeaders: Record<string, string> = {
@@ -37,14 +47,7 @@ export function preflight(method: string): APIGatewayProxyResult | null {
 
 export function parseEvent<TBody = unknown>(
   event: AnyApiGatewayEvent,
-): {
-  method: string;
-  path: string;
-  headers: Record<string, string | undefined>;
-  rawBody: string | undefined;
-  body: TBody | undefined;
-  contentType: string;
-} {
+): ParsedApiGatewayEvent<TBody> {
   const method =
     event?.requestContext?.http?.method ?? event?.httpMethod ?? "GET";
   const path = event?.rawPath || event?.path || "/";
@@ -63,7 +66,7 @@ export function parseEvent<TBody = unknown>(
       : undefined
   ) as TBody | undefined;
 
-  return { method, path, headers, rawBody, body, contentType } as const;
+  return { method, path, headers, rawBody, body, contentType };
 }
 
 function safelyParseJSON(value: string): unknown | undefined {
@@ -74,20 +77,34 @@ function safelyParseJSON(value: string): unknown | undefined {
   }
 }
 
-export function errorToResponse(err: unknown): APIGatewayProxyResult {
+export function errorToResponse(
+  err: unknown,
+  options?: { validationMessage?: string },
+): APIGatewayProxyResult {
   const message =
     err && typeof err === "object" && "message" in err
       ? String(err.message)
       : String(err);
 
-  // Map Runner validation errors to 400; everything else 500
+  if (isValidationError(err)) {
+    return json(400, {
+      message: options?.validationMessage ?? "Invalid input",
+      issues: getValidationIssues(err),
+    });
+  }
+
+  // Map other validation-shaped errors to 400; everything else 500
   if (
     err &&
     typeof err === "object" &&
     "name" in err &&
     (err.name === "ValidationError" || /validation failed/i.test(message))
   ) {
-    return json(400, { message: "Invalid input", error: message });
+    return json(400, {
+      message: options?.validationMessage ?? "Invalid input",
+      error: message,
+    });
   }
+
   return json(500, { message: "Internal error", error: message });
 }

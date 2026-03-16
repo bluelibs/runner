@@ -35,6 +35,7 @@ describe("nodeExposure discovery endpoint", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const taskId = rr.store.findIdByDefinition(t);
 
     // Success: GET /discovery with correct token
     {
@@ -50,7 +51,7 @@ describe("nodeExposure discovery endpoint", () => {
       const json = JSON.parse(rrMock.text);
       expect(json.ok).toBe(true);
       expect(json.result.allowList.enabled).toBe(true);
-      expect(json.result.allowList.tasks).toContain(t.id);
+      expect(json.result.allowList.tasks).toContain(taskId);
     }
 
     // Unauthorized: wrong token

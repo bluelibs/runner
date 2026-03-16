@@ -13,7 +13,7 @@ export type { ResourceFluentBuilder } from "./fluent-builder.interface";
 export * from "./types";
 
 /**
- * Creates a new resource builder with the given id.
+ * Public options accepted by {@link resourceBuilder}.
  */
 export type ResourceBuilderOptions = {};
 
@@ -82,6 +82,9 @@ export function resourceBuilder<TConfig = void>(
 }
 
 /**
- * Alias for resourceBuilder - common shorthand.
+ * Creates a fluent resource builder.
+ *
+ * Resources own lifecycle, registration, and isolation boundaries, so this builder
+ * keeps those decisions explicit in one chain.
  */
 export const resource = resourceBuilder;

@@ -74,6 +74,7 @@ export async function createNodeExposure(
 
   const authenticator = createAuthenticator(
     httpConfig?.auth,
+    store,
     taskRunner,
     validatorTasks,
     options?.sourceResourceId,

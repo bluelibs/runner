@@ -39,37 +39,40 @@ export class StoreValidator {
     if (!this.validatorContext.hasRegisteredId(id)) {
       return;
     }
-    const publicId = this.validatorContext.toPublicId(id);
+    const canonicalId = this.validatorContext.findIdByDefinition(id);
 
     if (this.registry.tasks.has(id)) {
-      duplicateRegistrationError.throw({ type: "Task", id: publicId });
+      duplicateRegistrationError.throw({ type: "Task", id: canonicalId });
     }
     if (this.registry.resources.has(id)) {
-      duplicateRegistrationError.throw({ type: "Resource", id: publicId });
+      duplicateRegistrationError.throw({ type: "Resource", id: canonicalId });
     }
     if (this.registry.events.has(id)) {
-      duplicateRegistrationError.throw({ type: "Event", id: publicId });
+      duplicateRegistrationError.throw({ type: "Event", id: canonicalId });
     }
     if (this.registry.errors.has(id)) {
-      duplicateRegistrationError.throw({ type: "Error", id: publicId });
+      duplicateRegistrationError.throw({ type: "Error", id: canonicalId });
     }
     if (this.registry.asyncContexts.has(id)) {
-      duplicateRegistrationError.throw({ type: "AsyncContext", id: publicId });
+      duplicateRegistrationError.throw({
+        type: "AsyncContext",
+        id: canonicalId,
+      });
     }
     if (this.registry.taskMiddlewares.has(id)) {
-      duplicateRegistrationError.throw({ type: "Middleware", id: publicId });
+      duplicateRegistrationError.throw({ type: "Middleware", id: canonicalId });
     }
     if (this.registry.resourceMiddlewares.has(id)) {
-      duplicateRegistrationError.throw({ type: "Middleware", id: publicId });
+      duplicateRegistrationError.throw({ type: "Middleware", id: canonicalId });
     }
     if (this.registry.tags.has(id)) {
-      duplicateRegistrationError.throw({ type: "Tag", id: publicId });
+      duplicateRegistrationError.throw({ type: "Tag", id: canonicalId });
     }
     if (this.registry.hooks.has(id)) {
-      duplicateRegistrationError.throw({ type: "Hook", id: publicId });
+      duplicateRegistrationError.throw({ type: "Hook", id: canonicalId });
     }
 
-    duplicateRegistrationError.throw({ type: "Unknown", id: publicId });
+    duplicateRegistrationError.throw({ type: "Unknown", id: canonicalId });
   }
 
   runSanityChecks(): void {

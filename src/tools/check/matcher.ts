@@ -1,6 +1,7 @@
-export { collectMatchFailures } from "./matcher/core";
+export { collectMatchFailures, collectMatchResult } from "./matcher/core";
 export {
   ClassPattern,
+  WithErrorPolicyPattern,
   LazyPattern,
   MapOfPattern,
   MaybePattern,
@@ -9,7 +10,9 @@ export {
   ObjectStrictPattern,
   OneOfPattern,
   OptionalPattern,
+  RangePattern,
   RegExpPattern,
+  WithMessagePattern,
   WherePattern,
 } from "./matcher/patterns";
 export {

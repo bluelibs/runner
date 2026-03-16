@@ -1,6 +1,7 @@
+import { createUser as createUserTask, disposeRunner, getRunner } from "./bootstrap";
 import { handler as lambdalith } from "./handler.lambdalith";
 import { handler as getUser } from "./handlers/getUser";
-import { handler as createUser } from "./handlers/createUser";
+import { handler as createUserHandler } from "./handlers/createUser";
 import { APIGatewayProxyResult } from "./http";
 
 function makeCtx() {
@@ -12,6 +13,10 @@ function parse<T>(res: APIGatewayProxyResult) {
 }
 
 describe("examples/aws-lambda-quickstart", () => {
+  afterEach(async () => {
+    await disposeRunner();
+  });
+
   it("lambdalith flow: POST /users then GET /users/{id}", async () => {
     // GET first should 404
     const res404 = parse<{ message: string }>(
@@ -62,7 +67,7 @@ describe("examples/aws-lambda-quickstart", () => {
   it("per-route flow: POST then GET", async () => {
     // POST
     const created = parse<{ id: string; name: string }>(
-      await createUser(
+      await createUserHandler(
         {
           requestContext: { http: { method: "POST" } },
           rawPath: "/users",
@@ -107,7 +112,7 @@ describe("examples/aws-lambda-quickstart", () => {
 
   it("validation: createUser returns 400 when name missing", async () => {
     const res = parse<{ message: string }>(
-      await createUser(
+      await createUserHandler(
         {
           requestContext: { http: { method: "POST" } },
           rawPath: "/users",
@@ -127,7 +132,7 @@ describe("examples/aws-lambda-quickstart", () => {
       "utf8",
     ).toString("base64");
     const created = parse<{ id: string; name: string }>(
-      await createUser(
+      await createUserHandler(
         {
           requestContext: { http: { method: "POST" } },
           rawPath: "/users",
@@ -170,5 +175,20 @@ describe("examples/aws-lambda-quickstart", () => {
     );
     expect(res.statusCode).toBe(200);
     expect(res.headers["Access-Control-Allow-Origin"]).toBe("*");
+  });
+
+  it("reuses the runtime across warm invocations", async () => {
+    const first = await getRunner();
+    const second = await getRunner();
+
+    expect(first).toBe(second);
+  });
+
+  it("fails fast when request context is missing", async () => {
+    const runtime = await getRunner();
+
+    await expect(
+      runtime.runTask(createUserTask, { name: "no-context" }),
+    ).rejects.toThrow();
   });
 });

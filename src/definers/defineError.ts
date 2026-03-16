@@ -17,13 +17,14 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
-import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import {
   isClassConstructor,
   hasParseFunction,
   isObjectRecord,
 } from "../tools/typeChecks";
+import { getRegisteredCheckRuntime } from "../tools/check/runtime";
 import type {
+  InferValidationSchemaInput,
   IValidationSchema,
   ValidationSchemaInput,
 } from "../types/utilities";
@@ -35,7 +36,7 @@ const isValidHttpCode = (value: number): boolean =>
 const assertHttpCode = (value: number): void => {
   if (!isValidHttpCode(value)) {
     throw new RunnerError(
-      "runner.errors.error.invalidHttpCode",
+      "error-invalidHttpCode",
       `Error httpCode must be an integer between 100 and 599. Received: ${value}`,
       { value },
     );
@@ -73,32 +74,47 @@ const normalizeErrorDataSchema = <TData extends DefaultErrorType>(
     return schema;
   }
 
-  const checkModule =
-    require("../tools/check") as typeof import("../tools/check");
-
   if (isClassConstructor(schema)) {
-    const classSchemaModule =
-      require("../tools/check/classSchema") as typeof import("../tools/check/classSchema");
-    if (!classSchemaModule.hasClassSchemaMetadata(schema)) {
-      throw new RunnerError(
-        "runner.errors.validation",
-        `Error data validation failed for ${errorId}: Class schema shorthand requires @Match.Schema() metadata for ${schema.name || "Anonymous"}.`,
-        {
-          subject: "Error data",
-          id: errorId,
-          originalError: "Missing @Match.Schema() metadata",
-        },
-      );
-    }
+    let compiledSchema: IValidationSchema<TData> | undefined;
 
-    return checkModule.Match.fromSchema(schema) as IValidationSchema<TData>;
+    return {
+      parse(data: TData): TData {
+        if (!compiledSchema) {
+          const { Match, hasClassSchemaMetadata } = getRegisteredCheckRuntime();
+          if (!hasClassSchemaMetadata(schema)) {
+            throw new RunnerError(
+              "validation",
+              `Error data validation failed for ${errorId}: Class schema shorthand requires @Match.Schema() metadata for ${schema.name || "Anonymous"}.`,
+              {
+                subject: "Error data",
+                id: errorId,
+                originalError: "Missing @Match.Schema() metadata",
+              },
+            );
+          }
+
+          compiledSchema = Match.fromSchema(schema) as IValidationSchema<TData>;
+        }
+
+        return compiledSchema.parse(data);
+      },
+    } satisfies IValidationSchema<TData>;
   }
 
+  let compiledSchema: IValidationSchema<TData> | undefined;
+
   return {
-    parse(input: unknown): TData {
-      return checkModule.check(input, schema as never) as TData;
+    parse(data: TData): TData {
+      if (!compiledSchema) {
+        const { Match } = getRegisteredCheckRuntime();
+        compiledSchema = Match.compile(
+          schema as never,
+        ) as IValidationSchema<TData>;
+      }
+
+      return compiledSchema.parse(data);
     },
-  };
+  } satisfies IValidationSchema<TData>;
 };
 
 export class RunnerError<
@@ -208,14 +224,26 @@ export class ErrorHelper<
  * @param definition
  * @returns
  */
+export function defineError<
+  TSchema extends ValidationSchemaInput<any>,
+  TData extends DefaultErrorType = InferValidationSchemaInput<TSchema> &
+    DefaultErrorType,
+>(
+  definition: Omit<IErrorDefinition<TData>, "dataSchema"> & {
+    dataSchema: TSchema;
+  },
+  filePath?: string,
+): IErrorHelper<TData>;
+export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
+  definition: IErrorDefinition<TData>,
+  filePath?: string,
+): IErrorHelper<TData>;
 export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   definition: IErrorDefinition<TData>,
   filePath?: string,
 ) {
   const resolvedFilePath = filePath ?? getCallerFile();
-  assertDefinitionId("Error", definition.id, {
-    allowReservedDottedNamespace: isFrameworkDefinitionMarked(definition),
-  });
+  assertDefinitionId("Error", definition.id);
 
   if (definition.httpCode !== undefined) {
     assertHttpCode(definition.httpCode);

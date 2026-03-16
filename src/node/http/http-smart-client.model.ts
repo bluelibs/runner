@@ -15,6 +15,7 @@ import {
   httpBaseUrlRequiredError,
   httpContextSerializationError,
 } from "../../errors";
+import { createCancellationErrorFromSignal } from "../../tools/abortSignals";
 
 export interface HttpSmartClientAuthConfig {
   header?: string; // default: x-runner-token
@@ -38,17 +39,17 @@ export interface HttpSmartClient {
   task<I = unknown, O = unknown>(
     id: string,
     input?: I,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<O | Readable>;
   event<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<void>;
   eventWithResult?<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<P>;
 }
 
@@ -149,6 +150,7 @@ async function postJson<T = any>(
   url: string,
   body: unknown,
   headersOverride?: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<T> {
   const serializer = cfg.serializer;
   const parsed = new URL(url);
@@ -165,14 +167,17 @@ async function postJson<T = any>(
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
   return await new Promise<T>((resolve, reject) => {
     let settled = false;
+    const cleanup: Array<() => void> = [];
     const resolveOnce = (value: T) => {
       if (settled) return;
       settled = true;
+      cleanup.forEach((fn) => fn());
       resolve(value);
     };
     const rejectOnce = (error: unknown) => {
       if (settled) return;
       settled = true;
+      cleanup.forEach((fn) => fn());
       reject(error instanceof Error ? error : new Error(String(error)));
     };
 
@@ -232,6 +237,15 @@ async function postJson<T = any>(
       },
     );
     req.on("error", rejectOnce);
+    if (signal) {
+      const onAbort = () =>
+        req.destroy(createCancellationErrorFromSignal(signal));
+      signal.addEventListener("abort", onAbort, { once: true });
+      cleanup.push(() => signal.removeEventListener("abort", onAbort));
+      if (signal.aborted) {
+        onAbort();
+      }
+    }
     req.on("timeout", () => {
       req.destroy(toTimeoutError(url, cfg.timeoutMs));
     });
@@ -241,7 +255,7 @@ async function postJson<T = any>(
 }
 
 function escapeHeaderValue(value: string): string {
-  return value.replace(/"/g, '\\"');
+  return value.replace(/[\\"]/g, "\\$&").replace(/[\r\n]+/g, " ");
 }
 
 function encodeMultipart(
@@ -307,6 +321,7 @@ async function postMultipart(
   manifestText: string,
   files: ReturnType<typeof buildNodeManifest>["files"],
   headersOverride?: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<{ stream: Readable; res: http.IncomingMessage }> {
   const parsed = new URL(url);
   const lib = requestLib(parsed);
@@ -328,17 +343,20 @@ async function postMultipart(
   return await new Promise<{ stream: Readable; res: http.IncomingMessage }>(
     (resolve, reject) => {
       let settled = false;
+      const cleanup: Array<() => void> = [];
       const resolveOnce = (value: {
         stream: Readable;
         res: http.IncomingMessage;
       }) => {
         if (settled) return;
         settled = true;
+        cleanup.forEach((fn) => fn());
         resolve(value);
       };
       const rejectOnce = (error: unknown) => {
         if (settled) return;
         settled = true;
+        cleanup.forEach((fn) => fn());
         reject(error instanceof Error ? error : new Error(String(error)));
       };
       const req = lib.request(
@@ -354,6 +372,15 @@ async function postMultipart(
         (res) => resolveOnce({ stream: res as Readable, res }),
       );
       req.on("error", rejectOnce);
+      if (signal) {
+        const onAbort = () =>
+          req.destroy(createCancellationErrorFromSignal(signal));
+        signal.addEventListener("abort", onAbort, { once: true });
+        cleanup.push(() => signal.removeEventListener("abort", onAbort));
+        if (signal.aborted) {
+          onAbort();
+        }
+      }
       req.on("timeout", () => {
         req.destroy(toTimeoutError(url, cfg.timeoutMs));
       });
@@ -368,6 +395,7 @@ async function postOctetStream(
   url: string,
   stream: Readable,
   headersOverride?: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<{ stream: Readable; res: http.IncomingMessage }> {
   const parsed = new URL(url);
   const lib = requestLib(parsed);
@@ -423,6 +451,15 @@ async function postOctetStream(
       const onReqError = (e: unknown) => rejectOnce(e);
       req.on("error", onReqError);
       cleanup.push(() => req.removeListener("error", onReqError));
+      if (signal) {
+        const onAbort = () =>
+          req.destroy(createCancellationErrorFromSignal(signal));
+        signal.addEventListener("abort", onAbort, { once: true });
+        cleanup.push(() => signal.removeEventListener("abort", onAbort));
+        if (signal.aborted) {
+          onAbort();
+        }
+      }
       const onReqTimeout = () =>
         req.destroy(toTimeoutError(url, cfg.timeoutMs));
       req.on("timeout", onReqTimeout);
@@ -529,7 +566,7 @@ export function createHttpSmartClient(
     async task<I, O>(
       id: string,
       input?: I,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<O | Readable> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
 
@@ -540,6 +577,7 @@ export function createHttpSmartClient(
           url,
           input,
           options?.headers,
+          options?.signal,
         );
         const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
           res,
@@ -564,6 +602,7 @@ export function createHttpSmartClient(
             manifestText,
             manifest.files,
             options?.headers,
+            options?.signal,
           );
           const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
             res,
@@ -585,6 +624,7 @@ export function createHttpSmartClient(
           url,
           { input },
           options?.headers,
+          options?.signal,
         );
         return assertOkEnvelope<O>(r, {
           fallbackMessage: "Remote lane task error",
@@ -597,7 +637,7 @@ export function createHttpSmartClient(
     async event<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       try {
@@ -606,6 +646,7 @@ export function createHttpSmartClient(
           url,
           { payload },
           options?.headers,
+          options?.signal,
         );
         assertOkEnvelope<void>(r, {
           fallbackMessage: "Remote lane event error",
@@ -618,7 +659,7 @@ export function createHttpSmartClient(
     async eventWithResult<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<P> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       try {
@@ -630,6 +671,7 @@ export function createHttpSmartClient(
             returnPayload: true,
           },
           options?.headers,
+          options?.signal,
         );
         if (r && typeof r === "object" && r.ok && !("result" in r)) {
           throw new RemoteLaneTransportError(

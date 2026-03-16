@@ -1,4 +1,5 @@
 import { r, resources } from "../../../";
+import { RunnerMode } from "../../../types/runner";
 
 // Type-only tests for strict fluent builder ordering.
 
@@ -326,10 +327,13 @@ import { r, resources } from "../../../";
   resourceAfterInit.build();
 
   r.resource<{ strict: boolean }>("types-order-resource-dynamic-isolate")
-    .isolate((config) => ({
-      exports: config.strict ? "none" : [],
-      // failTest: config.fail,
-    }))
+    .isolate((config, mode) => {
+      const runtimeMode: RunnerMode | undefined = mode;
+      void runtimeMode;
+      return {
+        exports: config.strict ? "none" : [],
+      };
+    })
     .init(async () => "ok")
     .build();
 

@@ -7,7 +7,7 @@ import { Queue } from "../.."; // <-- adjust path if needed
 
 /** Flush native micro‑tasks once (Promise jobs / process.nextTick). */
 const flushMicroTasks = () => Promise.resolve();
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 /* ------------------------------------------------------------------ */
 /* Tests                                                              */
@@ -202,7 +202,7 @@ describe("Queue", () => {
     const errorTask = async () => {
       jest.advanceTimersByTime(10);
       await Promise.resolve();
-      throw createMessageError("Task exception");
+      throw genericError.new({ message: "Task exception" });
     };
 
     const successTask = async () => {
@@ -252,7 +252,7 @@ describe("Queue", () => {
     await q.run(async () => "ok");
     await expect(
       q.run(async () => {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       }),
     ).rejects.toThrow("boom");
 

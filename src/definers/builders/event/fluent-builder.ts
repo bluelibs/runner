@@ -2,12 +2,14 @@ import type {
   EnsureTagsForTarget,
   IEvent,
   EventTagType,
+  ResolveValidationSchemaInput,
   IEventDefinition,
   IEventMeta,
   ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
+import type { ThrowsList } from "../../../types/error";
 import { defineEvent } from "../../defineEvent";
 import type { EventFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
@@ -23,21 +25,40 @@ export function makeEventBuilder<
 >(
   state: BuilderState<TPayload, TTransactional>,
 ): EventFluentBuilder<TPayload, TTransactional> {
-  const builder: EventFluentBuilder<TPayload, TTransactional> = {
+  const builder = {
     id: state.id,
 
-    payloadSchema<TNew>(schema: ValidationSchemaInput<TNew>) {
+    payloadSchema<
+      TNew = never,
+      TSchema extends ValidationSchemaInput<
+        [TNew] extends [never] ? any : TNew
+      > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+    >(schema: TSchema) {
       // Cast state to target type for widening, then assign the schema
       const next = clone(
-        state as unknown as BuilderState<TNew, TTransactional>,
+        state as unknown as BuilderState<
+          ResolveValidationSchemaInput<TNew, TSchema>,
+          TTransactional
+        >,
         {
           payloadSchema: schema,
         },
-      );
-      return makeEventBuilder<TNew, TTransactional>(next);
+      ) as BuilderState<
+        ResolveValidationSchemaInput<TNew, TSchema>,
+        TTransactional
+      >;
+      return makeEventBuilder<
+        ResolveValidationSchemaInput<TNew, TSchema>,
+        TTransactional
+      >(next);
     },
 
-    schema<TNew>(schema: ValidationSchemaInput<TNew>) {
+    schema<
+      TNew = never,
+      TSchema extends ValidationSchemaInput<
+        [TNew] extends [never] ? any : TNew
+      > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+    >(schema: TSchema) {
       return builder.payloadSchema(schema);
     },
 
@@ -52,7 +73,7 @@ export function makeEventBuilder<
       return makeEventBuilder<TPayload, TTransactional>(next);
     },
 
-    throws(_list) {
+    throws(_list: ThrowsList) {
       // Throws is only for documentation on and Event, because events themselves don't throw.
       return builder;
     },
@@ -88,5 +109,5 @@ export function makeEventBuilder<
     },
   };
 
-  return builder;
+  return builder as EventFluentBuilder<TPayload, TTransactional>;
 }

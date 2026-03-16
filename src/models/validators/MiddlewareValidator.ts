@@ -22,8 +22,8 @@ function validateTaskMiddlewareAttachments(ctx: ValidatorContext): void {
       if (!middlewareId || !ctx.registry.taskMiddlewares.has(middlewareId)) {
         middlewareNotRegisteredError.throw({
           type: "task",
-          source: ctx.toPublicId(task),
-          middlewareId: ctx.toPublicId(middlewareAttachment),
+          source: ctx.findIdByDefinition(task),
+          middlewareId: ctx.findIdByDefinition(middlewareAttachment),
         });
       }
     }
@@ -40,8 +40,8 @@ function validateResourceMiddlewareAttachments(ctx: ValidatorContext): void {
       ) {
         middlewareNotRegisteredError.throw({
           type: "resource",
-          source: ctx.toPublicId(resource),
-          middlewareId: ctx.toPublicId(middlewareAttachment),
+          source: ctx.findIdByDefinition(resource),
+          middlewareId: ctx.findIdByDefinition(middlewareAttachment),
         });
       }
     }
@@ -61,8 +61,8 @@ function validateSubtreeMiddlewareAttachments(ctx: ValidatorContext): void {
       if (!middlewareId || !ctx.registry.taskMiddlewares.has(middlewareId)) {
         middlewareNotRegisteredError.throw({
           type: "task",
-          source: ctx.toPublicId(ownerResource),
-          middlewareId: ctx.toPublicId(middleware),
+          source: ctx.findIdByDefinition(ownerResource),
+          middlewareId: ctx.findIdByDefinition(middleware),
         });
       }
     }
@@ -77,8 +77,8 @@ function validateSubtreeMiddlewareAttachments(ctx: ValidatorContext): void {
       ) {
         middlewareNotRegisteredError.throw({
           type: "resource",
-          source: ctx.toPublicId(ownerResource),
-          middlewareId: ctx.toPublicId(middleware),
+          source: ctx.findIdByDefinition(ownerResource),
+          middlewareId: ctx.findIdByDefinition(middleware),
         });
       }
     }

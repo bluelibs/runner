@@ -25,10 +25,11 @@ describe("Security: Mutation footgun prevention", () => {
     });
 
     const rr = await run(app);
+    const internalId = rr.store.findIdByDefinition(internal);
 
     // First emit: no star exclusion tag, star should see it currently (baseline)
     await rr.emitEvent(internal, { x: 1 });
-    expect(seen).toContain("sec-mut-internal");
+    expect(seen).toContain(internalId);
 
     const previousTags = internal.tags;
     try {
@@ -41,7 +42,7 @@ describe("Security: Mutation footgun prevention", () => {
     expect(internal.tags).toBe(previousTags);
 
     await rr.emitEvent(internal, { x: 2 });
-    const count = seen.filter((id) => id === "sec-mut-internal").length;
+    const count = seen.filter((id) => id === internalId).length;
     expect(count).toBe(2);
 
     await rr.dispose();

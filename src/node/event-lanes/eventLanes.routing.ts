@@ -1,5 +1,11 @@
 import type { EventLanesResourceContext } from "./EventLanesInternals";
 import { getLaneBindingOrThrow } from "./EventLanesInternals";
+import type { IEventLaneQueue } from "./types";
+
+export type QueueLikeWithAck = Pick<
+  IEventLaneQueue,
+  "ack" | "nack" | "consume" | "setPrefetch"
+>;
 
 export function validateAssignedEventRoutesHaveBindings(
   context: EventLanesResourceContext,

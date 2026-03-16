@@ -51,17 +51,17 @@ export interface MixedHttpClient {
   task<I = unknown, O = unknown>(
     id: string,
     input?: I,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<O | Readable | ReadableStream<Uint8Array>>;
   event<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<void>;
   eventWithResult?<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<P>;
 }
 
@@ -114,7 +114,7 @@ export function createHttpMixedClient(
     async task<I, O>(
       id: string,
       input?: I,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<O | Readable | ReadableStream<Uint8Array>> {
       // Prefer Smart path only when needed (streams or Node file sentinels)
       if (
@@ -130,7 +130,7 @@ export function createHttpMixedClient(
     async event<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<void> {
       // Events are always plain JSON
       return await fetchClient.event<P>(id, payload, options);
@@ -138,7 +138,7 @@ export function createHttpMixedClient(
     async eventWithResult<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<P> {
       if (!fetchClient.eventWithResult) {
         httpEventWithResultUnavailableError.throw({

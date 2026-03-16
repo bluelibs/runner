@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { buildTestRunner } from "#/general/test/utils";
 import { auth, AuthConfig, AuthValue } from "./auth.resource";
 import { r, resources } from "@bluelibs/runner";
@@ -42,7 +44,6 @@ describe("auth resource", () => {
         .replace(/=/g, "")
         .replace(/\+/g, "-")
         .replace(/\//g, "_");
-      const { createHmac } = require("crypto");
       const sig = createHmac("sha256", secret)
         .update(`${h}.${p}`)
         .digest("base64")

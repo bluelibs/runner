@@ -1,5 +1,6 @@
 import { r } from "../..";
 import { getSubtreeTaskMiddlewareAttachment } from "../../tools/subtreeMiddleware";
+import { RunnerMode } from "../../types/runner";
 
 describe("resource builder subtree()", () => {
   it("applies subtree policy and keeps chaining", () => {
@@ -52,10 +53,10 @@ describe("resource builder subtree()", () => {
       return;
     }
 
-    expect(built.subtree({ enabled: true })).toEqual({
+    expect(built.subtree({ enabled: true }, RunnerMode.TEST)).toEqual({
       validate: [expect.any(Function)],
     });
-    expect(built.subtree({ enabled: false })).toEqual({
+    expect(built.subtree({ enabled: false }, RunnerMode.TEST)).toEqual({
       validate: [],
     });
   });
@@ -134,14 +135,14 @@ describe("resource builder subtree()", () => {
       return;
     }
 
-    expect(built.subtree({ enabled: true })).toEqual({
+    expect(built.subtree({ enabled: true }, RunnerMode.TEST)).toEqual({
       tasks: {
         middleware: [],
         validate: [secondValidator],
       },
       validate: [firstValidator],
     });
-    expect(built.subtree({ enabled: false })).toEqual({
+    expect(built.subtree({ enabled: false }, RunnerMode.TEST)).toEqual({
       tasks: {
         middleware: [],
         validate: [],

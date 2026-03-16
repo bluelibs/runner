@@ -382,9 +382,10 @@ describe("requestHandlers - routing and dispatching", () => {
       const rr = await run(app);
       try {
         const handlers = await rr.getResourceValue(exposure as any);
+        const eventId = rr.store.findIdByDefinition(ev);
         const req: any = new Readable({ read() {} });
         req.method = "POST";
-        req.url = `/__runner/event/${encodeURIComponent(ev.id)}`;
+        req.url = `/__runner/event/${encodeURIComponent(eventId)}`;
         req.headers = { "content-type": "application/json" };
         req.once = undefined; // Force .on fallback
 

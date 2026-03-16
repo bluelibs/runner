@@ -1,5 +1,4 @@
 import { defineResource } from "../../../definers/defineResource";
-import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { DebugFriendlyConfig, getConfig } from "./types";
 import { globalTags } from "../../../globals/globalTags";
 import { Match } from "../../../tools/check";
@@ -27,20 +26,18 @@ const debugFriendlyConfigPattern = Match.OneOf(
   debugConfigPattern,
 );
 
-export const debugConfig = defineResource(
-  markFrameworkDefinition({
-    id: "runner.debug.resources.config",
-    configSchema: debugFriendlyConfigPattern,
-    meta: {
-      title: "Debug Config",
-      description: "Debug config. This is used to debug the system.",
-    },
-    tags: [globalTags.system],
-    init: async (config: DebugFriendlyConfig) => {
-      const myConfig = { ...getConfig(config) };
+export const debugConfig = defineResource({
+  id: "config",
+  configSchema: debugFriendlyConfigPattern,
+  meta: {
+    title: "Debug Config",
+    description: "Debug config. This is used to debug the system.",
+  },
+  tags: [globalTags.system],
+  init: async (config: DebugFriendlyConfig) => {
+    const myConfig = { ...getConfig(config) };
 
-      Object.freeze(myConfig);
-      return myConfig;
-    },
-  }),
-);
+    Object.freeze(myConfig);
+    return myConfig;
+  },
+});

@@ -17,6 +17,7 @@ function createEvent(
     id,
     data: undefined,
     timestamp: new Date(),
+    signal: new AbortController().signal,
     source: runtimeSource.runtime("tests"),
     meta: {},
     transactional: false,

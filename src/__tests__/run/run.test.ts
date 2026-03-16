@@ -6,7 +6,7 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../../define";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
 
@@ -92,11 +92,9 @@ describe("run", () => {
 
     const result = await run(app);
 
-    expect(result.store.getRuntimeMetadata(app).id).toBe("app");
-    expect(result.store.getRuntimeMetadata(app).path).toBe("app");
-    expect(result.store.getRuntimeMetadata(parent).id).toBe("resource-x");
-    expect(result.store.getRuntimeMetadata(parent).path).toBe("app.resource-x");
-    expect(result.store.getRuntimeMetadata(child).path).toBe(
+    expect(result.store.findIdByDefinition(app)).toBe("app");
+    expect(result.store.findIdByDefinition(parent)).toBe("app.resource-x");
+    expect(result.store.findIdByDefinition(child)).toBe(
       "app.resource-x.resource-y",
     );
     await expect(
@@ -105,7 +103,7 @@ describe("run", () => {
     await expect(
       Promise.resolve().then(() => result.runTask("resource-y.tasks.task-z")),
     ).rejects.toMatchObject({
-      id: "runner.errors.runtimeElementNotFound",
+      id: "runtimeElementNotFound",
     });
 
     await result.dispose();
@@ -163,8 +161,8 @@ describe("run", () => {
     });
 
     const result = await run(app);
-    expect(result.store.toPublicId(resourceMiddleware)).toBe(
-      "test-run-root-resource-middleware",
+    expect(result.store.findIdByDefinition(resourceMiddleware)).toBe(
+      "test-run-root-middleware-root.middleware.resource.test-run-root-resource-middleware",
     );
     await result.dispose();
   });
@@ -365,7 +363,7 @@ describe("run", () => {
       const testTask = defineTask({
         id: "test-task",
         run: async () => {
-          throw createMessageError("Task failed");
+          throw genericError.new({ message: "Task failed" });
         },
       });
 
@@ -698,7 +696,7 @@ describe("run", () => {
         init: async () => {
           // we do this so it doesn't become a never.
           if (true === true) {
-            throw createMessageError("Init failed");
+            throw genericError.new({ message: "Init failed" });
           }
         },
       });
@@ -706,7 +704,7 @@ describe("run", () => {
         id: "error-task",
         run: async (_event) => {
           if (true === true) {
-            throw createMessageError("Run failed");
+            throw genericError.new({ message: "Run failed" });
           }
         },
       });

@@ -8,11 +8,17 @@ import type {
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
 } from "../types/resource";
+import type {
+  InferValidationSchemaInput,
+  ValidationSchemaInput,
+} from "../types/utilities";
+import type { AnyError, ThrowsList } from "../types/error";
 import {
   symbolForkedFrom,
   symbolResource,
   symbolFilePath,
   symbolOptionalDependency,
+  symbolError,
   symbolResourceIsolateDeclarations,
   symbolResourceRegistersChildren,
   symbolResourceSubtreeDeclarations,
@@ -22,12 +28,12 @@ import {
   resourceForkNonLeafUnsupportedError,
   validationError,
 } from "../errors";
+import { isMatchError } from "../tools/check/errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
-import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import {
   createDisplaySubtreePolicy,
   createSubtreePolicyDeclaration,
@@ -38,6 +44,154 @@ import {
 } from "./isolatePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
+function cloneThrowsList(throwsList: readonly string[] | undefined) {
+  if (throwsList === undefined) return undefined;
+
+  return throwsList.map(
+    (id) =>
+      ({
+        id,
+        // Forked resources already hold normalized ids; rebuild the minimal
+        // branded helper shape accepted by normalizeThrows().
+        [symbolError]: true as const,
+      }) as AnyError,
+  ) satisfies ThrowsList;
+}
+
+/**
+ * Defines a resource.
+ *
+ * Resources model long-lived services and state. Use this low-level API when you want
+ * to construct the full definition object directly instead of using the fluent builder.
+ */
+export function defineResource<
+  TConfigSchema extends ValidationSchemaInput<any>,
+  TResultSchema extends ValidationSchemaInput<any>,
+  TDeps extends DependencyMapType = {},
+  TPrivate = any,
+  TMeta extends IResourceMeta = any,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+>(
+  constConfig: Omit<
+    IResourceDefinition<
+      InferValidationSchemaInput<TConfigSchema>,
+      Promise<InferValidationSchemaInput<TResultSchema>>,
+      TDeps,
+      TPrivate,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >,
+    "configSchema" | "resultSchema"
+  > & {
+    configSchema: TConfigSchema;
+    resultSchema: TResultSchema;
+  },
+): IResource<
+  InferValidationSchemaInput<TConfigSchema>,
+  Promise<InferValidationSchemaInput<TResultSchema>>,
+  TDeps,
+  TPrivate,
+  TMeta,
+  TTags,
+  TMiddleware
+>;
+export function defineResource<
+  TConfigSchema extends ValidationSchemaInput<any>,
+  TValue extends Promise<any> = Promise<any>,
+  TDeps extends DependencyMapType = {},
+  TPrivate = any,
+  TMeta extends IResourceMeta = any,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+>(
+  constConfig: Omit<
+    IResourceDefinition<
+      InferValidationSchemaInput<TConfigSchema>,
+      TValue,
+      TDeps,
+      TPrivate,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >,
+    "configSchema"
+  > & {
+    configSchema: TConfigSchema;
+  },
+): IResource<
+  InferValidationSchemaInput<TConfigSchema>,
+  TValue,
+  TDeps,
+  TPrivate,
+  TMeta,
+  TTags,
+  TMiddleware
+>;
+export function defineResource<
+  TResultSchema extends ValidationSchemaInput<any>,
+  TConfig = void,
+  TDeps extends DependencyMapType = {},
+  TPrivate = any,
+  TMeta extends IResourceMeta = any,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+>(
+  constConfig: Omit<
+    IResourceDefinition<
+      TConfig,
+      Promise<InferValidationSchemaInput<TResultSchema>>,
+      TDeps,
+      TPrivate,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >,
+    "resultSchema"
+  > & {
+    resultSchema: TResultSchema;
+  },
+): IResource<
+  TConfig,
+  Promise<InferValidationSchemaInput<TResultSchema>>,
+  TDeps,
+  TPrivate,
+  TMeta,
+  TTags,
+  TMiddleware
+>;
+export function defineResource<
+  TConfig = void,
+  TValue extends Promise<any> = Promise<any>,
+  TDeps extends DependencyMapType = {},
+  TPrivate = any,
+  TMeta extends IResourceMeta = any,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+>(
+  constConfig: IResourceDefinition<
+    TConfig,
+    TValue,
+    TDeps,
+    TPrivate,
+    any,
+    any,
+    TMeta,
+    TTags,
+    TMiddleware
+  >,
+): IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 export function defineResource<
   TConfig = void,
   TValue extends Promise<any> = Promise<any>,
@@ -78,10 +232,7 @@ export function defineResource<
    */
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
-  assertDefinitionId("Resource", id, {
-    allowReservedDottedNamespace: isFrameworkDefinitionMarked(constConfig),
-    allowReservedInternalId: isFrameworkDefinitionMarked(constConfig),
-  });
+  assertDefinitionId("Resource", id);
   const configSchema = normalizeOptionalValidationSchema(
     constConfig.configSchema,
     {
@@ -190,7 +341,7 @@ export function defineResource<
     configSchema: current.configSchema,
     resultSchema: current.resultSchema,
     tags: current.tags,
-    throws: current.throws,
+    throws: cloneThrowsList(current.throws),
     middleware: current.middleware,
     dispose: current.dispose,
     ready: current.ready,
@@ -214,6 +365,9 @@ export function defineResource<
       try {
         config = current.configSchema.parse(config);
       } catch (error) {
+        if (isMatchError(error)) {
+          throw error;
+        }
         validationError.throw({
           subject: "Resource config",
           id: currentId,

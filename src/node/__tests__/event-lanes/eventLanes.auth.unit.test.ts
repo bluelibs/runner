@@ -94,7 +94,7 @@ describe("eventLanes auth helpers", () => {
           laneId,
           bindingAuth,
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expect(() =>

@@ -17,6 +17,7 @@ import type {
   SerializerFieldOptions,
 } from "./types";
 import { SymbolPolicy } from "./types";
+import { genericError } from "../errors";
 import { validationError } from "./errors";
 import { check, Match } from "../tools/check";
 import { hasClassSchemaMetadata } from "../tools/check/classSchema";
@@ -40,10 +41,10 @@ import {
 import {
   remapObjectForSerialization,
   remapValueForSchemaDeserialize,
-  setSerializerFieldOptions,
   type SerializerClassConstructor,
 } from "./field-metadata";
 import { isClassConstructor } from "../tools/typeChecks";
+import { createEsSerializerFieldDecorator } from "./decorators";
 
 const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
@@ -53,7 +54,7 @@ function parseJsonPayload(payload: string): unknown {
   try {
     return JSON.parse(payload);
   } catch {
-    throw new SyntaxError("Invalid JSON payload.");
+    throw genericError.new({ message: "Invalid JSON payload." });
   }
 }
 
@@ -62,13 +63,8 @@ function parseWithSchema<TParsed>(
   schema?: unknown,
 ): TParsed | unknown {
   if (schema === undefined) return value;
-
-  if (typeof schema === "object" && schema !== null && "parse" in schema) {
-    const parseFn = (schema as SerializerSchemaLike<TParsed>).parse;
-    return parseFn.call(schema, value);
-  }
-
-  return check(value, schema as never) as TParsed;
+  const parseFn = (schema as SerializerSchemaLike<TParsed>).parse;
+  return parseFn.call(schema, value);
 }
 
 function normalizeSchemaOption(schema: unknown): unknown {
@@ -120,36 +116,18 @@ function normalizeSchemaOption(schema: unknown): unknown {
         "Invalid deserialize() schema option: expected an object with a parse(input) function.",
       );
     }
+
+    return schema;
   }
 
-  return schema;
+  return Match.compile(schema as never);
 }
 
 export class Serializer {
   public static Field(
     options: SerializerFieldOptions = {},
   ): SerializerFieldDecorator {
-    return (target, propertyKey) => {
-      if (typeof propertyKey !== "string") {
-        validationError(
-          "Invalid Serializer.Field() usage: only string property names are supported.",
-        );
-      }
-
-      const propertyName = propertyKey as string;
-
-      const ctor = (
-        typeof target === "function" ? target : target.constructor
-      ) as SerializerClassConstructor;
-
-      if (typeof ctor !== "function") {
-        validationError(
-          "Invalid Serializer.Field() usage: decorator target must be a class field.",
-        );
-      }
-
-      setSerializerFieldOptions(ctor, propertyName, options);
-    };
+    return createEsSerializerFieldDecorator(options);
   }
 
   /** Type registry for managing custom types */
@@ -324,7 +302,9 @@ export class Serializer {
   private jsonStringify(value: unknown): string {
     const type = typeof value;
     if (type === "bigint" || type === "symbol" || type === "function") {
-      throw new TypeError(`Cannot stringify value of type "${type}"`);
+      throw genericError.new({
+        message: `Cannot stringify value of type "${type}"`,
+      });
     }
     return JSON.stringify(value ?? null, null, this.indent);
   }

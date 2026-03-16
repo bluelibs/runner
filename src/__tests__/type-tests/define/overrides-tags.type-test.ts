@@ -1,4 +1,5 @@
 import { defineOverride, r } from "../../..";
+import { RunnerMode } from "../../../types/runner";
 import {
   defineResource,
   defineTag,
@@ -58,6 +59,18 @@ import {
     id: "resource-valid-override-with-config",
     register: [baseConfigResource.with({ name: "base" })],
     overrides: [validConfigOverride],
+    init: async () => "ok",
+  });
+
+  defineResource<{ enabled: boolean }>({
+    id: "resource-valid-dynamic-overrides",
+    register: [baseConfigResource.with({ name: "base" })],
+    overrides: (config, mode) => {
+      config.enabled;
+      const runtimeMode: RunnerMode = mode;
+      void runtimeMode;
+      return config.enabled ? [validConfigOverride] : [];
+    },
     init: async () => "ok",
   });
 

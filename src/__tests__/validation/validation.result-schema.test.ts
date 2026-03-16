@@ -6,7 +6,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { IValidationSchema } from "../../defs";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 class MockValidationSchema<T> implements IValidationSchema<T> {
   constructor(private validator: (input: unknown) => T) {}
@@ -21,7 +21,7 @@ describe("Result Schema Validation", () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
         const v = value as { ok: boolean };
         if (!v || typeof v !== "object" || typeof v.ok !== "boolean") {
-          throw createMessageError("expected { ok: boolean }");
+          throw genericError.new({ message: "expected { ok: boolean }" });
         }
         return v;
       });
@@ -57,7 +57,7 @@ describe("Result Schema Validation", () => {
           !("ok" in value) ||
           typeof (value as { ok: unknown }).ok !== "boolean"
         ) {
-          throw createMessageError("expected { ok: boolean }");
+          throw genericError.new({ message: "expected { ok: boolean }" });
         }
         return value as { ok: boolean };
       });
@@ -90,7 +90,7 @@ describe("Result Schema Validation", () => {
           !("ok" in value) ||
           typeof (value as { ok: unknown }).ok !== "boolean"
         ) {
-          throw createMessageError("expected { ok: boolean }");
+          throw genericError.new({ message: "expected { ok: boolean }" });
         }
         return value as { ok: boolean };
       });
@@ -139,7 +139,9 @@ describe("Result Schema Validation", () => {
           !("connected" in value) ||
           typeof (value as { connected: unknown }).connected !== "boolean"
         ) {
-          throw createMessageError("expected { connected: boolean }");
+          throw genericError.new({
+            message: "expected { connected: boolean }",
+          });
         }
         return value as { connected: boolean };
       });
@@ -169,7 +171,9 @@ describe("Result Schema Validation", () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
         const v = value as { connected: boolean };
         if (!v || typeof v !== "object" || typeof v.connected !== "boolean") {
-          throw createMessageError("expected { connected: boolean }");
+          throw genericError.new({
+            message: "expected { connected: boolean }",
+          });
         }
         return v;
       });
@@ -189,7 +193,9 @@ describe("Result Schema Validation", () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
         const v = value as { connected: boolean };
         if (!v || typeof v !== "object" || typeof v.connected !== "boolean") {
-          throw createMessageError("expected { connected: boolean }");
+          throw genericError.new({
+            message: "expected { connected: boolean }",
+          });
         }
         return v;
       });

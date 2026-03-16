@@ -1,6 +1,7 @@
 import type {
   EnsureTagsForTarget,
   EventTagType,
+  ResolveValidationSchemaInput,
   IEvent,
   IEventMeta,
   ValidationSchemaInput,
@@ -12,17 +13,33 @@ export interface EventFluentBuilder<
   TTransactional extends boolean | undefined = undefined,
 > {
   id: string;
-  payloadSchema<TNew>(
-    schema: ValidationSchemaInput<TNew>,
-  ): EventFluentBuilder<TNew, TTransactional>;
+  /** Declares the event payload schema. */
+  payloadSchema<
+    TNew = never,
+    TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
+      ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+  >(
+    schema: TSchema,
+  ): EventFluentBuilder<
+    ResolveValidationSchemaInput<TNew, TSchema>,
+    TTransactional
+  >;
 
   /**
    * Alias for payloadSchema. Use this to define the event payload validation contract.
    */
-  schema<TNew>(
-    schema: ValidationSchemaInput<TNew>,
-  ): EventFluentBuilder<TNew, TTransactional>;
+  schema<
+    TNew = never,
+    TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
+      ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+  >(
+    schema: TSchema,
+  ): EventFluentBuilder<
+    ResolveValidationSchemaInput<TNew, TSchema>,
+    TTransactional
+  >;
 
+  /** Adds or replaces event tags. */
   tags<TNewTags extends EventTagType[]>(
     t: EnsureTagsForTarget<"events", TNewTags>,
     options?: { override?: boolean },
@@ -34,6 +51,7 @@ export interface EventFluentBuilder<
    */
   throws(list: ThrowsList): EventFluentBuilder<TPayload, TTransactional>;
 
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IEventMeta>(
     m: TNewMeta,
   ): EventFluentBuilder<TPayload, TTransactional>;
@@ -54,5 +72,6 @@ export interface EventFluentBuilder<
   transactional<TEnabled extends boolean = true>(
     enabled?: TEnabled,
   ): EventFluentBuilder<TPayload, TEnabled>;
+  /** Materializes the final event definition for registration or reuse. */
   build(): IEvent<TPayload> & { transactional?: TTransactional };
 }

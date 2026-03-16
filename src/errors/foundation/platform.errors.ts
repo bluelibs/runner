@@ -4,7 +4,7 @@ import type { DefaultErrorType } from "../../types/error";
 
 // Context error
 export const contextError = error<{ details?: string } & DefaultErrorType>(
-  "runner.errors.context",
+  "context",
 )
   .format(({ details }) => details ?? "Context error")
   .remediation(
@@ -15,7 +15,7 @@ export const contextError = error<{ details?: string } & DefaultErrorType>(
 // Platform unsupported function
 export const platformUnsupportedFunctionError = error<
   { functionName: string } & DefaultErrorType
->("runner.errors.platformUnsupportedFunction")
+>("platformUnsupportedFunction")
   .format(
     ({ functionName }) =>
       `Platform function not supported in this environment: ${functionName}. Detected platform: ${detectEnvironment()}.`,

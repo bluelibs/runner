@@ -13,9 +13,15 @@ export function matchesObjectPattern(
     childPattern: unknown,
     childContext: MatchContext,
     childPath: readonly PathSegment[],
+    parent?: unknown,
   ) => boolean,
+  isMatchableObject: (value: unknown) => value is Record<string, unknown> = (
+    candidate,
+  ): candidate is Record<string, unknown> => isPlainObject(candidate),
 ): boolean {
-  if (!isPlainObject(value)) return fail(context, path, "plain object", value);
+  if (!isMatchableObject(value)) {
+    return fail(context, path, "plain object", value);
+  }
 
   const startFailures = context.failures.length;
   for (const key of Object.keys(value)) {
@@ -50,6 +56,7 @@ export function matchesObjectPattern(
       childPattern,
       context,
       appendPath(path, key),
+      value,
     );
     if (!matched && !context.collectAll) return false;
   }

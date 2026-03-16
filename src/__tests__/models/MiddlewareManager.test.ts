@@ -20,7 +20,7 @@ import {
   IResourceMiddleware,
   symbolRpcLanePolicy,
 } from "../../defs";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 
@@ -128,13 +128,7 @@ describe("MiddlewareManager", () => {
     ]);
   });
 
-  it("dedupes global vs local task middleware by id and emits observability events (non-global)", async () => {
-    const calls: string[] = [];
-
-    // Global listener should not be called for observability events (excluded by tag)
-    eventManager.addGlobalListener(async () => {
-      calls.push("globalListener");
-    });
+  it("fails fast when global and local task middleware resolve to the same id", async () => {
     const mLocal = defineTaskMiddleware({
       id: "shared",
       run: async ({ next, task }) => {
@@ -177,19 +171,14 @@ describe("MiddlewareManager", () => {
       isInitialized: true,
     });
 
-    // Stub global middleware provider to return one with same id as local; manager should dedupe it
+    // Stub global middleware provider to return one with same id as local.
     const spy = jest
       .spyOn(getMiddlewareResolver(), "getEverywhereTaskMiddlewares")
       .mockReturnValue([mGlobalSameId]);
 
-    const runner = manager.composeTaskRunner(task);
-    const result = await runner(2);
-    // Dedup ensures global "shared" is ignored; local "shared" runs once.
-    expect(result).toBe(7);
-
-    // Ensure event-specific listeners called twice (two middlewares), global listener not called
-    const globalCalls = calls.filter((c) => c === "globalListener").length;
-    expect(globalCalls).toBe(0);
+    expect(() => manager.composeTaskRunner(task)).toThrow(
+      /conflicts with a task-local middleware using the same id/i,
+    );
 
     spy.mockRestore();
   });
@@ -261,9 +250,7 @@ describe("MiddlewareManager", () => {
     });
     store.storeGenericItem(owner);
     const result = getMiddlewareResolver().getEverywhereResourceMiddlewares(r);
-    expect(
-      result.some((m) => store.toPublicId(m) === "mw-everywhere-true"),
-    ).toBe(true);
+    expect(result.some((m) => m.id.endsWith(".mw-everywhere-true"))).toBe(true);
   });
 
   it("middleware resolver fails fast on duplicate subtree resource middleware ids", () => {
@@ -343,9 +330,9 @@ describe("MiddlewareManager", () => {
     });
     store.storeGenericItem(owner);
     const res = getMiddlewareResolver().getEverywhereTaskMiddlewares(task);
-    expect(
-      res.some((m) => store.toPublicId(m) === "mw-task-everywhere-true"),
-    ).toBe(true);
+    expect(res.some((m) => m.id.endsWith(".mw-task-everywhere-true"))).toBe(
+      true,
+    );
   });
 
   it("middleware resolver fails fast on duplicate subtree task middleware ids", () => {
@@ -597,16 +584,18 @@ describe("MiddlewareManager", () => {
       const snapshot = middlewareManager.getInterceptorOwnerSnapshot();
 
       expect(snapshot.globalTaskInterceptorOwnerIds).toEqual([
-        ownerResource.id,
+        runtime.store.findIdByDefinition(ownerResource),
       ]);
       expect(snapshot.globalResourceInterceptorOwnerIds).toEqual([
-        ownerResource.id,
+        runtime.store.findIdByDefinition(ownerResource),
       ]);
       expect(snapshot.perTaskMiddlewareInterceptorOwnerIds).toEqual({
-        [taskMiddleware.id]: [ownerResource.id],
+        [taskMiddleware.id]: [runtime.store.findIdByDefinition(ownerResource)],
       });
       expect(snapshot.perResourceMiddlewareInterceptorOwnerIds).toEqual({
-        [resourceMiddleware.id]: [ownerResource.id],
+        [resourceMiddleware.id]: [
+          runtime.store.findIdByDefinition(ownerResource),
+        ],
       });
 
       await runtime.dispose();
@@ -761,7 +750,7 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store);
 
       manager.intercept("task", async (_next: any, _input: any) => {
-        throw createMessageError("interceptor error");
+        throw genericError.new({ message: "interceptor error" });
       });
 
       const task = defineTask({
@@ -792,7 +781,7 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store);
 
       manager.intercept("resource", async (_next: any, _input: any) => {
-        throw createMessageError("interceptor error");
+        throw genericError.new({ message: "interceptor error" });
       });
 
       const resource = defineResource<{ n: number }, Promise<number>>({
@@ -825,7 +814,7 @@ describe("MiddlewareManager", () => {
       const resource = defineResource<{ n: number }, Promise<number>>({
         id: "resource_with_init_error_reporting",
         init: async () => {
-          throw createMessageError("resource init failed");
+          throw genericError.new({ message: "resource init failed" });
         },
       });
 
@@ -853,7 +842,9 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store);
 
       manager.intercept("resource", async () => {
-        throw createMessageError("global resource interceptor failed");
+        throw genericError.new({
+          message: "global resource interceptor failed",
+        });
       });
 
       const resource = defineResource<{ n: number }, Promise<number>>({

@@ -10,8 +10,13 @@ import { ValidationHelper } from "./ValidationHelper";
 import { IResourceMiddlewareExecutionInput } from "../../types/resourceMiddleware";
 import type { ResourceMiddlewareInterceptor } from "./types";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
-import { toPublicDefinition } from "../utils/toPublicDefinition";
+import { runtimeSource } from "../../types/runtimeSource";
 import { composeReverseLayers } from "./composeLayers";
+import {
+  extractRequestedId,
+  resolveCanonicalIdFromStore,
+  toCanonicalDefinitionFromStore,
+} from "../StoreLookup";
 
 /**
  * Composes resource initialization chains with validation, interceptors, and middlewares.
@@ -29,6 +34,20 @@ export class ResourceMiddlewareComposer {
       this.store.getLifecycleAdmissionController();
   }
 
+  private resolveDefinitionId(reference: unknown): string {
+    return (
+      resolveCanonicalIdFromStore(this.store, reference) ??
+      extractRequestedId(reference) ??
+      String(reference)
+    );
+  }
+
+  private toCanonicalDefinition<TDefinition extends { id: string }>(
+    definition: TDefinition,
+  ): TDefinition {
+    return toCanonicalDefinitionFromStore(this.store, definition);
+  }
+
   /**
    * Runs resource initialization with all middleware and interceptors applied
    */
@@ -43,7 +62,7 @@ export class ResourceMiddlewareComposer {
     dependencies: ResourceDependencyValuesType<TDeps>,
     context: TContext,
   ): Promise<TValue | undefined> {
-    const resourceId = this.store.resolveDefinitionId(resource)!;
+    const resourceId = this.resolveDefinitionId(resource);
     const storedResource = this.store.resources.get(resourceId);
     const effectiveResource = (storedResource?.resource ??
       resource) as IResource<TConfig, TValue, TDeps, TContext>;
@@ -95,7 +114,7 @@ export class ResourceMiddlewareComposer {
       return ValidationHelper.validateResult(
         rawValue,
         resource.resultSchema,
-        this.store.toPublicId(resource),
+        this.resolveDefinitionId(resource),
         "Resource",
       ) as Awaited<TValue>;
     }) as (config: TConfig) => TValue;
@@ -115,19 +134,16 @@ export class ResourceMiddlewareComposer {
       return runner;
     }
 
-    const publicResourceDefinition = toPublicDefinition(this.store, resource);
+    const canonicalResourceDefinition = this.toCanonicalDefinition(resource);
 
     return composeReverseLayers(
       runner,
       middlewares,
       (nextFunction, middleware) => {
-        const middlewareId = this.store.resolveDefinitionId(middleware)!;
+        const middlewareId = this.resolveDefinitionId(middleware);
         const storeMiddleware =
           this.store.resourceMiddlewares.get(middlewareId)!;
-        const middlewareSource = this.store.createRuntimeSource(
-          "middleware",
-          middlewareId,
-        );
+        const middlewareSource = runtimeSource.resourceMiddleware(middlewareId);
 
         const baseMiddlewareRunner = async (cfg: TConfig) => {
           return this.lifecycleAdmissionController.trackMiddlewareExecution(
@@ -136,7 +152,7 @@ export class ResourceMiddlewareComposer {
               storeMiddleware.middleware.run(
                 {
                   resource: {
-                    definition: publicResourceDefinition,
+                    definition: canonicalResourceDefinition,
                     config: cfg,
                   },
                   next: (...args: [TConfig?]) =>
@@ -175,14 +191,14 @@ export class ResourceMiddlewareComposer {
     if (interceptors.length === 0) {
       return runner;
     }
-    const publicResourceDefinition = toPublicDefinition(this.store, resource);
+    const canonicalResourceDefinition = this.toCanonicalDefinition(resource);
 
     const createExecutionInput = (
       config: TConfig,
       nextFunc: (...args: [config?: TConfig]) => Promise<Awaited<TValue>>,
     ): IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>> => ({
       resource: {
-        definition: publicResourceDefinition,
+        definition: canonicalResourceDefinition,
         config: config,
       },
       next: nextFunc,
@@ -226,7 +242,7 @@ export class ResourceMiddlewareComposer {
     if (interceptors.length === 0) {
       return middlewareRunner;
     }
-    const publicResourceDefinition = toPublicDefinition(this.store, resource);
+    const canonicalResourceDefinition = this.toCanonicalDefinition(resource);
 
     return composeReverseLayers(
       middlewareRunner,
@@ -245,7 +261,7 @@ export class ResourceMiddlewareComposer {
             Awaited<TValue>
           > = {
             resource: {
-              definition: publicResourceDefinition,
+              definition: canonicalResourceDefinition,
               config: config,
             },
             next: nextForExecutionInput,

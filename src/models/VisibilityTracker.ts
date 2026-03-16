@@ -1,7 +1,7 @@
 import type {
   IsolationChannel,
   IsolationPolicy,
-  RegisterableItems,
+  RegisterableItem,
 } from "../defs";
 import type { StoreRegistry } from "./StoreRegistry";
 import {
@@ -53,13 +53,13 @@ export class VisibilityTracker {
     recordIsolation(this.state, resourceId, policy);
   }
 
-  recordOwnership(ownerResourceId: string, item: RegisterableItems): void {
+  recordOwnership(ownerResourceId: string, item: RegisterableItem): void {
     recordOwnership(this.state, ownerResourceId, item);
   }
 
   recordExports(
     resourceId: string,
-    exports: Array<RegisterableItems | string>,
+    exports: Array<RegisterableItem | string>,
   ): void {
     recordExports(this.state, resourceId, exports);
   }

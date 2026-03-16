@@ -46,15 +46,11 @@ import { Match, r } from "@bluelibs/runner";
 
 const createUser = r
   .task("createUser")
-  .inputSchema(
-    Match.compile({
-      name: Match.NonEmptyString,
-      email: Match.Email,
-    }),
-  )
-  .resultSchema<{ id: string; name: string }>({
-    parse: (v) => v,
+  .inputSchema({
+    name: Match.NonEmptyString,
+    email: Match.Email,
   })
+  .resultSchema({ id: Match.NonEmptyString, name: Match.NonEmptyString })
   .run(async (input) => {
     return { id: "user-1", name: input.name };
   })
@@ -66,7 +62,7 @@ Validation runs before/after the task body. Invalid input or output throws immed
 ### Two Ways to Call Tasks
 
 1. `runTask(task, input)` for production and integration flows through the full runtime pipeline
-2. `task.run(input, mockDeps)` for isolated unit tests
+2. `task.run(input, mockDeps)` for isolated unit tests when you only want the task body
 
 ```typescript
 const testResult = await sendEmail.run(
@@ -74,6 +70,8 @@ const testResult = await sendEmail.run(
   { emailService: mockEmailService, logger: mockLogger },
 );
 ```
+
+Direct `.run(...)` calls skip runtime validation, middleware, lifecycle wiring, execution context propagation, and health-gated admission checks.
 
 ### When Something Should Be a Task
 
@@ -103,7 +101,8 @@ Task `.run(input, deps, context)` receives:
 Task context includes:
 
 - `context.journal`: typed state shared with middleware
-- `context.source`: `{ kind, id }` of the current task invocation
+- `context.source`: `{ kind, id }` of the current task invocation, where `id` is the canonical runtime source id
+- `context.signal`: the cooperative `AbortSignal` for the current execution when cancellation is active
 
 ```typescript
 import { journal, resources, r } from "@bluelibs/runner";
@@ -114,6 +113,9 @@ const sendEmail = r
   .task<{ to: string; body: string }>("sendEmail")
   .dependencies({ logger: resources.logger })
   .run(async (input, { logger }, context) => {
+    if (context.signal?.aborted) {
+      return { delivered: false };
+    }
     context.journal.set(auditKey, { startedAt: Date.now() });
     await logger.info(`Sending email to ${input.to}`);
     return { delivered: true };
@@ -180,20 +182,52 @@ export const journalKeys = {
 export const timeoutMiddleware = r.middleware
   .task("timeoutMiddleware")
   .run(async ({ task, next, journal }, _deps, config: { ttl: number }) => {
-    const controller = new AbortController();
-    journal.set(journalKeys.abortController, controller);
+    const controller =
+      journal.get(journalKeys.abortController) ?? new AbortController();
+    if (!journal.has(journalKeys.abortController)) {
+      journal.set(journalKeys.abortController, controller);
+    }
 
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        controller.abort();
-        reject(new Error(`Timeout after ${config.ttl}ms`));
-      }, config.ttl);
-    });
+    const timer = setTimeout(() => {
+      controller.abort(`Timeout after ${config.ttl}ms`);
+    }, config.ttl);
 
-    return Promise.race([next(task.input), timeoutPromise]);
+    try {
+      return await next(task.input);
+    } finally {
+      clearTimeout(timer);
+    }
   })
   .build();
 ```
+
+Prefer `context.signal` for task code and hook code. It stays `undefined` until a real cancellation source is present. Use journal keys only when middleware layers need to share execution-local control surfaces such as the timeout controller.
+
+### Task Cancellation
+
+Task calls can pass a cooperative signal:
+
+```typescript
+const controller = new AbortController();
+
+const promise = runTask(sendEmail, input, {
+  signal: controller.signal,
+});
+
+controller.abort("User cancelled send");
+
+await promise;
+```
+
+Cancellation behavior:
+
+- `signal` is optional
+- top-level callers can pass `runTask(task, input, { signal })`
+- with execution context enabled, nested task and event dependency calls can inherit the ambient execution signal automatically
+- timeout middleware, forwarded task journals, and inbound HTTP/RPC request aborts still feed the same cooperative task signal when cancellation is active
+- when no real cancellation source exists, `context.signal` stays `undefined`
+
+For the full propagation model, including `executionContext: { frames: "off", cycleDetection: false }`, see [Execution Context and Signal Propagation](#execution-context-and-signal-propagation).
 
 Export your journal keys when you expect downstream middleware to consume the same execution-local state.
 
@@ -214,7 +248,92 @@ const orchestratorTask = r
   .build();
 ```
 
+### Execution Interception APIs
+
+Use interception when behavior must wrap execution globally or at runtime wiring boundaries.
+
+Available APIs:
+
+- Task catch-all: `taskRunner.intercept((next, input) => Promise<any>, { when? })`
+- Local task interception: `deps.someTask.intercept((next, input) => Promise<any>)`
+
+`taskRunner.intercept(...)` is the replacement for old middleware catch-all behavior:
+
+```typescript
+import { r, resources } from "@bluelibs/runner";
+
+const telemetryInstaller = r
+  .resource("telemetry")
+  .dependencies({
+    taskRunner: resources.taskRunner,
+    logger: resources.logger,
+  })
+  .init(async (_config, { taskRunner, logger }) => {
+    taskRunner.intercept(
+      async (next, input) => {
+        const startedAt = Date.now();
+        try {
+          return await next(input);
+        } finally {
+          await logger.info(
+            `Task ${input.task.definition.id} took ${Date.now() - startedAt}ms`,
+          );
+        }
+      },
+      {
+        when: (taskDefinition) => !taskDefinition.id.startsWith("internal."),
+      },
+    );
+  })
+  .build();
+```
+
+Key rules:
+
+- Register interceptors during resource `init` before the runtime locks.
+- `taskRunner.intercept(...)` runs outermost around the task middleware pipeline.
+- `deps.someTask.intercept(...)` runs inside task middleware and only for that task.
+- When `when(...)` must target one concrete definition, prefer `isSameDefinition(taskDefinition, someTask)` over comparing public ids directly.
+
+### Task Interceptors
+
+Task interceptors (`task.intercept()`) allow resources to dynamically modify task behavior during initialization without tight coupling.
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+const calculatorTask = r
+  .task("calculator")
+  .run(async (input: { value: number }) => {
+    return { result: input.value + 1 };
+  })
+  .build();
+
+const interceptorResource = r
+  .resource("interceptor")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    calculatorTask.intercept(async (next, input) => {
+      const result = await next(input);
+      return { ...result, intercepted: true };
+    });
+  })
+  .build();
+```
+
+You can inspect which resources installed local interceptors through an injected task dependency:
+
+```typescript
+const inspector = r
+  .resource("inspector")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    const owners = calculatorTask.getInterceptingResourceIds();
+    // eg: ["app.interceptor"]
+    return { owners };
+  })
+  .build();
+```
+
 For lifecycle-owned timers inside tasks or resources, depend on `resources.timers`.
 `timers.setTimeout()` and `timers.setInterval()` stop accepting new timers once `cooldown()` starts and are cleared during `dispose()`.
-
-> **runtime:** "Tasks: glorified functions with a resume, a chaperone, and a journal. But at least they show up in the logs when something goes wrong—unlike that anonymous arrow function in line 47."

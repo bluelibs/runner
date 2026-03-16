@@ -112,10 +112,11 @@ describe("nodeExposure - misc routing branches", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const dummyEventId = rr.store.findIdByDefinition(dummyEvent);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
     const req: any = {
       method: "POST",
-      url: `/__runner/event/${encodeURIComponent(dummyEvent.id)}`,
+      url: `/__runner/event/${encodeURIComponent(dummyEventId)}`,
       headers,
       _listeners: new Map<string, Function[]>(),
       on(event: string, cb: Function) {

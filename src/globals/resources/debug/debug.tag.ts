@@ -1,5 +1,4 @@
 import { defineTag } from "../../../definers/defineTag";
-import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { DebugFriendlyConfig } from "./types";
 import { Match } from "../../../tools/check";
 
@@ -26,14 +25,12 @@ const debugFriendlyConfigPattern = Match.OneOf(
   debugConfigPattern,
 );
 
-export const debugTag = defineTag<DebugFriendlyConfig>(
-  markFrameworkDefinition({
-    id: "runner.tags.debug",
-    configSchema: debugFriendlyConfigPattern,
-    meta: {
-      title: "Debug",
-      description:
-        "Debug-specific tags. Used for filtering out noise when you're focusing on your application.",
-    },
-  }),
-);
+export const debugTag = defineTag<DebugFriendlyConfig>({
+  id: "debug",
+  configSchema: debugFriendlyConfigPattern,
+  meta: {
+    title: "Debug",
+    description:
+      "Debug-specific tags. Used for filtering out noise when you're focusing on your application.",
+  },
+});

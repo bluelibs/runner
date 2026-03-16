@@ -34,10 +34,13 @@ import { defineAsyncContext, storage } from "../../definers/defineAsyncContext";
 describe("PlatformAdapter (Browser)", () => {
   it("should register and cleanup error listeners", () => {
     const adapter = new PlatformAdapter("browser");
+    const ctx = defineAsyncContext<{ id: string }>({ id: "test" });
 
     expect(detectEnvironment()).toBe("browser");
     expect(storage).toBeDefined();
-    expect(() => defineAsyncContext({ id: "test" })).toThrow();
+    expect(ctx).toBeDefined();
+    expect(() => ctx.use()).toThrow();
+    expect(() => ctx.provide({ id: "browser" }, () => "nope")).toThrow();
     expect(() => storage.getStore()).toThrow();
     expect(() => storage.run(new Map(), () => {})).toThrow();
 

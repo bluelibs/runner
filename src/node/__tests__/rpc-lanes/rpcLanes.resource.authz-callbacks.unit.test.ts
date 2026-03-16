@@ -59,8 +59,17 @@ describe("rpcLanesResource exposure auth callbacks", () => {
     const callbackAssertions = jest.fn();
     jest
       .spyOn(exposureModule, "createNodeExposure")
-      .mockImplementation(async (_cfg, _deps, options) => {
+      .mockImplementation(async (_cfg, deps, options) => {
         const authorization = options?.authorization;
+        const storedTaskId = Array.from(deps.store.tasks.keys()).find((id) =>
+          id.endsWith(task.id),
+        )!;
+        const storedUnservedTaskId = Array.from(deps.store.tasks.keys()).find(
+          (id) => id.endsWith(unservedTask.id),
+        )!;
+        const storedEventId = Array.from(deps.store.events.keys()).find((id) =>
+          id.endsWith(event.id),
+        )!;
         const unknownTask = await authorization?.authorizeTask?.(
           { headers: {} } as any,
           "tests.rpc-lanes.authz-callbacks.unknown-task",
@@ -71,15 +80,15 @@ describe("rpcLanesResource exposure auth callbacks", () => {
         );
         const unauthorizedServedTask = await authorization?.authorizeTask?.(
           { headers: {} } as any,
-          task.id,
+          storedTaskId,
         );
         const knownUnservedTask = await authorization?.authorizeTask?.(
           { headers: {} } as any,
-          unservedTask.id,
+          storedUnservedTaskId,
         );
         const unauthorizedServedEvent = await authorization?.authorizeEvent?.(
           { headers: {} } as any,
-          event.id,
+          storedEventId,
         );
         callbackAssertions(
           unknownTask,
@@ -173,23 +182,6 @@ describe("rpcLanesResource exposure auth callbacks", () => {
     jest
       .spyOn(exposureModule, "createNodeExposure")
       .mockImplementation(async (_cfg, deps, options) => {
-        const originalResolveDefinitionId = deps.store.resolveDefinitionId.bind(
-          deps.store,
-        );
-        const resolveSpy = jest
-          .spyOn(deps.store, "resolveDefinitionId")
-          .mockImplementation((reference) => {
-            if (
-              reference === task.id ||
-              reference === event.id ||
-              reference === storedTaskId ||
-              reference === storedEventId
-            ) {
-              return undefined;
-            }
-            return originalResolveDefinitionId(reference);
-          });
-
         const authorization = options?.authorization;
         const storedTaskId = Array.from(deps.store.tasks.keys()).find((id) =>
           id.endsWith(task.id),
@@ -206,7 +198,6 @@ describe("rpcLanesResource exposure auth callbacks", () => {
           storedEventId,
         );
         callbackAssertions(unauthorizedServedTask, unauthorizedServedEvent);
-        resolveSpy.mockRestore();
 
         return {
           handleRequest: async () => false,

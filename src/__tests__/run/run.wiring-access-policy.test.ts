@@ -10,10 +10,10 @@ import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 import { scope, subtreeOf } from "../../public";
 
-const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
-const POLICY_UNKNOWN_TARGET_ID = "runner.errors.isolationUnknownTarget";
-const POLICY_INVALID_ENTRY_ID = "runner.errors.isolationInvalidEntry";
-const POLICY_CONFLICT_ID = "runner.errors.isolationConflict";
+const POLICY_VIOLATION_ID = "isolationViolation";
+const POLICY_UNKNOWN_TARGET_ID = "isolationUnknownTarget";
+const POLICY_INVALID_ENTRY_ID = "isolationInvalidEntry";
+const POLICY_CONFLICT_ID = "isolationConflict";
 
 async function expectRunnerErrorId(
   promise: Promise<unknown>,
@@ -501,6 +501,44 @@ describe("run-isolate", () => {
     await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 
+  it("allows runner.mode when system dependencies are denied", async () => {
+    const modeReader = defineTask({
+      id: "policy-runner-mode-reader",
+      dependencies: { mode: globalResources.mode },
+      run: async (_input, deps) => deps.mode,
+    });
+
+    const app = defineResource({
+      id: "policy-runner-mode-app",
+      register: [modeReader],
+      isolate: {
+        deny: [scope("system.*", { dependencies: true })],
+      },
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(modeReader)).resolves.toBe(runtime.mode);
+    await runtime.dispose();
+  });
+
+  it("allows denying runner.mode explicitly without reopening system.runtime", async () => {
+    const modeReader = defineTask({
+      id: "policy-runner-mode-explicit-reader",
+      dependencies: { mode: globalResources.mode },
+      run: async (_input, deps) => deps.mode,
+    });
+
+    const app = defineResource({
+      id: "policy-runner-mode-explicit-app",
+      register: [modeReader],
+      isolate: {
+        deny: [globalResources.mode],
+      },
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
+
   it("supports denying container internals via definition references", async () => {
     const consumer = defineTask({
       id: "policy-container-internals-consumer",
@@ -522,7 +560,7 @@ describe("run-isolate", () => {
     });
 
     const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
-    expect(error.message).toContain(`"${globalResources.store.id}"`);
+    expect(error.message).toContain("system.store");
   });
 
   it("denies middlewareManager when its definition is blocked", async () => {
@@ -548,9 +586,7 @@ describe("run-isolate", () => {
     });
 
     const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
-    expect(error.message).toContain(
-      `"${globalResources.middlewareManager.id}"`,
-    );
+    expect(error.message).toContain("system.middlewareManager");
   });
 
   it("denies eventManager when its definition is blocked", async () => {
@@ -576,7 +612,7 @@ describe("run-isolate", () => {
     });
 
     const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
-    expect(error.message).toContain(`"${globalResources.eventManager.id}"`);
+    expect(error.message).toContain("system.eventManager");
   });
 
   it("allows a same-boundary whitelist carve-out for specific consumers", async () => {

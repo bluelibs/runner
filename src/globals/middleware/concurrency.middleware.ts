@@ -1,6 +1,5 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { Semaphore } from "../../models/Semaphore";
 import { globalTags } from "../globalTags";
 import {
@@ -8,8 +7,13 @@ import {
   validationError,
 } from "../../errors";
 import { Match } from "../../tools/check";
+import {
+  getTenantNamespace,
+  tenantScopePattern,
+  type TenantScopedMiddlewareConfig,
+} from "./tenantScope.shared";
 
-export interface ConcurrencyMiddlewareConfig {
+export interface ConcurrencyMiddlewareConfig extends TenantScopedMiddlewareConfig {
   /**
    * Maximum number of concurrent executions.
    * If provided, a Semaphore will be created and shared for this config object.
@@ -29,7 +33,10 @@ export interface ConcurrencyMiddlewareConfig {
 }
 
 export interface ConcurrencyState {
-  semaphoresByConfig: WeakMap<ConcurrencyMiddlewareConfig, Semaphore>;
+  semaphoresByConfig: WeakMap<
+    ConcurrencyMiddlewareConfig,
+    Map<string, Semaphore>
+  >;
   semaphoresByKey: Map<string, { semaphore: Semaphore; limit: number }>;
   semaphores: Set<Semaphore>;
 }
@@ -38,6 +45,7 @@ const concurrencyConfigPattern = Match.ObjectIncluding({
   limit: Match.Optional(Match.PositiveInteger),
   key: Match.Optional(Match.NonEmptyString),
   semaphore: Match.Optional(Semaphore),
+  tenantScope: tenantScopePattern,
 });
 
 function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
@@ -48,7 +56,7 @@ function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
   if (hasSemaphore && (hasLimit || hasKey)) {
     validationError.throw({
       subject: "Middleware config",
-      id: "runner.middleware.task.concurrency",
+      id: "concurrency",
       originalError:
         "Concurrency middleware config is ambiguous. Use either { semaphore } or { limit, key? }, not both.",
     });
@@ -57,7 +65,7 @@ function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
   if (hasKey && !hasLimit) {
     validationError.throw({
       subject: "Middleware config",
-      id: "runner.middleware.task.concurrency",
+      id: "concurrency",
       originalError: 'Concurrency middleware config "key" requires "limit".',
     });
   }
@@ -65,80 +73,84 @@ function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
   if (!hasSemaphore && !hasLimit) {
     validationError.throw({
       subject: "Middleware config",
-      id: "runner.middleware.task.concurrency",
+      id: "concurrency",
       originalError:
         'Concurrency middleware requires either "limit" or "semaphore".',
     });
   }
 }
 
-export const concurrencyResource = defineResource(
-  markFrameworkDefinition({
-    id: "runner.concurrency",
-    tags: [globalTags.system],
-    init: async () => ({
-      semaphoresByConfig: new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>(),
-      semaphoresByKey: new Map<
-        string,
-        { semaphore: Semaphore; limit: number }
-      >(),
-      semaphores: new Set<Semaphore>(),
-    }),
-    dispose: async (state) => {
-      for (const semaphore of state.semaphores) {
-        semaphore.dispose();
-      }
-      state.semaphores.clear();
-      state.semaphoresByKey.clear();
-    },
+export const concurrencyResource = defineResource({
+  id: "concurrency",
+  tags: [globalTags.system],
+  init: async () => ({
+    semaphoresByConfig: new WeakMap<
+      ConcurrencyMiddlewareConfig,
+      Map<string, Semaphore>
+    >(),
+    semaphoresByKey: new Map<string, { semaphore: Semaphore; limit: number }>(),
+    semaphores: new Set<Semaphore>(),
   }),
-);
+  dispose: async (state) => {
+    for (const semaphore of state.semaphores) {
+      semaphore.dispose();
+    }
+    state.semaphores.clear();
+    state.semaphoresByKey.clear();
+  },
+});
 
 /**
  * Middleware that limits concurrency of task executions using a Semaphore.
  */
-export const concurrencyTaskMiddleware = defineTaskMiddleware(
-  markFrameworkDefinition({
-    id: "runner.middleware.task.concurrency",
-    throws: [middlewareConcurrencyConflictError],
-    configSchema: concurrencyConfigPattern,
-    dependencies: { state: concurrencyResource },
-    async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
-      assertConcurrencyConfig(config);
+export const concurrencyTaskMiddleware = defineTaskMiddleware({
+  id: "concurrency",
+  throws: [middlewareConcurrencyConflictError],
+  configSchema: concurrencyConfigPattern,
+  dependencies: { state: concurrencyResource },
+  async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
+    assertConcurrencyConfig(config);
 
-      let semaphore = config.semaphore;
+    let semaphore = config.semaphore;
+    const tenantNamespace = getTenantNamespace(config.tenantScope);
 
-      if (!semaphore && config.limit !== undefined) {
-        if (config.key !== undefined) {
-          const existing = state.semaphoresByKey.get(config.key);
-          if (existing) {
-            if (existing.limit !== config.limit) {
-              middlewareConcurrencyConflictError.throw({
-                key: config.key,
-                existingLimit: existing.limit,
-                attemptedLimit: config.limit,
-              });
-            }
-            semaphore = existing.semaphore;
-          } else {
-            semaphore = new Semaphore(config.limit);
-            state.semaphores.add(semaphore);
-            state.semaphoresByKey.set(config.key, {
-              semaphore,
-              limit: config.limit,
+    if (!semaphore && config.limit !== undefined) {
+      if (config.key !== undefined) {
+        const scopedKey = `${tenantNamespace}:${config.key}`;
+        const existing = state.semaphoresByKey.get(scopedKey);
+        if (existing) {
+          if (existing.limit !== config.limit) {
+            middlewareConcurrencyConflictError.throw({
+              key: scopedKey,
+              existingLimit: existing.limit,
+              attemptedLimit: config.limit,
             });
           }
+          semaphore = existing.semaphore;
         } else {
-          semaphore = state.semaphoresByConfig.get(config);
-          if (!semaphore) {
-            semaphore = new Semaphore(config.limit);
-            state.semaphores.add(semaphore);
-            state.semaphoresByConfig.set(config, semaphore);
-          }
+          semaphore = new Semaphore(config.limit);
+          state.semaphores.add(semaphore);
+          state.semaphoresByKey.set(scopedKey, {
+            semaphore,
+            limit: config.limit,
+          });
+        }
+      } else {
+        let semaphoresByTenant = state.semaphoresByConfig.get(config);
+        if (!semaphoresByTenant) {
+          semaphoresByTenant = new Map<string, Semaphore>();
+          state.semaphoresByConfig.set(config, semaphoresByTenant);
+        }
+
+        semaphore = semaphoresByTenant.get(tenantNamespace);
+        if (!semaphore) {
+          semaphore = new Semaphore(config.limit);
+          state.semaphores.add(semaphore);
+          semaphoresByTenant.set(tenantNamespace, semaphore);
         }
       }
+    }
 
-      return semaphore!.withPermit(() => next(task?.input));
-    },
-  }),
-);
+    return semaphore!.withPermit(() => next(task?.input));
+  },
+});

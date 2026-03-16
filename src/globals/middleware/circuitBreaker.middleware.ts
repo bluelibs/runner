@@ -1,6 +1,5 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
@@ -76,136 +75,132 @@ export const journalKeys = {
   ),
 } as const;
 
-export const circuitBreakerResource = defineResource(
-  markFrameworkDefinition({
-    id: "runner.circuitBreaker",
-    tags: [globalTags.system],
-    init: async () => {
-      return {
-        statusMap: new Map<string, CircuitBreakerStatus>(),
-      };
-    },
-    dispose: async (state) => {
-      state.statusMap.clear();
-    },
-  }),
-);
+export const circuitBreakerResource = defineResource({
+  id: "circuitBreaker",
+  tags: [globalTags.system],
+  init: async () => {
+    return {
+      statusMap: new Map<string, CircuitBreakerStatus>(),
+    };
+  },
+  dispose: async (state) => {
+    state.statusMap.clear();
+  },
+});
 
-export const circuitBreakerMiddleware = defineTaskMiddleware(
-  markFrameworkDefinition({
-    id: "runner.middleware.task.circuitBreaker",
-    throws: [middlewareCircuitBreakerOpenError],
-    configSchema: circuitBreakerConfigPattern,
-    dependencies: { state: circuitBreakerResource },
-    async run(
-      { task, next, journal },
-      { state },
-      config: CircuitBreakerMiddlewareConfig,
-    ) {
-      const taskId = task!.definition.id;
-      const failureThreshold = config.failureThreshold ?? 5;
-      const resetTimeout = config.resetTimeout ?? 30000;
+export const circuitBreakerMiddleware = defineTaskMiddleware({
+  id: "circuitBreaker",
+  throws: [middlewareCircuitBreakerOpenError],
+  configSchema: circuitBreakerConfigPattern,
+  dependencies: { state: circuitBreakerResource },
+  async run(
+    { task, next, journal },
+    { state },
+    config: CircuitBreakerMiddlewareConfig,
+  ) {
+    const taskId = task!.definition.id;
+    const failureThreshold = config.failureThreshold ?? 5;
+    const resetTimeout = config.resetTimeout ?? 30000;
 
-      const { statusMap } = state;
+    const { statusMap } = state;
 
-      let status = statusMap.get(taskId);
-      if (!status) {
-        // Evict stale CLOSED entries once the map grows past a safety threshold.
-        // Task IDs are typically static so this rarely fires, but guards against
-        // pathological dynamic-registration workloads.
-        if (statusMap.size >= 10_000) {
-          for (const [key, entry] of statusMap) {
-            if (
-              entry.state === CircuitBreakerState.CLOSED &&
-              entry.failures === 0
-            ) {
-              statusMap.delete(key);
-            }
+    let status = statusMap.get(taskId);
+    if (!status) {
+      // Evict stale CLOSED entries once the map grows past a safety threshold.
+      // Task IDs are typically static so this rarely fires, but guards against
+      // pathological dynamic-registration workloads.
+      if (statusMap.size >= 10_000) {
+        for (const [key, entry] of statusMap) {
+          if (
+            entry.state === CircuitBreakerState.CLOSED &&
+            entry.failures === 0
+          ) {
+            statusMap.delete(key);
           }
         }
-
-        status = {
-          state: CircuitBreakerState.CLOSED,
-          failures: 0,
-          lastFailureTime: 0,
-          halfOpenProbeInFlight: false,
-        };
-        statusMap.set(taskId, status);
       }
 
-      const now = Date.now();
-      const syncJournal = () => {
-        journal.set(journalKeys.state, status.state, { override: true });
-        journal.set(journalKeys.failures, status.failures, { override: true });
+      status = {
+        state: CircuitBreakerState.CLOSED,
+        failures: 0,
+        lastFailureTime: 0,
+        halfOpenProbeInFlight: false,
       };
+      statusMap.set(taskId, status);
+    }
 
-      // Handle OPEN state transition to HALF_OPEN
-      if (status.state === CircuitBreakerState.OPEN) {
-        if (now - status.lastFailureTime >= resetTimeout) {
-          status.state = CircuitBreakerState.HALF_OPEN;
-          status.halfOpenProbeInFlight = false;
-        } else {
-          // Set journal values before throwing
-          syncJournal();
-          throw new CircuitBreakerOpenError(
-            `Circuit is OPEN for task "${taskId}"`,
-          );
-        }
+    const now = Date.now();
+    const syncJournal = () => {
+      journal.set(journalKeys.state, status.state, { override: true });
+      journal.set(journalKeys.failures, status.failures, { override: true });
+    };
+
+    // Handle OPEN state transition to HALF_OPEN
+    if (status.state === CircuitBreakerState.OPEN) {
+      if (now - status.lastFailureTime >= resetTimeout) {
+        status.state = CircuitBreakerState.HALF_OPEN;
+        status.halfOpenProbeInFlight = false;
+      } else {
+        // Set journal values before throwing
+        syncJournal();
+        throw new CircuitBreakerOpenError(
+          `Circuit is OPEN for task "${taskId}"`,
+        );
+      }
+    }
+
+    let acquiredHalfOpenProbe = false;
+    if (status.state === CircuitBreakerState.HALF_OPEN) {
+      if (status.halfOpenProbeInFlight) {
+        syncJournal();
+        throw new CircuitBreakerOpenError(
+          `Circuit is HALF_OPEN for task "${taskId}" (probe in progress)`,
+        );
+      }
+      status.halfOpenProbeInFlight = true;
+      acquiredHalfOpenProbe = true;
+    }
+
+    // Set journal values before executing
+    syncJournal();
+
+    try {
+      const result = await next(task!.input);
+
+      // If successful, we reset the failures counter
+      if (status.state === CircuitBreakerState.CLOSED) {
+        status.failures = 0;
       }
 
-      let acquiredHalfOpenProbe = false;
       if (status.state === CircuitBreakerState.HALF_OPEN) {
-        if (status.halfOpenProbeInFlight) {
-          syncJournal();
-          throw new CircuitBreakerOpenError(
-            `Circuit is HALF_OPEN for task "${taskId}" (probe in progress)`,
-          );
-        }
-        status.halfOpenProbeInFlight = true;
-        acquiredHalfOpenProbe = true;
+        status.state = CircuitBreakerState.CLOSED;
+        status.failures = 0;
+        status.lastFailureTime = 0;
       }
 
-      // Set journal values before executing
       syncJournal();
-
-      try {
-        const result = await next(task!.input);
-
-        // If successful, we reset the failures counter
-        if (status.state === CircuitBreakerState.CLOSED) {
-          status.failures = 0;
-        }
-
-        if (status.state === CircuitBreakerState.HALF_OPEN) {
-          status.state = CircuitBreakerState.CLOSED;
-          status.failures = 0;
-          status.lastFailureTime = 0;
-        }
-
-        syncJournal();
-        return result;
-      } catch (error) {
-        if (status.state === CircuitBreakerState.HALF_OPEN) {
+      return result;
+    } catch (error) {
+      if (status.state === CircuitBreakerState.HALF_OPEN) {
+        status.state = CircuitBreakerState.OPEN;
+        status.failures = Math.max(status.failures + 1, failureThreshold);
+        status.lastFailureTime = Date.now();
+      } else {
+        status.failures++;
+        status.lastFailureTime = Date.now();
+        // At this point the request path can only be CLOSED (HALF_OPEN handled above,
+        // OPEN throws before entering the try/catch execution path).
+        if (status.failures >= failureThreshold) {
           status.state = CircuitBreakerState.OPEN;
-          status.failures = Math.max(status.failures + 1, failureThreshold);
-          status.lastFailureTime = Date.now();
-        } else {
-          status.failures++;
-          status.lastFailureTime = Date.now();
-          // At this point the request path can only be CLOSED (HALF_OPEN handled above,
-          // OPEN throws before entering the try/catch execution path).
-          if (status.failures >= failureThreshold) {
-            status.state = CircuitBreakerState.OPEN;
-          }
-        }
-
-        syncJournal();
-        throw error;
-      } finally {
-        if (acquiredHalfOpenProbe) {
-          status.halfOpenProbeInFlight = false;
         }
       }
-    },
-  }),
-);
+
+      syncJournal();
+      throw error;
+    } finally {
+      if (acquiredHalfOpenProbe) {
+        status.halfOpenProbeInFlight = false;
+      }
+    }
+  },
+});

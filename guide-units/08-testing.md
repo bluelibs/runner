@@ -1,22 +1,22 @@
 ## Testing
 
-Runner's explicit dependency injection makes testing straightforward. Call `.run()` on a task with plain mocks for fast unit tests, or spin up the full runtime when you need middleware and lifecycle behavior.
+Runner's explicit dependency graph makes testing flexible. You can test one task like a normal function, boot a focused subtree, or run the full application pipeline.
 
-### Two Testing Approaches
+### Three Testing Approaches
 
-| Approach             | Speed  | What runs          | Best for                 |
-| -------------------- | ------ | ------------------ | ------------------------ |
-| **Unit test**        | Fast   | Just your function | Logic, edge cases        |
-| **Integration test** | Slower | Full pipeline      | End-to-end flows, wiring |
+| Approach                | Speed    | What runs                | What it skips                                  | Best for                     |
+| ----------------------- | -------- | ------------------------ | ---------------------------------------------- | ---------------------------- |
+| **Unit test**           | Fast     | Just your task function  | Runtime wiring, validation, middleware, hooks  | Logic, edge cases            |
+| **Focused Integration** | Moderate | Subtree + real runtime   | Unrelated modules you did not register         | Feature modules in isolation |
+| **Full Integration**    | Slower   | Full runtime pipeline    | Nothing intentional                            | End-to-end flows, wiring     |
 
 ### Unit Testing (Fast, Isolated)
 
-Call `.run()` directly on any task with mock dependencies. This bypasses middleware and runtime — you're testing pure business logic.
+Call `.run()` directly on a task with mock dependencies when you want pure business logic tests.
 
 ```typescript
-// Assuming: registerUser task is defined with { userService, userRegistered } dependencies
 describe("registerUser task", () => {
-  it("creates user and emits event", async () => {
+  it("creates a user and emits an event", async () => {
     const mockUserService = {
       createUser: jest.fn().mockResolvedValue({
         id: "user-123",
@@ -26,10 +26,12 @@ describe("registerUser task", () => {
     };
     const mockUserRegistered = jest.fn().mockResolvedValue(undefined);
 
-    // Call the task directly — no runtime needed
     const result = await registerUser.run(
       { name: "Alice", email: "alice@example.com" },
-      { userService: mockUserService, userRegistered: mockUserRegistered },
+      {
+        userService: mockUserService,
+        userRegistered: mockUserRegistered,
+      },
     );
 
     expect(result.id).toBe("user-123");
@@ -38,57 +40,91 @@ describe("registerUser task", () => {
       email: "alice@example.com",
     });
   });
+});
+```
 
-  it("propagates service errors", async () => {
-    const mockUserService = {
-      createUser: jest
-        .fn()
-        .mockRejectedValue(new Error("Email already exists")),
-    };
+Important boundary:
 
-    await expect(
-      registerUser.run(
-        { name: "Bob", email: "taken@example.com" },
-        { userService: mockUserService, userRegistered: jest.fn() },
-      ),
-    ).rejects.toThrow("Email already exists");
+- `.run(input, mocks)` exercises your task body only
+- it does **not** run middleware, runtime validation, lifecycle hooks, execution context propagation, or health-gated admission rules
+
+Use this path when that omission is exactly what you want.
+
+### Focused Integration Testing (Moderate, Subtree Only)
+
+You do not need to boot the whole application to test one feature module. Build a small harness resource, register the subtree you care about, and override the external dependencies around it.
+
+```typescript
+import { run, r } from "@bluelibs/runner";
+import {
+  notificationsResource,
+  processNotificationQueue,
+} from "./notifications";
+import { emailResource } from "./email";
+
+describe("Notifications module", () => {
+  it("processes notifications correctly", async () => {
+    const mockEmailProvider = r.override(emailResource, async () => ({
+      send: jest.fn().mockResolvedValue(true),
+    }));
+
+    const testHarness = r
+      .resource("testHarness")
+      .register([
+        notificationsResource,
+        emailResource,
+      ])
+      .overrides([mockEmailProvider])
+      .build();
+
+    const { runTask, dispose } = await run(testHarness, {
+      mode: "test",
+      logs: { printThreshold: null },
+    });
+
+    try {
+      await runTask(processNotificationQueue, { batchId: "123" });
+      // assertions...
+    } finally {
+      await dispose();
+    }
   });
 });
 ```
 
-**What you just learned**: `.run(input, mocks)` gives you one-line unit tests — no runtime, no lifecycle, no middleware. Just your function and its dependencies.
+Ownership rule:
 
-### Integration Testing (Full Pipeline)
+- an override only works if the target definition is actually registered in the harness graph
+- the override must be declared by the same owning resource or one of its ancestors
 
-Use `run()` to start the full app with middleware, events, and lifecycle. Swap infrastructure with `override()`.
+When multiple overrides target the same definition in `test` mode, the outermost declaring resource wins.
 
-Important:
+### Full Integration Testing (Full Pipeline)
 
-- `r.override(base, fn)` creates a replacement definition.
-- `.overrides([...])` only accepts override-produced definitions.
-- If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
+Use `run()` against the full app graph when you want the real middleware, hooks, validation, lifecycle, and dependency wiring.
 
 ```typescript
 import { run, r } from "@bluelibs/runner";
 
 describe("User registration flow", () => {
-  it("creates user, sends email, and tracks analytics", async () => {
-    // Swap infrastructure with test doubles
+  it("creates a user, sends email, and tracks analytics", async () => {
     const mockDb = r.override(realDb, async () => new InMemoryDatabase());
     const mockMailer = r.override(realMailer, async () => ({
       send: jest.fn().mockResolvedValue(true),
     }));
 
     const testApp = r
-      .resource("test")
+      .resource("testApp")
       .register([...productionComponents])
       .overrides([mockDb, mockMailer])
       .build();
 
-    const { runTask, getResourceValue, dispose } = await run(testApp);
+    const { runTask, getResourceValue, dispose } = await run(testApp, {
+      mode: "test",
+      logs: { printThreshold: null },
+    });
 
     try {
-      // Middleware, events, and hooks all fire
       const user = await runTask(registerUser, {
         name: "Charlie",
         email: "charlie@test.com",
@@ -96,7 +132,7 @@ describe("User registration flow", () => {
 
       expect(user.id).toBeDefined();
 
-      const mailer = await getResourceValue(mockMailer);
+      const mailer = getResourceValue(realMailer);
       expect(mailer.send).toHaveBeenCalled();
     } finally {
       await dispose();
@@ -105,37 +141,102 @@ describe("User registration flow", () => {
 });
 ```
 
-### Testing Tips
+Important override rules:
 
-**Always dispose** — resources hold connections, timers, and listeners. Leaking them causes flaky tests.
+- `r.override(base, fn)` creates a replacement definition
+- `.overrides([...])` accepts override definitions only
+- duplicate override targets fail fast outside `test` mode
+- do not place both base and override in `.register([...])`
+
+### Capturing Execution Context in Integration Tests
+
+Sometimes you want to assert the actual runtime path, not just the final result. Enable `executionContext` and wrap the call in `asyncContexts.execution.record(...)`.
 
 ```typescript
-const { dispose } = await run(app);
-try {
-  // ... tests
-} finally {
-  await dispose();
-}
+import { asyncContexts, run } from "@bluelibs/runner";
+
+describe("Notifications module", () => {
+  it("captures the execution tree for one integration run", async () => {
+    const runtime = await run(notificationsResource, {
+      executionContext: true,
+      logs: { printThreshold: null },
+    });
+
+    try {
+      const { result, recording } = await asyncContexts.execution.record(() =>
+        runtime.runTask(processNotificationQueue, { batchId: "123" }),
+      );
+
+      expect(result).toBeDefined();
+      expect(recording?.roots).toHaveLength(1);
+
+      const root = recording!.roots[0]!;
+      expect(root.frame.kind).toBe("task");
+      expect(root.status).toBe("completed");
+      expect(Array.isArray(root.children)).toBe(true);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+});
 ```
 
-**Prefer task references over string ids** — you get type-safe inputs and autocomplete:
+> **Platform Note:** Execution context relies on `AsyncLocalStorage`. The Node build supports it directly, and compatible Bun/Deno runtimes can support it when that primitive is available.
+
+### Observation Strategies for Integration Tests
+
+When an integration test fails, the real question is usually: what is the smallest surface that proves the behavior you care about?
+
+#### 1. Override a collaborator and assert on the mock
+
+Best when you care that an external dependency was called.
+
+#### 2. Add a test probe resource
+
+Best when you need to capture state from hooks, events, or resource lifecycle.
+
+#### 3. Record the execution tree
+
+Best when you need to prove that a task emitted an event, that hooks ran, or that the path through nested tasks is correct.
+
+#### 4. Assert on resulting resource state
+
+Best when the meaningful outcome is durable state, not an intermediate call.
+
+### Logging During Tests
+
+By default, Runner suppresses console log printing in `NODE_ENV=test` by setting `logs.printThreshold` to `null`.
+
+If you want logs printed during a test run:
 
 ```typescript
-// Type-safe — autocomplete works
+await run(app, {
+  mode: "test",
+  debug: "verbose",
+  logs: {
+    printThreshold: "debug",
+    printStrategy: "pretty",
+  },
+});
+```
+
+`debug: "verbose"` increases Runner instrumentation. `logs.printThreshold` controls whether anything is printed to the console.
+
+### Testing Tips
+
+- prefer task references over string ids so you keep type safety and autocomplete
+- always `dispose()` the runtime in integration tests
+- keep focused harnesses small so failures point at one feature, not the whole app
+- use `.run()` for pure business logic and `runTask()` for runtime behavior
+- when a test needs logs, set `logs.printThreshold` explicitly
+
+```typescript
 await runTask(registerUser, { name: "Alice", email: "alice@test.com" });
 
-// Works but no type checking
 await runTask("app.tasks.registerUser", {
   name: "Alice",
   email: "alice@test.com",
 });
 ```
 
-**Logs are suppressed** by default when `NODE_ENV=test`. Enable them for debugging:
-
-```typescript
-await run(app, { debug: "verbose" });
-```
-
-> **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still — nice coverage badge."
-
+The string form works, but task references are safer and easier to refactor.

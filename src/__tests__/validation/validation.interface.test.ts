@@ -7,7 +7,8 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { IValidationSchema } from "../../defs";
-import { createMessageError } from "../../errors";
+import { genericError, matchError } from "../../errors";
+import { Match } from "../../tools/check";
 
 // Simple mock validation schemas for testing the interface
 class MockValidationSchema<T> implements IValidationSchema<T> {
@@ -20,7 +21,9 @@ class MockValidationSchema<T> implements IValidationSchema<T> {
     try {
       return this.validator(input);
     } catch (error) {
-      throw createMessageError(this.errorMessage || "Validation failed");
+      throw genericError.new({
+        message: this.errorMessage || "Validation failed",
+      });
     }
   }
 }
@@ -32,18 +35,18 @@ const mockSchema = {
   ): IValidationSchema<T> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "object" || input === null) {
-        throw createMessageError("Expected object");
+        throw genericError.new({ message: "Expected object" });
       }
       const obj = input as Record<string, unknown>;
       for (const [key, expectedType] of Object.entries(shape)) {
         if (expectedType === "string" && typeof obj[key] !== "string") {
-          throw createMessageError(`${key} must be string`);
+          throw genericError.new({ message: `${key} must be string` });
         }
         if (expectedType === "number" && typeof obj[key] !== "number") {
-          throw createMessageError(`${key} must be number`);
+          throw genericError.new({ message: `${key} must be number` });
         }
         if (expectedType === "boolean" && typeof obj[key] !== "boolean") {
-          throw createMessageError(`${key} must be boolean`);
+          throw genericError.new({ message: `${key} must be boolean` });
         }
       }
       return obj as T;
@@ -53,7 +56,7 @@ const mockSchema = {
   string: (): IValidationSchema<string> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "string") {
-        throw createMessageError("Expected string");
+        throw genericError.new({ message: "Expected string" });
       }
       return input;
     });
@@ -62,7 +65,7 @@ const mockSchema = {
   number: (): IValidationSchema<number> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "number") {
-        throw createMessageError("Expected number");
+        throw genericError.new({ message: "Expected number" });
       }
       return input;
     });
@@ -71,7 +74,7 @@ const mockSchema = {
   boolean: (): IValidationSchema<boolean> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "boolean") {
-        throw createMessageError("Expected boolean");
+        throw genericError.new({ message: "Expected boolean" });
       }
       return input;
     });
@@ -95,6 +98,93 @@ const mockSchema = {
 };
 
 describe("Generic Validation Interface", () => {
+  describe("Native Match boundary propagation", () => {
+    it("surfaces MatchError for task input schemas", async () => {
+      const task = defineTask({
+        id: "task-match-input",
+        inputSchema: Match.compile({ age: Match.Integer }),
+        run: async () => "ok",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [task],
+        dependencies: { task },
+        init: async (_, { task }) => {
+          await task({ age: "bad" } as any);
+        },
+      });
+
+      await expect(run(app)).rejects.toMatchObject({ id: matchError.id });
+    });
+
+    it("surfaces MatchError for task result schemas", async () => {
+      const task = defineTask({
+        id: "task-match-result",
+        resultSchema: Match.compile({ ok: Boolean }) as any,
+        run: async () => ({ nope: true }) as any,
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [task],
+        dependencies: { task },
+        init: async (_, { task }) => {
+          await task(undefined);
+        },
+      });
+
+      await expect(run(app)).rejects.toMatchObject({ id: matchError.id });
+    });
+
+    it("surfaces MatchError for resource config validation", () => {
+      const resource = defineResource({
+        id: "resource-match-config",
+        configSchema: Match.compile({ port: Match.Integer }),
+        init: async () => "ok",
+      });
+
+      expect(() => resource.with({ port: "bad" } as any)).toThrow(
+        expect.objectContaining({ id: matchError.id }),
+      );
+    });
+
+    it("surfaces MatchError for event payload validation", async () => {
+      const event = defineEvent({
+        id: "event-match-payload",
+        payloadSchema: Match.compile({ message: String }),
+      });
+      const hook = defineHook({
+        id: "event-match-payload-hook",
+        on: event,
+        run: async () => undefined,
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [event, hook],
+        dependencies: { event },
+        init: async (_, { event }) => {
+          await event({ message: 42 } as any);
+        },
+      });
+
+      await expect(run(app)).rejects.toMatchObject({ id: matchError.id });
+    });
+
+    it("surfaces MatchError for middleware config validation", () => {
+      const middleware = defineTaskMiddleware({
+        id: "middleware-match-config",
+        configSchema: Match.compile({ timeout: Match.Integer }),
+        run: async ({ next }) => next(),
+      });
+
+      expect(() => middleware.with({ timeout: "bad" } as any)).toThrow(
+        expect.objectContaining({ id: matchError.id }),
+      );
+    });
+  });
+
   describe("Task Input Validation", () => {
     it("should validate task input successfully with valid data", async () => {
       const userSchema = mockSchema.object<{
@@ -133,14 +223,14 @@ describe("Generic Validation Interface", () => {
     it("should throw validation error for invalid task input", async () => {
       const userSchema = new MockValidationSchema((input: unknown) => {
         if (typeof input !== "object" || input === null) {
-          throw createMessageError("Expected object");
+          throw genericError.new({ message: "Expected object" });
         }
         const obj = input as Record<string, unknown>;
         if (typeof obj.name !== "string") {
-          throw createMessageError("name must be string");
+          throw genericError.new({ message: "name must be string" });
         }
         if (typeof obj.age !== "number" || obj.age < 0) {
-          throw createMessageError("age must be positive number");
+          throw genericError.new({ message: "age must be positive number" });
         }
         return obj;
       });
@@ -202,14 +292,16 @@ describe("Generic Validation Interface", () => {
     it("should validate resource config when .with() is called (fail fast)", async () => {
       const configSchema = new MockValidationSchema((input: unknown) => {
         if (typeof input !== "object" || input === null) {
-          throw createMessageError("Expected object");
+          throw genericError.new({ message: "Expected object" });
         }
         const obj = input as Record<string, unknown>;
         if (typeof obj.host !== "string") {
-          throw createMessageError("host must be string");
+          throw genericError.new({ message: "host must be string" });
         }
         if (typeof obj.port !== "number" || obj.port < 1 || obj.port > 65535) {
-          throw createMessageError("port must be number between 1-65535");
+          throw genericError.new({
+            message: "port must be number between 1-65535",
+          });
         }
         return obj;
       });
@@ -278,11 +370,11 @@ describe("Generic Validation Interface", () => {
     it("should validate event payload when emitted", async () => {
       const payloadSchema = new MockValidationSchema((input: unknown) => {
         if (typeof input !== "object" || input === null) {
-          throw createMessageError("Expected object");
+          throw genericError.new({ message: "Expected object" });
         }
         const obj = input as Record<string, unknown>;
         if (typeof obj.message !== "string") {
-          throw createMessageError("message must be string");
+          throw genericError.new({ message: "message must be string" });
         }
         return obj;
       });
@@ -326,11 +418,13 @@ describe("Generic Validation Interface", () => {
     it("should validate middleware config when .with() is called (fail fast)", async () => {
       const configSchema = new MockValidationSchema((input: unknown) => {
         if (typeof input !== "object" || input === null) {
-          throw createMessageError("Expected object");
+          throw genericError.new({ message: "Expected object" });
         }
         const obj = input as Record<string, unknown>;
         if (typeof obj.timeout !== "number" || obj.timeout <= 0) {
-          throw createMessageError("timeout must be positive number");
+          throw genericError.new({
+            message: "timeout must be positive number",
+          });
         }
         return obj;
       });

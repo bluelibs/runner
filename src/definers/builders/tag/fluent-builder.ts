@@ -1,4 +1,9 @@
-import type { ITagMeta, TagTarget, ValidationSchemaInput } from "../../../defs";
+import type {
+  ResolveValidationSchemaInput,
+  ITagMeta,
+  TagTarget,
+  ValidationSchemaInput,
+} from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineTag } from "../../defineTag";
@@ -17,12 +22,7 @@ export function makeTagBuilder<
 >(
   state: BuilderState<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>,
 ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> {
-  const builder: TagFluentBuilder<
-    TConfig,
-    TEnforceIn,
-    TEnforceOut,
-    TAllowedTargets
-  > = {
+  const builder = {
     id: state.id,
 
     meta(m: ITagMeta) {
@@ -30,14 +30,33 @@ export function makeTagBuilder<
       return makeTagBuilder(next);
     },
 
-    configSchema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
-      const next = clone(state, {
+    configSchema<
+      TNewConfig = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      > = ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      >,
+    >(schema: TSchema) {
+      const next = clone(state as BuilderState<any, any, any, any>, {
         configSchema: schema,
-      }) as BuilderState<TNewConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
+      }) as BuilderState<
+        ResolveValidationSchemaInput<TNewConfig, TSchema>,
+        TEnforceIn,
+        TEnforceOut,
+        TAllowedTargets
+      >;
       return makeTagBuilder(next);
     },
 
-    schema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
+    schema<
+      TNewConfig = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      > = ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      >,
+    >(schema: TSchema) {
       return builder.configSchema(schema);
     },
 
@@ -99,5 +118,10 @@ export function makeTagBuilder<
     },
   };
 
-  return builder;
+  return builder as TagFluentBuilder<
+    TConfig,
+    TEnforceIn,
+    TEnforceOut,
+    TAllowedTargets
+  >;
 }

@@ -27,8 +27,8 @@ function validateTagIdsAreUniquePerDefinition(ctx: ValidatorContext): void {
       if (seenTagIds.has(tagId)) {
         duplicateTagIdOnDefinitionError.throw({
           definitionType,
-          definitionId: ctx.toPublicId(definition),
-          tagId: ctx.toPublicId(tag),
+          definitionId: ctx.findIdByDefinition(definition),
+          tagId: ctx.findIdByDefinition(tag),
         });
       }
       seenTagIds.add(tagId);
@@ -42,7 +42,7 @@ function validateAllTagsUsedAreRegistered(ctx: ValidatorContext): void {
     for (const tag of tags) {
       const tagId = ctx.resolveReferenceId(tag)!;
       if (!ctx.registry.tags.has(tagId)) {
-        tagNotFoundError.throw({ id: ctx.toPublicId(tag) });
+        tagNotFoundError.throw({ id: ctx.findIdByDefinition(tag) });
       }
     }
   });
@@ -82,8 +82,8 @@ function validateNoSelfTagDependencies(ctx: ValidatorContext): void {
 
       tagSelfDependencyError.throw({
         definitionType: entry.definitionType,
-        definitionId: ctx.toPublicId(entry.definitionId),
-        tagId: ctx.toPublicId(maybeTag),
+        definitionId: ctx.findIdByDefinition(entry.definitionId),
+        tagId: ctx.findIdByDefinition(maybeTag),
       });
     }
   });

@@ -118,21 +118,25 @@ describe("error fluent builder + defineError", () => {
       .build();
 
     expect(helper.id).toBe("tests-errors-fluent");
-    expect(() => helper.throw({ message: "Boom" })).toThrow();
+    expect(helper.meta).toEqual({ title: "t2" });
+
+    const error = helper.new({ message: "Boom" });
+    expect(helper.is(error)).toBe(true);
+    expect(error.id).toBe("tests-errors-fluent");
+    expect(error.message).toBe("Boom");
+    expect(error.data).toEqual({ message: "Boom" });
   });
 
   it("defineError defaults format when missing", () => {
-    expect.assertions(1);
     const E = defineError<{ message: string }>({
       id: "tests-errors-defaultFormat",
       dataSchema: { parse: (v: unknown) => v as { message: string } },
     });
 
-    try {
-      E.throw({ message: "x" });
-    } catch (err) {
-      expect(E.is(err)).toBe(true);
-    }
+    const error = E.new({ message: "x" });
+    expect(E.is(error)).toBe(true);
+    expect(error.message).toBe('{"message":"x"}');
+    expect(error.data).toEqual({ message: "x" });
   });
 
   it("defineError meta getter falls back for nullish meta", () => {

@@ -52,7 +52,7 @@ describe("Security: Hackish circumvention attempts", () => {
         store: resources.store,
       },
       run: async (input, { eventManager, store }) => {
-        const hookId = store.resolveDefinitionId(h1) ?? h1.id;
+        const hookId = store.findIdByDefinition(h1);
         await eventManager.emit(e, input, runtimeSource.runtime(hookId)); // spoof source as h1
       },
     });
@@ -89,7 +89,7 @@ describe("Security: Hackish circumvention attempts", () => {
       run: async (ev, { eventManager, store }) => {
         countH++;
         if (ev.data.step === 0) {
-          const hookId = store.resolveDefinitionId(h) ?? h.id;
+          const hookId = store.findIdByDefinition(h);
           await eventManager.emit(e, { step: 1 }, runtimeSource.hook(hookId));
         }
       },

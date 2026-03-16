@@ -231,8 +231,11 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
         id: "exports-strict-everywhere-resource-internal",
         run: async ({ resource, next }) => {
           if (
+            !resource.definition.id.endsWith(
+              ".exports-strict-everywhere-resource-internal-resource",
+            ) &&
             resource.definition.id !==
-            "exports-strict-everywhere-resource-internal-resource"
+              "exports-strict-everywhere-resource-internal-resource"
           ) {
             return next();
           }

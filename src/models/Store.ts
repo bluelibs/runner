@@ -1,16 +1,20 @@
 import {
+  IEvent,
+  IEventEmissionCallOptions,
   IResource,
   ITag,
-  RegisterableItems,
+  RegisterableItem,
   TagDependencyAccessor,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
 import {
   circularDependencyError,
   resourceCooldownAdmissionTargetInvalidError,
+  lazyResourceShutdownAccessError,
   storeAlreadyInitializedError,
   eventEmissionCycleError,
   lockedError,
+  runtimeElementNotFoundError,
   taskRunnerNotSetError,
   validationError,
 } from "../errors";
@@ -26,6 +30,7 @@ import {
   DisposeWave,
   InitWave,
 } from "../types/storeTypes";
+import type { RuntimeCallSource } from "../types/runtimeSource";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
 import { OnUnhandledError } from "./UnhandledError";
@@ -38,17 +43,17 @@ import {
   getResourcesInReadyWaves as computeReadyWaves,
 } from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
-import type { RuntimeCallSource } from "../types/runtimeSource";
-import { runtimeSource } from "../types/runtimeSource";
 import {
   LifecycleAdmissionController,
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
-import { createFrameworkRootResource } from "./createFrameworkRootGateway";
+import { createSyntheticFrameworkRoot } from "./createSyntheticFrameworkRoot";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
-import { symbolRuntimeId } from "../types/symbols";
-import { getRuntimeId } from "../tools/runtimeMetadata";
 import type { ResourceCooldownAdmissionTargets } from "../types/resource";
+import { Match, check } from "../tools/check/engine";
+import { StoreLookup, resolveRequestedIdFromStore } from "./StoreLookup";
+import { ExecutionContextStore } from "./ExecutionContextStore";
+import { resolveExecutionContextConfig } from "../tools/resolveExecutionContextConfig";
 
 // Re-export types for backward compatibility
 export type {
@@ -65,6 +70,7 @@ export type {
 export class Store {
   root!: ResourceStoreElementType;
   private registry: StoreRegistry;
+  public readonly lookup: StoreLookup;
   private overrideManager: OverrideManager;
   private validator: StoreValidator;
   private taskRunner?: TaskRunner;
@@ -74,6 +80,7 @@ export class Store {
   private readonly readyResourceIds = new Set<string>();
   private hasRunCooldown = false;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
+  private readonly executionContextStore: ExecutionContextStore;
 
   #isLocked = false;
   #isInitialized = false;
@@ -85,14 +92,17 @@ export class Store {
     public readonly onUnhandledError: OnUnhandledError,
     mode?: RunnerMode,
     lifecycleAdmissionController?: LifecycleAdmissionController,
+    executionContextStore?: ExecutionContextStore,
   ) {
     this.lifecycleAdmissionController =
       lifecycleAdmissionController ?? new LifecycleAdmissionController();
+    this.executionContextStore =
+      executionContextStore ?? new ExecutionContextStore(null);
     this.registry = new StoreRegistry(this);
+    this.lookup = new StoreLookup(this.registry);
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this);
-    this.eventManager.bindStore(this);
 
     this.mode = detectRunnerMode(mode);
   }
@@ -143,6 +153,14 @@ export class Store {
   }
 
   /**
+   * Returns the shared execution-context store used by runtime-facing
+   * execution entrypoints and framework internals.
+   */
+  public getExecutionContextStore(): ExecutionContextStore {
+    return this.executionContextStore;
+  }
+
+  /**
    * Checks whether a registered item is visible to a consumer id under the
    * current exports visibility model.
    */
@@ -157,82 +175,51 @@ export class Store {
    * Returns the owner resource id that directly registered the given item.
    */
   public getOwnerResourceId(itemId: string): string | undefined {
-    const resolvedItemId = this.resolveDefinitionId(itemId) ?? itemId;
+    const resolvedItemId =
+      this.lookup.resolveCandidateId(itemId) ??
+      this.lookup.extractRequestedId(itemId) ??
+      itemId;
     return this.registry.visibilityTracker.getOwnerResourceId(resolvedItemId);
   }
 
-  public resolveDefinitionId(reference: unknown): string | undefined {
-    return this.registry.resolveDefinitionId(reference);
-  }
-
-  public toPublicId(reference: unknown): string {
-    return this.getRuntimeMetadata(reference).id;
-  }
-
-  public toPublicPath(reference: unknown): string {
-    return this.getRuntimeMetadata(reference).path;
-  }
-
-  public getRuntimeDefinitionId(reference: unknown): string {
-    const runtimeId =
-      getRuntimeId(reference) ?? this.resolveDefinitionId(reference);
-    this.assertResolvedDefinitionId(runtimeId, reference);
-    return runtimeId;
-  }
-
-  public getRuntimeMetadata(reference: unknown): {
-    id: string;
-    path: string;
-    runtimeId: string;
-  } {
-    const runtimeId = this.getRuntimeDefinitionId(reference);
-    return {
-      id: this.registry.getDisplayId(runtimeId),
-      path: runtimeId,
-      runtimeId,
-    };
-  }
-
-  public toRuntimeSource(source: RuntimeCallSource): RuntimeCallSource {
-    const runtimeId = this.getRuntimeDefinitionId(source);
-    return {
-      ...source,
-      id: this.registry.getDisplayId(runtimeId),
-      path: runtimeId,
-    };
-  }
-
-  public createRuntimeSource(
-    kind: RuntimeCallSource["kind"],
-    reference: unknown,
-  ): RuntimeCallSource {
-    const metadata = this.getRuntimeMetadata(reference);
-    switch (kind) {
-      case "task":
-        return runtimeSource.task(metadata.id, metadata.path);
-      case "hook":
-        return runtimeSource.hook(metadata.id, metadata.path);
-      case "resource":
-        return runtimeSource.resource(metadata.id, metadata.path);
-      case "middleware":
-        return runtimeSource.middleware(metadata.id, metadata.path);
-      default:
-        return runtimeSource.runtime(metadata.id, metadata.path);
-    }
-  }
-
-  private assertResolvedDefinitionId(
-    resolvedId: string | undefined,
-    reference: unknown,
-  ): asserts resolvedId is string {
-    if (typeof resolvedId !== "string" || resolvedId.length === 0) {
-      validationError.throw({
-        subject: "Definition reference",
-        id: String(reference),
-        originalError:
-          "Unable to resolve a definition id from the provided reference.",
+  public findIdByDefinition(definition: unknown): string {
+    const canonicalId = this.lookup.resolveCandidateId(definition) ?? undefined;
+    check(canonicalId, Match.NonEmptyString);
+    const resolvedCanonicalId = canonicalId as string;
+    if (!this.hasId(resolvedCanonicalId)) {
+      runtimeElementNotFoundError.throw({
+        type: "Definition",
+        elementId:
+          typeof definition === "string" ? definition : resolvedCanonicalId,
       });
     }
+
+    return resolvedCanonicalId;
+  }
+
+  public findDefinitionById(canonicalId: string): RegisterableItem {
+    const definition = this.lookup.tryDefinitionById(canonicalId);
+    if (definition === null) {
+      runtimeElementNotFoundError.throw({
+        type: "Definition",
+        elementId: canonicalId,
+      });
+    }
+
+    return definition as RegisterableItem;
+  }
+
+  public hasDefinition(definition: unknown): boolean {
+    const canonicalId = this.lookup.resolveCandidateId(definition);
+    if (!canonicalId) {
+      return false;
+    }
+
+    return this.hasId(canonicalId);
+  }
+
+  public hasId(canonicalId: string): boolean {
+    return this.lookup.tryDefinitionById(canonicalId) !== null;
   }
 
   /**
@@ -340,15 +327,23 @@ export class Store {
       taskRunnerNotSetError.throw();
     }
 
+    this.configureExecutionContextResource();
+    const eventManagerFacade = this.createEventManagerFacade();
+
     const builtInResourcesMap = new Map<
       IResource<any, any, any, any, any>,
       unknown
     >();
     builtInResourcesMap.set(globalResources.store, this);
-    builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
+    builtInResourcesMap.set(globalResources.eventManager, eventManagerFacade);
+    builtInResourcesMap.set(globalResources.mode, this.mode);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner);
     builtInResourcesMap.set(globalResources.serializer, new Serializer());
+    builtInResourcesMap.set(
+      globalResources.executionContext,
+      this.executionContextStore,
+    );
     builtInResourcesMap.set(
       globalResources.middlewareManager,
       this.middlewareManager,
@@ -363,19 +358,142 @@ export class Store {
 
       entry.value = value;
       entry.isInitialized = true;
-      this.recordResourceInitialized(resource.id);
+      this.recordResourceInitialized(entry.resource.id);
     }
+  }
+
+  private configureExecutionContextResource(): void {
+    const entry = this.resources.get(globalResources.executionContext.id);
+    if (!entry) {
+      this.executionContextStore.configure(null);
+      return;
+    }
+
+    this.executionContextStore.configure(
+      resolveExecutionContextConfig(entry.config),
+    );
   }
 
   public setTaskRunner(taskRunner: TaskRunner) {
     this.taskRunner = taskRunner;
   }
 
+  private createEventManagerFacade(): EventManager {
+    const resolveRegisteredEvent = <TInput>(
+      eventDefinition: IEvent<TInput>,
+    ): IEvent<TInput> => {
+      const eventId = this.findIdByDefinition(eventDefinition);
+      const storeEvent = this.events.get(eventId);
+      if (!storeEvent) {
+        runtimeElementNotFoundError.throw({
+          type: "Event",
+          elementId: eventId,
+        });
+
+        return undefined as never;
+      }
+
+      return storeEvent.event as IEvent<TInput>;
+    };
+    const resolveRuntimeSource = (
+      source: RuntimeCallSource,
+    ): RuntimeCallSource => ({
+      ...source,
+      id: resolveRequestedIdFromStore(this, source.id) ?? source.id,
+    });
+    const manager = this.eventManager;
+
+    return {
+      enterShutdownLockdown: () => manager.enterShutdownLockdown(),
+      lock: () => manager.lock(),
+      emit: (<TInput>(
+        eventDefinition: IEvent<TInput>,
+        data: TInput,
+        request: RuntimeCallSource | IEventEmissionCallOptions,
+      ) => {
+        const options =
+          "source" in request
+            ? {
+                ...request,
+                source: resolveRuntimeSource(request.source),
+              }
+            : { source: resolveRuntimeSource(request) };
+        return manager.emit(
+          resolveRegisteredEvent(eventDefinition),
+          data,
+          options,
+        );
+      }) as EventManager["emit"],
+      emitLifecycle: (<TInput>(
+        eventDefinition: IEvent<TInput>,
+        data: TInput,
+        request: RuntimeCallSource | IEventEmissionCallOptions,
+      ) => {
+        const options =
+          "source" in request
+            ? {
+                ...request,
+                source: resolveRuntimeSource(request.source),
+              }
+            : { source: resolveRuntimeSource(request) };
+        return manager.emitLifecycle(
+          resolveRegisteredEvent(eventDefinition),
+          data,
+          options,
+        );
+      }) as EventManager["emitLifecycle"],
+      emitWithResult: (<TInput>(
+        eventDefinition: IEvent<TInput>,
+        data: TInput,
+        request: RuntimeCallSource | IEventEmissionCallOptions,
+      ) => {
+        const options =
+          "source" in request
+            ? {
+                ...request,
+                source: resolveRuntimeSource(request.source),
+              }
+            : { source: resolveRuntimeSource(request) };
+        return manager.emitWithResult(
+          resolveRegisteredEvent(eventDefinition),
+          data,
+          options,
+        );
+      }) as EventManager["emitWithResult"],
+      addListener: (<TInput>(
+        event: IEvent<TInput> | Array<IEvent<TInput>>,
+        handler: Parameters<EventManager["addListener"]>[1],
+        options?: Parameters<EventManager["addListener"]>[2],
+      ) =>
+        manager.addListener(
+          Array.isArray(event)
+            ? event.map((entry) => resolveRegisteredEvent(entry))
+            : resolveRegisteredEvent(event),
+          handler as any,
+          options as any,
+        )) as EventManager["addListener"],
+      addGlobalListener: manager.addGlobalListener.bind(manager),
+      removeListenerById: manager.removeListenerById.bind(manager),
+      hasListeners: (<TInput>(eventDefinition: IEvent<TInput>) =>
+        manager.hasListeners(
+          resolveRegisteredEvent(eventDefinition),
+        )) as EventManager["hasListeners"],
+      intercept: manager.intercept.bind(manager),
+      interceptHook: manager.interceptHook.bind(manager),
+      executeHookWithInterceptors:
+        manager.executeHookWithInterceptors.bind(manager),
+      dispose: manager.dispose.bind(manager),
+      get isLocked() {
+        return manager.isLocked;
+      },
+    } as EventManager;
+  }
+
   private resolveRootEntry(
     rootDefinition: IResource<any>,
   ): ResourceStoreElementType {
     const rootId =
-      this.registry.resolveDefinitionId(rootDefinition) ?? rootDefinition.id;
+      this.lookup.resolveCandidateId(rootDefinition) ?? rootDefinition.id;
     const rootEntry = this.resources.get(rootId);
 
     if (rootEntry) {
@@ -415,15 +533,17 @@ export class Store {
     runtimeResult: RunResult<unknown>,
     options?: {
       debug?: DebugFriendlyConfig;
+      executionContext?: RunResult<unknown>["runOptions"]["executionContext"];
     },
   ) {
     if (this.#isInitialized) {
       storeAlreadyInitializedError.throw();
     }
 
-    const frameworkRoot = createFrameworkRootResource({
+    const frameworkRoot = createSyntheticFrameworkRoot({
       rootItem: root.with(config as any),
       debug: options?.debug,
+      executionContext: options?.executionContext ?? null,
     });
 
     this.registry.computeRegistrationDeeply(frameworkRoot);
@@ -520,6 +640,8 @@ export class Store {
     if (!resource) {
       return;
     }
+
+    this.assertLazyResourceWakeupAllowed(resourceId);
 
     await this.runReadyResource(resource);
   }
@@ -660,6 +782,16 @@ export class Store {
     this.readyResourceIds.add(resourceId);
   }
 
+  public assertLazyResourceWakeupAllowed(resourceId: string): void {
+    if (!this.isDisposalStarted()) {
+      return;
+    }
+
+    lazyResourceShutdownAccessError.throw({
+      id: this.findIdByDefinition(resourceId),
+    });
+  }
+
   private async disposeResource(
     resource: ResourceStoreElementType,
   ): Promise<void> {
@@ -690,7 +822,7 @@ export class Store {
     );
 
     this.registerCooldownAdmissionTargets(
-      this.getRuntimeDefinitionId(resource.resource),
+      this.findIdByDefinition(resource.resource),
       resource.resource,
       admissionTargets,
     );
@@ -724,13 +856,13 @@ export class Store {
     resource: IResource<any, any, any, any, any>,
     target: ResourceCooldownAdmissionTargets[number],
   ): string {
-    const resolvedRuntimePath = this.resolveDefinitionId(target);
+    const resolvedRuntimePath = this.registry.resolveDefinitionId(target);
     if (
       typeof resolvedRuntimePath !== "string" ||
       !this.resources.has(resolvedRuntimePath)
     ) {
       throw resourceCooldownAdmissionTargetInvalidError.new({
-        resourceId: this.toPublicId(resource),
+        resourceId: this.findIdByDefinition(resource),
         targetId: String(target?.id ?? target),
       });
     }
@@ -751,7 +883,7 @@ export class Store {
    * @param item
    * @returns
    */
-  public storeGenericItem<C>(item: RegisterableItems) {
+  public storeGenericItem<C>(item: RegisterableItem) {
     return this.registry.storeGenericItem<C>(item);
   }
 
@@ -763,17 +895,5 @@ export class Store {
     options?: { consumerId?: string; includeSelf?: boolean },
   ): TagDependencyAccessor<TTag> {
     return this.registry.getTagAccessor(tag, options);
-  }
-
-  public toPublicDefinition<TDefinition extends { id: string }>(
-    definition: TDefinition,
-  ): TDefinition {
-    const metadata = this.getRuntimeMetadata(definition);
-    return {
-      ...definition,
-      id: metadata.id,
-      path: metadata.path,
-      [symbolRuntimeId]: metadata.runtimeId,
-    };
   }
 }

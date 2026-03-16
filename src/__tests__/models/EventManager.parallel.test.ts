@@ -1,7 +1,7 @@
 import { EventEmissionFailureMode, IEvent } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager Parallel Execution", () => {
@@ -119,6 +119,45 @@ describe("EventManager Parallel Execution", () => {
     expect(results).toEqual(["batch1"]);
   });
 
+  it("stops scheduling later batches once the signal aborts", async () => {
+    const controller = new AbortController();
+    const results: string[] = [];
+
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch1-first");
+        controller.abort("stop here");
+      },
+      { order: 0 },
+    );
+
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch1-second");
+      },
+      { order: 0 },
+    );
+
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch2");
+      },
+      { order: 1 },
+    );
+
+    await expect(
+      eventManager.emit(parallelEvent, "data", {
+        source: runtimeSource.runtime("test"),
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ id: "cancellation" });
+
+    expect(results).toEqual(["batch1-first", "batch1-second"]);
+  });
+
   it("should NOT stop propagation within the same batch", async () => {
     const results: string[] = [];
 
@@ -188,7 +227,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Parallel Error");
+        throw genericError.new({ message: "Parallel Error" });
       },
       { order: 0 },
     );
@@ -211,7 +250,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Error 1");
+        throw genericError.new({ message: "Error 1" });
       },
       { order: 0 },
     );
@@ -219,7 +258,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Error 2");
+        throw genericError.new({ message: "Error 2" });
       },
       { order: 0 },
     );
@@ -227,7 +266,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Error 3");
+        throw genericError.new({ message: "Error 3" });
       },
       { order: 0 },
     );
@@ -389,7 +428,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Batch 0 error");
+        throw genericError.new({ message: "Batch 0 error" });
       },
       { order: 0 },
     );
@@ -416,7 +455,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("batch0-fail");
+        throw genericError.new({ message: "batch0-fail" });
       },
       { order: 0, id: "b0" },
     );
@@ -424,7 +463,7 @@ describe("EventManager Parallel Execution", () => {
       parallelEvent,
       async () => {
         results.push("batch1-ran");
-        throw createMessageError("batch1-fail");
+        throw genericError.new({ message: "batch1-fail" });
       },
       { order: 1, id: "b1" },
     );
@@ -436,16 +475,12 @@ describe("EventManager Parallel Execution", () => {
       { order: 2, id: "b2" },
     );
 
-    const report = await eventManager.emit(
-      parallelEvent,
-      "data",
-      runtimeSource.runtime("test"),
-      {
-        report: true,
-        throwOnError: false,
-        failureMode: EventEmissionFailureMode.Aggregate,
-      },
-    );
+    const report = await eventManager.emit(parallelEvent, "data", {
+      source: runtimeSource.runtime("test"),
+      report: true,
+      throwOnError: false,
+      failureMode: EventEmissionFailureMode.Aggregate,
+    });
 
     expect(results).toEqual(["batch1-ran", "batch2-ran"]);
     expect(report.failedListeners).toBe(2);

@@ -1,3 +1,4 @@
+import { ensureSymbolMetadata } from "./runtime/ensureSymbolMetadata";
 import {
   defineTask,
   defineResource,
@@ -54,18 +55,35 @@ import { scope as scopeFn } from "./tools/scope";
 import { isSameDefinition } from "./tools/isSameDefinition";
 import { asyncContexts } from "./asyncContexts";
 
+ensureSymbolMetadata();
+
+/**
+ * Built-in framework resources that Runner registers and exposes for dependency lookup.
+ */
 export const resources: Readonly<typeof globalResources> = Object.freeze({
   ...globalResources,
 });
+/**
+ * Built-in lifecycle events emitted by the runtime.
+ */
 export const events: Readonly<typeof globalEvents> = Object.freeze({
   ...globalEvents,
 });
+/**
+ * Built-in middleware factories grouped by target surface.
+ */
 export const middleware: Readonly<typeof globalMiddlewares> = Object.freeze({
   ...globalMiddlewares,
 });
+/**
+ * Built-in tags used by core Runner features and routing policies.
+ */
 export const tags: Readonly<typeof globalTags> = Object.freeze({
   ...globalTags,
 });
+/**
+ * Debug level helpers for configuring runtime observability.
+ */
 export const debug: Readonly<{ levels: typeof globalDebug.levels }> =
   Object.freeze({ levels: globalDebug.levels });
 
@@ -115,7 +133,7 @@ export {
  * import { r, run } from "@bluelibs/runner";
  *
  * const greet = r.task("app.tasks.greet")
- *   .inputSchema<{ name: string }>({ parse: (v) => v })
+ *   .inputSchema({ name: String })
  *   .run(async (input) => `Hello, ${input.name}!`)
  *   .build();
  *
@@ -145,17 +163,42 @@ export const r = Object.freeze({
   }),
 });
 
+/**
+ * Low-level definition and brand types for advanced integration work.
+ */
 export * as definitions from "./defs";
 
 // Re-export public models — internal-only classes (DependencyProcessor,
 // ResourceInitializer) are excluded from the barrel.
 export * from "./models";
 export * from "./globals/types";
+/**
+ * Built-in Runner error helpers keyed by framework error id.
+ */
+export * as errors from "./errors";
+/**
+ * Legacy alias for {@link errors}.
+ */
 export * as Errors from "./errors";
+/**
+ * Signals cooperative cancellation inside Runner-controlled executions.
+ */
 export { cancellationError } from "./errors";
+/**
+ * Platform abstraction and override hook used by advanced integrations and tests.
+ */
 export { PlatformAdapter, setPlatform } from "./platform";
+/**
+ * Concrete error class produced by Runner error helpers.
+ */
 export { RunnerError } from "./definers/defineError";
+/**
+ * Small mutable map that can be locked once a composition surface should stop changing.
+ */
 export { LockableMap } from "./tools/LockableMap";
+/**
+ * Validation and pattern-matching toolkit used by schema-aware Runner APIs.
+ */
 export { Match, check } from "./tools/check";
 export type {
   CheckSchemaLike,
@@ -163,21 +206,33 @@ export type {
   InferCheckSchema,
   InferMatchPattern,
   MatchCompiledSchema,
+  MatchMessageContext,
+  MatchMessageDescriptor,
+  MatchMessageOptions,
   MatchJsonObject,
   MatchJsonPrimitive,
   MatchJsonSchema,
   MatchJsonValue,
   MatchPattern,
 } from "./tools/check";
+export type { InferValidationSchemaInput } from "./types/utilities";
+export type { ITenant, TenantContextValue } from "./public-types";
 
-// HTTP transport functionality
+/**
+ * Universal HTTP client helpers for talking to exposed Runner tasks and events.
+ */
 export * from "./http-client";
 
+/**
+ * Serialization primitives used by HTTP transport, async context exchange, and custom codecs.
+ */
 export {
   Serializer,
   SymbolPolicy,
   SymbolPolicyErrorMessage,
 } from "./serializer";
 
-// ExecutionJournal for per-execution state sharing
+/**
+ * Per-execution scratchpad for middleware and nested task coordination.
+ */
 export { journal } from "./models/ExecutionJournal";

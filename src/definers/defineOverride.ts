@@ -4,6 +4,7 @@ import {
   IResource,
   IResourceMeta,
   IResourceMiddleware,
+  ResourceDependencyValuesType,
   ITask,
   ITaskMeta,
   ITaskMiddleware,
@@ -25,6 +26,10 @@ import {
 } from "./tools";
 import { freezeIfLineageLocked } from "../tools/deepFreeze";
 import { overrideUnsupportedBaseError } from "../errors";
+import {
+  normalizeResourceOverridePatch,
+  ResourceOverridePatch,
+} from "./resourceOverridePatch";
 
 const overrideUnsupportedBaseMessage =
   "r.override() / defineOverride() supports tasks, resources, hooks, and middleware only.";
@@ -32,6 +37,8 @@ const overrideMissingImplementationMessage =
   "r.override() / defineOverride() requires an implementation function as the second argument.";
 const overrideInvalidImplementationMessage =
   "r.override() / defineOverride() second argument must be a function (task/hook/middleware run or resource init).";
+const overrideInvalidNonResourcePatchMessage =
+  "r.override() / defineOverride() resource patch objects are supported only when the base is a resource.";
 
 type OverrideBuilderBase =
   | ITask<any, any, any, any, any, any>
@@ -39,6 +46,9 @@ type OverrideBuilderBase =
   | IHook<any, any, any>
   | ITaskMiddleware<any, any, any, any>
   | IResourceMiddleware<any, any, any, any>;
+
+const isObjectLike = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 function brandOverride<TBase extends object, TDefinition extends object>(
   base: TBase,
@@ -76,6 +86,12 @@ function applyOverridePatch<TBase extends OverrideBuilderBase>(
   return brandOverride(base, overridden);
 }
 
+/**
+ * Overrides a task, resource, hook, or middleware definition without mutating the original.
+ *
+ * Use this to adapt shared definitions in a local composition tree while preserving
+ * identity and ancestry information for Runner internals.
+ */
 export function defineOverride<
   TInput,
   TOutput extends Promise<any>,
@@ -90,6 +106,39 @@ export function defineOverride<
   OverrideDefinitionBrand;
 export function defineOverride<
   TConfig,
+  TResolved,
+  TDeps extends DependencyMapType,
+  TContext,
+  TMeta extends IResourceMeta,
+  TTags extends ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[],
+>(
+  base: IResource<
+    TConfig,
+    Promise<TResolved>,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >,
+  init: (
+    config: TConfig,
+    dependencies: ResourceDependencyValuesType<TDeps>,
+    context: TContext,
+  ) => Promise<TResolved>,
+): IResource<
+  TConfig,
+  Promise<TResolved>,
+  TDeps,
+  TContext,
+  TMeta,
+  TTags,
+  TMiddleware
+> &
+  OverrideDefinitionBrand;
+export function defineOverride<
+  TConfig,
   TValue extends Promise<any>,
   TDeps extends DependencyMapType,
   TContext,
@@ -98,16 +147,14 @@ export function defineOverride<
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
   base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
-  init: NonNullable<
-    IResource<
-      TConfig,
-      TValue,
-      TDeps,
-      TContext,
-      TMeta,
-      TTags,
-      TMiddleware
-    >["init"]
+  patch: ResourceOverridePatch<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
   >,
 ): IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware> &
   OverrideDefinitionBrand;
@@ -127,13 +174,43 @@ export function defineOverride<C, In, Out, D extends DependencyMapType>(
   base: IResourceMiddleware<C, In, Out, D>,
   run: IResourceMiddleware<C, In, Out, D>["run"],
 ): IResourceMiddleware<C, In, Out, D> & OverrideDefinitionBrand;
-export function defineOverride(base: OverrideBuilderBase, fn?: unknown) {
-  if (fn === undefined) {
+
+export function defineOverride(
+  base: OverrideBuilderBase,
+  implementation?: unknown,
+) {
+  if (implementation === undefined) {
     overrideUnsupportedBaseError.throw({
       message: overrideMissingImplementationMessage,
     });
   }
-  if (typeof fn !== "function") {
+
+  if (isResource(base)) {
+    if (typeof implementation === "function") {
+      return applyOverridePatch(base, {
+        init: implementation as NonNullable<typeof base.init>,
+      });
+    }
+
+    if (!isObjectLike(implementation)) {
+      overrideUnsupportedBaseError.throw({
+        message: overrideInvalidImplementationMessage,
+      });
+    }
+
+    const patch = normalizeResourceOverridePatch(
+      base,
+      implementation as Record<string, unknown>,
+    );
+    return applyOverridePatch(base, patch);
+  }
+
+  if (isObjectLike(implementation)) {
+    overrideUnsupportedBaseError.throw({
+      message: overrideInvalidNonResourcePatchMessage,
+    });
+  }
+  if (typeof implementation !== "function") {
     overrideUnsupportedBaseError.throw({
       message: overrideInvalidImplementationMessage,
     });
@@ -141,27 +218,22 @@ export function defineOverride(base: OverrideBuilderBase, fn?: unknown) {
 
   if (isTask(base)) {
     return applyOverridePatch(base, {
-      run: fn as typeof base.run,
-    });
-  }
-  if (isResource(base)) {
-    return applyOverridePatch(base, {
-      init: fn as NonNullable<typeof base.init>,
+      run: implementation as typeof base.run,
     });
   }
   if (isHook(base)) {
     return applyOverridePatch(base, {
-      run: fn as typeof base.run,
+      run: implementation as typeof base.run,
     });
   }
   if (isTaskMiddleware(base)) {
     return applyOverridePatch(base, {
-      run: fn as typeof base.run,
+      run: implementation as typeof base.run,
     });
   }
   if (isResourceMiddleware(base)) {
     return applyOverridePatch(base, {
-      run: fn as typeof base.run,
+      run: implementation as typeof base.run,
     });
   }
   overrideUnsupportedBaseError.throw({

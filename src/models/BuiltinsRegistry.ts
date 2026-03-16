@@ -1,4 +1,4 @@
-import type { RegisterableItems } from "../defs";
+import type { RegisterableItem } from "../defs";
 import { globalEventsArray } from "../globals/globalEvents";
 import { globalResources } from "../globals/globalResources";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
@@ -30,46 +30,59 @@ import {
 } from "../globals/middleware/circuitBreaker.middleware";
 import { globalTags } from "../globals/globalTags";
 import {
+  checkInvalidOptionsError,
+  checkInvalidPatternError,
+  checkJsonSchemaUnsupportedPatternError,
   durableExecutionError,
+  matchError,
   middlewareCircuitBreakerOpenError,
   middlewareRateLimitExceededError,
   middlewareTimeoutError,
 } from "../errors";
 
-function collectUniqueTags(): RegisterableItems[] {
-  const uniqueTags: RegisterableItems[] = [];
+function collectUniqueTags(): Array<
+  [keyof typeof globalTags, RegisterableItem]
+> {
+  const uniqueTags: Array<[keyof typeof globalTags, RegisterableItem]> = [];
   const seenIds = new Set<string>();
 
-  for (const tag of Object.values(globalTags)) {
+  for (const [key, tag] of Object.entries(globalTags) as Array<
+    [keyof typeof globalTags, RegisterableItem]
+  >) {
     if (seenIds.has(tag.id)) {
       continue;
     }
     seenIds.add(tag.id);
-    uniqueTags.push(tag);
+    uniqueTags.push([key, tag]);
   }
 
   return uniqueTags;
 }
 
-export const SYSTEM_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
+export const SYSTEM_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
   Object.freeze([
     globalResources.store,
     globalResources.eventManager,
     globalResources.taskRunner,
     globalResources.middlewareManager,
     globalResources.runtime,
-    ...collectUniqueTags().filter((tag) => tag.id.startsWith("system.")),
+    ...collectUniqueTags()
+      .filter(([key]) => key === "system")
+      .map(([, tag]) => tag),
     ...globalEventsArray,
   ]);
 
-export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
+export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
   Object.freeze([
+    globalResources.mode,
     globalResources.health,
     globalResources.timers,
     globalResources.logger,
     globalResources.serializer,
     globalResources.queue,
-    ...collectUniqueTags().filter((tag) => tag.id.startsWith("runner.")),
+    ...collectUniqueTags()
+      .filter(([key]) => key !== "system")
+      .map(([, tag]) => tag),
     requireContextTaskMiddleware,
     retryTaskMiddleware,
     timeoutTaskMiddleware,
@@ -85,6 +98,10 @@ export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
     circuitBreakerResource,
     temporalResource,
     concurrencyResource,
+    matchError,
+    checkInvalidPatternError,
+    checkInvalidOptionsError,
+    checkJsonSchemaUnsupportedPatternError,
     middlewareTimeoutError,
     middlewareCircuitBreakerOpenError,
     middlewareRateLimitExceededError,

@@ -1,7 +1,26 @@
 import { definitions, r, defineAsyncContext } from "../..";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
+import {
+  getPlatform,
+  PlatformAdapter,
+  resetPlatform,
+  setPlatform,
+} from "../../platform";
 
 describe("async context builder and defineAsyncContext", () => {
+  const globalScope = globalThis as typeof globalThis & {
+    AsyncLocalStorage?: new <T>() => {
+      getStore(): T | undefined;
+      run<R>(store: T, callback: () => R): R;
+    };
+  };
+  const originalAsyncLocalStorage = globalScope.AsyncLocalStorage;
+
+  afterEach(() => {
+    globalScope.AsyncLocalStorage = originalAsyncLocalStorage;
+    resetPlatform();
+  });
+
   it("builder.build produces context with id and custom serializer/parse", () => {
     type Ctx = { id: number };
     const ctx = r
@@ -9,7 +28,8 @@ describe("async context builder and defineAsyncContext", () => {
       .configSchema({
         parse(input: unknown) {
           const d = input as Ctx;
-          if (typeof d?.id !== "number") throw createMessageError("invalid");
+          if (typeof d?.id !== "number")
+            throw genericError.new({ message: "invalid" });
           return d;
         },
       })
@@ -32,7 +52,8 @@ describe("async context builder and defineAsyncContext", () => {
       configSchema: {
         parse(input: unknown) {
           const d = input as { v: string };
-          if (typeof d?.v !== "string") throw createMessageError("invalid");
+          if (typeof d?.v !== "string")
+            throw genericError.new({ message: "invalid" });
           return d;
         },
       },
@@ -64,7 +85,8 @@ describe("async context builder and defineAsyncContext", () => {
       .configSchema({
         parse(input: unknown) {
           const d = input as { id: number };
-          if (typeof d?.id !== "number") throw createMessageError("invalid");
+          if (typeof d?.id !== "number")
+            throw genericError.new({ message: "invalid" });
           return d;
         },
       })
@@ -95,5 +117,73 @@ describe("async context builder and defineAsyncContext", () => {
     expect(
       (ctx as unknown as Record<symbol, any>)[definitions.symbolFilePath],
     ).toContain("asyncContext.builder.test");
+  });
+
+  it("can be defined before universal async-local storage becomes available", async () => {
+    globalScope.AsyncLocalStorage = class MockALS<T> {
+      private store: T | undefined;
+
+      getStore(): T | undefined {
+        return this.store;
+      }
+
+      run<R>(store: T, callback: () => R): R {
+        const previous = this.store;
+        this.store = store;
+        try {
+          return callback();
+        } finally {
+          this.store = previous;
+        }
+      }
+    };
+
+    setPlatform(new PlatformAdapter("universal"));
+
+    const ctx = r
+      .asyncContext<{ id: string }>("tests-ctx-lazy-universal")
+      .build();
+
+    await getPlatform().init();
+
+    await ctx.provide({ id: "acme" }, async () => {
+      expect(ctx.use()).toEqual({ id: "acme" });
+    });
+  });
+
+  it("fails fast when configSchema is declared after custom parse or serialize", () => {
+    expect(() =>
+      r
+        .asyncContext<{ id: number }>("tests-ctx-rebind-serialize")
+        .serialize((value) => JSON.stringify(value))
+        .configSchema({
+          parse(input: unknown) {
+            const data = input as { id: number };
+            if (typeof data?.id !== "number") {
+              throw genericError.new({ message: "invalid" });
+            }
+            return data;
+          },
+        }),
+    ).toThrow(
+      'Async context "tests-ctx-rebind-serialize" cannot call .configSchema() after .serialize() or .parse().',
+    );
+
+    expect(() =>
+      r
+        .asyncContext<{ id: number }>("tests-ctx-rebind-parse")
+        .parse((raw) => JSON.parse(raw))
+        .configSchema({
+          parse(input: unknown) {
+            const data = input as { id: number };
+            if (typeof data?.id !== "number") {
+              throw genericError.new({ message: "invalid" });
+            }
+            return data;
+          },
+        }),
+    ).toThrow(
+      'Async context "tests-ctx-rebind-parse" cannot call .configSchema() after .serialize() or .parse().',
+    );
   });
 });

@@ -10,7 +10,7 @@ import { EventEmissionFailureMode } from "../../defs";
 import { TaskRunner } from "../../models";
 import { run } from "../../run";
 import { createTestFixture } from "../test-utils";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 import { ResourceLifecycleMode, RunnerMode } from "../../types/runner";
 
@@ -192,10 +192,8 @@ describe("RunResult", () => {
     const runtime = await run(app);
     await runtime.runTask(parent);
 
-    const parentTaskId = runtime.store.resolveDefinitionId(parent)!;
-    expect(seenChildSources[0]).toEqual(
-      runtimeSource.task(parent.id, parentTaskId),
-    );
+    const parentTaskId = runtime.store.findIdByDefinition(parent);
+    expect(seenChildSources[0]).toEqual(runtimeSource.task(parentTaskId));
     await runtime.dispose();
   });
 
@@ -206,7 +204,7 @@ describe("RunResult", () => {
       id: "rr-report-failFirst",
       on: ping,
       run: async () => {
-        throw createMessageError("first");
+        throw genericError.new({ message: "first" });
       },
     });
 
@@ -214,7 +212,7 @@ describe("RunResult", () => {
       id: "rr-report-failSecond",
       on: ping,
       run: async () => {
-        throw createMessageError("second");
+        throw genericError.new({ message: "second" });
       },
     });
 
@@ -290,7 +288,7 @@ describe("RunResult", () => {
         return "unhealthy-value";
       },
       async health() {
-        throw createMessageError("down");
+        throw genericError.new({ message: "down" });
       },
     });
 
@@ -311,9 +309,9 @@ describe("RunResult", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
     const report = await runtime.getHealth();
-    const healthyId = runtime.store.getRuntimeMetadata(healthy).path;
-    const degradedId = runtime.store.getRuntimeMetadata(degraded).path;
-    const unhealthyId = runtime.store.getRuntimeMetadata(unhealthy).path;
+    const healthyId = runtime.store.findIdByDefinition(healthy);
+    const degradedId = runtime.store.findIdByDefinition(degraded);
+    const unhealthyId = runtime.store.findIdByDefinition(unhealthy);
 
     expect(report.totals).toEqual({
       resources: 3,
@@ -379,8 +377,8 @@ describe("RunResult", () => {
     });
 
     const runtime = await run(app, { shutdownHooks: false });
-    const healthyId = runtime.store.resolveDefinitionId(healthy)!;
-    const healthyReportId = runtime.store.getRuntimeMetadata(healthy).path;
+    const healthyId = runtime.store.findIdByDefinition(healthy);
+    const healthyReportId = healthyId;
 
     await expect(
       runtime.getHealth(["rr-health-filter-missing"]),
@@ -469,7 +467,7 @@ describe("RunResult", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
     const report = await runtime.getHealth([unhealthy]);
-    const unhealthyId = runtime.store.getRuntimeMetadata(unhealthy).path;
+    const unhealthyId = runtime.store.findIdByDefinition(unhealthy);
 
     expect(report.totals).toEqual({
       resources: 1,
@@ -541,7 +539,7 @@ describe("RunResult", () => {
     });
 
     const runtime = await run(app, { shutdownHooks: false });
-    const resourcePath = runtime.store.getRuntimeMetadata(healthy).path;
+    const resourcePath = runtime.store.findIdByDefinition(healthy);
     const report = await runtime.getHealth([resourcePath]);
 
     expect(report.totals).toEqual({
@@ -594,6 +592,25 @@ describe("RunResult", () => {
     await runtime.dispose();
   });
 
+  it("rejects lazy resource wakeups once shutdown has started", async () => {
+    const fixture = createTestFixture();
+    const taskRunner: TaskRunner = fixture.createTaskRunner();
+    fixture.store.setTaskRunner(taskRunner);
+    const runtime = fixture.createRuntimeResult(taskRunner);
+
+    const resource = defineResource({
+      id: "rr-lazy-shutdown-only",
+    });
+    fixture.store.storeGenericItem(resource);
+    runtime.setLazyOptions({ lazyMode: true });
+    runtime.setValue("ready");
+    fixture.store.beginCoolingDown();
+
+    await expect(runtime.getLazyResourceValue(resource)).rejects.toThrow(
+      /cannot be lazy-initialized because shutdown has already started/i,
+    );
+  });
+
   it("fails fast when getLazyResourceValue is called outside lazy mode", async () => {
     const only = defineResource({
       id: "rr-lazy-dryrun-only",
@@ -641,7 +658,7 @@ describe("RunResult", () => {
     fixture.store.storeGenericItem(resource);
     const resourceEntry = fixture.store.resources.get(resource.id);
     if (!resourceEntry) {
-      throw createMessageError("Expected resource entry to exist");
+      throw genericError.new({ message: "Expected resource entry to exist" });
     }
     resourceEntry.value = { ok: true };
 
@@ -734,6 +751,7 @@ describe("RunResult", () => {
       dryRun: true,
       executionContext: {
         createCorrelationId: expect.any(Function),
+        frames: "full",
         cycleDetection: {
           maxDepth: 10,
           maxRepetitions: 2,
@@ -743,6 +761,7 @@ describe("RunResult", () => {
       lifecycleMode: ResourceLifecycleMode.Parallel,
       mode: RunnerMode.PROD,
     });
+    expect(runtime.mode).toBe(RunnerMode.PROD);
     expect(runtime.store.mode).toBe(RunnerMode.PROD);
 
     await runtime.dispose();

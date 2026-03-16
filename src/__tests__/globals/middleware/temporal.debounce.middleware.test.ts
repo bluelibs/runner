@@ -4,7 +4,7 @@ import {
   debounceTaskMiddleware,
   temporalResource,
 } from "../../../globals/middleware/temporal.middleware";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("Temporal Middleware: Debounce", () => {
   it("should debounce task executions", async () => {
@@ -209,7 +209,7 @@ describe("Temporal Middleware: Debounce", () => {
       dependencies: { task },
       async init(_, { task }) {
         await expect(task()).rejects.toThrow(
-          "Middleware config validation failed for debounce-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string. Received object.",
+          /Middleware config validation failed for .*debounce-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string\. Received object\./,
         );
       },
     });
@@ -225,7 +225,7 @@ describe("Temporal Middleware: Debounce", () => {
       middleware: [debounceTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;
-        throw createMessageError("Debounce error");
+        throw genericError.new({ message: "Debounce error" });
       },
     });
 

@@ -57,6 +57,7 @@ describe("main exports", () => {
     expect(typeof testTag2.extract).toBe("function");
 
     // Test namespaced sub-properties for complete coverage
+    expect(typeof mainExports.resources.mode).toBe("object");
     expect(typeof mainExports.resources.runtime).toBe("object");
     expect(typeof mainExports.resources.cron).toBe("object");
     expect((mainExports.resources as any).httpClientFactory).toBeUndefined();
@@ -81,7 +82,7 @@ describe("main exports", () => {
     expect((mainExports as any).system).toBeUndefined();
     expect((mainExports as any).asyncContexts).toBeDefined();
     expect((mainExports as any).asyncContexts.execution.id).toBe(
-      "asyncContexts.execution",
+      "executionContext",
     );
     expect((mainExports as any).globals).toBeUndefined();
   });
