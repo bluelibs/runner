@@ -232,6 +232,8 @@ Selector rules:
 ### Listening to Multiple Events
 
 Use `onAnyOf()` for tuple-friendly exact-event inference and `isOneOf()` as a runtime guard.
+`isOneOf()` is intended for Runner-provided emissions that retain definition
+identity. Plain `{ id }`-shaped objects are not treated as exact event matches.
 
 ```typescript
 import { Match, isOneOf, onAnyOf, r } from "@bluelibs/runner";

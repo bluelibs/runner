@@ -363,6 +363,7 @@ Key rules:
 - Selector-based hooks (`subtreeOf(...)`, predicates, or arrays containing them) resolve once at bootstrap and subscribe only to events visible to the hook on the `listening` channel.
 - Exact direct event refs still fail fast on visibility violations; selector matches that are not visible are skipped.
 - Selector-based hooks trade away payload autocomplete. Exact event refs and exact event tuples keep strong payload inference.
+- `isOneOf()` is a runtime guard for Runner emissions that retain definition identity; arbitrary `{ id }`-shaped objects are not exact matches.
 - `.parallel(true)` allows concurrent same-priority listeners.
 - `.transactional(true)` makes listeners reversible. Each executed hook must return an async undo closure.
 

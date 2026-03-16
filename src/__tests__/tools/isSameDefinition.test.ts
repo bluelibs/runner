@@ -1,5 +1,8 @@
 import { defineTag, defineTask } from "../../define";
-import { isSameDefinition } from "../../tools/isSameDefinition";
+import {
+  hasDefinitionIdentity,
+  isSameDefinition,
+} from "../../tools/isSameDefinition";
 import {
   symbolDefinitionIdentity,
   symbolTagConfiguredFrom,
@@ -75,5 +78,15 @@ describe("isSameDefinition()", () => {
     expect(isSameDefinition(foreignConfiguredClone, tag)).toBe(false);
     expect(isSameDefinition(invalidConfiguredClone, tag)).toBe(false);
     expect(isSameDefinition(nullIdentityConfiguredClone, tag)).toBe(false);
+  });
+
+  it("reports whether a value retains Runner definition identity", () => {
+    const task = defineTask({
+      id: "same-definition-identity-check",
+      run: async () => "ok",
+    });
+
+    expect(hasDefinitionIdentity(task)).toBe(true);
+    expect(hasDefinitionIdentity({ id: task.id })).toBe(false);
   });
 });
