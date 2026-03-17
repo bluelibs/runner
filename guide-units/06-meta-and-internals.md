@@ -164,7 +164,7 @@ These built-ins sit under two synthetic framework namespace resources:
 - `system`: owns locked internal infrastructure such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, and lifecycle events
 - `runner`: owns built-in utility globals such as `resources.mode`, `resources.health`, `resources.timers`, `resources.logger`, `resources.serializer`, `resources.queue`, core tags, middleware, framework errors, and optional debug/execution-context resources
 
-Both namespace resources are real Runner resources and expose `.meta.title` / `.meta.description` for docs and tooling. The transparent `runtime-framework-root` above them remains internal-only and does not appear in user-facing canonical ids.
+Both namespace resources are real Runner resources and expose `.meta.title` / `.meta.description` for docs and tooling. They also enforce the same metadata contract across the framework-owned resources, events, hooks, tags, and middleware they register. The transparent `runtime-framework-root` above them remains internal-only and does not appear in user-facing canonical ids.
 
 | Resource                      | What it gives you                                                                                                                                                                                                                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

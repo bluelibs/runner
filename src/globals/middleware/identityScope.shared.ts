@@ -14,66 +14,70 @@ import { Match } from "../../tools/check";
  * Controls whether identity-aware middleware partitions its internal state by
  * the active identity payload.
  *
- * - `"auto"`: partition by `tenantId` when it exists, otherwise fall back to
- *   the shared keyspace
- * - `"auto:userId"`: same as `"auto"`, but append `userId` when it exists
- * - `"required"`: require a valid `tenantId` and fail fast when it is missing
- * - `"required:userId"`: same as `"required"`, but append `userId` when it
- *   exists
- * - `"full"`: require both `tenantId` and `userId` and prefix keys as
- *   `<tenantId>:<userId>:...`
- * - `"off"`: disable identity partitioning and use the shared cross-identity
- *   keyspace
+ * Omit the option to keep the shared cross-identity keyspace.
+ * Provide `{ tenant: true }` to require tenant partitioning.
+ * Add `user: true` for `<tenantId>:<userId>:...` partitioning.
+ * Set `required: false` when identity should refine the key only when present.
  */
-export type IdentityScopeMode =
-  | "auto"
-  | "auto:userId"
-  | "required"
-  | "required:userId"
-  | "full"
-  | "off";
-export type IdentityScopeConfig = IdentityScopeMode;
+export interface IdentityScopeConfig {
+  /**
+   * Tenant partitioning is always explicit when identity scoping is enabled.
+   */
+  tenant: true;
+  /**
+   * Append `userId` after `tenantId` when it exists.
+   *
+   * When `required` is not set to `false`, `userId` becomes mandatory.
+   */
+  user?: boolean;
+  /**
+   * Require the scoped identity fields to exist.
+   *
+   * Defaults to `true`. Set to `false` when identity should only refine the
+   * key when available.
+   */
+  required?: boolean;
+}
+
+interface NormalizedIdentityScopeConfig {
+  required: boolean;
+  tenant: true;
+  user: boolean;
+}
 
 export interface IdentityScopedMiddlewareConfig {
   /**
    * Controls identity partitioning for middleware-managed state.
    *
-   * Omit this option for the default `"auto"` behavior.
+   * Omit this option to keep the shared cross-identity keyspace.
    */
   identityScope?: IdentityScopeConfig;
 }
 
-export const DEFAULT_IDENTITY_SCOPE = "auto";
-const USER_ID_SCOPE_SUFFIX = ":userId";
+function isIdentityScopeConfig(value: unknown): value is IdentityScopeConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
 
-function isIdentityScopeMode(value: unknown): value is IdentityScopeMode {
+  const candidate = value as Record<string, unknown>;
+  const keys = Object.keys(candidate);
+
   return (
-    value === "auto" ||
-    value === "auto:userId" ||
-    value === "required" ||
-    value === "required:userId" ||
-    value === "full" ||
-    value === "off"
+    candidate.tenant === true &&
+    (candidate.user === undefined || typeof candidate.user === "boolean") &&
+    (candidate.required === undefined ||
+      typeof candidate.required === "boolean") &&
+    keys.every(
+      (key) => key === "tenant" || key === "user" || key === "required",
+    )
   );
 }
 
 export const identityScopePattern = Match.Optional(
   Match.Where((value: unknown): value is IdentityScopeConfig =>
-    isIdentityScopeMode(value),
+    isIdentityScopeConfig(value),
   ),
 );
-
-function requiresIdentity(mode: IdentityScopeMode): boolean {
-  return mode === "required" || mode === "required:userId" || mode === "full";
-}
-
-function includesUserIdScope(mode: IdentityScopeMode): boolean {
-  return mode === "full" || mode.endsWith(USER_ID_SCOPE_SUFFIX);
-}
-
-function requiresUserId(mode: IdentityScopeMode): boolean {
-  return mode === "full";
-}
 
 function validateScopedIdentityField(
   fieldName: "tenantId" | "userId",
@@ -102,28 +106,38 @@ function validateScopedIdentityField(
   return validated;
 }
 
-export function getIdentityScopeMode(
+/**
+ * Applies the runtime defaults for an explicit `identityScope` config.
+ */
+export function normalizeIdentityScopeConfig(
   identityScope: IdentityScopeConfig | undefined,
-): IdentityScopeMode {
+): NormalizedIdentityScopeConfig | undefined {
   if (identityScope === undefined) {
-    return DEFAULT_IDENTITY_SCOPE;
+    return undefined;
   }
 
-  return identityScope;
+  return {
+    required: identityScope.required ?? true,
+    tenant: true,
+    user: identityScope.user ?? false,
+  };
 }
 
+/**
+ * Reads and validates the active identity payload for middleware helpers.
+ */
 export function resolveIdentityContext(
   identityScope: IdentityScopeConfig | undefined,
   readIdentity: () => unknown = () => asyncContexts.identity.tryUse(),
 ): IdentityContextValue | undefined {
-  const mode = getIdentityScopeMode(identityScope);
-  if (mode === "off") {
+  const scope = normalizeIdentityScopeConfig(identityScope);
+  if (!scope) {
     return undefined;
   }
 
   const identity = readIdentity();
   if (!identity || typeof identity !== "object") {
-    if (requiresIdentity(mode)) {
+    if (scope.required) {
       throw identityContextRequiredError.new();
     }
 
@@ -132,30 +146,39 @@ export function resolveIdentityContext(
 
   const candidate = identity as IdentityContextValue;
   if (candidate.tenantId === undefined) {
-    if (requiresIdentity(mode)) {
+    if (scope.required) {
       throw identityContextRequiredError.new();
     }
 
     return undefined;
   }
 
+  const validatedUserId =
+    scope.user && candidate.userId !== undefined
+      ? validateScopedIdentityField("userId", candidate.userId)
+      : candidate.userId;
+
   return {
     ...candidate,
     tenantId: validateScopedIdentityField("tenantId", candidate.tenantId),
-    userId:
-      candidate.userId === undefined
-        ? undefined
-        : validateScopedIdentityField("userId", candidate.userId),
+    userId: validatedUserId,
   };
 }
 
+/**
+ * Builds the identity namespace prefix for middleware-managed keys.
+ */
 export function getIdentityScopePrefix(
   identityScope: IdentityScopeConfig | undefined,
   readIdentity?: () => unknown,
 ): string | undefined {
-  const mode = getIdentityScopeMode(identityScope);
+  const scope = normalizeIdentityScopeConfig(identityScope);
+  if (!scope) {
+    return undefined;
+  }
+
   const identity = resolveIdentityContext(
-    mode,
+    identityScope,
     readIdentity ?? (() => asyncContexts.identity.tryUse()),
   );
 
@@ -163,10 +186,11 @@ export function getIdentityScopePrefix(
     return undefined;
   }
 
-  if (!includesUserIdScope(mode) || !identity.userId) {
-    if (requiresUserId(mode)) {
+  if (!scope.user || !identity.userId) {
+    if (scope.user && scope.required) {
       throw identityInvalidContextError.new({
-        reason: 'Identity "userId" is required when identityScope is "full".',
+        reason:
+          'Identity "userId" is required when identityScope.user is enabled.',
       });
     }
 
@@ -176,6 +200,9 @@ export function getIdentityScopePrefix(
   return `${identity.tenantId}${IDENTITY_SCOPE_SEPARATOR}${identity.userId}`;
 }
 
+/**
+ * Prefixes a middleware-managed key with the active identity namespace.
+ */
 export function applyIdentityScopeToKey(
   baseKey: string,
   identityScope: IdentityScopeConfig | undefined,
@@ -185,6 +212,9 @@ export function applyIdentityScopeToKey(
   return prefix ? `${prefix}${IDENTITY_SCOPE_SEPARATOR}${baseKey}` : baseKey;
 }
 
+/**
+ * Returns the active identity namespace or the shared global namespace marker.
+ */
 export function getIdentityNamespace(
   identityScope: IdentityScopeConfig | undefined,
   readIdentity?: () => unknown,

@@ -7,6 +7,7 @@ import { identityContextResource } from "../globals/resources/identityContext.re
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
 import type { ExecutionContextConfig } from "../types/executionContext";
 import type { IdentityAsyncContext } from "../types/runner";
+import { frameworkNamespaceMetaPolicy } from "./frameworkNamespaceMetaPolicy";
 import {
   RUNNER_FRAMEWORK_ITEMS,
   SYSTEM_FRAMEWORK_ITEMS,
@@ -53,6 +54,7 @@ function createFrameworkNamespaceResource(
   return defineResource({
     id: resourceId,
     meta: FRAMEWORK_NAMESPACE_META[resourceId],
+    subtree: frameworkNamespaceMetaPolicy,
     register: [...register],
   });
 }

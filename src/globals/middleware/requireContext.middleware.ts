@@ -17,6 +17,11 @@ const requireContextConfigPattern = Match.ObjectIncluding({
 
 export const requireContextTaskMiddleware = defineTaskMiddleware({
   id: "requireContext",
+  meta: {
+    title: "Require Context",
+    description:
+      "Fails fast when the configured async context is missing before the wrapped task runs.",
+  },
   throws: [middlewareContextRequiredError],
   configSchema: requireContextConfigPattern,
   async run({ task, next }, _deps, config: RequireContextMiddlewareConfig) {

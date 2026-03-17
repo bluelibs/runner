@@ -94,6 +94,11 @@ export type {
  */
 export const debounceTaskMiddleware = defineTaskMiddleware({
   id: "debounce",
+  meta: {
+    title: "Debounce",
+    description:
+      "Collapses bursts of task calls into the last execution after a quiet window, with optional identity-aware partitioning.",
+  },
   throws: [middlewareTemporalDisposedError, middlewareKeyCapacityExceededError],
   configSchema: temporalConfigPattern,
   dependencies: {
@@ -204,6 +209,11 @@ export { temporalResource } from "./temporal.resource";
  */
 export const throttleTaskMiddleware = defineTaskMiddleware({
   id: "throttle",
+  meta: {
+    title: "Throttle",
+    description:
+      "Limits task execution frequency to at most once per window, scheduling the latest pending call when needed.",
+  },
   throws: [middlewareTemporalDisposedError, middlewareKeyCapacityExceededError],
   configSchema: temporalConfigPattern,
   dependencies: {

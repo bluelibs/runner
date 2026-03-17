@@ -127,6 +127,11 @@ export function resolveCacheMiddlewareConfig(
 
 export const cacheMiddleware = defineTaskMiddleware({
   id: "cache",
+  meta: {
+    title: "Task Cache",
+    description:
+      "Caches task results by computed key and optional identity scope, reusing task-local providers from resources.cache.",
+  },
   configSchema: cacheMiddlewareConfigPattern,
   dependencies: () => ({
     cache: cacheResource,
@@ -180,13 +185,7 @@ export const cacheMiddleware = defineTaskMiddleware({
       resolvedConfig.identityScope,
       identityContext?.tryUse,
     );
-    const refs = cacheKey.refs.map((ref) =>
-      applyIdentityScopeToKey(
-        ref,
-        resolvedConfig.identityScope,
-        identityContext?.tryUse,
-      ),
-    );
+    const refs = cacheKey.refs;
 
     const cachedValue = await cacheHolderForTask.get(key);
     const hasCachedEntry =

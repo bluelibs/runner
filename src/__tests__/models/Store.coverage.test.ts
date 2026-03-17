@@ -1,4 +1,9 @@
-import { defineEvent, defineResource } from "../../define";
+import {
+  defineEvent,
+  defineResource,
+  defineTaskMiddleware,
+} from "../../define";
+import { isResource } from "../../definers/tools";
 import { runtimeElementNotFoundError, validationError } from "../../errors";
 import {
   createSyntheticFrameworkRoot,
@@ -6,6 +11,7 @@ import {
   FRAMEWORK_SYSTEM_RESOURCE_ID,
   SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID,
 } from "../../models/createSyntheticFrameworkRoot";
+import { validateFrameworkNamespaceMetadata } from "../../models/frameworkNamespaceMetaPolicy";
 import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
 
@@ -126,6 +132,54 @@ describe("Store coverage", () => {
       },
     });
     expect(registerEntries[2]?.id).toBe(root.id);
+  });
+
+  it("attaches the shared metadata policy to both framework namespace resources", () => {
+    const root = defineResource({
+      id: "store-coverage-framework-policy-root",
+    });
+
+    const frameworkRoot = createSyntheticFrameworkRoot({
+      rootItem: root,
+      debug: undefined,
+    });
+
+    const namespaceResources = (frameworkRoot.register as unknown[]).filter(
+      isResource,
+    );
+    const systemResource = namespaceResources.find(
+      (resource) => resource.id === FRAMEWORK_SYSTEM_RESOURCE_ID,
+    );
+    const runnerResource = namespaceResources.find(
+      (resource) => resource.id === FRAMEWORK_RUNNER_RESOURCE_ID,
+    );
+
+    expect(systemResource?.subtree).toMatchObject({
+      validate: [validateFrameworkNamespaceMetadata],
+    });
+    expect(runnerResource?.subtree).toMatchObject({
+      validate: [validateFrameworkNamespaceMetadata],
+    });
+  });
+
+  it("rejects framework subtree definitions that omit meta.title or meta.description", () => {
+    const missingMetaMiddleware = defineTaskMiddleware({
+      id: "store-coverage-missing-meta",
+      run: async ({ next }) => next(),
+    });
+
+    expect(validateFrameworkNamespaceMetadata(missingMetaMiddleware)).toEqual([
+      {
+        code: "framework-meta-title-required",
+        message:
+          'Task middleware "store-coverage-missing-meta" must define meta.title.',
+      },
+      {
+        code: "framework-meta-description-required",
+        message:
+          'Task middleware "store-coverage-missing-meta" must define meta.description.',
+      },
+    ]);
   });
 
   it("fails fast when the computed root resource entry is missing after bootstrap", () => {

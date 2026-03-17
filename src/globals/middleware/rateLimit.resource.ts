@@ -56,6 +56,11 @@ export function pruneRateLimitStatesForCapacity(
 
 export const rateLimitResource = defineResource({
   id: "rateLimit",
+  meta: {
+    title: "Rate Limit State",
+    description:
+      "Stores keyed fixed-window counters and cleanup timers for the built-in rate-limit middleware.",
+  },
   dependencies: { timers: timersResource },
   context: (): RateLimitResourceContext => ({}),
   init: async (

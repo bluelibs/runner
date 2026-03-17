@@ -2101,11 +2101,14 @@ const app = r
 Use semantic refs when multiple cached tasks should be refreshed after the same write.
 
 ```typescript
-import { middleware, r, resources } from "@bluelibs/runner";
+import { asyncContexts, middleware, r, resources } from "@bluelibs/runner";
 
 const CacheRefs = {
+  getTenantId() {
+    return asyncContexts.identity.use().tenantId;
+  },
   user(id: string) {
-    return `user:${id}` as const;
+    return `tenant:${this.getTenantId()}:user:${id}` as const;
   },
 };
 
@@ -2140,7 +2143,7 @@ Notes:
 
 - `keyBuilder(taskId, input, { canonicalKey })` may return either a plain string or `{ cacheKey, refs? }`.
 - Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`.
-- Refs follow the same `identityScope` policy as the cache key, so tenant-aware caches invalidate only their own tenant-scoped entries by default.
+- Refs do not follow `identityScope`. If you want tenant-aware invalidation, read the active identity inside your app helper, for example `CacheRefs.getTenantId()`, and build the ref string there so writes and invalidations always match.
 
 `totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
 
@@ -2784,7 +2787,7 @@ const getUser = r
 
 > **Note:** `cache`, `rateLimit`, `debounce`, and `throttle` default to partitioning by `canonicalTaskKey + ":" + serialized input`, and they fail fast when the input cannot be serialized. Provide `keyBuilder(taskId, input, { canonicalKey })` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. `canonicalKey` strips the `.tasks.` namespace marker so custom keys can stay readable. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
-> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active identity context is present. Use `"auto:userId"` when you want optional `userId` suffixing, or `"full"` when you want strict `<tenantId>:<userId>:<baseKey>` partitioning and fail fast if `userId` is missing. Cache refs follow the same scope policy. The default behavior is `"auto"`: use the tenant prefix when identity context exists, otherwise keep the shared key. Use `"required"` when identity context must exist, and `"off"` only for intentional cross-tenant sharing. Legacy user-aware modes such as `"required:userId"` still work, but prefer `"full"` for the clearer strict-per-user intent.
+> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:<baseKey>`, and set `required: false` when identity should only refine the key when available. Omit `identityScope` for the shared cross-identity keyspace. If your app has users but no tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and then use tenant+user scoping normally. Cache refs stay raw and are invalidated exactly as returned by `keyBuilder`.
 
 ### Resilience Orchestration
 
@@ -3089,7 +3092,7 @@ const internalEvent = r
   .build();
 ```
 
-`tags.system` is deprecated and no longer used by framework internals. Tasks can also opt into runtime health gating with `tags.failWhenUnhealthy.with([db, cache])`.
+Tasks can also opt into runtime health gating with `tags.failWhenUnhealthy.with([db, cache])`.
 
 ### Contract Tags
 
@@ -5589,9 +5592,11 @@ Unsupported in strict mode (fail-fast):
 
 Multi-tenant work in Runner usually means one `run(app)` serving many tenants without mixing their logical state.
 Runner's identity-aware middleware (`cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency`) reads tenant partitioning data from an async context grouper.
+In Runner, "identity" means the async-context payload used to partition framework-managed state. It is not an identity-provider or authentication-service abstraction.
 
 - If you do nothing, Runner uses the built-in `asyncContexts.identity`.
 - If your app needs extra runtime-validated fields such as `userId`, define your own async context, register it, and pass it to `run(app, { identity })`.
+- If your SaaS has users but no real tenant model, you can still use the built-in identity-aware middleware by providing a constant tenant such as `tenantId: "app"` at ingress and treating it as your single shared tenant namespace.
 
 ### Built-In Default
 
@@ -5655,7 +5660,10 @@ const listProjects = r
   .task("listProjects")
   .middleware([
     identity.require(),
-    middleware.task.cache.with({ ttl: 30_000, identityScope: "required" }),
+    middleware.task.cache.with({
+      ttl: 30_000,
+      identityScope: { tenant: true },
+    }),
   ])
   .run(async () => {
     const { tenantId, userId } = identity.use();
@@ -5701,29 +5709,28 @@ export function getTelemetryTenantId(): string | undefined {
 
 ### Identity Scope
 
-Identity-aware middleware defaults to `identityScope: "auto"`.
-That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` prefix their internal keys with `tenantId` when identity context exists, and fall back to the shared non-tenant keyspace when it does not.
+Identity-aware middleware stays in the shared keyspace unless you set `identityScope`.
+That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` only prefix their internal keys with identity data when you opt in explicitly.
 
 - Use `identity.provide({ tenantId }, fn)` at HTTP, RPC, queue, or job ingress.
 - Use `identity.require()` or `identity.use()` when running without an identity would be a correctness bug.
 - `identity.require()` does not validate optional fields such as `userId` on the built-in identity context. Prefer your own authorization middleware when access rules depend on the active user, or use a custom identity context when you want `userId` required as part of the identity contract itself.
-- Omit `identityScope` for the default `"auto"` behavior.
-- Use `identityScope: "auto"` when you want to make that default explicit in config.
-- Use `identityScope: "auto:userId"` when you want tenant partitioning plus optional `userId` partitioning when the active identity context provides it.
-- Use `identityScope: "required"` when middleware correctness depends on `tenantId` being present and tenant-only partitioning is enough.
-- Use `identityScope: "full"` when middleware correctness depends on both `tenantId` and `userId`, and you want strict per-user isolation as `<tenantId>:<userId>:...`.
-- Use `identityScope: "off"` only for intentional cross-tenant sharing.
-- Legacy user-aware modes such as `"required:userId"` still work, but prefer `"full"` for the clearer strict-per-user intent.
+- Omit `identityScope` for intentional cross-tenant sharing.
+- Use `identityScope: { tenant: true }` when middleware correctness depends on `tenantId` being present and tenant-only partitioning is enough.
+- Use `identityScope: { tenant: true, user: true }` when middleware correctness depends on both `tenantId` and `userId`, and you want strict per-user isolation as `<tenantId>:<userId>:...`.
+- `required` defaults to `true` whenever `identityScope` is present. That means Runner throws `identityContextRequiredError` if the scoped identity fields are missing. Set `required: false` only when identity should refine the key when present instead of being mandatory.
+- If your app is effectively single-tenant, an explicit constant such as `tenantId: "app"` is a reasonable way to keep using these scopes without inventing fake tenant logic elsewhere.
 - `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
 - When user-aware identity scope is enabled, `userId` must also be a non-empty string and cannot contain `:`.
+- Cache refs stay raw. If invalidation should respect tenant or user boundaries, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same tenant-aware ref format.
 
 Quick choice guide:
 
-- Use omitted / `"auto"` when tenant partitioning is helpful but not mandatory.
-- Use `"required"` when the task must run inside a tenant and tenant-only isolation is enough.
-- Use `"full"` when the task must run inside a tenant and each user needs a separate middleware bucket.
-- Use `"auto:userId"` when tenant isolation is mandatory enough to keep when present, but `userId` is only a refinement when available.
-- Use `"off"` only when cross-tenant sharing is explicitly intended.
+- Omit `identityScope` when cross-tenant sharing is explicitly intended.
+- Use `{ tenant: true }` when the task must run inside a tenant and tenant-only isolation is enough.
+- Use `{ tenant: true, user: true }` when the task must run inside a tenant and each user needs a separate middleware bucket.
+- Add `required: false` when tenant or user data should only refine an existing key rather than being mandatory. Otherwise the default `required: true` behavior fails fast with `identityContextRequiredError`.
+- If the app has users but no tenant model, provide a constant tenant such as `"app"` and then use `{ tenant: true, user: true }` for per-user buckets under that one shared tenant.
 
 Examples:
 
@@ -5734,19 +5741,19 @@ import { middleware } from "@bluelibs/runner";
 middleware.task.rateLimit.with({
   windowMs: 60_000,
   max: 10,
-  identityScope: "required",
+  identityScope: { tenant: true },
 });
 
 // Tenant + user must both exist. Keys look like: <tenantId>:<userId>:...
 middleware.task.cache.with({
   ttl: 30_000,
-  identityScope: "full",
+  identityScope: { tenant: true, user: true },
 });
 
-// Tenant is required when present, userId refines the key only when available.
+// Tenant and user refine the key only when identity exists.
 middleware.task.debounce.with({
   ms: 250,
-  identityScope: "auto:userId",
+  identityScope: { required: false, tenant: true, user: true },
 });
 ```
 
@@ -6305,7 +6312,7 @@ These built-ins sit under two synthetic framework namespace resources:
 - `system`: owns locked internal infrastructure such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, and lifecycle events
 - `runner`: owns built-in utility globals such as `resources.mode`, `resources.health`, `resources.timers`, `resources.logger`, `resources.serializer`, `resources.queue`, core tags, middleware, framework errors, and optional debug/execution-context resources
 
-Both namespace resources are real Runner resources and expose `.meta.title` / `.meta.description` for docs and tooling. The transparent `runtime-framework-root` above them remains internal-only and does not appear in user-facing canonical ids.
+Both namespace resources are real Runner resources and expose `.meta.title` / `.meta.description` for docs and tooling. They also enforce the same metadata contract across the framework-owned resources, events, hooks, tags, and middleware they register. The transparent `runtime-framework-root` above them remains internal-only and does not appear in user-facing canonical ids.
 
 | Resource                      | What it gives you                                                                                                                                                                                                                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

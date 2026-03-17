@@ -52,6 +52,11 @@ export const identityContextResource = defineResource<
   Promise<IdentityContextResourceValue>
 >({
   id: "identityContext",
+  meta: {
+    title: "Identity Context Reader",
+    description:
+      "Exposes the configured runtime identity async context as a small resource dependency for identity-aware framework middleware.",
+  },
   configSchema: identityContextConfigPattern,
   init: async (config, _dependencies, _context) => ({
     tryUse() {

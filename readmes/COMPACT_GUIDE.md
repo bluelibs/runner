@@ -298,7 +298,7 @@ Ownership and ids:
 - Runner also creates two real framework namespace resources:
   - `system`: owns locked internals such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, and lifecycle events
   - `runner`: owns built-in utility globals such as `resources.mode`, `resources.health`, `resources.timers`, `resources.logger`, `resources.serializer`, `resources.queue`, core tags, middleware, and framework errors
-- `system` and `runner` carry proper `.meta.title` and `.meta.description` for docs and tooling, even though the transparent `runtime-framework-root` stays internal-only.
+- `system` and `runner` carry proper `.meta.title` and `.meta.description` for docs and tooling, and they enforce the same metadata contract across the framework-owned resources, events, hooks, tags, and middleware they register.
 
 Lazy resources:
 
@@ -487,7 +487,7 @@ Operational notes:
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `rateLimit`, `debounce`, and `throttle` default to `canonicalTaskKey + ":" + serialized input` partitioning and fail fast when the input cannot be serialized. Pass `keyBuilder(taskId, input, { canonicalKey })` when you want broader grouping such as per user, tenant, or request context, and use `maxKeys` when you need a hard cap on distinct live keys.
-- When `identityScope` is active, Runner prefixes internal middleware keys with `<tenantId>:`. Use `identityScope: "auto:userId"` when you want optional `userId` suffixing, or `identityScope: "full"` when you want strict `<tenantId>:<userId>:` partitioning and fail fast if `userId` is missing. Cache refs follow the same scope policy.
+- When `identityScope` is present, Runner prefixes internal middleware keys with `<tenantId>:`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` when identity should only refine the key when present. Cache refs stay raw; for tenant-aware invalidation, build refs through an app helper such as `CacheRefs.getTenantId()` so the same ref format is reused in `keyBuilder` and `invalidateRefs(...)`.
 - Resource `retry` and `timeout` use the same semantics on `middleware.resource.*`.
 
 Built-in journal keys exist for middleware introspection, for example cache hits, retry attempts, circuit-breaker state, and timeout abort controllers.
@@ -906,6 +906,7 @@ When your app needs extra runtime-validated fields such as `userId`, define your
 - `identity.require()` enforces identity presence, but it does not validate optional fields such as `userId` on the built-in identity context.
 - Prefer your own authorization middleware when access rules depend on the active user. If you want user presence enforced at identity binding time, require `userId` in a custom identity context and pass it to `run(..., { identity })`.
 - Provide identity at ingress with `identity.provide({ tenantId }, fn)`.
+- In Runner, `identity` is the async-context payload used to partition framework-managed state such as cache keys, rate limits, concurrency, and scheduling. It is not an identity-provider abstraction.
 - `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
 
 ```ts
@@ -930,25 +931,24 @@ await identity.provide({ tenantId: "acme", userId: "u1" }, () =>
 - If your custom identity context is already registered in the app graph, your app can also depend on it directly. If it is not, `run(..., { identity })` auto-registers it for runtime dependency usage.
 - Because identity lives in async context, nested `run()` calls inside the same async execution tree inherit it too.
 - Remote lanes and HTTP transport still require the context to be explicitly forwarded and allowlisted.
+- If your SaaS only has users and no real tenant model, provide a constant tenant such as `tenantId: "app"` at ingress when you want to use identity-aware middleware scopes.
 
-Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` default to `identityScope: "auto"`:
+Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` use the shared keyspace unless you set `identityScope`.
 
-- `"auto"`: partition by tenant when identity context exists, otherwise use shared space
-- `"auto:userId"`: same as `"auto"`, but append `userId` when the active identity context provides it
-- `"required"`: fail fast when `tenantId` is missing, and keep tenant-only partitioning
-- `"full"`: require both `tenantId` and `userId`, and partition as `<tenantId>:<userId>:...`
-- `"off"`: always use the shared non-tenant space
-- Legacy user-aware modes such as `"required:userId"` still work, but prefer `"full"` for strict per-user scoping.
+`identityScope` is an object:
+
+- `identityScope: { tenant: true }`: `required` defaults to `true`, so missing `tenantId` throws `identityContextRequiredError`; otherwise partition as `<tenantId>:...`
+- `identityScope: { tenant: true, user: true }`: same default `required: true`, but require both `tenantId` and `userId` and partition as `<tenantId>:<userId>:...`
+- `identityScope: { required: false, tenant: true }`: use `<tenantId>:...` only when identity exists
+- `identityScope: { required: false, tenant: true, user: true }`: append `userId` only when it exists
 
 Fast rule of thumb:
 
-- use omitted / `"auto"` for optional tenant partitioning
-- use `"required"` for strict tenant-only partitioning
-- use `"full"` for strict tenant+user partitioning
-- use `"auto:userId"` when `userId` is only an optional refinement
-- use `"off"` only for intentional cross-tenant sharing
-
-Use `"off"` only when cross-tenant sharing is intentional, such as a truly global cache or semaphore namespace.
+- omit `identityScope` for intentional cross-tenant sharing
+- use `{ tenant: true }` for strict tenant-only partitioning
+- use `{ tenant: true, user: true }` for strict tenant+user partitioning
+- add `required: false` when identity should be an optional refinement instead of a requirement
+- if the app is effectively single-tenant, use a constant tenant such as `"app"` and then `{ tenant: true, user: true }` for per-user buckets
 
 Platform note:
 

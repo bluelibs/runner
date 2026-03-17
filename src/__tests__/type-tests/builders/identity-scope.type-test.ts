@@ -3,22 +3,30 @@ import { concurrencyTaskMiddleware } from "../../../globals/middleware/concurren
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
 
 {
-  const requiredScope: IdentityScopeConfig = "required";
-  const requiredUserScope: IdentityScopeConfig = "required:userId";
-  const fullScope: IdentityScopeConfig = "full";
-  const offScope: IdentityScopeConfig = "off";
-  const autoScope: IdentityScopeConfig = "auto";
-  const autoUserScope: IdentityScopeConfig = "auto:userId";
+  const requiredTenantScope: IdentityScopeConfig = { tenant: true };
+  const optionalTenantScope: IdentityScopeConfig = {
+    required: false,
+    tenant: true,
+  };
+  const requiredUserScope: IdentityScopeConfig = {
+    tenant: true,
+    user: true,
+  };
+  const optionalUserScope: IdentityScopeConfig = {
+    required: false,
+    tenant: true,
+    user: true,
+  };
 
   rateLimitTaskMiddleware.with({
     windowMs: 1_000,
     max: 1,
-    identityScope: requiredScope,
+    identityScope: requiredTenantScope,
   });
 
   concurrencyTaskMiddleware.with({
     limit: 1,
-    identityScope: offScope,
+    identityScope: optionalTenantScope,
   });
 
   rateLimitTaskMiddleware.with({
@@ -30,23 +38,11 @@ import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.m
   rateLimitTaskMiddleware.with({
     windowMs: 1_000,
     max: 1,
-    identityScope: fullScope,
+    identityScope: optionalUserScope,
   });
 
-  rateLimitTaskMiddleware.with({
-    windowMs: 1_000,
-    max: 1,
-    identityScope: autoScope,
-  });
-
-  rateLimitTaskMiddleware.with({
-    windowMs: 1_000,
-    max: 1,
-    identityScope: autoUserScope,
-  });
-
-  // @ts-expect-error unsupported tenant scope mode
-  const invalidScope: IdentityScopeConfig = "queue";
+  // @ts-expect-error identityScope requires tenant: true when configured
+  const invalidScope: IdentityScopeConfig = { user: true };
 
   void invalidScope;
 }

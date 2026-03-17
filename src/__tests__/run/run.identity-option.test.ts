@@ -5,6 +5,8 @@ import {
 } from "../../errors";
 import { PlatformAdapter, resetPlatform, setPlatform } from "../../platform";
 
+const tenantScope = { tenant: true } as const;
+
 describe("run(..., { identity })", () => {
   afterEach(() => {
     resetPlatform();
@@ -17,7 +19,7 @@ describe("run(..., { identity })", () => {
         middleware.task.rateLimit.with({
           windowMs: 5_000,
           max: 1,
-          identityScope: "required",
+          identityScope: tenantScope,
         }),
       ])
       .run(async () => "ok")
@@ -56,7 +58,7 @@ describe("run(..., { identity })", () => {
         middleware.task.rateLimit.with({
           windowMs: 5_000,
           max: 1,
-          identityScope: "required",
+          identityScope: tenantScope,
         }),
       ])
       .run(async () => "ok")
@@ -148,7 +150,7 @@ describe("run(..., { identity })", () => {
         middleware.task.rateLimit.with({
           windowMs: 5_000,
           max: 1,
-          identityScope: "required",
+          identityScope: tenantScope,
         }),
       ])
       .run(async () => "ok")
@@ -191,7 +193,7 @@ describe("run(..., { identity })", () => {
         middleware.task.rateLimit.with({
           windowMs: 5_000,
           max: 1,
-          identityScope: "required",
+          identityScope: tenantScope,
         }),
       ])
       .run(async () => "ok")

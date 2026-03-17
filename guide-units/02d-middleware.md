@@ -296,11 +296,14 @@ const app = r
 Use semantic refs when multiple cached tasks should be refreshed after the same write.
 
 ```typescript
-import { middleware, r, resources } from "@bluelibs/runner";
+import { asyncContexts, middleware, r, resources } from "@bluelibs/runner";
 
 const CacheRefs = {
+  getTenantId() {
+    return asyncContexts.identity.use().tenantId;
+  },
   user(id: string) {
-    return `user:${id}` as const;
+    return `tenant:${this.getTenantId()}:user:${id}` as const;
   },
 };
 
@@ -335,7 +338,7 @@ Notes:
 
 - `keyBuilder(taskId, input, { canonicalKey })` may return either a plain string or `{ cacheKey, refs? }`.
 - Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`.
-- Refs follow the same `identityScope` policy as the cache key, so tenant-aware caches invalidate only their own tenant-scoped entries by default.
+- Refs do not follow `identityScope`. If you want tenant-aware invalidation, read the active identity inside your app helper, for example `CacheRefs.getTenantId()`, and build the ref string there so writes and invalidations always match.
 
 `totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
 
@@ -979,7 +982,7 @@ const getUser = r
 
 > **Note:** `cache`, `rateLimit`, `debounce`, and `throttle` default to partitioning by `canonicalTaskKey + ":" + serialized input`, and they fail fast when the input cannot be serialized. Provide `keyBuilder(taskId, input, { canonicalKey })` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. `canonicalKey` strips the `.tasks.` namespace marker so custom keys can stay readable. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
-> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active identity context is present. Use `"auto:userId"` when you want optional `userId` suffixing, or `"full"` when you want strict `<tenantId>:<userId>:<baseKey>` partitioning and fail fast if `userId` is missing. Cache refs follow the same scope policy. The default behavior is `"auto"`: use the tenant prefix when identity context exists, otherwise keep the shared key. Use `"required"` when identity context must exist, and `"off"` only for intentional cross-tenant sharing. Legacy user-aware modes such as `"required:userId"` still work, but prefer `"full"` for the clearer strict-per-user intent.
+> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:<baseKey>`, and set `required: false` when identity should only refine the key when available. Omit `identityScope` for the shared cross-identity keyspace. If your app has users but no tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and then use tenant+user scoping normally. Cache refs stay raw and are invalidated exactly as returned by `keyBuilder`.
 
 ### Resilience Orchestration
 

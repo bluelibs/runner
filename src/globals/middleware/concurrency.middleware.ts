@@ -84,6 +84,11 @@ function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
 
 export const concurrencyResource = defineResource({
   id: "concurrency",
+  meta: {
+    title: "Concurrency State",
+    description:
+      "Tracks shared semaphores for the built-in concurrency middleware, including keyed and identity-scoped partitions.",
+  },
   init: async () => ({
     semaphoresByConfig: new WeakMap<
       ConcurrencyMiddlewareConfig,
@@ -106,6 +111,11 @@ export const concurrencyResource = defineResource({
  */
 export const concurrencyTaskMiddleware = defineTaskMiddleware({
   id: "concurrency",
+  meta: {
+    title: "Concurrency Limit",
+    description:
+      "Limits concurrent task executions with semaphores, supporting shared keys and optional identity scoping.",
+  },
   throws: [middlewareConcurrencyConflictError],
   configSchema: concurrencyConfigPattern,
   dependencies: {

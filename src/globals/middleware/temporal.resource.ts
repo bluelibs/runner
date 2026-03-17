@@ -84,6 +84,11 @@ export function pruneThrottleStatesForCapacity<TConfig extends { ms: number }>(
 
 export const temporalResource = defineResource({
   id: "temporal",
+  meta: {
+    title: "Temporal Middleware State",
+    description:
+      "Stores debounce and throttle keyed state plus lifecycle-aware cleanup for the built-in temporal middleware.",
+  },
   dependencies: { timers: timersResource },
   context: (): TemporalResourceContext => ({}),
   init: async (

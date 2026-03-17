@@ -26,10 +26,7 @@ import {
 import { isResource, isResourceWithConfig } from "../../define";
 import { storeResource } from "../resources/store.resource";
 import { loggerResource } from "../resources/logger.resource";
-import { identityContextResource } from "../resources/identityContext.resource";
 import { normalizeCacheRefs, toStableTaskId } from "./cache.key";
-import { applyIdentityScopeToKey } from "./identityScope.shared";
-import type { IdentityScopeConfig } from "./identityScope.shared";
 import type { Store } from "../../models/Store";
 import { MiddlewareResolver } from "../../models/middleware/MiddlewareResolver";
 import { getSubtreeMiddlewareDuplicateKey } from "../../tools/subtreeMiddleware";
@@ -86,7 +83,6 @@ export interface CacheResourceValue {
 type CacheInvalidationTarget = {
   cacheOptions: CacheFactoryOptions;
   taskId: string;
-  identityScope: IdentityScopeConfig | undefined;
 };
 
 const cacheFactoryOptionsPattern = Match.Where(
@@ -114,6 +110,11 @@ const cacheResourceConfigPattern: ValidationSchemaInput<CacheResourceConfig> =
 export const cacheProviderResource: CacheProviderResourceDefinition =
   defineResource<void, Promise<CacheProvider>>({
     id: "cacheProvider",
+    meta: {
+      title: "Default Cache Provider",
+      description:
+        "Creates in-memory task-scoped cache providers when the cache resource is not configured with a custom provider.",
+    },
     init: async () => createDefaultCacheProvider(),
   });
 
@@ -124,10 +125,14 @@ export const cacheResource = defineResource<
     cacheProvider: typeof cacheProviderResource;
     logger: ReturnType<typeof loggerResource.optional>;
     store: typeof storeResource;
-    identityContext: typeof identityContextResource;
   }
 >({
   id: "cache",
+  meta: {
+    title: "Task Cache Registry",
+    description:
+      "Owns task-scoped cache instances, default cache options, and ref-based invalidation helpers for the built-in cache middleware.",
+  },
   configSchema: cacheResourceConfigPattern,
   // we cast it to :RegisterableItems[] because cacheMiddleware uses cacheResource
   register: (config): RegisterableItem[] => {
@@ -140,7 +145,6 @@ export const cacheResource = defineResource<
         cacheProvider: resource,
         logger: loggerResource.optional(),
         store: storeResource,
-        identityContext: identityContextResource,
       };
     }
 
@@ -148,12 +152,11 @@ export const cacheResource = defineResource<
       cacheProvider: cacheProviderResource,
       logger: loggerResource.optional(),
       store: storeResource,
-      identityContext: identityContextResource,
     };
   },
   init: async (
     config: CacheResourceConfig,
-    { cacheProvider, logger, store, identityContext },
+    { cacheProvider, logger, store },
   ) => {
     if (typeof cacheProvider !== "function") {
       validationError.throw({
@@ -192,13 +195,6 @@ export const cacheResource = defineResource<
         let deletedCount = 0;
 
         for (const target of cacheTargets) {
-          const scopedRefs = baseRefs.map((ref) =>
-            applyIdentityScopeToKey(
-              ref,
-              target.identityScope,
-              identityContext.tryUse,
-            ),
-          );
           try {
             const cacheInstance = await getCacheInstanceForInvalidation(
               cacheValue,
@@ -209,7 +205,7 @@ export const cacheResource = defineResource<
               continue;
             }
 
-            deletedCount += await cacheInstance.invalidateRefs(scopedRefs);
+            deletedCount += await cacheInstance.invalidateRefs(baseRefs);
           } catch (error) {
             // Ref invalidation is a best-effort fan-out across task-local
             // caches. One broken provider must not stop other targets from
@@ -219,7 +215,7 @@ export const cacheResource = defineResource<
               {
                 source: "cache",
                 data: {
-                  refs: scopedRefs,
+                  refs: baseRefs,
                   taskId: target.taskId,
                 },
                 error:
@@ -340,7 +336,6 @@ function getCacheEnabledTaskIds(
     taskTargets.set(taskId, {
       cacheOptions: resolvedConfig.cacheOptions,
       taskId,
-      identityScope: resolvedConfig.identityScope,
     });
   }
 

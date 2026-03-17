@@ -1,7 +1,10 @@
 import { middleware, r, resources, run } from "../../..";
 
+const tenantScope = { tenant: true } as const;
+const userScope = { tenant: true, user: true } as const;
+
 describe("tenant runtime option middleware integration", () => {
-  it("scopes cache refs and invalidation by the configured tenant context", async () => {
+  it("keeps cache keys tenant-scoped while refs remain raw", async () => {
     const tenant = r
       .asyncContext<{ tenantId: string; userId: string }>(
         "tenant-runtime-option-cache-ctx",
@@ -18,7 +21,7 @@ describe("tenant runtime option middleware integration", () => {
       .middleware([
         middleware.task.cache.with({
           ttl: 60_000,
-          identityScope: "required",
+          identityScope: tenantScope,
           keyBuilder: () => ({
             cacheKey: "profile",
             refs: ["profile"],
@@ -49,7 +52,7 @@ describe("tenant runtime option middleware integration", () => {
       cache.invalidateRefs("profile"),
     );
 
-    const acmeStillCached = await tenant.provide(
+    const acmeAfterGlobexInvalidate = await tenant.provide(
       { tenantId: "acme", userId: "u1" },
       () => runtime.runTask(cached),
     );
@@ -65,13 +68,13 @@ describe("tenant runtime option middleware integration", () => {
 
     expect(acme1).toBe(1);
     expect(acme2).toBe(1);
-    expect(acmeStillCached).toBe(1);
-    expect(acmeAfterInvalidate).toBe(2);
+    expect(acmeAfterGlobexInvalidate).toBe(2);
+    expect(acmeAfterInvalidate).toBe(3);
 
     await runtime.dispose();
   });
 
-  it("can also scope cache refs by user when the configured tenant context exposes userId", async () => {
+  it("can still isolate raw refs by user when keyBuilder encodes them", async () => {
     const tenant = r
       .asyncContext<{ tenantId: string; userId: string }>(
         "tenant-runtime-option-cache-user-ctx",
@@ -88,10 +91,10 @@ describe("tenant runtime option middleware integration", () => {
       .middleware([
         middleware.task.cache.with({
           ttl: 60_000,
-          identityScope: "full",
+          identityScope: userScope,
           keyBuilder: () => ({
             cacheKey: "profile",
-            refs: ["profile"],
+            refs: [`profile:${tenant.use().userId}`],
           }),
         }),
       ])
@@ -122,7 +125,7 @@ describe("tenant runtime option middleware integration", () => {
     );
 
     await tenant.provide({ tenantId: "acme", userId: "u1" }, () =>
-      cache.invalidateRefs("profile"),
+      cache.invalidateRefs("profile:u1"),
     );
 
     const acmeUserOneAfterInvalidate = await tenant.provide(
@@ -158,7 +161,7 @@ describe("tenant runtime option middleware integration", () => {
         middleware.task.concurrency.with({
           limit: 1,
           key: "shared",
-          identityScope: "required",
+          identityScope: tenantScope,
         }),
       ])
       .run(async () => {
@@ -200,7 +203,7 @@ describe("tenant runtime option middleware integration", () => {
       .middleware([
         middleware.task.debounce.with({
           ms: 25,
-          identityScope: "required",
+          identityScope: tenantScope,
           keyBuilder: () => "shared",
         }),
       ])
@@ -245,7 +248,7 @@ describe("tenant runtime option middleware integration", () => {
       .middleware([
         middleware.task.throttle.with({
           ms: 1_000,
-          identityScope: "required",
+          identityScope: tenantScope,
           keyBuilder: () => "shared",
         }),
       ])

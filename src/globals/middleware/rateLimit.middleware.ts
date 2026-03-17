@@ -104,6 +104,11 @@ export const journalKeys = {
  */
 export const rateLimitTaskMiddleware = defineTaskMiddleware({
   id: "rateLimit",
+  meta: {
+    title: "Rate Limit",
+    description:
+      "Enforces fixed-window task admission limits with optional identity-aware partitioning.",
+  },
   throws: [
     middlewareRateLimitExceededError,
     middlewareKeyCapacityExceededError,
