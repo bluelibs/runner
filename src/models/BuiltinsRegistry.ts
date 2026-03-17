@@ -17,13 +17,11 @@ import {
 import {
   debounceTaskMiddleware,
   throttleTaskMiddleware,
-  temporalResource,
 } from "../globals/middleware/temporal.middleware";
+import { temporalResource } from "../globals/middleware/temporal.resource";
 import { fallbackTaskMiddleware } from "../globals/middleware/fallback.middleware";
-import {
-  rateLimitTaskMiddleware,
-  rateLimitResource,
-} from "../globals/middleware/rateLimit.middleware";
+import { rateLimitTaskMiddleware } from "../globals/middleware/rateLimit.middleware";
+import { rateLimitResource } from "../globals/middleware/rateLimit.resource";
 import {
   circuitBreakerMiddleware,
   circuitBreakerResource,

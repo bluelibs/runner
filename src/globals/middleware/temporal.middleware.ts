@@ -1,6 +1,4 @@
-import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { globalTags } from "../globalTags";
 import {
   middlewareKeyCapacityExceededError,
   middlewareTemporalDisposedError,
@@ -11,28 +9,20 @@ import {
   defaultTaskKeyBuilder,
   type MiddlewareKeyBuilder,
 } from "./keyBuilder.shared";
-import {
-  deriveKeyedStateCleanupInterval,
-  ensureKeyedStateCapacity,
-  syncCleanupTimer,
-  type CleanupTimerState,
-} from "./keyedState.shared";
+import { ensureKeyedStateCapacity } from "./keyedState.shared";
 import {
   applyTenantScopeToKey,
   tenantScopePattern,
   type TenantScopedMiddlewareConfig,
 } from "./tenantScope.shared";
+import { type DebounceState, type ThrottleState } from "./temporal.shared";
 import {
-  type DebounceState,
-  pruneStaleDebounceStates,
-  pruneIdleThrottleStates,
-  rejectDebounceState,
-  rejectThrottleState,
-  type TemporalResourceState,
-  type ThrottleState,
-} from "./temporal.shared";
-import { timersResource } from "../resources/timers.resource";
-import type { ITimers } from "../../types/timers";
+  createTemporalDisposedError,
+  deleteEmptyDebounceStateMap,
+  pruneDebounceStatesForCapacity,
+  pruneThrottleStatesForCapacity,
+  temporalResource,
+} from "./temporal.resource";
 
 export interface TemporalMiddlewareConfig extends TenantScopedMiddlewareConfig {
   ms: number;
@@ -52,17 +42,6 @@ const temporalConfigPattern = Match.ObjectIncluding({
   tenantScope: tenantScopePattern,
 });
 
-const TEMPORAL_DISPOSED_ERROR_MESSAGE =
-  "Temporal middleware resource has been disposed.";
-
-type TemporalResourceContext = CleanupTimerState;
-
-function createTemporalDisposedError() {
-  return middlewareTemporalDisposedError.new({
-    message: TEMPORAL_DISPOSED_ERROR_MESSAGE,
-  });
-}
-
 function buildTemporalMiddlewareKey(
   config: TemporalMiddlewareConfig,
   taskId: string,
@@ -80,182 +59,6 @@ function buildTemporalMiddlewareKey(
 
   return applyTenantScopeToKey(key, config.tenantScope);
 }
-
-function deleteEmptyDebounceStateMap(
-  state: TemporalResourceState<TemporalMiddlewareConfig>,
-  config: TemporalMiddlewareConfig,
-  keyedStates: Map<string, DebounceState>,
-) {
-  if (keyedStates.size > 0) {
-    return;
-  }
-
-  state.debounceStateMaps?.delete(config);
-  state.debounceStates.delete(config);
-  state.sweepIdleStates?.(Date.now());
-}
-
-function pruneDebounceStatesForCapacity(
-  state: TemporalResourceState<TemporalMiddlewareConfig>,
-  debounceStates: Map<string, DebounceState>,
-  config: TemporalMiddlewareConfig,
-) {
-  if (state.sweepIdleStates) {
-    state.sweepIdleStates(Date.now());
-    return;
-  }
-
-  pruneStaleDebounceStates(
-    debounceStates,
-    state.trackedDebounceStates,
-    Date.now(),
-    config.ms,
-  );
-}
-
-function pruneThrottleStatesForCapacity(
-  state: TemporalResourceState<TemporalMiddlewareConfig>,
-  throttleStates: Map<string, ThrottleState>,
-  config: TemporalMiddlewareConfig,
-) {
-  if (state.sweepIdleStates) {
-    state.sweepIdleStates(Date.now());
-    return;
-  }
-
-  pruneIdleThrottleStates(
-    throttleStates,
-    state.trackedThrottleStates,
-    Date.now(),
-    config.ms,
-  );
-}
-
-export const temporalResource = defineResource({
-  id: "temporal",
-  tags: [globalTags.system],
-  dependencies: { timers: timersResource },
-  context: (): TemporalResourceContext => ({}),
-  init: async (
-    _config,
-    { timers }: { timers: ITimers },
-    context: TemporalResourceContext,
-  ): Promise<TemporalResourceState<TemporalMiddlewareConfig>> => {
-    const debounceStates = new WeakMap<
-      TemporalMiddlewareConfig,
-      Map<string, DebounceState>
-    >();
-    const throttleStates = new WeakMap<
-      TemporalMiddlewareConfig,
-      Map<string, ThrottleState>
-    >();
-    const debounceStateMaps = new Map<
-      TemporalMiddlewareConfig,
-      Map<string, DebounceState>
-    >();
-    const throttleStateMaps = new Map<
-      TemporalMiddlewareConfig,
-      Map<string, ThrottleState>
-    >();
-
-    const getCleanupInterval = () =>
-      deriveKeyedStateCleanupInterval([
-        ...Array.from(debounceStateMaps.keys(), (config) => config.ms),
-        ...Array.from(throttleStateMaps.keys(), (config) => config.ms),
-      ]);
-
-    const syncResourceCleanupTimer = () => {
-      syncCleanupTimer(context, timers, getCleanupInterval(), () => {
-        resourceState.sweepIdleStates?.(Date.now());
-      });
-    };
-
-    const resourceState: TemporalResourceState<TemporalMiddlewareConfig> = {
-      debounceStates,
-      throttleStates,
-      debounceStateMaps,
-      throttleStateMaps,
-      trackedDebounceStates: new Set<DebounceState>(),
-      trackedThrottleStates: new Set<ThrottleState>(),
-      disposeCleanupTimer: () => {
-        syncCleanupTimer(context, timers, undefined);
-      },
-      registerDebounceStateMap: (
-        config: TemporalMiddlewareConfig,
-        keyedStates: Map<string, DebounceState>,
-      ) => {
-        debounceStates.set(config, keyedStates);
-        debounceStateMaps.set(config, keyedStates);
-        syncResourceCleanupTimer();
-      },
-      registerThrottleStateMap: (
-        config: TemporalMiddlewareConfig,
-        keyedStates: Map<string, ThrottleState>,
-      ) => {
-        throttleStates.set(config, keyedStates);
-        throttleStateMaps.set(config, keyedStates);
-        syncResourceCleanupTimer();
-      },
-      sweepIdleStates: (now: number) => {
-        for (const [config, keyedStates] of debounceStateMaps) {
-          pruneStaleDebounceStates(
-            keyedStates,
-            resourceState.trackedDebounceStates,
-            now,
-            config.ms,
-          );
-          if (keyedStates.size === 0) {
-            debounceStateMaps.delete(config);
-            debounceStates.delete(config);
-          }
-        }
-
-        for (const [config, keyedStates] of throttleStateMaps) {
-          pruneIdleThrottleStates(
-            keyedStates,
-            resourceState.trackedThrottleStates,
-            now,
-            config.ms,
-          );
-          if (keyedStates.size === 0) {
-            throttleStateMaps.delete(config);
-            throttleStates.delete(config);
-          }
-        }
-
-        syncResourceCleanupTimer();
-      },
-      isDisposed: false,
-    };
-
-    return resourceState;
-  },
-  cooldown: async (_state, _config, _deps, context) => {
-    context.cleanupTimer?.cancel();
-    context.cleanupTimer = undefined;
-    context.cleanupIntervalMs = undefined;
-  },
-  dispose: async (state: TemporalResourceState<TemporalMiddlewareConfig>) => {
-    state.isDisposed = true;
-    state.disposeCleanupTimer?.();
-    const disposeError = createTemporalDisposedError();
-    const trackedDebounceStates = state.trackedDebounceStates;
-    const trackedThrottleStates = state.trackedThrottleStates;
-
-    trackedDebounceStates.forEach((debounceState) => {
-      rejectDebounceState(debounceState, disposeError);
-    });
-
-    trackedThrottleStates.forEach((throttleState) => {
-      rejectThrottleState(throttleState, disposeError);
-    });
-
-    trackedDebounceStates.clear();
-    trackedThrottleStates.clear();
-    state.debounceStateMaps?.clear();
-    state.throttleStateMaps?.clear();
-  },
-});
 
 export type {
   DebounceState,
@@ -359,6 +162,8 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
     return promise;
   },
 });
+
+export { temporalResource } from "./temporal.resource";
 
 /**
  * Throttle middleware: ensures execution at most once every `ms`.

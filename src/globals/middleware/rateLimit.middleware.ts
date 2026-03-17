@@ -1,7 +1,5 @@
-import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
-import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import {
   middlewareKeyCapacityExceededError,
@@ -14,19 +12,17 @@ import {
   defaultTaskKeyBuilder,
   type MiddlewareKeyBuilder,
 } from "./keyBuilder.shared";
-import {
-  deriveKeyedStateCleanupInterval,
-  ensureKeyedStateCapacity,
-  syncCleanupTimer,
-  type CleanupTimerState,
-} from "./keyedState.shared";
+import { ensureKeyedStateCapacity } from "./keyedState.shared";
 import {
   applyTenantScopeToKey,
   tenantScopePattern,
   type TenantScopedMiddlewareConfig,
 } from "./tenantScope.shared";
-import { timersResource } from "../resources/timers.resource";
-import type { ITimers } from "../../types/timers";
+import {
+  pruneRateLimitStatesForCapacity,
+  rateLimitResource,
+  type RateLimitState,
+} from "./rateLimit.resource";
 
 export interface RateLimitMiddlewareConfig extends TenantScopedMiddlewareConfig {
   /**
@@ -77,27 +73,6 @@ export class RateLimitError extends RunnerError<{ message: string }> {
   }
 }
 
-export interface RateLimitState {
-  count: number;
-  resetTime: number;
-}
-
-/**
- * Internal resource state used by the built-in rate-limit middleware.
- */
-export interface RateLimitResourceState {
-  states: WeakMap<RateLimitMiddlewareConfig, Map<string, RateLimitState>>;
-  trackedStates: Map<RateLimitMiddlewareConfig, Map<string, RateLimitState>>;
-  disposeCleanupTimer: () => void;
-  registerConfigMap: (
-    config: RateLimitMiddlewareConfig,
-    keyedStates: Map<string, RateLimitState>,
-  ) => void;
-  sweepExpiredStates: (now: number) => void;
-}
-
-type RateLimitResourceContext = CleanupTimerState;
-
 /**
  * Journal keys exposed by the rate limit middleware.
  * Use these to access shared state from downstream middleware or tasks.
@@ -116,100 +91,6 @@ export const journalKeys = {
     "runner.middleware.task.rateLimit.limit",
   ),
 } as const;
-
-export const rateLimitResource = defineResource({
-  id: "rateLimit",
-  tags: [globalTags.system],
-  dependencies: { timers: timersResource },
-  context: (): RateLimitResourceContext => ({}),
-  init: async (
-    _config,
-    { timers }: { timers: ITimers },
-    context: RateLimitResourceContext,
-  ): Promise<RateLimitResourceState> => {
-    const trackedStates = new Map<
-      RateLimitMiddlewareConfig,
-      Map<string, RateLimitState>
-    >();
-    const states = new WeakMap<
-      RateLimitMiddlewareConfig,
-      Map<string, RateLimitState>
-    >();
-
-    const getCleanupInterval = () =>
-      deriveKeyedStateCleanupInterval(
-        Array.from(trackedStates.keys(), (config) => config.windowMs),
-      );
-
-    const syncResourceCleanupTimer = () => {
-      syncCleanupTimer(context, timers, getCleanupInterval(), () => {
-        resourceState.sweepExpiredStates(Date.now());
-      });
-    };
-
-    const resourceState: RateLimitResourceState = {
-      states,
-      trackedStates,
-      disposeCleanupTimer: () => {
-        syncCleanupTimer(context, timers, undefined);
-      },
-      registerConfigMap: (
-        config: RateLimitMiddlewareConfig,
-        keyedStates: Map<string, RateLimitState>,
-      ) => {
-        states.set(config, keyedStates);
-        trackedStates.set(config, keyedStates);
-        syncResourceCleanupTimer();
-      },
-      sweepExpiredStates: (now: number) => {
-        for (const [config, keyedStates] of trackedStates) {
-          pruneExpiredRateLimitStates(keyedStates, now);
-          if (keyedStates.size === 0) {
-            trackedStates.delete(config);
-            states.delete(config);
-          }
-        }
-
-        syncResourceCleanupTimer();
-      },
-    };
-
-    return resourceState;
-  },
-  cooldown: async (_state, _config, _deps, context) => {
-    context.cleanupTimer?.cancel();
-    context.cleanupTimer = undefined;
-    context.cleanupIntervalMs = undefined;
-  },
-  dispose: async (state, _config, _deps, context) => {
-    state.trackedStates.clear();
-    state.disposeCleanupTimer();
-    context.cleanupTimer = undefined;
-    context.cleanupIntervalMs = undefined;
-  },
-});
-
-function pruneExpiredRateLimitStates(
-  keyedStates: Map<string, RateLimitState>,
-  now: number,
-) {
-  for (const [key, keyedState] of keyedStates) {
-    if (now >= keyedState.resetTime) {
-      keyedStates.delete(key);
-    }
-  }
-}
-
-function pruneRateLimitStatesForCapacity(
-  state: RateLimitResourceState,
-  keyedStates: Map<string, RateLimitState>,
-  now: number,
-) {
-  state.sweepExpiredStates?.(now);
-  if (!state.sweepExpiredStates) {
-    pruneExpiredRateLimitStates(keyedStates, now);
-  }
-}
 
 /**
  * Rate limit middleware: limits the number of executions within a fixed time window.
@@ -288,3 +169,9 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     return await next(task.input);
   },
 });
+
+export type {
+  RateLimitResourceState,
+  RateLimitState,
+} from "./rateLimit.resource";
+export { rateLimitResource } from "./rateLimit.resource";

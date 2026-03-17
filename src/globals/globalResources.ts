@@ -4,8 +4,8 @@ import {
 } from "./middleware/cache.resource";
 import { circuitBreakerResource } from "./middleware/circuitBreaker.middleware";
 import { concurrencyResource } from "./middleware/concurrency.middleware";
-import { rateLimitResource } from "./middleware/rateLimit.middleware";
-import { temporalResource } from "./middleware/temporal.middleware";
+import { rateLimitResource } from "./middleware/rateLimit.resource";
+import { temporalResource } from "./middleware/temporal.resource";
 import { cronResource as cron } from "./cron/cron.resource";
 import { queueResource } from "./resources/queue.resource";
 import { healthResource } from "./resources/health.resource";
