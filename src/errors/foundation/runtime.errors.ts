@@ -291,27 +291,53 @@ export const taskBlockedByResourceHealthError = error<
   )
   .build();
 
-export const tenantContextRequiredError = error<DefaultErrorType>(
-  "tenantContextRequired",
+export const identityContextRequiredError = error<DefaultErrorType>(
+  "identityContextRequired",
 )
   .format(
     () =>
-      "Tenant context is required but not available. Provide it via asyncContexts.tenant.provide({ tenantId }, fn).",
+      "Identity context is required but not available. Provide the runtime's active identity async context before running identity-sensitive work.",
   )
   .remediation(
-    "Wrap tenant-sensitive work in asyncContexts.tenant.provide(...), or set tenantScope: 'off' only when cross-tenant sharing is intentional.",
+    "Wrap identity-sensitive work in your configured identity context's provide(...). If you rely on the built-in default, use asyncContexts.identity.provide(...). Set identityScope: 'off' only when cross-identity sharing is intentional.",
   )
   .build();
 
-export const tenantInvalidContextError = error<
+export const identityInvalidContextError = error<
   { reason?: string } & DefaultErrorType
->("tenantInvalidContext")
+>("identityInvalidContext")
   .format(
     ({ reason }) =>
       reason ??
-      'Tenant context must be an object containing a non-empty string "tenantId" that does not contain ":" and is not "__global__".',
+      'Identity context may include "tenantId" and "userId", and any provided ids must be non-empty strings that do not contain ":" while "tenantId" must not be "__global__".',
   )
   .remediation(
-    'Pass asyncContexts.tenant.provide({ tenantId: "your-tenant" }, fn) with a valid non-empty tenant id that does not contain ":" and is not "__global__".',
+    'Provide an identity async context value whose ids are valid strings. If you use the built-in default context, call asyncContexts.identity.provide({ tenantId: "your-tenant", userId: "your-user" }, fn) or omit fields that are not known yet.',
+  )
+  .build();
+
+export const identityRunOptionRequiresAsyncLocalStorageError = error<
+  { contextId: string } & DefaultErrorType
+>("identityRunOptionRequiresAsyncLocalStorage")
+  .format(
+    ({ contextId }) =>
+      `run(..., { identity }) requires AsyncLocalStorage, but the configured identity context "${contextId}" is running in an environment without it.`,
+  )
+  .remediation(
+    ({ contextId }) =>
+      `Use run(..., { identity: ${contextId} }) only on platforms with AsyncLocalStorage support, or omit the identity run option in browser-like runtimes.`,
+  )
+  .build();
+
+export const identityRunOptionContextNotRegisteredError = error<
+  { contextId: string } & DefaultErrorType
+>("identityRunOptionContextNotRegistered")
+  .format(
+    ({ contextId }) =>
+      `run(..., { identity }) received async context "${contextId}", but Runner could not register it for this runtime.`,
+  )
+  .remediation(
+    ({ contextId }) =>
+      `Ensure async context "${contextId}" is a valid Runner async context accessor. Runner auto-registers the configured identity context for dependency usage, but remote lanes still require normal async-context allowlisting for transport forwarding.`,
   )
   .build();

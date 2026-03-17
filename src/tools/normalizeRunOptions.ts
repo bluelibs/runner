@@ -50,6 +50,7 @@ export function normalizeRunOptions(
     onUnhandledErrorInput: options?.onUnhandledError,
     dryRun,
     executionContext: resolveExecutionContextConfig(options?.executionContext),
+    identity: options?.identity ?? null,
     lazy,
     lifecycleMode,
     mode,

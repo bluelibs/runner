@@ -236,6 +236,79 @@ await rr.dispose();
 
 ---
 
+## Async Contexts
+
+Use `r.asyncContext(id)` for request-local business state such as tenant ids, auth claims, locale, or request metadata.
+
+Builder chain example:
+
+```ts
+const requestContextShape = Match.Object({
+  requestId: Match.NonEmptyString,
+  tenantId: Match.NonEmptyString,
+});
+
+const requestContext = r
+  .asyncContext("requestContext")
+  .schema(requestContextShape)
+  .serialize((value) => JSON.stringify(value))
+  .parse((raw) => requestContextShape.parse(JSON.parse(raw)))
+  .meta({
+    title: "Request Context",
+    description: "Per-request business metadata",
+  })
+  .build();
+```
+
+Runtime usage:
+
+```ts
+const auditTask = r
+  .task("tasks.audit")
+  .dependencies({ requestContext })
+  .middleware([requestContext.require()])
+  .run(async (_input, { requestContext }) => {
+    return requestContext.use().requestId;
+  })
+  .build();
+
+const app = r
+  .resource("app.async-context")
+  .register([requestContext, auditTask])
+  .build();
+
+const runtime = await run(app);
+
+await requestContext.provide(
+  { requestId: "req_1", tenantId: "acme" },
+  () => runtime.runTask(auditTask),
+);
+```
+
+Key rules:
+
+- `.schema()` is an alias for `.configSchema()` and validates values when `provide(...)` is called.
+- Call `.schema()` before custom `.serialize()` or `.parse()`; schema rebinding after transport callbacks is rejected.
+- `.meta()` attaches docs/tooling metadata.
+- `.build()` returns the accessor with `use()`, `tryUse()`, `has()`, `provide()`, `require()`, and `optional()`.
+- Register the built context before injecting it as a required dependency.
+- Use `ctx.optional()` when the dependency may not be registered in a given app.
+- Default serialization uses Runner's serializer; customize it only when a transport boundary needs a stable wire format.
+
+Optional dependency example:
+
+```ts
+const maybeAudit = r
+  .task("tasks.maybeAudit")
+  .dependencies({ requestContext: requestContext.optional() })
+  .run(async (_input, { requestContext }) => {
+    return requestContext?.tryUse()?.requestId;
+  })
+  .build();
+```
+
+---
+
 ## Middleware Builders
 
 Task middleware:

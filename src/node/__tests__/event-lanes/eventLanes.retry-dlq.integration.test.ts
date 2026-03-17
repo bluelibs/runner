@@ -1,5 +1,5 @@
 import { genericError } from "../../../errors";
-import { r, run, tags } from "../../..";
+import { r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -96,17 +96,19 @@ async function waitUntil(
 
 describe("event-lanes: failure settlement + retries", () => {
   it("nacks without requeue after final failure", async () => {
-    const lane = r.eventLane("tests-event-lanes-failure-settle-lane").build();
     const queue = new TestQueue();
 
-    const tagged = r
+    const event = r
       .event<{ id: string }>("tests-event-lanes-failure-settle-event")
-      .tags([tags.eventLane.with({ lane })])
+      .build();
+    const lane = r
+      .eventLane("tests-event-lanes-failure-settle-lane")
+      .applyTo([event])
       .build();
 
     const failingHook = r
       .hook("tests-event-lanes-failure-settle-failing-hook")
-      .on(tagged)
+      .on(event)
       .run(async () => {
         throw genericError.new({ message: "hook failed" });
       })
@@ -114,22 +116,22 @@ describe("event-lanes: failure settlement + retries", () => {
 
     const emitTask = r
       .task("tests-event-lanes-failure-settle-emit")
-      .dependencies({ tagged })
-      .run(async (_input, { tagged }) => {
-        await tagged({ id: "evt-1" });
+      .dependencies({ event })
+      .run(async (_input, { event }) => {
+        await event({ id: "evt-1" });
       })
       .build();
 
     const app = r
       .resource("tests-event-lanes-failure-settle-app")
       .register([
-        tagged,
+        event,
         failingHook,
         emitTask,
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue }],
           },
         }),
@@ -146,19 +148,19 @@ describe("event-lanes: failure settlement + retries", () => {
   });
 
   it("normalizes primitive failures and still settles with nack(false)", async () => {
-    const lane = r
-      .eventLane("tests-event-lanes-failure-primitive-lane")
-      .build();
     const queue = new TestQueue();
 
-    const tagged = r
+    const event = r
       .event<{ id: string }>("tests-event-lanes-failure-primitive-event")
-      .tags([tags.eventLane.with({ lane })])
+      .build();
+    const lane = r
+      .eventLane("tests-event-lanes-failure-primitive-lane")
+      .applyTo([event])
       .build();
 
     const failingHook = r
       .hook("tests-event-lanes-failure-primitive-failing-hook")
-      .on(tagged)
+      .on(event)
       .run(async () => {
         throw "primitive-failure";
       })
@@ -166,22 +168,22 @@ describe("event-lanes: failure settlement + retries", () => {
 
     const emitTask = r
       .task("tests-event-lanes-failure-primitive-emit")
-      .dependencies({ tagged })
-      .run(async (_input, { tagged }) => {
-        await tagged({ id: "evt-primitive" });
+      .dependencies({ event })
+      .run(async (_input, { event }) => {
+        await event({ id: "evt-primitive" });
       })
       .build();
 
     const app = r
       .resource("tests-event-lanes-failure-primitive-app")
       .register([
-        tagged,
+        event,
         failingHook,
         emitTask,
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue }],
           },
         }),
@@ -198,17 +200,19 @@ describe("event-lanes: failure settlement + retries", () => {
   });
 
   it("retries before final nack(false) when maxAttempts is greater than one", async () => {
-    const lane = r.eventLane("tests-event-lanes-retry-multiple-lane").build();
     const queue = new TestQueue();
 
-    const tagged = r
+    const event = r
       .event<{ id: string }>("tests-event-lanes-retry-multiple-event")
-      .tags([tags.eventLane.with({ lane })])
+      .build();
+    const lane = r
+      .eventLane("tests-event-lanes-retry-multiple-lane")
+      .applyTo([event])
       .build();
 
     const failingHook = r
       .hook("tests-event-lanes-retry-multiple-failing-hook")
-      .on(tagged)
+      .on(event)
       .run(async () => {
         throw genericError.new({ message: "hook failed on retry" });
       })
@@ -216,22 +220,22 @@ describe("event-lanes: failure settlement + retries", () => {
 
     const emitTask = r
       .task("tests-event-lanes-retry-multiple-emit")
-      .dependencies({ tagged })
-      .run(async (_input, { tagged }) => {
-        await tagged({ id: "evt-retry" });
+      .dependencies({ event })
+      .run(async (_input, { event }) => {
+        await event({ id: "evt-retry" });
       })
       .build();
 
     const app = r
       .resource("tests-event-lanes-retry-multiple-app")
       .register([
-        tagged,
+        event,
         failingHook,
         emitTask,
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue, maxAttempts: 2 }],
           },
         }),

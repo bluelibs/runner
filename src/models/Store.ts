@@ -34,6 +34,7 @@ import {
 import type { RuntimeCallSource } from "../types/runtimeSource";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
+import { asyncContexts } from "../asyncContexts";
 import { OnUnhandledError } from "./UnhandledError";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { RunnerMode } from "../types/runner";
@@ -56,6 +57,7 @@ import { StoreLookup, resolveRequestedIdFromStore } from "./StoreLookup";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import { resolveExecutionContextConfig } from "../tools/resolveExecutionContextConfig";
 import type { AccessViolation } from "./VisibilityTracker";
+import type { IdentityAsyncContext } from "../types/runner";
 
 // Re-export types for backward compatibility
 export type {
@@ -579,6 +581,7 @@ export class Store {
     options?: {
       debug?: DebugFriendlyConfig;
       executionContext?: RunResult<unknown>["runOptions"]["executionContext"];
+      identity?: IdentityAsyncContext | null;
     },
   ) {
     if (this.#isInitialized) {
@@ -589,9 +592,11 @@ export class Store {
       rootItem: root.with(config as any),
       debug: options?.debug,
       executionContext: options?.executionContext ?? null,
+      identity: options?.identity ?? null,
     });
 
     this.registry.computeRegistrationDeeply(frameworkRoot);
+    this.ensureRuntimeIdentityContextRegistered(options?.identity ?? null);
     this.bindFrameworkResourceValues(runtimeResult);
     const rootEntry = this.resolveRootEntry(root);
     this.root = rootEntry;
@@ -607,6 +612,17 @@ export class Store {
     }
 
     this.#isInitialized = true;
+  }
+
+  private ensureRuntimeIdentityContextRegistered(
+    identity: IdentityAsyncContext | null,
+  ): void {
+    const activeIdentity = identity ?? asyncContexts.identity;
+    if (this.lookup.tryCanonicalId(activeIdentity)) {
+      return;
+    }
+
+    this.registry.storeOwnedAsyncContext("runner", activeIdentity);
   }
 
   public async dispose() {

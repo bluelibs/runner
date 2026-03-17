@@ -145,7 +145,7 @@ describe("event lane builder", () => {
 
     const topology = r.eventLane.topology({
       profiles: {
-        worker: { consume: [laneA, laneB] },
+        worker: { consume: [{ lane: laneA }, { lane: laneB }] },
       },
       bindings: [
         { lane: laneA, queue: { id: "queue-a" } },
@@ -153,7 +153,10 @@ describe("event lane builder", () => {
       ],
     });
 
-    expect(topology.profiles.worker.consume).toEqual([laneA, laneB]);
+    expect(topology.profiles.worker.consume).toEqual([
+      { lane: laneA },
+      { lane: laneB },
+    ]);
     expect(Object.isFrozen(topology)).toBe(true);
   });
 });

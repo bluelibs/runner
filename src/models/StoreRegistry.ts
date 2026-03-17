@@ -33,6 +33,7 @@ import { StoreRegistryDefinitionPreparer } from "./store-registry/StoreRegistryD
 import { StoreRegistryTagIndex } from "./store-registry/StoreRegistryTagIndex";
 import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
+import { RegisterableKind } from "./store-registry/registerableKind";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
 import type { RunnerMode } from "../types/runner";
@@ -367,6 +368,26 @@ export class StoreRegistry {
   storeAsyncContext<_C>(item: IAsyncContext<any>) {
     this.clearHookTargetResolutionCache();
     return this.writer.storeAsyncContext<_C>(item);
+  }
+
+  storeOwnedAsyncContext(
+    ownerResourceId: string,
+    item: IAsyncContext<any>,
+  ): IAsyncContext<any> {
+    this.clearHookTargetResolutionCache();
+    const compiled = this.writer.compileOwnedDefinition(
+      ownerResourceId,
+      false,
+      item,
+      RegisterableKind.AsyncContext,
+    ) as IAsyncContext<any>;
+
+    this.visibilityTracker.recordOwnership(ownerResourceId, compiled);
+    this.registerDefinitionAlias(item, compiled.id);
+    this.registerDefinitionAlias(compiled, compiled.id);
+    this.writer.storeAsyncContext(compiled);
+
+    return compiled;
   }
 
   storeTag(item: ITag<any, any, any>) {

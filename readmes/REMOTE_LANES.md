@@ -190,7 +190,7 @@ const queue = new MemoryEventLaneQueue();
 const topology = r.eventLane.topology({
   profiles: {
     api: { consume: [] },
-    worker: { consume: [lane] },
+    worker: { consume: [{ lane: lane }] },
   },
   bindings: [{ lane, queue }],
 });
@@ -229,14 +229,16 @@ import {
 } from "@bluelibs/runner/node";
 
 // 1. Define a lane — a logical routing channel
-const notificationsLane = r.eventLane("notifications-lane").build();
-
-// 2. Tag the event for lane routing
 const notificationRequested = r
   .event<{ userId: string; channel: "email" | "sms" }>(
     "app.events.notificationRequested",
   )
-  .tags([tags.eventLane.with({ lane: notificationsLane })])
+  .build();
+
+// 2. Assign the event to a lane
+const notificationsLane = r
+  .eventLane("notifications-lane")
+  .applyTo([notificationRequested])
   .build();
 
 // 3. Hook runs on the consumer side after relay
@@ -253,7 +255,7 @@ const sendNotification = r
 const topology = r.eventLane.topology({
   profiles: {
     api: { consume: [] },
-    worker: { consume: [notificationsLane] },
+    worker: { consume: [{ lane: notificationsLane }] },
   },
   bindings: [
     {
@@ -281,7 +283,43 @@ const app = r
   .build();
 ```
 
-**What you just learned**: Lane definition, event tagging, topology wiring, and profile-based consumer routing — the full Event Lane pattern.
+**What you just learned**: Lane definition, lane-side event assignment, topology wiring, and profile-based consumer routing — the full Event Lane pattern.
+
+### Consumer Hook Policy
+
+When a consumer runtime can handle multiple event lanes, topology can narrow which hooks run for one lane's relay deliveries:
+
+```typescript
+const auditNotification = r
+  .hook("app.hooks.auditNotification")
+  .on(notificationRequested)
+  .run(async (event) => {
+    await auditLog(event.data);
+  })
+  .build();
+
+const topology = r.eventLane.topology({
+  profiles: {
+    worker: {
+      consume: [
+        {
+          lane: notificationsLane,
+          hooks: { only: [sendNotification] },
+        },
+      ],
+    },
+  },
+  bindings: [{ lane: notificationsLane, queue: new MemoryEventLaneQueue() }],
+});
+```
+
+Behavior:
+
+- `sendNotification` runs for relay deliveries consumed from `notificationsLane`.
+- `auditNotification` is skipped on that relay path because it is not in `hooks.only`.
+- Local in-process emissions are unaffected by `hooks.only`; the allowlist matters only on relay re-emits.
+
+Why: a single consumer runtime can process more than one lane, so topology-owned hook policy keeps relay behavior explicit in the same place that declares lane consumption.
 
 ### Event Lane Network Lifecycle (Auth + Serialization)
 
@@ -518,7 +556,7 @@ Multiple worker processes consume from the same queue. Each worker gets `prefetc
 const topology = r.eventLane.topology({
   profiles: {
     api: { consume: [] },
-    worker: { consume: [emailLane, smsLane] },
+    worker: { consume: [{ lane: emailLane }, { lane: smsLane }] },
   },
   bindings: [
     { lane: emailLane, queue: emailQueue, prefetch: 16 },
@@ -536,7 +574,7 @@ Start with one profile that does everything, then split as traffic grows. Bindin
 // Phase 1: monolith — one profile consumes all lanes
 const topology = r.eventLane.topology({
   profiles: {
-    mono: { consume: [emailLane, analyticsLane] },
+    mono: { consume: [{ lane: emailLane }, { lane: analyticsLane }] },
   },
   bindings: [
     { lane: emailLane, queue: emailQueue },
@@ -547,8 +585,8 @@ const topology = r.eventLane.topology({
 // Phase 2: split workers — add profiles, same bindings
 const topology = r.eventLane.topology({
   profiles: {
-    emailWorker: { consume: [emailLane] },
-    analyticsWorker: { consume: [analyticsLane] },
+    emailWorker: { consume: [{ lane: emailLane }] },
+    analyticsWorker: { consume: [{ lane: analyticsLane }] },
   },
   bindings: [
     { lane: emailLane, queue: emailQueue },
@@ -639,7 +677,7 @@ const lane = r.eventLane("test-lane").build();
 const queue = new MemoryEventLaneQueue();
 
 const topology = r.eventLane.topology({
-  profiles: { test: { consume: [lane] } },
+  profiles: { test: { consume: [{ lane: lane }] } },
   bindings: [{ lane, queue }],
 });
 
@@ -687,7 +725,7 @@ If you see `skip-inactive-lane`, your active profile likely doesn't include the 
 Key rules:
 
 - `mode` is authoritative and sits above topology/profile routing.
-- In `transparent` and `local-simulated`, profile routing (`consume`/`serve`) is ignored for transport decisions.
+- In `transparent` and `local-simulated`, profile routing (`consume`/`serve`) does not start network consumers/servers, but those entries can still declare lane presence and relay hook policy.
 - Only `network` uses queue/communicator bindings for remote routing.
 
 ## Security and Exposure
@@ -812,7 +850,7 @@ const notificationsLane = r.eventLane("notifications-lane").build();
 const topology = r.eventLane.topology({
   profiles: {
     api: { consume: [] }, // producer profile
-    worker: { consume: [notificationsLane] }, // consumer profile
+    worker: { consume: [{ lane: notificationsLane }] }, // consumer profile
   },
   bindings: [
     {
@@ -848,7 +886,7 @@ Legacy pre-lane event routing (`events` + `emit` + `eventDeliveryMode`) is remov
 | Legacy pre-lane pattern                  | v6 replacement                                          |
 | ---------------------------------------- | ------------------------------------------------------- |
 | `remoteResource.with({ events: [...] })` | `eventLanesResource.with({ topology, profile })`        |
-| `remoteResource.with({ emit: [...] })`   | Tag events with `tags.eventLane.with({ lane })` |
+| `remoteResource.with({ emit: [...] })`   | Assign events with `r.eventLane(...).applyTo([...])`    |
 | `eventDeliveryMode: "queue"`             | Event Lanes `mode: "network"` with queue binding        |
 | Sync remote task calls                   | RPC Lanes `mode: "network"` with communicator binding   |
 
@@ -872,11 +910,11 @@ When routing does not behave as expected, check in this order:
 - Lane ids must be non-empty strings.
 - Event definitions must not end up routed through both lane systems (`eventLane` + `rpcLane`).
 - A definition cannot be assigned to two different lanes in the same lane system.
-- `applyTo(...)` is authoritative: when a task/event matches `applyTo`, it overrides any tag-based (IoC) lane assignment for that definition.
 - `applyTo` supports either:
   - A list of explicit targets (definitions or id strings), validated against container definitions and failing fast on invalid type/id.
   - A predicate function that is evaluated against container definitions at runtime.
-- `transactional + tags.eventLane` is invalid.
+- Deprecated `tags.eventLane` and `tags.eventLaneHook` fail fast at startup.
+- `transactional + eventLane.applyTo(...)` is invalid.
 - `transactional + parallel` is invalid.
 
 ### Event Lane Contract
@@ -884,9 +922,8 @@ When routing does not behave as expected, check in this order:
 | Concept          | API                                                              |
 | ---------------- | ---------------------------------------------------------------- |
 | Lane definition  | `r.eventLane("...").asyncContexts([...]).applyTo([...])` or `r.eventLane("...").asyncContexts([...]).applyTo((event) => boolean)` |
-| Event tagging    | `tags.eventLane.with({ lane })` |
 | Topology         | `r.eventLane.topology({ profiles, bindings })`                   |
-| Profile consume  | `profiles[profile].consume: lane[]`                              |
+| Profile consume  | `profiles[profile].consume: [{ lane, hooks?: { only?: hook[] } }]` |
 | Binding          | `{ lane, queue, prefetch?, maxAttempts?, retryDelayMs? }`        |
 | Runtime resource | `eventLanesResource.with({ profile, topology, mode? })`          |
 

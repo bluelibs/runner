@@ -9,6 +9,7 @@ import {
 } from "./runtime/activeRunResults";
 import { runtimeSource } from "./types/runtimeSource";
 import { assertExecutionContextSupport } from "./tools/assertExecutionContextSupport";
+import { assertIdentitySupport } from "./tools/assertIdentitySupport";
 import { createRuntimeServices } from "./tools/createRuntimeServices";
 import { extractResourceAndConfig } from "./tools/extractResourceAndConfig";
 import { normalizeRunOptions } from "./tools/normalizeRunOptions";
@@ -47,6 +48,7 @@ export async function run<C, V extends Promise<any>>(
   await getPlatform().init();
   const normalizedOptions = normalizeRunOptions(options);
   assertExecutionContextSupport(normalizedOptions.executionContext);
+  assertIdentitySupport(normalizedOptions.identity);
 
   // --- Service creation ---
   const { resource, config } = extractResourceAndConfig(
@@ -118,6 +120,7 @@ export async function run<C, V extends Promise<any>>(
     store.initializeStore(resource, config, runtimeResult, {
       debug: normalizedOptions.debug,
       executionContext: normalizedOptions.executionContext,
+      identity: normalizedOptions.identity,
     });
     throwIfShutdownRequested("store initialization");
 

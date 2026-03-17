@@ -1,25 +1,25 @@
 import {
   asyncContexts,
   Match,
-  type ITenant,
+  type IIdentity,
   type InferMatchPattern,
-  type TenantContextValue,
+  type IdentityContextValue,
 } from "../../../";
-import { tenantContextValuePattern } from "../../../async-contexts/tenant.asyncContext";
+import { identityContextValuePattern } from "../../../async-contexts/identity.asyncContext";
 
 declare module "../../../" {
-  interface TenantContextValue {
+  interface IdentityContextValue {
     region: string;
   }
 }
 
-const baseTenant: ITenant = { tenantId: "acme" };
-const extendedTenant: TenantContextValue = {
+const baseTenant: IIdentity = { tenantId: "acme" };
+const extendedTenant: IdentityContextValue = {
   ...baseTenant,
   region: "eu-west",
 };
 
-type TenantPatternValue = InferMatchPattern<typeof tenantContextValuePattern>;
+type TenantPatternValue = InferMatchPattern<typeof identityContextValuePattern>;
 const basePatternTenant: TenantPatternValue = {
   tenantId: "acme",
   extra: true,
@@ -27,9 +27,9 @@ const basePatternTenant: TenantPatternValue = {
 void basePatternTenant;
 
 void (async () => {
-  await asyncContexts.tenant.provide(extendedTenant, async () => {
-    const current = asyncContexts.tenant.use();
-    const tenantId: string = current.tenantId;
+  await asyncContexts.identity.provide(extendedTenant, async () => {
+    const current = asyncContexts.identity.use();
+    const tenantId: string = current.tenantId!;
     const region: string = current.region;
 
     void tenantId;
@@ -43,8 +43,8 @@ void (async () => {
     region: "eu-west",
   };
 
-  if (Match.test(candidate, tenantContextValuePattern)) {
-    const tenantId: string = candidate.tenantId;
+  if (Match.test(candidate, identityContextValuePattern)) {
+    const tenantId: string = candidate.tenantId!;
     const region: unknown = candidate.region;
 
     void tenantId;

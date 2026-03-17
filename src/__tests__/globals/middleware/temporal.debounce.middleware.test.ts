@@ -16,7 +16,12 @@ describe("Temporal Middleware: Debounce", () => {
     let callCount = 0;
     const task = defineTask({
       id: "debounce-task",
-      middleware: [debounceTaskMiddleware.with({ ms: 50 })],
+      middleware: [
+        debounceTaskMiddleware.with({
+          ms: 50,
+          keyBuilder: () => "shared",
+        }),
+      ],
       run: async (val: string) => {
         callCount++;
         return val;
@@ -49,7 +54,12 @@ describe("Temporal Middleware: Debounce", () => {
     let callCount = 0;
     const task = defineTask({
       id: "debounce-cycles",
-      middleware: [debounceTaskMiddleware.with({ ms: 50 })],
+      middleware: [
+        debounceTaskMiddleware.with({
+          ms: 50,
+          keyBuilder: () => "shared",
+        }),
+      ],
       run: async (val: string) => {
         callCount++;
         return val;

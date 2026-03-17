@@ -14,9 +14,32 @@ type RelayInterceptorDeps = {
   serializer: SerializerLike;
 };
 
+function extractRelayLaneId(
+  sourceId: string,
+  relaySourcePrefix: string,
+): string | undefined {
+  const relayPayload = sourceId.slice(relaySourcePrefix.length);
+  const profileSeparatorIndex = relayPayload.indexOf(":");
+  if (
+    profileSeparatorIndex < 0 ||
+    profileSeparatorIndex === relayPayload.length - 1
+  ) {
+    return undefined;
+  }
+
+  const laneAndSuffix = relayPayload.slice(profileSeparatorIndex + 1);
+  const optionalSuffixIndex = laneAndSuffix.indexOf(":");
+  return optionalSuffixIndex < 0
+    ? laneAndSuffix
+    : laneAndSuffix.slice(0, optionalSuffixIndex);
+}
+
 export function registerEventLaneRelayInterceptors(options: {
   dependencies: RelayInterceptorDeps;
-  context: Pick<EventLanesResourceContext, "relaySourcePrefix">;
+  context: Pick<
+    EventLanesResourceContext,
+    "relaySourcePrefix" | "hookAllowlistByLaneId"
+  >;
 }): void {
   const { dependencies, context } = options;
 
@@ -29,6 +52,26 @@ export function registerEventLaneRelayInterceptors(options: {
   });
 
   dependencies.eventManager.interceptHook(async (next, hook, emission) => {
+    if (isRelayEmission(emission, context.relaySourcePrefix)) {
+      const relayLaneId = extractRelayLaneId(
+        emission.source.id,
+        context.relaySourcePrefix,
+      );
+
+      if (relayLaneId === undefined && context.hookAllowlistByLaneId.size > 0) {
+        return;
+      }
+
+      const hookAllowlist =
+        relayLaneId === undefined
+          ? undefined
+          : context.hookAllowlistByLaneId.get(relayLaneId);
+
+      if (hookAllowlist && !hookAllowlist.has(hook.id)) {
+        return;
+      }
+    }
+
     return withEventLaneEmissionAsyncContexts({
       emission,
       store: dependencies.store,

@@ -1,7 +1,6 @@
 import { defineEvent, defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { globalResources } from "../../../globals/globalResources";
-import { globalTags } from "../../../globals/globalTags";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { MemoryEventLaneQueue } from "../../event-lanes/MemoryEventLaneQueue";
 import { eventLanesResource } from "../../event-lanes";
@@ -9,13 +8,13 @@ import { r } from "../../../public";
 
 describe("eventLanes auth in local-simulated mode", () => {
   it("relays events when lane auth material is configured", async () => {
-    const lane = r
-      .eventLane("tests-event-lanes-auth-local-simulated-lane")
-      .build();
     const event = defineEvent<{ value: number }>({
       id: "tests-event-lanes-auth-local-simulated-event",
-      tags: [globalTags.eventLane.with({ lane })],
     });
+    const lane = r
+      .eventLane("tests-event-lanes-auth-local-simulated-lane")
+      .applyTo([event])
+      .build();
 
     let seen = 0;
     const hook = r
@@ -40,7 +39,7 @@ describe("eventLanes auth in local-simulated mode", () => {
 
     const topology = {
       profiles: {
-        test: { consume: [lane] },
+        test: { consume: [{ lane }] },
       },
       bindings: [
         {
@@ -73,17 +72,17 @@ describe("eventLanes auth in local-simulated mode", () => {
   });
 
   it("fails fast when binding auth is enabled but signer secrets are missing", async () => {
-    const lane = r
-      .eventLane("tests-event-lanes-auth-local-simulated-missing-lane")
-      .build();
     const event = defineEvent({
       id: "tests-event-lanes-auth-local-simulated-missing-event",
-      tags: [globalTags.eventLane.with({ lane })],
     });
+    const lane = r
+      .eventLane("tests-event-lanes-auth-local-simulated-missing-lane")
+      .applyTo([event])
+      .build();
 
     const topology = {
       profiles: {
-        test: { consume: [lane] },
+        test: { consume: [{ lane }] },
       },
       bindings: [
         {

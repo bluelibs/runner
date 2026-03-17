@@ -1,4 +1,5 @@
 import { validationError } from "../../errors";
+import { toCanonicalTaskKey } from "./keyBuilder.shared";
 
 /**
  * Semantic cache reference used for cross-task invalidation.
@@ -42,14 +43,7 @@ export interface NormalizedCacheKeyDescriptor {
 }
 
 export function toStableTaskId(taskId: string): string {
-  const taskMarker = ".tasks.";
-  const markerIndex = taskId.indexOf(taskMarker);
-
-  if (markerIndex === -1) {
-    return taskId;
-  }
-
-  return taskId.slice(markerIndex + taskMarker.length);
+  return toCanonicalTaskKey(taskId);
 }
 
 export function normalizeCacheRefs(

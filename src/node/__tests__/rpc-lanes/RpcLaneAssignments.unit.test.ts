@@ -102,7 +102,9 @@ describe("RpcLaneAssignments", () => {
       events: [event],
       eventTopology: {
         profiles: {
-          worker: { consume: [eventFunctionLane, eventInvalidLane] },
+          worker: {
+            consume: [{ lane: eventFunctionLane }, { lane: eventInvalidLane }],
+          },
         },
         bindings: [],
       },
@@ -112,7 +114,7 @@ describe("RpcLaneAssignments", () => {
     expect(assignments.eventLaneByEventId.has(event.id)).toBe(false);
   });
 
-  it("throws when event has both rpc-lane and event-lane tags without explicit applyTo ownership", () => {
+  it("ignores deprecated event-lane tags when resolving rpc tag assignments", () => {
     const rpcTagLane = rpcLane("rpc.tagged");
     const eventTagLane = eventLane("event.tagged");
     const event = {
@@ -124,9 +126,8 @@ describe("RpcLaneAssignments", () => {
     };
     const store = createStore({ events: [event] });
 
-    expect(() => resolveRpcLaneAssignments(store, [])).toThrow(
-      'Event "tests-rpc-lane-tag-conflict-event" cannot be assigned to rpcLane "rpc.tagged" because it is already assigned to an event lane.',
-    );
+    const assignments = resolveRpcLaneAssignments(store, []);
+    expect(assignments.eventLaneByEventId.get(event.id)?.id).toBe("rpc.tagged");
   });
 
   it("allows duplicate task applyTo declarations when they use the same lane id", () => {
@@ -172,7 +173,7 @@ describe("RpcLaneAssignments", () => {
       events: [selected, ignored],
       eventTopology: {
         profiles: {
-          worker: { consume: [eventFunctionLane] },
+          worker: { consume: [{ lane: eventFunctionLane }] },
         },
         bindings: [],
       },

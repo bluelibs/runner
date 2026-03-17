@@ -1,9 +1,12 @@
 import type { IResource, IResourceWithConfig, RegisterableItem } from "../defs";
 import { defineResource } from "../define";
+import { asyncContexts } from "../asyncContexts";
 import { debugResource } from "../globals/resources/debug";
 import { globalResources } from "../globals/globalResources";
+import { identityContextResource } from "../globals/resources/identityContext.resource";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
 import type { ExecutionContextConfig } from "../types/executionContext";
+import type { IdentityAsyncContext } from "../types/runner";
 import {
   RUNNER_FRAMEWORK_ITEMS,
   SYSTEM_FRAMEWORK_ITEMS,
@@ -40,6 +43,7 @@ type FrameworkRootInput = {
   rootItem: IResource<any, any, any, any, any> | IResourceWithConfig<any, any>;
   debug: DebugFriendlyConfig | undefined;
   executionContext?: ExecutionContextConfig | null;
+  identity?: IdentityAsyncContext | null;
 };
 
 function createFrameworkNamespaceResource(
@@ -57,8 +61,18 @@ export function createSyntheticFrameworkRoot({
   rootItem,
   debug,
   executionContext = null,
+  identity = null,
 }: FrameworkRootInput): IResource<void, Promise<void>> {
   const runnerRegister = [...RUNNER_FRAMEWORK_ITEMS];
+  const identityContext = identity ?? asyncContexts.identity;
+
+  runnerRegister.push(asyncContexts.identity);
+
+  runnerRegister.push(
+    identityContextResource.with({
+      context: identityContext,
+    }),
+  );
 
   if (executionContext) {
     runnerRegister.push(

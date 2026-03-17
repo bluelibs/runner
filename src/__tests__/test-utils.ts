@@ -21,6 +21,7 @@ const testRunOptions: ResolvedRunOptions = {
   onUnhandledError: jest.fn(),
   dryRun: false,
   executionContext: null,
+  identity: null,
   lazy: false,
   lifecycleMode: ResourceLifecycleMode.Sequential,
   mode: RunnerMode.TEST,

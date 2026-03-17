@@ -10,6 +10,10 @@ import {
   type TemporalResourceState,
 } from "../../../globals/middleware/temporal.middleware";
 
+const testTenantContext = {
+  tryUse: () => undefined,
+};
+
 const createTemporalState = (
   overrides: Partial<TemporalResourceState<TemporalMiddlewareConfig>> = {},
 ): TemporalResourceState<TemporalMiddlewareConfig> => ({
@@ -63,7 +67,12 @@ describe("Temporal Middleware: Dispose", () => {
     let callCount = 0;
     const task = defineTask({
       id: "throttle-dispose-task",
-      middleware: [throttleTaskMiddleware.with({ ms: 1000 })],
+      middleware: [
+        throttleTaskMiddleware.with({
+          ms: 1000,
+          keyBuilder: () => "shared",
+        }),
+      ],
       run: async (input: string) => {
         callCount += 1;
         return input;
@@ -94,6 +103,7 @@ describe("Temporal Middleware: Dispose", () => {
   it("throws immediately when debounce middleware state is already disposed", async () => {
     const deps = {
       state: createTemporalState({ isDisposed: true }),
+      identityContext: testTenantContext,
     } satisfies Parameters<typeof debounceTaskMiddleware.run>[1];
 
     await expect(
@@ -114,6 +124,7 @@ describe("Temporal Middleware: Dispose", () => {
   it("throws immediately when throttle middleware state is already disposed", async () => {
     const deps = {
       state: createTemporalState({ isDisposed: true }),
+      identityContext: testTenantContext,
     } satisfies Parameters<typeof throttleTaskMiddleware.run>[1];
 
     await expect(
@@ -134,7 +145,7 @@ describe("Temporal Middleware: Dispose", () => {
   it("rejects debounce callers when callback runs after state becomes disposed", async () => {
     expect.assertions(1);
     const state = createTemporalState();
-    const deps = { state };
+    const deps = { state, identityContext: testTenantContext };
 
     let scheduled: (() => Promise<void>) | undefined;
     const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
@@ -170,7 +181,7 @@ describe("Temporal Middleware: Dispose", () => {
   it("rejects throttle callers when callback runs after state becomes disposed", async () => {
     expect.assertions(2);
     const state = createTemporalState();
-    const deps = { state };
+    const deps = { state, identityContext: testTenantContext };
 
     let scheduled: (() => Promise<void>) | undefined;
     const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
@@ -178,7 +189,7 @@ describe("Temporal Middleware: Dispose", () => {
       scheduled = fn;
       return 1 as any;
     }) as any);
-    const config = { ms: 100000 };
+    const config = { ms: 100000, keyBuilder: () => "shared" };
 
     try {
       await expect(
@@ -328,7 +339,10 @@ describe("Temporal Middleware: Dispose", () => {
       configurable: true,
       writable: true,
     });
-    const deps = { state } as Parameters<typeof debounceTaskMiddleware.run>[1];
+    const deps = {
+      state,
+      identityContext: testTenantContext,
+    } as Parameters<typeof debounceTaskMiddleware.run>[1];
 
     await expect(
       debounceTaskMiddleware.run(

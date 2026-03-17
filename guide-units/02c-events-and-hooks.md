@@ -119,7 +119,7 @@ Transactional behavior:
 - if a hook fails, previously completed hooks are rolled back in reverse order
 - rollback continues even if one undo fails; Runner throws an aggregated rollback error
 - `transactional + parallel` is invalid
-- `transactional + tags.eventLane` is invalid
+- `transactional + eventLane.applyTo(...)` is invalid
 
 ```mermaid
 sequenceDiagram

@@ -5,26 +5,30 @@ import {
   middlewareKeyCapacityExceededError,
   middlewareRateLimitExceededError,
   RunnerErrorId,
+  validationError,
 } from "../../errors";
 import { Match } from "../../tools/check";
+import type { ValidationSchemaInput } from "../../types/utilities";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 import {
+  createMiddlewareKeyBuilderHelpers,
   defaultTaskKeyBuilder,
   type MiddlewareKeyBuilder,
 } from "./keyBuilder.shared";
 import { ensureKeyedStateCapacity } from "./keyedState.shared";
 import {
-  applyTenantScopeToKey,
-  tenantScopePattern,
-  type TenantScopedMiddlewareConfig,
-} from "./tenantScope.shared";
+  applyIdentityScopeToKey,
+  identityScopePattern,
+  type IdentityScopedMiddlewareConfig,
+} from "./identityScope.shared";
 import {
   pruneRateLimitStatesForCapacity,
   rateLimitResource,
   type RateLimitState,
 } from "./rateLimit.resource";
+import { identityContextResource } from "../resources/identityContext.resource";
 
-export interface RateLimitMiddlewareConfig extends TenantScopedMiddlewareConfig {
+export interface RateLimitMiddlewareConfig extends IdentityScopedMiddlewareConfig {
   /**
    * Time window in milliseconds
    */
@@ -35,7 +39,9 @@ export interface RateLimitMiddlewareConfig extends TenantScopedMiddlewareConfig 
   max: number;
   /**
    * Builds the partition key used to isolate fixed-window counters.
-   * Defaults to the task id.
+   * Defaults to `canonicalTaskKey + ":" + serialized input`.
+   * Provide an explicit key when you want broader grouping, such as per user or
+   * per identity admission limits.
    */
   keyBuilder?: MiddlewareKeyBuilder;
   /**
@@ -49,13 +55,14 @@ const positiveNonZeroIntegerPattern = Match.Where(
     typeof value === "number" && Number.isInteger(value) && value > 0,
 );
 
-const rateLimitConfigPattern = Match.ObjectIncluding({
-  windowMs: positiveNonZeroIntegerPattern,
-  max: positiveNonZeroIntegerPattern,
-  keyBuilder: Match.Optional(Function),
-  maxKeys: Match.Optional(positiveNonZeroIntegerPattern),
-  tenantScope: tenantScopePattern,
-});
+const rateLimitConfigPattern: ValidationSchemaInput<RateLimitMiddlewareConfig> =
+  Match.ObjectIncluding({
+    windowMs: positiveNonZeroIntegerPattern,
+    max: positiveNonZeroIntegerPattern,
+    keyBuilder: Match.Optional(Function),
+    maxKeys: Match.Optional(positiveNonZeroIntegerPattern),
+    identityScope: identityScopePattern,
+  });
 
 /**
  * Custom error class for rate limit errors.
@@ -102,17 +109,35 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     middlewareKeyCapacityExceededError,
   ],
   configSchema: rateLimitConfigPattern,
-  dependencies: { state: rateLimitResource },
+  dependencies: {
+    state: rateLimitResource,
+    identityContext: identityContextResource,
+  },
   async run(
     { task, next, journal },
-    { state },
+    { state, identityContext },
     config: RateLimitMiddlewareConfig,
   ) {
     const taskId = task.definition.id;
     const keyBuilder = config.keyBuilder ?? defaultTaskKeyBuilder;
-    const key = applyTenantScopeToKey(
-      keyBuilder(taskId, task.input),
-      config.tenantScope,
+    const builtKey = keyBuilder(
+      taskId,
+      task.input,
+      createMiddlewareKeyBuilderHelpers(taskId),
+    );
+
+    if (typeof builtKey !== "string") {
+      validationError.throw({
+        subject: "Middleware config",
+        id: taskId,
+        originalError: `Rate limit middleware keyBuilder must return a string. Received ${typeof builtKey}.`,
+      });
+    }
+
+    const key = applyIdentityScopeToKey(
+      builtKey,
+      config.identityScope,
+      identityContext?.tryUse,
     );
     const now = Date.now();
     let keyedStates = state.states.get(config);

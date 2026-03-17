@@ -3,6 +3,8 @@ import {
   journalKeys,
   resolveCacheMiddlewareConfig,
 } from "../../globals/middleware/cache.middleware";
+import { createMiddlewareKeyBuilderHelpers } from "../../globals/middleware/keyBuilder.shared";
+import { Serializer } from "../../serializer";
 
 describe("cache middleware coverage", () => {
   it("falls back to the default key builder when config explicitly sets keyBuilder to undefined", () => {
@@ -22,7 +24,51 @@ describe("cache middleware coverage", () => {
       ttl: 123,
       ttlAutopurge: true,
     });
-    expect(resolved.keyBuilder("task", { ok: true })).toBe('task-{"ok":true}');
+    expect(resolved.keyBuilder("task", { ok: true })).toBe('task:{"ok":true}');
+  });
+
+  it("exposes the canonical task key helper to key builders", () => {
+    const resolved = resolveCacheMiddlewareConfig(
+      {
+        keyBuilder: (_taskId, _input, helpers) => helpers!.canonicalKey,
+      },
+      {},
+    );
+
+    expect(
+      resolved.keyBuilder(
+        "app.tasks.lookup",
+        { ok: true },
+        createMiddlewareKeyBuilderHelpers("app.tasks.lookup"),
+      ),
+    ).toBe("lookup");
+  });
+
+  it("fails fast when the default key builder cannot serialize input", () => {
+    const resolved = resolveCacheMiddlewareConfig(undefined, {});
+
+    expect(() =>
+      resolved.keyBuilder("task", {
+        fn: () => true,
+      }),
+    ).toThrow(/serializable input/i);
+  });
+
+  it("surfaces non-Error serialization failures from the default key builder", () => {
+    const resolved = resolveCacheMiddlewareConfig(undefined, {});
+    const stringifySpy = jest
+      .spyOn(Serializer.prototype, "stringify")
+      .mockImplementation(() => {
+        throw "plain-string-failure";
+      });
+
+    try {
+      expect(() => resolved.keyBuilder("task", { ok: true })).toThrow(
+        /plain-string-failure/,
+      );
+    } finally {
+      stringifySpy.mockRestore();
+    }
   });
 
   it("keeps raw task ids unchanged when no canonical task marker is present", async () => {
@@ -56,9 +102,9 @@ describe("cache middleware coverage", () => {
 
     expect(result).toBe("fresh-value");
     expect(next).toHaveBeenCalledWith({ ok: true });
-    expect(get).toHaveBeenCalledWith(`${rawTaskId}-{"ok":true}`);
+    expect(get).toHaveBeenCalledWith(`${rawTaskId}:{"ok":true}`);
     expect(set).toHaveBeenCalledWith(
-      `${rawTaskId}-{"ok":true}`,
+      `${rawTaskId}:{"ok":true}`,
       "fresh-value",
       {
         refs: [],

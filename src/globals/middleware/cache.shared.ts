@@ -17,7 +17,7 @@ export interface ICacheProvider {
   clear(): void | Promise<void>;
   /**
    * Invalidates refs after the caller has already normalized and tenant-scoped
-   * them via normalizeCacheRefs() and applyTenantScopeToKey().
+   * them via normalizeCacheRefs() and applyIdentityScopeToKey().
    */
   invalidateRefs(refs: readonly string[]): number | Promise<number>;
   has?(key: string): boolean | Promise<boolean>;

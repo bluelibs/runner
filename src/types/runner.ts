@@ -6,9 +6,19 @@ import type {
   ExecutionContextConfig,
   ExecutionContextOptions,
 } from "./executionContext";
+import type { IAsyncContext } from "./asyncContext";
 import { IResource, IResourceHealthReport } from "./resource";
 import { ITask } from "./task";
 import { TaskCallOptions } from "./utilities";
+
+/**
+ * Async context type accepted by `run(..., { identity })`.
+ *
+ * Apps usually pass a built `r.asyncContext(...).configSchema(...).build()`
+ * accessor whose value shape may include `tenantId` and `userId`, alongside
+ * any other app-owned identity fields.
+ */
+export type IdentityAsyncContext = IAsyncContext<any>;
 
 /**
  * Minimal runtime health-reporting contract.
@@ -235,6 +245,16 @@ export type RunOptions = {
    * Enables built-in execution tracing and cycle detection for this runtime.
    */
   executionContext?: boolean | ExecutionContextOptions;
+  /**
+   * Overrides which async context Runner reads for identity-aware framework
+   * features such as identity-scoped cache, rate limits, and temporal
+   * policies.
+   *
+   * App code should continue using this context directly for `provide()`,
+   * `use()`, and `require()`. Runner also auto-registers the configured
+   * context inside the runtime so it can be used as a dependency.
+   */
+  identity?: IdentityAsyncContext;
 };
 
 /**
@@ -271,6 +291,8 @@ export type ResolvedRunOptions = {
   dryRun: boolean;
   /** Normalized execution-context configuration for this runtime. */
   executionContext: ExecutionContextConfig | null;
+  /** Runtime-specific async context used for identity-aware framework behavior. */
+  identity: IdentityAsyncContext | null;
   /** Whether lazy resource startup is active. */
   lazy: boolean;
   /** Normalized lifecycle scheduling mode. */

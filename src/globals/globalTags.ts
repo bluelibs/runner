@@ -1,9 +1,11 @@
+import { isEventLane } from "../define";
 import { defineTag } from "../definers/defineTag";
 import type {
   IEventLaneDefinition,
   IResource,
   IRpcLaneDefinition,
 } from "../defs";
+import { Match } from "../tools/check";
 import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
 
@@ -16,6 +18,15 @@ const internalTag = defineTag<{
     description:
       "Marks framework-owned internals and infrastructure definitions.",
   },
+});
+
+const eventLaneReferencePattern = Match.Where(
+  (value: unknown): value is IEventLaneDefinition => isEventLane(value),
+  "Expected Event Lane definition.",
+);
+
+const eventLaneHookConfigPattern = Match.ObjectStrict({
+  lane: eventLaneReferencePattern,
 });
 
 const globalTagsBase = {
@@ -37,9 +48,21 @@ const globalTagsBase = {
     id: "eventLane",
     targets: ["events"] as const,
     meta: {
-      title: "Event Lane",
+      title: "Event Lane (Deprecated)",
       description:
-        "Routes tagged events to the configured Event Lane binding (reference-based).",
+        "Deprecated: use r.eventLane(...).applyTo(...) for Event Lane routing instead of tag-based assignment.",
+    },
+  }),
+  eventLaneHook: defineTag<{
+    lane: IEventLaneDefinition;
+  }>({
+    id: "eventLaneHook",
+    configSchema: eventLaneHookConfigPattern,
+    targets: ["hooks"] as const,
+    meta: {
+      title: "Event Lane Hook (Deprecated)",
+      description:
+        "Deprecated: configure relay hook policy in event-lane topology profiles via consume[].hooks.only.",
     },
   }),
   rpcLane: defineTag<{

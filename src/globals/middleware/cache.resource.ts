@@ -17,6 +17,7 @@ import {
 } from "../../defs";
 import { extractResourceAndConfig } from "../../tools/extractResourceAndConfig";
 import { Match } from "../../tools/check";
+import type { ValidationSchemaInput } from "../../types/utilities";
 import { validationError } from "../../errors";
 import {
   cacheMiddleware,
@@ -25,9 +26,10 @@ import {
 import { isResource, isResourceWithConfig } from "../../define";
 import { storeResource } from "../resources/store.resource";
 import { loggerResource } from "../resources/logger.resource";
+import { identityContextResource } from "../resources/identityContext.resource";
 import { normalizeCacheRefs, toStableTaskId } from "./cache.key";
-import { applyTenantScopeToKey } from "./tenantScope.shared";
-import type { TenantScopeConfig } from "./tenantScope.shared";
+import { applyIdentityScopeToKey } from "./identityScope.shared";
+import type { IdentityScopeConfig } from "./identityScope.shared";
 import type { Store } from "../../models/Store";
 import { MiddlewareResolver } from "../../models/middleware/MiddlewareResolver";
 import { getSubtreeMiddlewareDuplicateKey } from "../../tools/subtreeMiddleware";
@@ -84,7 +86,7 @@ export interface CacheResourceValue {
 type CacheInvalidationTarget = {
   cacheOptions: CacheFactoryOptions;
   taskId: string;
-  tenantScope: TenantScopeConfig | undefined;
+  identityScope: IdentityScopeConfig | undefined;
 };
 
 const cacheFactoryOptionsPattern = Match.Where(
@@ -102,11 +104,12 @@ const totalBudgetBytesPattern = Match.Where(
     typeof value === "number" && Number.isInteger(value) && value > 0,
 );
 
-const cacheResourceConfigPattern = Match.ObjectIncluding({
-  defaultOptions: Match.Optional(cacheFactoryOptionsPattern),
-  provider: Match.Optional(cacheProviderResourcePattern),
-  totalBudgetBytes: Match.Optional(totalBudgetBytesPattern),
-});
+const cacheResourceConfigPattern: ValidationSchemaInput<CacheResourceConfig> =
+  Match.ObjectIncluding({
+    defaultOptions: Match.Optional(cacheFactoryOptionsPattern),
+    provider: Match.Optional(cacheProviderResourcePattern),
+    totalBudgetBytes: Match.Optional(totalBudgetBytesPattern),
+  });
 
 export const cacheProviderResource: CacheProviderResourceDefinition =
   defineResource<void, Promise<CacheProvider>>({
@@ -121,6 +124,7 @@ export const cacheResource = defineResource<
     cacheProvider: typeof cacheProviderResource;
     logger: ReturnType<typeof loggerResource.optional>;
     store: typeof storeResource;
+    identityContext: typeof identityContextResource;
   }
 >({
   id: "cache",
@@ -136,6 +140,7 @@ export const cacheResource = defineResource<
         cacheProvider: resource,
         logger: loggerResource.optional(),
         store: storeResource,
+        identityContext: identityContextResource,
       };
     }
 
@@ -143,11 +148,12 @@ export const cacheResource = defineResource<
       cacheProvider: cacheProviderResource,
       logger: loggerResource.optional(),
       store: storeResource,
+      identityContext: identityContextResource,
     };
   },
   init: async (
     config: CacheResourceConfig,
-    { cacheProvider, logger, store },
+    { cacheProvider, logger, store, identityContext },
   ) => {
     if (typeof cacheProvider !== "function") {
       validationError.throw({
@@ -187,7 +193,11 @@ export const cacheResource = defineResource<
 
         for (const target of cacheTargets) {
           const scopedRefs = baseRefs.map((ref) =>
-            applyTenantScopeToKey(ref, target.tenantScope),
+            applyIdentityScopeToKey(
+              ref,
+              target.identityScope,
+              identityContext.tryUse,
+            ),
           );
           try {
             const cacheInstance = await getCacheInstanceForInvalidation(
@@ -330,7 +340,7 @@ function getCacheEnabledTaskIds(
     taskTargets.set(taskId, {
       cacheOptions: resolvedConfig.cacheOptions,
       taskId,
-      tenantScope: resolvedConfig.tenantScope,
+      identityScope: resolvedConfig.identityScope,
     });
   }
 

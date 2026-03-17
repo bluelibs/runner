@@ -124,14 +124,6 @@ export function resolveRpcLaneAssignments(
       continue;
     }
 
-    // Without explicit applyTo, IoC tags must not assign the same event to both systems.
-    if (globalTags.eventLane.exists(eventEntry.event.tags)) {
-      rpcLaneAssignmentEventLaneConflictError.throw({
-        eventId,
-        rpcLaneId: laneConfig.lane.id,
-      });
-    }
-
     eventLaneByEventId.set(eventId, laneConfig.lane);
   }
 

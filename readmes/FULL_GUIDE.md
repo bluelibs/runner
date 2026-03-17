@@ -1507,7 +1507,7 @@ Transactional behavior:
 - if a hook fails, previously completed hooks are rolled back in reverse order
 - rollback continues even if one undo fails; Runner throws an aggregated rollback error
 - `transactional + parallel` is invalid
-- `transactional + tags.eventLane` is invalid
+- `transactional + eventLane.applyTo(...)` is invalid
 
 ```mermaid
 sequenceDiagram
@@ -2051,6 +2051,7 @@ Notes:
 - Custom providers should enforce their own backend budget policy when `input.totalBudgetBytes` is provided.
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - When `keyBuilder(...)` returns `{ cacheKey, refs }`, middleware passes those refs to `set(..., metadata)` for provider-side indexing.
+- Without `keyBuilder`, cache keys default to `taskId + serialized input` and fail fast when the input cannot be serialized.
 - `resources.cache.invalidateRefs(ref | ref[])` fans out across cache-enabled tasks and deletes matching entries.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
@@ -2065,8 +2066,8 @@ const expensiveTask = r
     middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input: { userId: string }) =>
-        `${taskId}-${input.userId}`, // optional key builder
+      keyBuilder: (_taskId, input: { userId: string }) =>
+        `user:${input.userId}`, // optional when the default serialized-input key is too granular
     }),
   ])
   .run(async (input: { userId: string }) => {
@@ -2132,9 +2133,9 @@ const updateUser = r
 
 Notes:
 
-- `keyBuilder(taskId, input)` may return either a plain string or `{ cacheKey, refs? }`.
+- `keyBuilder(taskId, input, { canonicalKey })` may return either a plain string or `{ cacheKey, refs? }`.
 - Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`.
-- Refs follow the same `tenantScope` policy as the cache key, so tenant-aware caches invalidate only their own tenant-scoped entries by default.
+- Refs follow the same `identityScope` policy as the cache key, so tenant-aware caches invalidate only their own tenant-scoped entries by default.
 
 `totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
 
@@ -2382,13 +2383,20 @@ const myTask = r
 
 Control the frequency of task execution over time. This is useful for event-driven tasks that might fire in bursts.
 
+By default, Runner buckets `debounce` and `throttle` by `taskId + serialized input`, so different payloads stay isolated unless you intentionally provide a broader `keyBuilder(...)`.
+
 ```typescript
 import { middleware, r } from "@bluelibs/runner";
 
 // Debounce: Run only after 500ms of inactivity
 const saveTask = r
-  .task("saveTask")
-  .middleware([middleware.task.debounce.with({ ms: 500 })])
+  .task<{ docId: string; content: string }>("saveTask")
+  .middleware([
+    middleware.task.debounce.with({
+      ms: 500,
+      keyBuilder: (_taskId, input) => `doc:${input.docId}`,
+    }),
+  ])
   .run(async (data) => {
     // Assuming db is available in the closure
     return await db.save(data);
@@ -2397,8 +2405,13 @@ const saveTask = r
 
 // Throttle: Run at most once every 1000ms
 const logTask = r
-  .task("logTask")
-  .middleware([middleware.task.throttle.with({ ms: 1000 })])
+  .task<{ channel: string; message: string }>("logTask")
+  .middleware([
+    middleware.task.throttle.with({
+      ms: 1000,
+      keyBuilder: (_taskId, input) => `channel:${input.channel}`,
+    }),
+  ])
   .run(async (msg) => {
     console.log(msg);
   })
@@ -2480,6 +2493,8 @@ const sensitiveTask = r
       windowMs: 60 * 1000, // 1 minute window
       max: 5, // Max 5 attempts per window
       maxKeys: 1_000, // Optional hard cap for distinct live keys
+      keyBuilder: (_taskId, input: { email: string }) =>
+        input.email.toLowerCase(),
     }),
   ])
   .run(async (credentials) => {
@@ -2492,7 +2507,7 @@ const sensitiveTask = r
 **Key features:**
 
 - **Fixed-window strategy**: Simple, predictable request counting.
-- **Isolation**: Limits are tracked per task definition.
+- **Isolation**: Limits are tracked per serialized input by default.
 - **Error handling**: Throws the built-in typed Runner rate-limit error.
 
 **Why would you need this?** For monitoring, you want to see remaining quota to implement client-side throttling.
@@ -2546,15 +2561,15 @@ If you prefer the explicit middleware form, which is useful in documentation and
 ```typescript
 import { middleware, r } from "@bluelibs/runner";
 
-const TenantContext = r
+const IdentityContext = r
   .asyncContext<{ tenantId: string }>("tenantContext")
   .build();
 
 const listProjects = r
   .task("listProjects")
-  .middleware([middleware.task.requireContext.with({ context: TenantContext })])
+  .middleware([middleware.task.requireContext.with({ context: IdentityContext })])
   .run(async () => {
-    const { tenantId } = TenantContext.use();
+    const { tenantId } = IdentityContext.use();
     return await projectRepo.findByTenant(tenantId);
   })
   .build();
@@ -2762,9 +2777,9 @@ const getUser = r
 
 > **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
 
-> **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
+> **Note:** `cache`, `rateLimit`, `debounce`, and `throttle` default to partitioning by `canonicalTaskKey + ":" + serialized input`, and they fail fast when the input cannot be serialized. Provide `keyBuilder(taskId, input, { canonicalKey })` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. `canonicalKey` strips the `.tasks.` namespace marker so custom keys can stay readable. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
-> **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant value is `acme`. Cache refs are scoped with the same policy. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
+> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active identity context is present. Use `"auto:userId"` when you want optional `userId` suffixing, or `"full"` when you want strict `<tenantId>:<userId>:<baseKey>` partitioning and fail fast if `userId` is missing. Cache refs follow the same scope policy. The default behavior is `"auto"`: use the tenant prefix when identity context exists, otherwise keep the shared key. Use `"required"` when identity context must exist, and `"off"` only for intentional cross-tenant sharing. Legacy user-aware modes such as `"required:userId"` still work, but prefer `"full"` for the clearer strict-per-user intent.
 
 ### Resilience Orchestration
 
@@ -3392,6 +3407,7 @@ Pass as the second argument to `run(app, options)`.
 | `lazy`             | `boolean`                                       | Skip startup-unused resources until `getLazyResourceValue(...)` wakes them. |
 | `lifecycleMode`    | `"sequential" \| "parallel"`                    | Control startup and disposal scheduling strategy. |
 | `executionContext` | `boolean \| ExecutionContextOptions`            | Enable correlation ids, execution frames, and inherited execution signals. |
+| `identity`         | `IAsyncContext<IIdentity>`                      | Override which async context Runner reads for identity-aware framework behavior. |
 | `mode`             | `"dev" \| "prod" \| "test"`                     | Override Runner's detected runtime mode. |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
@@ -4088,6 +4104,134 @@ Cycle protection still comes in layers:
 - dynamic runtime loops such as `task -> event -> hook -> task` need full execution context with cycle detection enabled
 
 Lightweight mode is for propagation, not runtime loop detection.
+
+---
+
+## Async Context For Business State
+
+Use `r.asyncContext(...)` when you need request-local business state such as tenant identity, auth claims, locale, or request ids.
+
+Unlike `asyncContexts.execution`, this is your application contract. You define the value shape, decide whether it is required, and optionally define how it crosses transport boundaries. Inside one async execution tree, the active value also stays visible to nested `run()` work, so a tenant or request context can flow into a nested runtime when you intentionally compose things that way.
+
+### Smallest Useful Pattern
+
+```typescript
+import { Match, r, run } from "@bluelibs/runner";
+
+const requestContext = r
+  .asyncContext("requestContext")
+  .schema({
+    requestId: Match.NonEmptyString,
+    tenantId: Match.NonEmptyString,
+    locale: Match.Optional(String),
+  })
+  .build();
+
+const listProjects = r
+  .task("listProjects")
+  .dependencies({ requestContext })
+  .middleware([requestContext.require()])
+  .run(async (_input, { requestContext }) => {
+    const request = requestContext.use();
+
+    return {
+      tenantId: request.tenantId,
+      requestId: request.requestId,
+      locale: request.locale ?? "en",
+    };
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([requestContext, listProjects])
+  .build();
+
+const runtime = await run(app);
+
+await requestContext.provide(
+  {
+    requestId: "req_123",
+    tenantId: "acme",
+    locale: "en",
+  },
+  () => runtime.runTask(listProjects),
+);
+```
+
+Why this pattern works:
+
+- `provide(value, fn)` binds the value to the current async execution tree before `fn` runs.
+- nested `run()` calls created inside that same async execution tree inherit the active value too, which is rare but useful for tenant-aware orchestration.
+- `.schema(...)` validates the value when you call `provide(...)`, so bad ingress data fails fast.
+- registering the context makes it injectable through `.dependencies({ requestContext })`.
+- `requestContext.require()` is a shorthand for `middleware.task.requireContext.with({ context: requestContext })`.
+
+### Access Patterns
+
+Pick the accessor that matches how strict the call site should be:
+
+- `use()`: read the value and throw immediately when it is missing.
+- `tryUse()`: read the value when present, otherwise return `undefined`.
+- `has()`: check whether the context is active.
+- `require()`: turn missing context into middleware-level failure before task logic starts.
+- `optional()`: inject the context as an optional dependency in apps where registration is conditional.
+
+```typescript
+const maybeAudit = r
+  .task("maybeAudit")
+  .dependencies({ requestContext: requestContext.optional() })
+  .run(async (_input, { requestContext }) => {
+    return requestContext?.tryUse()?.requestId;
+  })
+  .build();
+```
+
+Use `use()` or `require()` when continuing without context would be a correctness bug. Use `tryUse()` or `has()` in shared helpers, optional integrations, or platform-neutral code paths.
+
+### Transport and Serialization
+
+By default, async contexts use Runner's serializer. That is enough for in-process flows and many transport cases.
+
+Add custom `serialize(...)` and `parse(...)` only when you need a specific wire format for HTTP or remote-lane boundaries:
+
+```typescript
+import { Match, Serializer, createHttpClient, r } from "@bluelibs/runner";
+
+const requestContextShape = Match.Object({
+  requestId: Match.NonEmptyString,
+  tenantId: Match.NonEmptyString,
+});
+
+const requestContext = r
+  .asyncContext("requestContext")
+  .schema(requestContextShape)
+  .serialize((value) => JSON.stringify(value))
+  .parse((raw) => requestContextShape.parse(JSON.parse(raw)))
+  .build();
+
+const client = createHttpClient({
+  baseUrl: "https://api.example.com",
+  serializer: new Serializer(),
+  contexts: [requestContext],
+});
+
+await requestContext.provide(
+  { requestId: "req_42", tenantId: "acme" },
+  () => client.task("listProjects"),
+);
+```
+
+Transport rules:
+
+- define `.schema(...)` before custom `.serialize(...)` or `.parse(...)` so the builder can keep the resolved value type aligned.
+- `createHttpClient({ contexts: [...] })` snapshots only the contexts you list.
+- remote lanes hydrate only registered contexts that are also allowlisted with `eventLane.asyncContexts([...])` or `rpcLane.asyncContexts([...])`.
+- custom serialization is about transport compatibility, not normal in-process access.
+
+> **Platform Note:** User-defined async contexts require `AsyncLocalStorage`. They work on the Node build and on compatible Bun/Deno universal runtimes that expose async-local storage. In browsers and other runtimes without it, `use()`, `tryUse()`, and `provide()` are not available for user-defined `r.asyncContext(...)` contracts.
+
+For Runner's tenant-aware framework behavior, prefer the pattern in [`04c-multi-tenant`](./04c-multi-tenant.md): use the built-in `asyncContexts.identity` when `{ tenantId }` is enough, or pass your own registered `r.asyncContext(...).configSchema(...)` to `run(..., { identity })` when you need a richer contract.
 
 ---
 
@@ -5439,12 +5583,19 @@ Unsupported in strict mode (fail-fast):
 ## Multi-Tenant Systems
 
 Multi-tenant work in Runner usually means one `run(app)` serving many tenants without mixing their logical state.
-The built-in same-runtime pattern uses `asyncContexts.tenant`: provide tenant identity at ingress, require it where correctness depends on it, and let tenant-aware middleware partition its internal state when tenant context exists.
+Runner's identity-aware middleware (`cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency`) reads tenant partitioning data from an async context grouper.
+
+- If you do nothing, Runner uses the built-in `asyncContexts.identity`.
+- If your app needs extra runtime-validated fields such as `userId`, define your own async context, register it, and pass it to `run(app, { identity })`.
+
+### Built-In Default
+
+Use `asyncContexts.identity` when the built-in identity shape is enough, for example `{ tenantId, userId? }`.
 
 ```typescript
 import { asyncContexts, middleware, r, run } from "@bluelibs/runner";
 
-const { tenant } = asyncContexts;
+const { identity } = asyncContexts;
 
 const projectRepo = r
   .resource("projectRepo")
@@ -5453,14 +5604,8 @@ const projectRepo = r
 
     return {
       async list() {
-        const { tenantId } = tenant.use();
+        const { tenantId } = identity.use();
         return storage.get(tenantId) ?? [];
-      },
-      async add(name: string) {
-        const { tenantId } = tenant.use();
-        const current = storage.get(tenantId) ?? [];
-        current.push(name);
-        storage.set(tenantId, current);
       },
     };
   })
@@ -5468,7 +5613,7 @@ const projectRepo = r
 
 const listProjects = r
   .task("listProjects")
-  .middleware([tenant.require(), middleware.task.cache.with({ ttl: 30_000 })])
+  .middleware([identity.require(), middleware.task.cache.with({ ttl: 30_000 })])
   .dependencies({ projectRepo })
   .run(async (_input, { projectRepo }) => projectRepo.list())
   .build();
@@ -5476,109 +5621,129 @@ const listProjects = r
 const app = r.resource("app").register([projectRepo, listProjects]).build();
 const runtime = await run(app);
 
-// Starting a task with our custom tenant provider.
-const projects = await tenant.provide({ tenantId: "acme" }, async () =>
+await identity.provide({ tenantId: "acme" }, () => runtime.runTask(listProjects));
+```
+
+This keeps tenant identity in async context instead of global mutable state.
+The flow is: ingress provides the identity, identity-sensitive tasks require it, downstream code reads it, and identity-aware middleware partitions internal keys with `<tenantId>:` when identity context exists.
+That same identity value also remains visible to nested `run()` calls created inside the same async execution tree, which is uncommon but useful when one runtime intentionally orchestrates another without dropping identity awareness.
+
+### Custom Identity Context
+
+Use a custom async context when identity-aware framework behavior should follow a richer contract such as `{ tenantId, userId }`.
+
+```typescript
+import { middleware, r, run } from "@bluelibs/runner";
+
+const identity = r
+  .asyncContext<{ tenantId: string; userId: string }>("appTenant")
+  .configSchema({
+    tenantId: String,
+    userId: String,
+  })
+  .build();
+
+const listProjects = r
+  .task("listProjects")
+  .middleware([
+    identity.require(),
+    middleware.task.cache.with({ ttl: 30_000, identityScope: "required" }),
+  ])
+  .run(async () => {
+    const { tenantId, userId } = identity.use();
+    return { tenantId, userId };
+  })
+  .build();
+
+const app = r.resource("app").register([identity, listProjects]).build();
+const runtime = await run(app, { identity });
+
+await identity.provide({ tenantId: "acme", userId: "u1" }, () =>
   runtime.runTask(listProjects),
 );
 ```
 
-This pattern keeps tenant identity in async context instead of global mutable state.
-The flow is: ingress provides the tenant, tenant-sensitive tasks require it, downstream code reads it, and middleware such as `cache` uses it to partition internal keys.
+Why this pattern matters:
 
-```mermaid
-sequenceDiagram
-    participant Ingress as HTTP / RPC Ingress
-    participant Tenant as tenant.provide()
-    participant MW as Middleware (cache, rateLimit)
-    participant Task as Task .run()
-    participant Code as Business Code
+- your app keeps using its own context directly for `provide()`, `use()`, and `require()`
+- Runner internals read that same context for identity-aware middleware behavior
+- `.configSchema(...)` validates your richer ingress contract before `provide(...)` binds it
 
-    Ingress->>Tenant: provide({ tenantId: "acme" })
-    activate Tenant
-    Tenant->>MW: runTask(listProjects)
-    Note over MW: Keys prefixed with "acme:"
-    MW->>Task: next(input)
-    Task->>Code: tenant.use()
-    Code-->>Task: { tenantId: "acme" }
-    Task-->>MW: result
-    MW-->>Tenant: result
-    deactivate Tenant
-    Tenant-->>Ingress: result
-```
+If that custom identity context is already registered in the app graph, your app can also depend on it directly in the usual way.
+If it is not registered, `run(app, { identity })` still auto-registers it for runtime dependency usage.
+Transport features remain stricter: HTTP clients, exposure, and remote lanes can only serialize or hydrate contexts that are registered and explicitly forwarded.
 
-Use the built-in tenant accessor in two modes:
+### Access Patterns
 
-- strict: `tenant.use()` when tenant context must exist, throws if not.
-- safe: `tenant.tryUse()` or `tenant.has()` in shared or frontend-safe helpers
+Use identity access in two modes:
+
+- strict: `identity.use()` when running without an identity would be a correctness bug
+- safe: `identity.tryUse()` or `identity.has()` in shared helpers that may execute outside identity-bound work
 
 ```typescript
 import { asyncContexts } from "@bluelibs/runner";
 
-const { tenant } = asyncContexts;
+const { identity } = asyncContexts;
 
 export function getTelemetryTenantId(): string | undefined {
-  return tenant.tryUse()?.tenantId;
+  return identity.tryUse()?.tenantId;
 }
 ```
 
-Tenant-sensitive middleware defaults to `tenantScope: "auto"`.
-That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` prefix their internal keys with `tenantId` when tenant context exists, and fall back to the shared non-tenant keyspace when it does not.
+### Identity Scope
 
-- Use `tenant.provide({ tenantId }, fn)` at HTTP, RPC, queue, or job ingress.
-- Use `tenant.require()` or `tenant.use()` when running without a tenant would be a correctness bug.
-- Omit `tenantScope` for the default `"auto"` behavior.
-- Use `tenantScope: "auto"` when you want to make that default explicit in config.
-- Use `tenantScope: "required"` when middleware correctness depends on tenant context being present.
-- Use `tenantScope: "off"` only for intentional cross-tenant sharing.
-- `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because tenant-aware middleware reserves those for internal namespace partitioning.
+Identity-aware middleware defaults to `identityScope: "auto"`.
+That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` prefix their internal keys with `tenantId` when identity context exists, and fall back to the shared non-tenant keyspace when it does not.
+
+- Use `identity.provide({ tenantId }, fn)` at HTTP, RPC, queue, or job ingress.
+- Use `identity.require()` or `identity.use()` when running without an identity would be a correctness bug.
+- Omit `identityScope` for the default `"auto"` behavior.
+- Use `identityScope: "auto"` when you want to make that default explicit in config.
+- Use `identityScope: "auto:userId"` when you want tenant partitioning plus optional `userId` partitioning when the active identity context provides it.
+- Use `identityScope: "required"` when middleware correctness depends on `tenantId` being present and tenant-only partitioning is enough.
+- Use `identityScope: "full"` when middleware correctness depends on both `tenantId` and `userId`, and you want strict per-user isolation as `<tenantId>:<userId>:...`.
+- Use `identityScope: "off"` only for intentional cross-tenant sharing.
+- Legacy user-aware modes such as `"required:userId"` still work, but prefer `"full"` for the clearer strict-per-user intent.
+- `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
+- When user-aware identity scope is enabled, `userId` must also be a non-empty string and cannot contain `:`.
+
+Quick choice guide:
+
+- Use omitted / `"auto"` when tenant partitioning is helpful but not mandatory.
+- Use `"required"` when the task must run inside a tenant and tenant-only isolation is enough.
+- Use `"full"` when the task must run inside a tenant and each user needs a separate middleware bucket.
+- Use `"auto:userId"` when tenant isolation is mandatory enough to keep when present, but `userId` is only a refinement when available.
+- Use `"off"` only when cross-tenant sharing is explicitly intended.
+
+Examples:
 
 ```typescript
 import { middleware } from "@bluelibs/runner";
 
+// Tenant must exist. Keys look like: <tenantId>:...
 middleware.task.rateLimit.with({
   windowMs: 60_000,
   max: 10,
-  tenantScope: "required",
+  identityScope: "required",
+});
+
+// Tenant + user must both exist. Keys look like: <tenantId>:<userId>:...
+middleware.task.cache.with({
+  ttl: 30_000,
+  identityScope: "full",
+});
+
+// Tenant is required when present, userId refines the key only when available.
+middleware.task.debounce.with({
+  ms: 250,
+  identityScope: "auto:userId",
 });
 ```
 
-Runner still reads tenant identity from `asyncContexts.tenant`. Destructure it as `const { tenant } = asyncContexts` to keep call sites concise.
-That `tenant` accessor is an application async context contract; unlike `asyncContexts.execution`, it exists to carry your business state rather than expose runtime tracing metadata.
-If a specific provider or middleware family needs extra metadata, keep that on that provider's own config instead of overloading `tenantScope`.
+Runner still validates `tenantId` at middleware read time.
+Extra fields belong to your app-level contract, so validate them in your custom identity context schema when correctness depends on them.
 
-`TenantContextValue` now extends `ITenant`, so you can layer app-specific tenant metadata onto the built-in contract without replacing Runner's `tenantId` requirement.
-
-```typescript
-import { asyncContexts, type TenantContextValue } from "@bluelibs/runner";
-
-declare module "@bluelibs/runner" {
-  interface TenantContextValue {
-    region: string;
-    plan: "free" | "enterprise";
-  }
-}
-
-const { tenant } = asyncContexts;
-
-await tenant.provide(
-  {
-    // type-safety on proide and use()
-    tenantId: "acme",
-    region: "eu-west",
-    plan: "enterprise",
-  },
-  async () => {
-    const currentTenant = tenant.use();
-    await runtime.runTask(listProjects);
-
-    console.log(currentTenant.region);
-  },
-);
-```
-
-Runner still validates `tenantId` at runtime. Extra fields are part of your app-level contract, so validate them where that metadata enters your system if correctness depends on them.
-
-> **Platform Note:** Tenant propagation requires `AsyncLocalStorage`. That works on the Node build and on compatible Bun/Deno runtimes when async-local storage is exposed. On platforms without it, `provide()` still runs the callback but does not propagate tenant state, so shared or frontend-compatible code should treat tenant presence as optional and use `tenant.tryUse()` or `tenant.has()` when probing.
+> **Platform Note:** Identity propagation requires `AsyncLocalStorage`. The built-in `asyncContexts.identity` degrades gently on unsupported runtimes: `tryUse()` returns `undefined`, `has()` returns `false`, and `provide()` still executes the callback without propagation. In contrast, `run(app, { identity: customIdentityContext })` fails fast when `AsyncLocalStorage` is unavailable.
 ## Observability Strategy (Logs, Metrics, and Traces)
 
 Runner gives you integration points for the three core observability signals:

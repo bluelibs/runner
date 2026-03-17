@@ -1,5 +1,5 @@
 import { genericError } from "../../../errors";
-import { r, resources, run, tags } from "../../..";
+import { r, resources, run } from "../../..";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
@@ -106,7 +106,6 @@ type CapturedLog = {
 
 describe("event-lanes: debug routing logs", () => {
   it("logs enqueue, relay, and inactive-lane skip when debug event logging is enabled", async () => {
-    const lane = r.eventLane("tests-event-lanes-debug-routing-lane").build();
     const queue = new DebugRoutingQueue();
     const logs: CapturedLog[] = [];
 
@@ -127,7 +126,10 @@ describe("event-lanes: debug routing logs", () => {
 
     const event = r
       .event<{ id: string }>("tests-event-lanes-debug-routing-event")
-      .tags([tags.eventLane.with({ lane })])
+      .build();
+    const lane = r
+      .eventLane("tests-event-lanes-debug-routing-lane")
+      .applyTo([event])
       .build();
 
     let hookCalls = 0;
@@ -157,7 +159,7 @@ describe("event-lanes: debug routing logs", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue }],
           },
         }),
@@ -238,9 +240,6 @@ describe("event-lanes: debug routing logs", () => {
   });
 
   it("does not log lane diagnostics when logEventEmissionOnRun is false", async () => {
-    const lane = r
-      .eventLane("tests-event-lanes-debug-routing-disabled-lane")
-      .build();
     const queue = new DebugRoutingQueue();
     const logs: CapturedLog[] = [];
 
@@ -261,7 +260,10 @@ describe("event-lanes: debug routing logs", () => {
 
     const event = r
       .event<{ id: string }>("tests-event-lanes-debug-routing-disabled-event")
-      .tags([tags.eventLane.with({ lane })])
+      .build();
+    const lane = r
+      .eventLane("tests-event-lanes-debug-routing-disabled-lane")
+      .applyTo([event])
       .build();
     const emitTask = r
       .task("tests-event-lanes-debug-routing-disabled-emit")
@@ -280,7 +282,7 @@ describe("event-lanes: debug routing logs", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue }],
           },
         }),

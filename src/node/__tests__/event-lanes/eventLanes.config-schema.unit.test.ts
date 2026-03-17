@@ -1,5 +1,6 @@
 import { matchError } from "../../../errors/foundation/match.errors";
 import { eventLanesResourceConfigSchema } from "../../event-lanes/configSchema";
+import { r } from "../../../index";
 
 function expectMatchFailure(run: () => unknown): void {
   try {
@@ -13,11 +14,19 @@ function expectMatchFailure(run: () => unknown): void {
 describe("eventLanes resource config schema", () => {
   it("accepts valid event-lanes config shape", () => {
     const lane = { id: "lane-valid" };
+    const event = r.event("tests-event-lanes-config-schema-hook-event").build();
+    const hook = r
+      .hook("tests-event-lanes-config-schema-hook")
+      .on(event)
+      .run(async () => {})
+      .build();
     const config = {
       profile: "worker",
       topology: {
         profiles: {
-          worker: { consume: [lane] },
+          worker: {
+            consume: [{ lane, hooks: { only: [hook] } }],
+          },
         },
         bindings: [
           {
@@ -71,6 +80,41 @@ describe("eventLanes resource config schema", () => {
         topology: {
           profiles: {
             worker: { consume: ["lane-id"] },
+          },
+          bindings: [
+            {
+              lane,
+              queue: {
+                enqueue: async () => "id",
+                consume: async () => {},
+                ack: async () => {},
+                nack: async () => {},
+              },
+            },
+          ],
+        },
+      } as never),
+    );
+  });
+
+  it("rejects profiles entries whose hooks.only values are not hook references", () => {
+    const lane = { id: "lane-invalid-hooks" };
+
+    expectMatchFailure(() =>
+      eventLanesResourceConfigSchema.parse({
+        profile: "worker",
+        topology: {
+          profiles: {
+            worker: {
+              consume: [
+                {
+                  lane,
+                  hooks: {
+                    only: ["hook-id"],
+                  },
+                },
+              ],
+            },
           },
           bindings: [
             {

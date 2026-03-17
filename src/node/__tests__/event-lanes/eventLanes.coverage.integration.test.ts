@@ -1,5 +1,5 @@
 import { genericError } from "../../../errors";
-import { events, r, resources, run, tags } from "../../..";
+import { events, r, resources, run } from "../../..";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
@@ -73,11 +73,13 @@ class ManualCoverageQueue implements IEventLaneQueue {
 
 describe("event-lanes: additional coverage", () => {
   it("treats malformed relay ids as non-lane-specific and runs matching hooks", async () => {
-    const laneA = r.eventLane("tests-event-lanes-malformed-relay-a").build();
     const queue = new ManualCoverageQueue();
     const event = r
       .event<{ id: string }>("tests-event-lanes-malformed-relay-event")
-      .tags([tags.eventLane.with({ lane: laneA })])
+      .build();
+    const laneA = r
+      .eventLane("tests-event-lanes-malformed-relay-a")
+      .applyTo([event])
       .build();
 
     let callsA = 0;
@@ -119,7 +121,7 @@ describe("event-lanes: additional coverage", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [laneA] } },
+            profiles: { worker: { consume: [{ lane: laneA }] } },
             bindings: [{ lane: laneA, queue }],
           },
         }),
@@ -136,11 +138,11 @@ describe("event-lanes: additional coverage", () => {
   });
 
   it("uses binding prefetch and ignores repeated ready", async () => {
-    const lane = r.eventLane("tests-event-lanes-prefetch-invalid").build();
     const queue = new ManualCoverageQueue();
-    const event = r
-      .event("tests-event-lanes-prefetch-invalid-event")
-      .tags([tags.eventLane.with({ lane })])
+    const event = r.event("tests-event-lanes-prefetch-invalid-event").build();
+    const lane = r
+      .eventLane("tests-event-lanes-prefetch-invalid")
+      .applyTo([event])
       .build();
     const laneHook = r
       .hook("tests-event-lanes-prefetch-invalid-hook")
@@ -168,7 +170,7 @@ describe("event-lanes: additional coverage", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue, prefetch: 4 }],
           },
         }),
@@ -197,7 +199,7 @@ describe("event-lanes: additional coverage", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane: lane }] } },
             bindings: [{ lane, queue }],
           },
         }),

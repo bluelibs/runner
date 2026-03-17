@@ -298,8 +298,33 @@ describe("Rate Limit Middleware", () => {
     await run(app);
   });
 
+  it("fails fast when keyBuilder returns a non-string", async () => {
+    const task = defineTask({
+      id: "rateLimit-keyBuilder-invalid-return",
+      middleware: [
+        rateLimitTaskMiddleware.with({
+          windowMs: 1000,
+          max: 1,
+          keyBuilder: () => ({ invalid: true }) as unknown as string,
+        }),
+      ],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-rateLimit-keyBuilder-invalid-return",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task()).rejects.toThrow();
+      },
+    });
+
+    await run(app);
+  });
+
   it("prunes expired keyed windows before admitting a new distinct key", async () => {
-    const config = { windowMs: 1000, max: 1 };
+    const config = { windowMs: 1000, max: 1, keyBuilder: () => "shared" };
     const keyedStates = new Map<string, { count: number; resetTime: number }>();
 
     keyedStates.set("expired-a", {
@@ -337,6 +362,9 @@ describe("Rate Limit Middleware", () => {
           }
         },
       },
+      identityContext: {
+        tryUse: () => undefined,
+      },
     } as Parameters<typeof rateLimitTaskMiddleware.run>[1];
 
     await expect(
@@ -358,7 +386,7 @@ describe("Rate Limit Middleware", () => {
 
     expect(keyedStates.size).toBe(2);
     expect(keyedStates.has("keep")).toBe(true);
-    expect(keyedStates.has("rateLimit-prune")).toBe(true);
+    expect(keyedStates.has("shared")).toBe(true);
   });
 
   it("rejects new distinct keys when maxKeys is reached but still allows the existing key", async () => {
@@ -492,7 +520,12 @@ describe("Rate Limit Middleware", () => {
   });
 
   it("falls back to direct pruning when a mocked state does not expose sweepExpiredStates", async () => {
-    const config = { windowMs: 1_000, max: 1, maxKeys: 1 };
+    const config = {
+      windowMs: 1_000,
+      max: 1,
+      maxKeys: 1,
+      keyBuilder: () => "shared",
+    };
     const keyedStates = new Map<string, { count: number; resetTime: number }>([
       [
         "expired",
@@ -508,6 +541,9 @@ describe("Rate Limit Middleware", () => {
         trackedStates: new Map(),
         disposeCleanupTimer: jest.fn(),
         registerConfigMap: jest.fn(),
+      },
+      identityContext: {
+        tryUse: () => undefined,
       },
     } as unknown as Parameters<typeof rateLimitTaskMiddleware.run>[1];
 
@@ -529,6 +565,6 @@ describe("Rate Limit Middleware", () => {
     ).resolves.toBe("fresh");
 
     expect(keyedStates.has("expired")).toBe(false);
-    expect(keyedStates.has("rateLimit-fallback-prune")).toBe(true);
+    expect(keyedStates.has("shared")).toBe(true);
   });
 });

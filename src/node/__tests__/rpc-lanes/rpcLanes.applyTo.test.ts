@@ -254,7 +254,7 @@ describe("rpcLanes applyTo", () => {
           profile: "worker",
           mode: "transparent",
           topology: {
-            profiles: { worker: { consume: [eventLane] } },
+            profiles: { worker: { consume: [{ lane: eventLane }] } },
             bindings: [],
           },
         }),

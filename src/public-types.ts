@@ -71,19 +71,32 @@ export type { ResourceCooldownAdmissionTargets } from "./types/resource";
 export type { ITimerHandle, ITimers } from "./types/timers";
 
 /**
- * Minimal tenant identity contract used by Runner's built-in tenant async context.
+ * Minimal identity payload Runner understands for identity-aware framework
+ * behavior.
+ *
+ * `tenantId` and `userId` are both optional at the ambient context level so
+ * apps can establish identity gradually across request/auth boundaries.
+ * Middleware that opts into identity partitioning validates the fields it
+ * actually needs at use time.
  */
-export interface ITenant {
+export interface IIdentity {
   /**
-   * Stable non-empty tenant identifier used to partition tenant-aware state.
+   * Stable tenant identifier used to partition tenant-aware framework state
+   * when present.
    */
-  tenantId: string;
+  tenantId?: string;
+  /**
+   * Stable authenticated user identifier used by user-aware identity scopes
+   * when present.
+   */
+  userId?: string;
 }
 
 /**
- * Value carried by `asyncContexts.tenant`.
+ * Value carried by `asyncContexts.identity`.
  *
- * Augment this interface when your app needs extra tenant metadata to flow
- * through `tenant.provide()`, `tenant.use()`, and `tenant.tryUse()`.
+ * This built-in context is the default runtime identity grouper. Apps can also
+ * define their own `r.asyncContext(...).configSchema(...)` accessor and pass it
+ * to `run(..., { identity })` when they want a custom runtime identity source.
  */
-export interface TenantContextValue extends ITenant {}
+export interface IdentityContextValue extends IIdentity {}

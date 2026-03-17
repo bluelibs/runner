@@ -1089,13 +1089,18 @@ describe("Caching System", () => {
       await run(app);
     });
 
-    it("should cache circular and BigInt inputs with default keyBuilder", async () => {
+    it("should cache circular and BigInt inputs with an explicit keyBuilder", async () => {
       type CircularBigIntInput = { id: bigint; self?: unknown };
       const runSpy = jest.fn(async (_input: CircularBigIntInput) => "ok");
 
       const testTask = defineTask({
         id: "circular-bigint-task",
-        middleware: [cacheMiddleware],
+        middleware: [
+          cacheMiddleware.with({
+            keyBuilder: (_taskId, input: CircularBigIntInput) =>
+              `id:${input.id.toString()}`,
+          }),
+        ],
         run: async (input: CircularBigIntInput) => runSpy(input),
       });
 
@@ -1198,9 +1203,9 @@ describe("Caching System", () => {
             "max-size-task",
           );
 
-          expect(await cacheInstance?.has?.("max-size-task-1")).toBe(false);
-          expect(await cacheInstance?.has?.("max-size-task-2")).toBe(true);
-          expect(await cacheInstance?.has?.("max-size-task-3")).toBe(true);
+          expect(await cacheInstance?.has?.("max-size-task:1")).toBe(false);
+          expect(await cacheInstance?.has?.("max-size-task:2")).toBe(true);
+          expect(await cacheInstance?.has?.("max-size-task:3")).toBe(true);
         },
       });
 

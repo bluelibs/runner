@@ -22,7 +22,7 @@ describe("eventLanes auth helpers", () => {
     const config = {
       profile: "p",
       topology: {
-        profiles: { p: { consume: [lane] } },
+        profiles: { p: { consume: [{ lane: lane }] } },
         bindings: [{ lane, queue: {}, auth: { secret: "s1" } }],
       },
     } as any;
@@ -50,7 +50,7 @@ describe("eventLanes auth helpers", () => {
     const config = {
       profile: "p",
       topology: {
-        profiles: { p: { consume: [lane] } },
+        profiles: { p: { consume: [{ lane: lane }] } },
         bindings: [{ lane, queue: {}, auth: { secret: "ready-secret" } }],
       },
     } as any;

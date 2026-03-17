@@ -103,15 +103,93 @@ export const transactionalParallelConflictError = error<
   .build();
 
 export const transactionalEventLaneConflictError = error<
-  { eventId: string; tagId: string } & DefaultErrorType
+  { eventId: string; laneId: string } & DefaultErrorType
 >("transactionalEventLaneConflict")
   .format(
-    ({ eventId, tagId }) =>
-      `Event "${eventId}" cannot be transactional while using lane tag "${tagId}".`,
+    ({ eventId, laneId }) =>
+      `Event "${eventId}" cannot be transactional while assigned to eventLane "${laneId}".`,
   )
   .remediation(
     ({ eventId }) =>
-      `Remove .transactional() or remove runner.tags.eventLane from "${eventId}". Transactional events rely on in-process rollback semantics.`,
+      `Remove .transactional() or stop routing "${eventId}" through Event Lanes. Transactional events rely on in-process rollback semantics.`,
+  )
+  .build();
+
+export const eventLaneTagDeprecatedError = error<
+  { eventId: string; tagId: string } & DefaultErrorType
+>("eventLaneTagDeprecated")
+  .format(
+    ({ eventId, tagId }) =>
+      `Event "${eventId}" uses deprecated tag "${tagId}".`,
+  )
+  .remediation(
+    ({ eventId }) =>
+      `Move Event Lane routing for "${eventId}" to r.eventLane(...).applyTo([...]) and remove the deprecated tag.`,
+  )
+  .build();
+
+export const eventLaneHookTagDeprecatedError = error<
+  { hookId: string; tagId: string } & DefaultErrorType
+>("eventLaneHookTagDeprecated")
+  .format(
+    ({ hookId, tagId }) => `Hook "${hookId}" uses deprecated tag "${tagId}".`,
+  )
+  .remediation(
+    ({ hookId }) =>
+      `Move relay hook policy for "${hookId}" into eventLane topology consume entries via hooks.only and remove the deprecated tag.`,
+  )
+  .build();
+
+export const eventLaneHookPolicyConflictError = error<
+  {
+    hookId: string;
+    tagId: string;
+    profile: string;
+    laneId: string;
+  } & DefaultErrorType
+>("eventLaneHookPolicyConflict")
+  .format(
+    ({ hookId, tagId, profile, laneId }) =>
+      `Hook "${hookId}" cannot combine deprecated tag "${tagId}" with topology hooks.only policy for profile "${profile}" lane "${laneId}".`,
+  )
+  .remediation(
+    ({ hookId }) =>
+      `Keep hook policy for "${hookId}" in topology only: remove the deprecated tag and manage relay hook allowlists through profiles[profile].consume[].hooks.only.`,
+  )
+  .build();
+
+export const eventLaneHookPolicyHookReferenceInvalidError = error<
+  {
+    resourceId: string;
+    profile: string;
+    laneId: string;
+    hookId: string;
+  } & DefaultErrorType
+>("eventLaneHookPolicyHookReferenceInvalid")
+  .format(
+    ({ resourceId, profile, laneId, hookId }) =>
+      `Event Lanes resource "${resourceId}" profile "${profile}" lane "${laneId}" references hook "${hookId}" in hooks.only, but that hook is not registered.`,
+  )
+  .remediation(
+    ({ hookId }) =>
+      `Register hook "${hookId}" in the app before referencing it from hooks.only.`,
+  )
+  .build();
+
+export const eventLaneConsumeDuplicateLaneError = error<
+  {
+    resourceId: string;
+    profile: string;
+    laneId: string;
+  } & DefaultErrorType
+>("eventLaneConsumeDuplicateLane")
+  .format(
+    ({ resourceId, profile, laneId }) =>
+      `Event Lanes resource "${resourceId}" declares lane "${laneId}" more than once in profile "${profile}" consume.`,
+  )
+  .remediation(
+    ({ laneId, profile }) =>
+      `Keep lane "${laneId}" only once inside profile "${profile}" consume. Merge hook policy into a single consume entry for that lane.`,
   )
   .build();
 
@@ -128,7 +206,7 @@ export const eventLaneRpcLaneConflictError = error<
   )
   .remediation(
     ({ eventId }) =>
-      `Pick one lane model for "${eventId}": use runner.tags.eventLane for async queue delivery, or runner.tags.rpcLane for synchronous RPC-style delivery.`,
+      `Pick one lane model for "${eventId}": route it through r.eventLane(...).applyTo([...]) for async queue delivery, or use RPC Lane routing for synchronous RPC-style delivery.`,
   )
   .build();
 

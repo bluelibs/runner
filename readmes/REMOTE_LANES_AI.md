@@ -7,10 +7,10 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - Runtime boundary: `eventLanesResource` attaches interception at runtime for lane-assigned emissions only; non-lane events keep normal local behavior.
 - Define lanes with `r.eventLane("email-lane").build()` (or `eventLane(...)`).
 - Lane async-context policy is lane-level: `r.eventLane("...").asyncContexts([...])` (default is `[]`, so none are forwarded unless explicitly allowlisted).
-- Optional lane-side assignment: `r.eventLane("...").applyTo([eventOrId])`.
+- Assign events to lanes with `r.eventLane("...").applyTo([eventOrId])`.
 - Define topology with `r.eventLane.topology({ profiles, bindings })`.
+- `profiles[profile].consume` is object-based: `[{ lane, hooks?: { only?: [hookA, hookB] } }]`.
 - Boundary reminder: Event Lanes are async fire-and-forget queue routing; use RPC Lanes for synchronous task/event RPC (`readmes/REMOTE_LANES.md`).
-- Tag events with `tags.eventLane.with({ lane })`.
 - Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`)
   - `bindings: [{ lane, queue, auth?, prefetch?, maxAttempts?, retryDelayMs? }]` where `queue` can be a queue instance or a queue resource
@@ -18,9 +18,10 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - `const Profiles = { API: "api", WORKER: "worker" } as const`
   - `profile: Profiles.API`
 - `mode: "network"` (default):
-  - Lane-assigned event emissions (tag or `applyTo`) are intercepted and enqueued to bound queues.
+  - Lane-assigned event emissions (`applyTo`) are intercepted and enqueued to bound queues.
   - Active profile `consume` lanes start dequeue workers on `r.system.events.ready`.
   - Payload is deserialized with `serializer.parse(...)`, then re-emitted in-process.
+  - If `consume[].hooks.only` is configured for that lane, only those hooks run for the relay re-emit.
   - Allowlisted async contexts are serialized on the producer side and rehydrated on the consumer side.
   - Auth readiness is role-based: consumed lanes require verifier material; non-consumed lanes require signer material.
   - In `jwt_asymmetric`, this enables producer-only private key and consumer-only public key setups.
@@ -40,10 +41,11 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - lane ids must be non-empty strings (`defineEventLane`, `defineRpcLane`)
   - `applyTo` string ids are validated against container definitions and type (event only).
   - Event cannot be on two different `eventLane`s.
-  - Event cannot be on both `eventLane` and `rpcLane` (via tags and/or `applyTo`).
+  - Event cannot be on both `eventLane` and `rpcLane` via lane assignment.
+  - Deprecated `tags.eventLane` and `tags.eventLaneHook` fail fast at startup.
   - Missing signer material fails fast (`remoteLanes-auth-signerMissing`) for producer roles.
   - Missing verifier material fails fast (`remoteLanes-auth-verifierMissing`) for consumer roles.
-- In `transparent` and `local-simulated`, profile `consume` is ignored for routing decisions.
+- In `transparent` and `local-simulated`, profile `consume` does not start network consumers, but it can still declare lane presence and relay hook policy (`hooks.only`).
 - Relay re-emits bypass lane interception to prevent loops.
 - Hooks run based on event subscriptions after relay re-emit.
 - When debug event emission logging is enabled (`logEventEmissionOnRun`), Event Lanes emits routing diagnostics: `event-lanes.enqueue`, `event-lanes.relay-emit`, and `event-lanes.skip-inactive-lane`.

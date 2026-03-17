@@ -7,8 +7,8 @@ import {
   setPlatform,
 } from "../../platform";
 import {
-  tenantContextRequiredError,
-  tenantInvalidContextError,
+  identityContextRequiredError,
+  identityInvalidContextError,
 } from "../../errors";
 
 function tenantValue(tenantId: string) {
@@ -18,7 +18,7 @@ function tenantValue(tenantId: string) {
   };
 }
 
-describe("asyncContexts.tenant", () => {
+describe("asyncContexts.identity", () => {
   const globalScope = globalThis as typeof globalThis & {
     AsyncLocalStorage?: new <T>() => {
       getStore(): T | undefined;
@@ -33,9 +33,14 @@ describe("asyncContexts.tenant", () => {
     resetPlatform();
   });
 
-  it("supports safe probing when no tenant is active", () => {
-    expect(asyncContexts.tenant.tryUse()).toBeUndefined();
-    expect(asyncContexts.tenant.has()).toBe(false);
+  it("supports safe probing when no identity is active", () => {
+    expect(asyncContexts.identity.tryUse()).toBeUndefined();
+    expect(asyncContexts.identity.has()).toBe(false);
+  });
+
+  it("exposes an optional dependency wrapper", () => {
+    const optionalIdentity = asyncContexts.identity.optional();
+    expect(optionalIdentity.inner).toBe(asyncContexts.identity);
   });
 
   it("stays safely unavailable on platforms without async local storage", () => {
@@ -43,54 +48,60 @@ describe("asyncContexts.tenant", () => {
     globalScope.AsyncLocalStorage = undefined;
     setPlatform(new PlatformAdapter("universal"));
 
-    expect(asyncContexts.tenant.tryUse()).toBeUndefined();
-    expect(asyncContexts.tenant.has()).toBe(false);
-    expect(asyncContexts.tenant.provide(tenantValue("acme"), () => "ok")).toBe(
-      "ok",
-    );
+    expect(asyncContexts.identity.tryUse()).toBeUndefined();
+    expect(asyncContexts.identity.has()).toBe(false);
+    expect(
+      asyncContexts.identity.provide(tenantValue("acme"), () => "ok"),
+    ).toBe("ok");
   });
 
-  it("throws a typed error when tenant context is required but missing", () => {
-    expect(() => asyncContexts.tenant.use()).toThrow();
+  it("throws a typed error when identity context is required but missing", () => {
+    expect(() => asyncContexts.identity.use()).toThrow();
 
     try {
-      asyncContexts.tenant.use();
+      asyncContexts.identity.use();
     } catch (error) {
-      expect(tenantContextRequiredError.is(error)).toBe(true);
+      expect(identityContextRequiredError.is(error)).toBe(true);
     }
   });
 
-  it("rejects invalid tenant payloads", () => {
+  it("exposes optional() for dependency wiring", () => {
+    const optionalIdentity = asyncContexts.identity.optional();
+
+    expect(optionalIdentity.inner).toBe(asyncContexts.identity);
+  });
+
+  it("rejects invalid built-in identity payloads", () => {
     expect(() =>
-      asyncContexts.tenant.provide(tenantValue(""), () => "nope"),
+      asyncContexts.identity.provide(tenantValue(""), () => "nope"),
     ).toThrow();
     expect(() =>
-      asyncContexts.tenant.provide(tenantValue("acme:west"), () => "nope"),
+      asyncContexts.identity.provide(tenantValue("acme:west"), () => "nope"),
     ).toThrow(/cannot contain ":"/);
     expect(() =>
-      asyncContexts.tenant.provide(tenantValue("__global__"), () => "nope"),
-    ).toThrow(/reserved for the shared non-tenant namespace/);
+      asyncContexts.identity.provide(tenantValue("__global__"), () => "nope"),
+    ).toThrow(/reserved for the shared non-identity namespace/);
 
     try {
-      asyncContexts.tenant.provide(tenantValue(""), () => "nope");
+      asyncContexts.identity.provide(tenantValue(""), () => "nope");
     } catch (error) {
-      expect(tenantInvalidContextError.is(error)).toBe(true);
+      expect(identityInvalidContextError.is(error)).toBe(true);
     }
 
     try {
-      asyncContexts.tenant.provide(tenantValue("acme:west"), () => "nope");
+      asyncContexts.identity.provide(tenantValue("acme:west"), () => "nope");
     } catch (error) {
-      expect(tenantInvalidContextError.is(error)).toBe(true);
+      expect(identityInvalidContextError.is(error)).toBe(true);
     }
 
     try {
-      asyncContexts.tenant.provide(tenantValue("__global__"), () => "nope");
+      asyncContexts.identity.provide(tenantValue("__global__"), () => "nope");
     } catch (error) {
-      expect(tenantInvalidContextError.is(error)).toBe(true);
+      expect(identityInvalidContextError.is(error)).toBe(true);
     }
   });
 
-  it("propagates tenant context through task -> event -> hook execution", async () => {
+  it("propagates identity context through task -> event -> hook execution", async () => {
     const seen: string[] = [];
 
     const tenantObserved = r
@@ -99,10 +110,10 @@ describe("asyncContexts.tenant", () => {
 
     const emitTenant = r
       .task("emitTenant")
-      .middleware([asyncContexts.tenant.require()])
+      .middleware([asyncContexts.identity.require()])
       .dependencies({ tenantObserved })
       .run(async (_input, { tenantObserved }) => {
-        const tenantId = asyncContexts.tenant.use().tenantId;
+        const tenantId = asyncContexts.identity.use().tenantId!;
         seen.push(`task:${tenantId}`);
         await tenantObserved({ tenantId });
       })
@@ -112,7 +123,7 @@ describe("asyncContexts.tenant", () => {
       .hook("recordTenant")
       .on(tenantObserved)
       .run(async (event) => {
-        seen.push(`hook:${asyncContexts.tenant.use().tenantId}`);
+        seen.push(`hook:${asyncContexts.identity.use().tenantId}`);
         seen.push(`event:${event.data.tenantId}`);
       })
       .build();
@@ -124,7 +135,7 @@ describe("asyncContexts.tenant", () => {
 
     const runtime = await run(app, { executionContext: true });
 
-    await asyncContexts.tenant.provide(tenantValue("acme"), async () => {
+    await asyncContexts.identity.provide(tenantValue("acme"), async () => {
       await runtime.runTask(emitTenant);
     });
 
@@ -135,8 +146,8 @@ describe("asyncContexts.tenant", () => {
   it("provides a built-in require() guard", async () => {
     const guardedTask = r
       .task("guardedTask")
-      .middleware([asyncContexts.tenant.require()])
-      .run(async () => asyncContexts.tenant.use().tenantId)
+      .middleware([asyncContexts.identity.require()])
+      .run(async () => asyncContexts.identity.use().tenantId)
       .build();
 
     const app = r.resource("app").register([guardedTask]).build();
@@ -144,7 +155,7 @@ describe("asyncContexts.tenant", () => {
 
     await expect(runtime.runTask(guardedTask)).rejects.toThrow();
     await expect(
-      asyncContexts.tenant.provide(tenantValue("globex"), async () =>
+      asyncContexts.identity.provide(tenantValue("globex"), async () =>
         runtime.runTask(guardedTask),
       ),
     ).resolves.toBe("globex");
@@ -152,16 +163,16 @@ describe("asyncContexts.tenant", () => {
     await runtime.dispose();
   });
 
-  it("restores the outer tenant when tenant providers are nested", async () => {
-    const result = await asyncContexts.tenant.provide(
+  it("restores the outer identity when identity providers are nested", async () => {
+    const result = await asyncContexts.identity.provide(
       tenantValue("outer"),
       async () => {
-        const outer = asyncContexts.tenant.use().tenantId;
-        const inner = await asyncContexts.tenant.provide(
+        const outer = asyncContexts.identity.use().tenantId;
+        const inner = await asyncContexts.identity.provide(
           tenantValue("inner"),
-          async () => asyncContexts.tenant.use().tenantId,
+          async () => asyncContexts.identity.use().tenantId,
         );
-        const restored = asyncContexts.tenant.use().tenantId;
+        const restored = asyncContexts.identity.use().tenantId;
 
         return { outer, inner, restored };
       },
@@ -174,16 +185,18 @@ describe("asyncContexts.tenant", () => {
     });
   });
 
-  it("has remains a pure probe even when the stored tenant value is invalid", () => {
+  it("has remains a pure probe even when the stored identity value is invalid", () => {
     const invalidStore = new Map<string, unknown>([
-      ["tenant", { tenantId: "" }],
+      ["identity", { tenantId: "" }],
     ]);
 
-    const result = storage.run(invalidStore, () => asyncContexts.tenant.has());
+    const result = storage.run(invalidStore, () =>
+      asyncContexts.identity.has(),
+    );
 
     expect(result).toBe(true);
     expect(() =>
-      storage.run(invalidStore, () => asyncContexts.tenant.tryUse()),
+      storage.run(invalidStore, () => asyncContexts.identity.tryUse()),
     ).toThrow();
   });
 
@@ -208,14 +221,14 @@ describe("asyncContexts.tenant", () => {
 
     setPlatform(new PlatformAdapter("universal"));
     expect(
-      asyncContexts.tenant.provide(tenantValue("acme"), () => "before"),
+      asyncContexts.identity.provide(tenantValue("acme"), () => "before"),
     ).toBe("before");
 
     await getPlatform().init();
 
-    const result = await asyncContexts.tenant.provide(
+    const result = await asyncContexts.identity.provide(
       tenantValue("acme"),
-      async () => asyncContexts.tenant.use().tenantId,
+      async () => asyncContexts.identity.use().tenantId,
     );
 
     expect(result).toBe("acme");

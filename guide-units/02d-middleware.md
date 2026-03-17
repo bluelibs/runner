@@ -250,6 +250,7 @@ Notes:
 - Custom providers should enforce their own backend budget policy when `input.totalBudgetBytes` is provided.
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - When `keyBuilder(...)` returns `{ cacheKey, refs }`, middleware passes those refs to `set(..., metadata)` for provider-side indexing.
+- Without `keyBuilder`, cache keys default to `taskId + serialized input` and fail fast when the input cannot be serialized.
 - `resources.cache.invalidateRefs(ref | ref[])` fans out across cache-enabled tasks and deletes matching entries.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
@@ -264,8 +265,8 @@ const expensiveTask = r
     middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input: { userId: string }) =>
-        `${taskId}-${input.userId}`, // optional key builder
+      keyBuilder: (_taskId, input: { userId: string }) =>
+        `user:${input.userId}`, // optional when the default serialized-input key is too granular
     }),
   ])
   .run(async (input: { userId: string }) => {
@@ -331,9 +332,9 @@ const updateUser = r
 
 Notes:
 
-- `keyBuilder(taskId, input)` may return either a plain string or `{ cacheKey, refs? }`.
+- `keyBuilder(taskId, input, { canonicalKey })` may return either a plain string or `{ cacheKey, refs? }`.
 - Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`.
-- Refs follow the same `tenantScope` policy as the cache key, so tenant-aware caches invalidate only their own tenant-scoped entries by default.
+- Refs follow the same `identityScope` policy as the cache key, so tenant-aware caches invalidate only their own tenant-scoped entries by default.
 
 `totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
 
@@ -581,13 +582,20 @@ const myTask = r
 
 Control the frequency of task execution over time. This is useful for event-driven tasks that might fire in bursts.
 
+By default, Runner buckets `debounce` and `throttle` by `taskId + serialized input`, so different payloads stay isolated unless you intentionally provide a broader `keyBuilder(...)`.
+
 ```typescript
 import { middleware, r } from "@bluelibs/runner";
 
 // Debounce: Run only after 500ms of inactivity
 const saveTask = r
-  .task("saveTask")
-  .middleware([middleware.task.debounce.with({ ms: 500 })])
+  .task<{ docId: string; content: string }>("saveTask")
+  .middleware([
+    middleware.task.debounce.with({
+      ms: 500,
+      keyBuilder: (_taskId, input) => `doc:${input.docId}`,
+    }),
+  ])
   .run(async (data) => {
     // Assuming db is available in the closure
     return await db.save(data);
@@ -596,8 +604,13 @@ const saveTask = r
 
 // Throttle: Run at most once every 1000ms
 const logTask = r
-  .task("logTask")
-  .middleware([middleware.task.throttle.with({ ms: 1000 })])
+  .task<{ channel: string; message: string }>("logTask")
+  .middleware([
+    middleware.task.throttle.with({
+      ms: 1000,
+      keyBuilder: (_taskId, input) => `channel:${input.channel}`,
+    }),
+  ])
   .run(async (msg) => {
     console.log(msg);
   })
@@ -679,6 +692,8 @@ const sensitiveTask = r
       windowMs: 60 * 1000, // 1 minute window
       max: 5, // Max 5 attempts per window
       maxKeys: 1_000, // Optional hard cap for distinct live keys
+      keyBuilder: (_taskId, input: { email: string }) =>
+        input.email.toLowerCase(),
     }),
   ])
   .run(async (credentials) => {
@@ -691,7 +706,7 @@ const sensitiveTask = r
 **Key features:**
 
 - **Fixed-window strategy**: Simple, predictable request counting.
-- **Isolation**: Limits are tracked per task definition.
+- **Isolation**: Limits are tracked per serialized input by default.
 - **Error handling**: Throws the built-in typed Runner rate-limit error.
 
 **Why would you need this?** For monitoring, you want to see remaining quota to implement client-side throttling.
@@ -745,15 +760,15 @@ If you prefer the explicit middleware form, which is useful in documentation and
 ```typescript
 import { middleware, r } from "@bluelibs/runner";
 
-const TenantContext = r
+const IdentityContext = r
   .asyncContext<{ tenantId: string }>("tenantContext")
   .build();
 
 const listProjects = r
   .task("listProjects")
-  .middleware([middleware.task.requireContext.with({ context: TenantContext })])
+  .middleware([middleware.task.requireContext.with({ context: IdentityContext })])
   .run(async () => {
-    const { tenantId } = TenantContext.use();
+    const { tenantId } = IdentityContext.use();
     return await projectRepo.findByTenant(tenantId);
   })
   .build();
@@ -961,9 +976,9 @@ const getUser = r
 
 > **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
 
-> **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
+> **Note:** `cache`, `rateLimit`, `debounce`, and `throttle` default to partitioning by `canonicalTaskKey + ":" + serialized input`, and they fail fast when the input cannot be serialized. Provide `keyBuilder(taskId, input, { canonicalKey })` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. `canonicalKey` strips the `.tasks.` namespace marker so custom keys can stay readable. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
-> **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant value is `acme`. Cache refs are scoped with the same policy. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
+> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active identity context is present. Use `"auto:userId"` when you want optional `userId` suffixing, or `"full"` when you want strict `<tenantId>:<userId>:<baseKey>` partitioning and fail fast if `userId` is missing. Cache refs follow the same scope policy. The default behavior is `"auto"`: use the tenant prefix when identity context exists, otherwise keep the shared key. Use `"required"` when identity context must exist, and `"off"` only for intentional cross-tenant sharing. Legacy user-aware modes such as `"required:userId"` still work, but prefer `"full"` for the clearer strict-per-user intent.
 
 ### Resilience Orchestration
 

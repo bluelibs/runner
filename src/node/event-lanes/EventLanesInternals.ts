@@ -1,5 +1,9 @@
 import { isResource } from "../../define";
-import type { IEventEmission, IEventLaneTopologyProfile } from "../../defs";
+import type {
+  IEventEmission,
+  IEventLaneTopologyConsumeEntry,
+  IEventLaneTopologyProfile,
+} from "../../defs";
 import {
   eventLaneDuplicateBindingError,
   eventLaneBindingNotFoundError,
@@ -7,6 +11,7 @@ import {
   eventLaneQueueReferenceInvalidError,
   eventLaneRetryPolicyInvalidError,
 } from "../../errors";
+import type { Store } from "../../models/Store";
 import type { EventLaneRoute } from "./EventLaneAssignments";
 import type {
   EventLaneBinding,
@@ -30,6 +35,7 @@ export interface EventLanesResourceContext {
   coolingDown: boolean;
   disposed: boolean;
   activeBindingsByQueue: Map<IEventLaneQueue, Set<string>>;
+  hookAllowlistByLaneId: Map<string, Set<string>>;
   bindingsByLaneId: Map<string, EventLanesResolvedBinding>;
   eventRouteByEventId: Map<string, EventLaneRoute>;
   queues: Set<IEventLaneQueue>;
@@ -134,8 +140,15 @@ export function buildEventLanesContext(
   bindings: EventLanesResolvedBinding[],
   managedQueues: Set<IEventLaneQueue>,
   eventRouteByEventId: Map<string, EventLaneRoute>,
+  store?: Pick<Store, "findIdByDefinition">,
 ): EventLanesResourceContext {
-  return buildContext(config, bindings, managedQueues, eventRouteByEventId);
+  return buildContext(
+    config,
+    bindings,
+    managedQueues,
+    eventRouteByEventId,
+    store,
+  );
 }
 
 export function isRelayEmission(
@@ -228,9 +241,12 @@ function buildContext(
   bindings: EventLanesResolvedBinding[],
   managedQueues: Set<IEventLaneQueue>,
   eventRouteByEventId: Map<string, EventLaneRoute>,
+  store?: Pick<Store, "findIdByDefinition">,
 ): EventLanesResourceContext {
   const bindingsByLaneId = new Map<string, EventLanesResolvedBinding>();
   const queues = new Set<IEventLaneQueue>();
+  const profile = resolveProfile(config);
+  const hookAllowlistByLaneId = buildHookAllowlistByLaneId(profile, store);
 
   for (const binding of bindings) {
     bindingsByLaneId.set(binding.lane.id, binding);
@@ -239,12 +255,11 @@ function buildContext(
 
   const activeBindingsByQueue = new Map<IEventLaneQueue, Set<string>>();
   if (shouldConsumeProfile(config)) {
-    const profile = resolveProfile(config);
-    for (const lane of profile.consume) {
-      const binding = getLaneBindingOrThrow(lane.id, bindingsByLaneId);
+    for (const entry of profile.consume) {
+      const binding = getLaneBindingOrThrow(entry.lane.id, bindingsByLaneId);
       const activeLaneIds =
         activeBindingsByQueue.get(binding.queue) ?? new Set<string>();
-      activeLaneIds.add(lane.id);
+      activeLaneIds.add(entry.lane.id);
       activeBindingsByQueue.set(binding.queue, activeLaneIds);
     }
   }
@@ -254,6 +269,7 @@ function buildContext(
     coolingDown: false,
     disposed: false,
     activeBindingsByQueue,
+    hookAllowlistByLaneId,
     bindingsByLaneId,
     eventRouteByEventId,
     queues,
@@ -262,4 +278,35 @@ function buildContext(
       config.topology.relaySourcePrefix ?? DEFAULT_RELAY_SOURCE_PREFIX,
     profile: config.profile,
   };
+}
+
+function buildHookAllowlistByLaneId(
+  profile: IEventLaneTopologyProfile,
+  store?: Pick<Store, "findIdByDefinition">,
+): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>();
+
+  for (const entry of profile.consume) {
+    const hookAllowlist = toHookAllowlist(entry, store);
+    if (hookAllowlist) {
+      result.set(entry.lane.id, hookAllowlist);
+    }
+  }
+
+  return result;
+}
+
+function toHookAllowlist(
+  entry: IEventLaneTopologyConsumeEntry,
+  store?: Pick<Store, "findIdByDefinition">,
+): Set<string> | undefined {
+  if (!entry.hooks?.only) {
+    return undefined;
+  }
+
+  return new Set(
+    entry.hooks.only.map((hook) =>
+      store ? store.findIdByDefinition(hook) : hook.id,
+    ),
+  );
 }

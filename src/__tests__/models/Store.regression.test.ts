@@ -32,6 +32,7 @@ describe("Store regressions", () => {
         onUnhandledError: async () => {},
         dryRun: false,
         executionContext: null,
+        identity: null,
         lazy: false,
         lifecycleMode: ResourceLifecycleMode.Sequential,
         mode: RunnerMode.TEST,

@@ -8,18 +8,19 @@ import {
   throttleTaskMiddleware,
 } from "../../../globals/middleware/temporal.middleware";
 import {
-  applyTenantScopeToKey,
-  resolveTenantContext,
-} from "../../../globals/middleware/tenantScope.shared";
-import { tenantInvalidContextError } from "../../../errors";
+  applyIdentityScopeToKey,
+  resolveIdentityContext,
+} from "../../../globals/middleware/identityScope.shared";
+import { identityInvalidContextError } from "../../../errors";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const tenantValue = (tenantId: string) => ({
+const tenantValue = (tenantId: string, userId?: string) => ({
   tenantId,
   region: `${tenantId}-region`,
+  ...(userId === undefined ? {} : { userId }),
 });
 
-describe("tenantScope middleware support", () => {
+describe("identityScope middleware support", () => {
   it("isolates cache entries by tenant by default", async () => {
     let callCount = 0;
 
@@ -43,15 +44,15 @@ describe("tenantScope middleware support", () => {
 
     const runtime = await run(app);
 
-    const acmeFirst = await asyncContexts.tenant.provide(
+    const acmeFirst = await asyncContexts.identity.provide(
       tenantValue("acme"),
       () => runtime.runTask(task, "x"),
     );
-    const acmeSecond = await asyncContexts.tenant.provide(
+    const acmeSecond = await asyncContexts.identity.provide(
       tenantValue("acme"),
       () => runtime.runTask(task, "x"),
     );
-    const globex = await asyncContexts.tenant.provide(
+    const globex = await asyncContexts.identity.provide(
       tenantValue("globex"),
       () => runtime.runTask(task, "x"),
     );
@@ -91,24 +92,24 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
     const cache = runtime.getResourceValue(cacheResource);
 
-    await asyncContexts.tenant.provide(tenantValue("acme"), () =>
+    await asyncContexts.identity.provide(tenantValue("acme"), () =>
       runtime.runTask(task, { userId: "u1" }),
     );
-    await asyncContexts.tenant.provide(tenantValue("globex"), () =>
+    await asyncContexts.identity.provide(tenantValue("globex"), () =>
       runtime.runTask(task, { userId: "u1" }),
     );
 
-    await asyncContexts.tenant.provide(tenantValue("acme"), () =>
+    await asyncContexts.identity.provide(tenantValue("acme"), () =>
       cache.invalidateRefs("user:u1"),
     );
 
     await expect(
-      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
         runtime.runTask(task, { userId: "u1" }),
       ),
     ).resolves.toBe("u1-3");
     await expect(
-      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(task, { userId: "u1" }),
       ),
     ).resolves.toBe("u1-2");
@@ -116,7 +117,7 @@ describe("tenantScope middleware support", () => {
     await runtime.dispose();
   });
 
-  it('uses the target cache policy when invalidating refs with tenantScope: "off"', async () => {
+  it('uses the target cache policy when invalidating refs with identityScope: "off"', async () => {
     let callCount = 0;
 
     const task = defineTask({
@@ -124,7 +125,7 @@ describe("tenantScope middleware support", () => {
       middleware: [
         cacheMiddleware.with({
           ttl: 60_000,
-          tenantScope: "off",
+          identityScope: "off",
           keyBuilder: (_taskId: string, input: { userId: string }) => ({
             cacheKey: `user:${input.userId}`,
             refs: [`user:${input.userId}`],
@@ -145,21 +146,21 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
     const cache = runtime.getResourceValue(cacheResource);
 
-    await asyncContexts.tenant.provide(tenantValue("acme"), () =>
+    await asyncContexts.identity.provide(tenantValue("acme"), () =>
       runtime.runTask(task, { userId: "u1" }),
     );
-    await asyncContexts.tenant.provide(tenantValue("globex"), () =>
+    await asyncContexts.identity.provide(tenantValue("globex"), () =>
       runtime.runTask(task, { userId: "u1" }),
     );
 
     expect(callCount).toBe(1);
 
-    await asyncContexts.tenant.provide(tenantValue("acme"), () =>
+    await asyncContexts.identity.provide(tenantValue("acme"), () =>
       cache.invalidateRefs("user:u1"),
     );
 
     await expect(
-      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(task, { userId: "u1" }),
       ),
     ).resolves.toBe("u1-2");
@@ -183,20 +184,90 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     await expect(
-      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
     await expect(
-      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
     await expect(
-      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
     ).rejects.toThrow(/rate limit exceeded/i);
+
+    await runtime.dispose();
+  });
+
+  it("can also isolate rate limits by user within the same tenant", async () => {
+    const task = defineTask({
+      id: "tenant-rate-limit-user-scope-task",
+      middleware: [
+        rateLimitTaskMiddleware.with({
+          windowMs: 60_000,
+          max: 1,
+          identityScope: "full",
+        }),
+      ],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "tenant-rate-limit-user-scope-app",
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+
+    await expect(
+      asyncContexts.identity.provide(tenantValue("acme", "u1"), () =>
+        runtime.runTask(task),
+      ),
+    ).resolves.toBe("ok");
+    await expect(
+      asyncContexts.identity.provide(tenantValue("acme", "u2"), () =>
+        runtime.runTask(task),
+      ),
+    ).resolves.toBe("ok");
+    await expect(
+      asyncContexts.identity.provide(tenantValue("acme", "u1"), () =>
+        runtime.runTask(task),
+      ),
+    ).rejects.toThrow(/rate limit exceeded/i);
+
+    await runtime.dispose();
+  });
+
+  it('fails fast when identityScope: "full" is missing userId', async () => {
+    const task = defineTask({
+      id: "tenant-rate-limit-full-missing-user-task",
+      middleware: [
+        rateLimitTaskMiddleware.with({
+          windowMs: 60_000,
+          max: 1,
+          identityScope: "full",
+        }),
+      ],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "tenant-rate-limit-full-missing-user-app",
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+
+    await expect(
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
+        runtime.runTask(task),
+      ),
+    ).rejects.toThrow(/identityScope is "full"/i);
 
     await runtime.dispose();
   });
@@ -208,7 +279,7 @@ describe("tenantScope middleware support", () => {
         rateLimitTaskMiddleware.with({
           windowMs: 60_000,
           max: 1,
-          tenantScope: "off",
+          identityScope: "off",
         }),
       ],
       run: async () => "ok",
@@ -223,12 +294,12 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     await expect(
-      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
     await expect(
-      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
     ).rejects.toThrow(/rate limit exceeded/i);
@@ -236,14 +307,14 @@ describe("tenantScope middleware support", () => {
     await runtime.dispose();
   });
 
-  it("fails fast when tenantScope is required and no tenant exists", async () => {
+  it("fails fast when identityScope is required and no tenant exists", async () => {
     const task = defineTask({
       id: "tenant-rate-limit-required-task",
       middleware: [
         rateLimitTaskMiddleware.with({
           windowMs: 60_000,
           max: 1,
-          tenantScope: "required",
+          identityScope: "required",
         }),
       ],
       run: async () => "ok",
@@ -261,70 +332,122 @@ describe("tenantScope middleware support", () => {
     await runtime.dispose();
   });
 
-  it("rejects invalid tenantScope values at config time", () => {
+  it("rejects invalid identityScope values at config time", () => {
     expect(() =>
       concurrencyTaskMiddleware.with({
         limit: 1,
-        tenantScope: "invalid" as never,
+        identityScope: "invalid" as never,
       }),
     ).toThrow();
 
     expect(() =>
       concurrencyTaskMiddleware.with({
         limit: 1,
-        tenantScope: "invalid" as never,
+        identityScope: "invalid" as never,
       }),
     ).toThrow();
   });
 
-  it("supports explicit helper resolution paths without mutating global tenant state", () => {
+  it("supports explicit helper resolution paths without mutating global identity state", () => {
     expect(
-      resolveTenantContext("off", () => tenantValue("ignored")),
+      resolveIdentityContext("off", () => tenantValue("ignored")),
     ).toBeUndefined();
+    expect(resolveIdentityContext("auto", () => null)).toBeUndefined();
     expect(
-      applyTenantScopeToKey("search", "auto", () => tenantValue("acme")),
+      resolveIdentityContext("auto", () => ({ userId: "u1" })),
+    ).toBeUndefined();
+    expect(() =>
+      resolveIdentityContext("required", () => ({ userId: "u1" })),
+    ).toThrow();
+    expect(
+      applyIdentityScopeToKey("search", "auto", () => tenantValue("acme")),
     ).toBe("acme:search");
     expect(
-      applyTenantScopeToKey("search", "auto", () => tenantValue("acme")),
+      applyIdentityScopeToKey("search", "auto:userId", () =>
+        tenantValue("acme", "u1"),
+      ),
+    ).toBe("acme:u1:search");
+    expect(
+      applyIdentityScopeToKey("search", "auto:userId", () =>
+        tenantValue("acme"),
+      ),
     ).toBe("acme:search");
+    expect(
+      applyIdentityScopeToKey("search", "full", () =>
+        tenantValue("acme", "u1"),
+      ),
+    ).toBe("acme:u1:search");
+    expect(() =>
+      applyIdentityScopeToKey("search", "full", () => tenantValue("acme")),
+    ).toThrow(/identityScope is "full"/i);
   });
 
-  it("fails fast on invalid tenant payloads when resolving tenant scope", () => {
-    expect(() => resolveTenantContext("auto", () => tenantValue(""))).toThrow();
+  it("uses the built-in identity reader when no explicit reader is provided", async () => {
+    await asyncContexts.identity.provide(tenantValue("acme"), async () => {
+      expect(resolveIdentityContext("auto")).toEqual(tenantValue("acme"));
+      expect(applyIdentityScopeToKey("search", "auto")).toBe("acme:search");
+    });
+  });
+
+  it("treats identity without tenantId as absent unless tenant partitioning is required", () => {
+    expect(
+      resolveIdentityContext("auto", () => ({ userId: "u1" })),
+    ).toBeUndefined();
+
     expect(() =>
-      resolveTenantContext("auto", () => tenantValue("acme:west")),
+      resolveIdentityContext("required", () => ({ userId: "u1" })),
+    ).toThrow(/Identity context is required/);
+  });
+
+  it("fails fast on invalid identity payloads when resolving identity scope", () => {
+    expect(() =>
+      resolveIdentityContext("auto", () => tenantValue("")),
+    ).toThrow();
+    expect(() =>
+      resolveIdentityContext("auto", () => tenantValue("acme:west")),
     ).toThrow(/cannot contain ":"/);
     expect(() =>
-      resolveTenantContext("auto", () => tenantValue("__global__")),
-    ).toThrow(/reserved for the shared non-tenant namespace/);
+      resolveIdentityContext("auto", () => tenantValue("__global__")),
+    ).toThrow(/reserved for the shared non-identity namespace/);
 
     try {
-      resolveTenantContext("auto", () => tenantValue(""));
+      resolveIdentityContext("auto", () => tenantValue(""));
     } catch (error) {
-      expect(tenantInvalidContextError.is(error)).toBe(true);
+      expect(identityInvalidContextError.is(error)).toBe(true);
     }
 
     try {
-      resolveTenantContext("auto", () => tenantValue("acme:west"));
+      resolveIdentityContext("auto", () => tenantValue("acme:west"));
     } catch (error) {
-      expect(tenantInvalidContextError.is(error)).toBe(true);
+      expect(identityInvalidContextError.is(error)).toBe(true);
     }
 
     try {
-      resolveTenantContext("auto", () => tenantValue("__global__"));
+      resolveIdentityContext("auto", () => tenantValue("__global__"));
     } catch (error) {
-      expect(tenantInvalidContextError.is(error)).toBe(true);
+      expect(identityInvalidContextError.is(error)).toBe(true);
     }
+
+    expect(() =>
+      applyIdentityScopeToKey("search", "auto:userId", () =>
+        tenantValue("acme", "u:1"),
+      ),
+    ).toThrow(/cannot contain ":"/);
+    expect(() =>
+      applyIdentityScopeToKey("search", "auto:userId", () =>
+        tenantValue("acme", ""),
+      ),
+    ).toThrow(/userId.*non-empty string/i);
   });
 
-  it('supports the explicit "auto" tenantScope mode', async () => {
+  it('supports the explicit "auto" identityScope mode', async () => {
     const task = defineTask({
       id: "tenant-rate-limit-mode-scope-task",
       middleware: [
         rateLimitTaskMiddleware.with({
           windowMs: 60_000,
           max: 1,
-          tenantScope: "auto",
+          identityScope: "auto",
         }),
       ],
       run: async () => "ok",
@@ -339,15 +462,78 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     await expect(
-      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
     await expect(
-      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
+
+    await runtime.dispose();
+  });
+
+  it("scopes cache refs by user when identityScope opts into user-aware partitioning", async () => {
+    let callCount = 0;
+
+    const task = defineTask({
+      id: "tenant-cache-user-scope-task",
+      middleware: [
+        cacheMiddleware.with({
+          ttl: 60_000,
+          identityScope: "full",
+          keyBuilder: () => ({
+            cacheKey: "profile",
+            refs: ["profile"],
+          }),
+        }),
+      ],
+      run: async () => `profile-${++callCount}`,
+    });
+
+    const app = defineResource({
+      id: "tenant-cache-user-scope-app",
+      register: [cacheResource, task],
+      dependencies: { task, cache: cacheResource },
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+    const cache = runtime.getResourceValue(cacheResource);
+
+    const acmeUserOneFirst = await asyncContexts.identity.provide(
+      tenantValue("acme", "u1"),
+      () => runtime.runTask(task),
+    );
+    const acmeUserOneSecond = await asyncContexts.identity.provide(
+      tenantValue("acme", "u1"),
+      () => runtime.runTask(task),
+    );
+    const acmeUserTwo = await asyncContexts.identity.provide(
+      tenantValue("acme", "u2"),
+      () => runtime.runTask(task),
+    );
+
+    await asyncContexts.identity.provide(tenantValue("acme", "u1"), () =>
+      cache.invalidateRefs("profile"),
+    );
+
+    const acmeUserOneAfterInvalidate = await asyncContexts.identity.provide(
+      tenantValue("acme", "u1"),
+      () => runtime.runTask(task),
+    );
+    const acmeUserTwoStillCached = await asyncContexts.identity.provide(
+      tenantValue("acme", "u2"),
+      () => runtime.runTask(task),
+    );
+
+    expect(acmeUserOneFirst).toBe("profile-1");
+    expect(acmeUserOneSecond).toBe("profile-1");
+    expect(acmeUserTwo).toBe("profile-2");
+    expect(acmeUserOneAfterInvalidate).toBe("profile-3");
+    expect(acmeUserTwoStillCached).toBe("profile-2");
 
     await runtime.dispose();
   });
@@ -377,10 +563,10 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     await Promise.all([
-      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
-      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
     ]);
@@ -422,10 +608,10 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     const debouncePromises = [
-      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
         runtime.runTask(debounced),
       ),
-      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(debounced),
       ),
     ];
@@ -438,10 +624,10 @@ describe("tenantScope middleware support", () => {
     ]);
 
     const throttlePromises = [
-      asyncContexts.tenant.provide(tenantValue("acme"), () =>
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
         runtime.runTask(throttled),
       ),
-      asyncContexts.tenant.provide(tenantValue("globex"), () =>
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(throttled),
       ),
     ];

@@ -5,16 +5,18 @@ import {
   validationError,
 } from "../../errors";
 import { Match } from "../../tools/check";
+import type { ValidationSchemaInput } from "../../types/utilities";
 import {
+  createMiddlewareKeyBuilderHelpers,
   defaultTaskKeyBuilder,
   type MiddlewareKeyBuilder,
 } from "./keyBuilder.shared";
 import { ensureKeyedStateCapacity } from "./keyedState.shared";
 import {
-  applyTenantScopeToKey,
-  tenantScopePattern,
-  type TenantScopedMiddlewareConfig,
-} from "./tenantScope.shared";
+  applyIdentityScopeToKey,
+  identityScopePattern,
+  type IdentityScopedMiddlewareConfig,
+} from "./identityScope.shared";
 import { type DebounceState, type ThrottleState } from "./temporal.shared";
 import {
   createTemporalDisposedError,
@@ -23,10 +25,23 @@ import {
   pruneThrottleStatesForCapacity,
   temporalResource,
 } from "./temporal.resource";
+import { identityContextResource } from "../resources/identityContext.resource";
 
-export interface TemporalMiddlewareConfig extends TenantScopedMiddlewareConfig {
+export interface TemporalMiddlewareConfig extends IdentityScopedMiddlewareConfig {
+  /**
+   * Debounce/throttle window in milliseconds.
+   */
   ms: number;
+  /**
+   * Builds the partition key for collapse/coalescing behavior.
+   * Defaults to `canonicalTaskKey + ":" + serialized input`, so different
+   * payloads stay isolated unless you intentionally provide a broader grouping
+   * key.
+   */
   keyBuilder?: MiddlewareKeyBuilder;
+  /**
+   * Maximum number of distinct live keys tracked for this middleware config.
+   */
   maxKeys?: number;
 }
 
@@ -35,19 +50,25 @@ const positiveNonZeroIntegerPattern = Match.Where(
     typeof value === "number" && Number.isInteger(value) && value > 0,
 );
 
-const temporalConfigPattern = Match.ObjectIncluding({
-  ms: Match.PositiveInteger,
-  keyBuilder: Match.Optional(Function),
-  maxKeys: Match.Optional(positiveNonZeroIntegerPattern),
-  tenantScope: tenantScopePattern,
-});
+const temporalConfigPattern: ValidationSchemaInput<TemporalMiddlewareConfig> =
+  Match.ObjectIncluding({
+    ms: Match.PositiveInteger,
+    keyBuilder: Match.Optional(Function),
+    maxKeys: Match.Optional(positiveNonZeroIntegerPattern),
+    identityScope: identityScopePattern,
+  });
 
 function buildTemporalMiddlewareKey(
   config: TemporalMiddlewareConfig,
   taskId: string,
   input: unknown,
+  readIdentity?: () => unknown,
 ): string {
-  const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(taskId, input);
+  const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(
+    taskId,
+    input,
+    createMiddlewareKeyBuilderHelpers(taskId),
+  );
 
   if (typeof key !== "string") {
     validationError.throw({
@@ -57,7 +78,7 @@ function buildTemporalMiddlewareKey(
     });
   }
 
-  return applyTenantScopeToKey(key, config.tenantScope);
+  return applyIdentityScopeToKey(key, config.identityScope, readIdentity);
 }
 
 export type {
@@ -75,14 +96,26 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
   id: "debounce",
   throws: [middlewareTemporalDisposedError, middlewareKeyCapacityExceededError],
   configSchema: temporalConfigPattern,
-  dependencies: { state: temporalResource },
-  async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
+  dependencies: {
+    state: temporalResource,
+    identityContext: identityContextResource,
+  },
+  async run(
+    { task, next },
+    { state, identityContext },
+    config: TemporalMiddlewareConfig,
+  ) {
     if (state.isDisposed === true) {
       throw createTemporalDisposedError();
     }
 
     const taskId = task.definition.id;
-    const key = buildTemporalMiddlewareKey(config, taskId, task.input);
+    const key = buildTemporalMiddlewareKey(
+      config,
+      taskId,
+      task.input,
+      identityContext?.tryUse,
+    );
     let debounceStates = state.debounceStates.get(config);
     const hadDebounceStates = debounceStates !== undefined;
     if (!debounceStates) {
@@ -173,14 +206,26 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
   id: "throttle",
   throws: [middlewareTemporalDisposedError, middlewareKeyCapacityExceededError],
   configSchema: temporalConfigPattern,
-  dependencies: { state: temporalResource },
-  async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
+  dependencies: {
+    state: temporalResource,
+    identityContext: identityContextResource,
+  },
+  async run(
+    { task, next },
+    { state, identityContext },
+    config: TemporalMiddlewareConfig,
+  ) {
     if (state.isDisposed === true) {
       throw createTemporalDisposedError();
     }
 
     const taskId = task.definition.id;
-    const key = buildTemporalMiddlewareKey(config, taskId, task.input);
+    const key = buildTemporalMiddlewareKey(
+      config,
+      taskId,
+      task.input,
+      identityContext?.tryUse,
+    );
     let throttleStates = state.throttleStates.get(config);
     const hadThrottleStates = throttleStates !== undefined;
     if (!throttleStates) {

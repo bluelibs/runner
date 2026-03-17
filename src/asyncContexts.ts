@@ -1,2 +1,2 @@
 export { asyncContexts } from "./async-contexts";
-export type { ITenant, TenantContextValue } from "./async-contexts";
+export type { IIdentity, IdentityContextValue } from "./async-contexts";

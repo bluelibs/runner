@@ -759,6 +759,7 @@ describe("RunResult", () => {
           maxRepetitions: 2,
         },
       },
+      identity: null,
       lazy: true,
       lifecycleMode: ResourceLifecycleMode.Parallel,
       mode: RunnerMode.PROD,

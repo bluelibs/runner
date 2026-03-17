@@ -101,6 +101,7 @@ Pass as the second argument to `run(app, options)`.
 | `lazy`             | `boolean`                                       | Skip startup-unused resources until `getLazyResourceValue(...)` wakes them. |
 | `lifecycleMode`    | `"sequential" \| "parallel"`                    | Control startup and disposal scheduling strategy. |
 | `executionContext` | `boolean \| ExecutionContextOptions`            | Enable correlation ids, execution frames, and inherited execution signals. |
+| `identity`         | `IAsyncContext<IIdentity>`                      | Override which async context Runner reads for identity-aware framework behavior. |
 | `mode`             | `"dev" \| "prod" \| "test"`                     | Override Runner's detected runtime mode. |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).

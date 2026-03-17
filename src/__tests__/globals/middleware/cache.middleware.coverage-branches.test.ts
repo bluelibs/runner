@@ -33,9 +33,15 @@ describe("cache middleware coverage branches", () => {
     );
 
     expect(result).toEqual({ input: { payload: "ok" } });
-    expect(keyBuilder).toHaveBeenCalledWith("legacy-task-id", {
-      payload: "ok",
-    });
+    expect(keyBuilder).toHaveBeenCalledWith(
+      "legacy-task-id",
+      {
+        payload: "ok",
+      },
+      {
+        canonicalKey: "legacy-task-id",
+      },
+    );
     expect(next).toHaveBeenCalledWith({ payload: "ok" });
   });
 });
