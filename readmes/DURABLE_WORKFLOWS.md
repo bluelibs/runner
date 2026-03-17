@@ -27,7 +27,7 @@
 ## Start Here
 
 - If you want the short version: `readmes/DURABLE_WORKFLOWS_AI.md`
-- If you're new to Runner concepts (tasks/resources/events/middleware): `readmes/AI.md`
+- If you're new to Runner concepts (tasks/resources/events/middleware): `readmes/COMPACT_GUIDE.md`
 - Platform note (why this is Node-only): `readmes/MULTI_PLATFORM.md`
 
 ## Quickstart

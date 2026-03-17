@@ -27,7 +27,7 @@
     "fastify": "^5.6.0"
   },
   "devDependencies": {
-    "@bluelibs/runner-dev": "../../../runner-dev",
+    "@bluelibs/runner-dev": "^6.2.0",
     "@mikro-orm/better-sqlite": "^6.6.6",
     "@mikro-orm/cli": "^6.5.2",
     "@types/jest": "^29.5.12",

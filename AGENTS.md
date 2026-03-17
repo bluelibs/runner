@@ -27,7 +27,7 @@
 - Node specific code (Async Context, Durable Workflows, Remote Lanes, etc) goes under ./src/node/ folder. It is exported only for node.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - When User asking questions like "did you check the tests?" if it would've been obvious to run the tests do it pro-actively instead of just saying no.
-- AI.md (readmes/AI.md) contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
+- The compact guide is inside the runner's skill in .agents/skills. Changes/updates should be also included in the COMPACT_GUIDE.md (in references) as minimal as possible.
 - Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds, if working only on docs, don't run it)
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
@@ -43,11 +43,9 @@
 - When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
 - Code retain 100% test coverage.
 - Use check() as much as you can for runtime constraints, it's very useful (and powerful) and avoids typeof hell. (hint: Custom WithMessage error h)
-- Ensure readmes/AI.md (minimal version of README) and that the guide-units with the full guide are updated accordingly.
 - Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
 - Use runner errors instead of 'throw new Error()' for better error handling and consistency.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.
-- Do not include deprecated values/information in AI.md.
 
 ## Review
 

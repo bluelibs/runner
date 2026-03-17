@@ -27,7 +27,7 @@
     "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
-    "@bluelibs/runner-dev": "^5.0.0",
+    "@bluelibs/runner-dev": "^6.2.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.17",

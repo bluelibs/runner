@@ -51,17 +51,13 @@ describe("authorize middleware (roles)", () => {
       });
       expect(wrongRole.statusCode).toBe(403);
 
-      // 4) Authenticated with admin role -> 200 + returns list
-      const ok = await f.inject({
+      // 4) Authenticated with spoofed admin role header -> still 403
+      const spoofedAdmin = await f.inject({
         method: "GET",
         url: "/users",
         headers: { Authorization: `Bearer ${token}`, "x-user-role": "admin" },
       });
-      expect(ok.statusCode).toBe(200);
-      const list = ok.json();
-      expect(Array.isArray(list)).toBe(true);
-      expect(list.length).toBeGreaterThanOrEqual(1);
-      expect(list[0]).toHaveProperty("email");
+      expect(spoofedAdmin.statusCode).toBe(403);
     } finally {
       await rr.dispose();
     }

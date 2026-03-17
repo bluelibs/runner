@@ -640,18 +640,18 @@ All new functionality ships with full test coverage:
 
 Additional test files in the latest round:
 
-| Test File                                           | Focus                                                                 |
-| --------------------------------------------------- | --------------------------------------------------------------------- |
-| `cache.resource.invalidate-refs.test.ts`            | Resilient ref invalidation fan-out, concurrent provider dedup         |
-| `runShutdownController.test.ts`                     | Shutdown controller integration, force dispose propagation            |
-| `runtimeAccessViolationError.test.ts`               | Remediation message variants for export states                        |
-| `redisCache.refs.test.ts`                           | Cross-task ref unlinking in Redis cache                               |
-| `DurableService.execution.unit.test.ts` (expanded)  | Timeout failure path, graceful execution marking                      |
-| `DurableService.scheduling.unit.test.ts` (expanded) | Schedule update rescheduling, resume status, input-only updates       |
-| `DurableWorker.test.ts` (expanded)                  | Nack respects maxAttempts                                             |
-| `RabbitMQQueue.mock.test.ts`                        | `x-delivery-count` header parsing, attempt tracking                   |
-| `RunResult.coverage.test.ts` (expanded)             | `shutdownLockdownError` during force dispose                          |
-| `VisibilityTracker.deny-mode.test.ts` (expanded)    | Deny-mode isolation channel access checks                             |
+| Test File                                           | Focus                                                           |
+| --------------------------------------------------- | --------------------------------------------------------------- |
+| `cache.resource.invalidate-refs.test.ts`            | Resilient ref invalidation fan-out, concurrent provider dedup   |
+| `runShutdownController.test.ts`                     | Shutdown controller integration, force dispose propagation      |
+| `runtimeAccessViolationError.test.ts`               | Remediation message variants for export states                  |
+| `redisCache.refs.test.ts`                           | Cross-task ref unlinking in Redis cache                         |
+| `DurableService.execution.unit.test.ts` (expanded)  | Timeout failure path, graceful execution marking                |
+| `DurableService.scheduling.unit.test.ts` (expanded) | Schedule update rescheduling, resume status, input-only updates |
+| `DurableWorker.test.ts` (expanded)                  | Nack respects maxAttempts                                       |
+| `RabbitMQQueue.mock.test.ts`                        | `x-delivery-count` header parsing, attempt tracking             |
+| `RunResult.coverage.test.ts` (expanded)             | `shutdownLockdownError` during force dispose                    |
+| `VisibilityTracker.deny-mode.test.ts` (expanded)    | Deny-mode isolation channel access checks                       |
 
 111 files changed, 7121 insertions, 830 deletions across source, tests, and
 documentation.

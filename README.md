@@ -91,7 +91,7 @@ This example is intentionally runnable with only `@bluelibs/runner`, `typescript
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./readmes/AI.md)                                                                                 | Docs    | Compact summary (<10,000 tokens)    |
+| [Compact Guide](./readmes/COMPACT_GUIDE.md)                                                                         | Docs    | Compact summary (<10,000 tokens)    |
 | [Full Guide](./readmes/FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
 | [Support & Release Policy](./readmes/ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
@@ -114,7 +114,7 @@ This example is intentionally runnable with only `@bluelibs/runner`, `typescript
 - **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
 - **Planning upgrades**: See [Support & Release Policy](./readmes/ENTERPRISE.md)
 - **Want the complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md)
-- **Want the short version**: Read [AI.md](./readmes/AI.md)
+- **Want the short version**: Read [COMPACT_GUIDE.md](./readmes/COMPACT_GUIDE.md)
 
 ## Platform Support (Quick Summary)
 
@@ -244,7 +244,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
   - [Testing](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#testing)
   - [Observability](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#observability-strategy-logs-metrics-and-traces)
 - **API reference**: Browse the [TypeDoc documentation](https://bluelibs.github.io/runner/).
-- **Token-friendly overview**: Read [AI.md](./readmes/AI.md).
+- **Token-friendly overview**: Read [COMPACT_GUIDE.md](./readmes/COMPACT_GUIDE.md).
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
   - [Remote Lanes](./readmes/REMOTE_LANES.md)

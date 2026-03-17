@@ -1,6 +1,6 @@
 # ask-runner Example
 
-`ask-runner` is a public Runner-powered HTTP service that answers BlueLibs Runner questions from the repository's `readmes/AI.md`.
+`ask-runner` is a public Runner-powered HTTP service that answers BlueLibs Runner questions from the repository's `readmes/COMPACT_GUIDE.md`.
 
 It demonstrates:
 

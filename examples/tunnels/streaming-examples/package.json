@@ -10,7 +10,6 @@
     "@bluelibs/runner": "file:../../.."
   },
   "devDependencies": {
-    "@bluelibs/runner-dev": "../../../runner-dev",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   }

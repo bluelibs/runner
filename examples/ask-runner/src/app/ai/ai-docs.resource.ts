@@ -15,7 +15,10 @@ export interface AiDocsPrompt {
 export const aiDocsPrompt = r
   .resource("aiDocsPrompt")
   .init(async (): Promise<AiDocsPrompt> => {
-    const filePath = path.resolve(__dirname, "../../../../../readmes/AI.md");
+    const filePath = path.resolve(
+      __dirname,
+      "../../../../../readmes/COMPACT_GUIDE.md",
+    );
     const content = await fs.readFile(filePath, "utf8");
     if (!content.trim()) {
       missingConfigError.throw({

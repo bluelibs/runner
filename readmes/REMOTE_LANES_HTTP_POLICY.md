@@ -318,7 +318,7 @@ Response: `{"ok": true}`
 
 ## References
 
-- [AI.md](./AI.md): High-level fluent API.
+- [COMPACT_GUIDE.md](./COMPACT_GUIDE.md): High-level fluent API.
 - [REMOTE_LANES.md](REMOTE_LANES.md): Usage, examples, troubleshooting.
 - Code: `src/node/rpc-lanes/rpcLanes.exposure.ts` and `src/node/exposure/` (server), `src/node/http/http-smart-client.model.ts` (clients).
 - Standards: HTTP/1.1 (RFC 7230), Multipart (RFC 7578), JSON.

@@ -678,6 +678,85 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     ]);
   });
 
+  it("fails with a minimal patch when an execution times out mid-attempt", async () => {
+    const updateExecution = jest.fn(
+      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
+        undefined,
+    );
+    const createTimer = jest.fn(async () => undefined);
+
+    const execution: Execution = {
+      id: "e-timeout-mid-attempt",
+      taskId: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 3,
+      timeout: 10,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const store: IDurableStore = {
+      saveExecution: async () => {},
+      getExecution: async () => execution,
+      updateExecution,
+      listIncompleteExecutions: async () => [],
+      getStepResult: async () => null,
+      saveStepResult: async () => {},
+      createTimer,
+      getReadyTimers: async () => [],
+      markTimerFired: async () => {},
+      deleteTimer: async () => {},
+      createSchedule: async () => {},
+      getSchedule: async () => null,
+      updateSchedule: async () => {},
+      deleteSchedule: async () => {},
+      listSchedules: async () => [],
+      listActiveSchedules: async () => [],
+    };
+
+    const taskExecutor: ITaskExecutor = {
+      run: async () =>
+        new Promise<never>(() => {
+          // Intentionally unresolved so withTimeout drives the terminal path.
+        }),
+    };
+
+    const manager = createManager({ store, taskExecutor });
+    await manager.processExecution(execution.id);
+
+    expect(updateExecution).toHaveBeenNthCalledWith(
+      1,
+      execution.id,
+      expect.objectContaining({ status: ExecutionStatus.Running }),
+    );
+
+    const failedCall = updateExecution.mock.calls[1];
+    expect(failedCall).toBeDefined();
+    if (!failedCall) {
+      throw new Error("Expected timeout failure update call to be recorded");
+    }
+    const failedPatch = failedCall[1] as Record<string, unknown>;
+    expect(failedPatch.status).toBe(ExecutionStatus.Failed);
+    expect(failedPatch.error).toEqual(
+      expect.objectContaining({
+        message: `Execution ${execution.id} timed out`,
+      }),
+    );
+    expect(failedPatch.completedAt).toBeInstanceOf(Date);
+    expect(Object.keys(failedPatch).sort()).toEqual([
+      "completedAt",
+      "error",
+      "status",
+    ]);
+    expect(createTimer).not.toHaveBeenCalled();
+    expect(updateExecution).not.toHaveBeenCalledWith(
+      execution.id,
+      expect.objectContaining({ status: ExecutionStatus.Retrying }),
+    );
+  });
+
   it("fails executions when queue delivery attempts are exhausted", async () => {
     const updateExecution = jest.fn(
       async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>

@@ -4,7 +4,7 @@ This file explains the intent and current architecture of `examples/ask-runner`.
 
 ## Purpose
 
-`ask-runner` is a small public-facing Runner app that answers questions about BlueLibs Runner using `readmes/AI.md` as its source material.
+`ask-runner` is a small public-facing Runner app that answers questions about BlueLibs Runner using `readmes/COMPACT_GUIDE.md` as its source material.
 
 It is not just a demo of OpenAI usage. It is meant to show a Runner-style composition:
 
