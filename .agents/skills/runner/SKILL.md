@@ -1,6 +1,6 @@
 ---
 name: runner
-description: Main skill for building applications with BlueLibs Runner. Use when Codex needs help modeling resources, tasks, events, hooks, middleware, tags, errors, runtime lifecycle, validation, observability, or testing in apps built with Runner, and when it should navigate Runner documentation from the compact guide into the correct in-depth guide chapter.
+description: Main skill for building applications with BlueLibs Runner. Use when Agent needs help modeling resources, tasks, events, hooks, middleware, tags, errors, runtime lifecycle, validation, observability, or testing in apps built with Runner, and when it should navigate Runner documentation from the compact guide into the correct in-depth guide chapter. Can be used for architecting and developing Runner as well.
 ---
 
 # Runner
