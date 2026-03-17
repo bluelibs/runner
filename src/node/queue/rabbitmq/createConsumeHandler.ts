@@ -4,7 +4,7 @@ type ConsumeChannel = Pick<Channel, "nack">;
 
 type CreateConsumeHandlerOptions<TMessage> = {
   channel: ConsumeChannel;
-  decode: (content: Buffer) => TMessage | null;
+  decode: (message: ConsumeMessage) => TMessage | null;
   resolveMessageId: (message: TMessage) => string | undefined;
   parseFailureLogMessage: string;
   handlerFailureLogMessage: string;
@@ -38,7 +38,7 @@ export function createConsumeHandler<TMessage>({
 
     let decoded: TMessage | null;
     try {
-      decoded = decode(msg.content);
+      decoded = decode(msg);
     } catch (error) {
       reportError(parseFailureLogMessage, {
         error: normalizeError(error),

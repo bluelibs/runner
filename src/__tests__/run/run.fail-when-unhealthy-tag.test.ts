@@ -160,7 +160,7 @@ describe("tags.failWhenUnhealthy", () => {
     await runtime.dispose();
   });
 
-  it("falls back to the raw resource id for unresolved resource references", async () => {
+  it("fails fast for unresolved resource references", async () => {
     const detached = defineResource({
       id: "task-health-detached-resource",
       async init() {
@@ -189,15 +189,9 @@ describe("tags.failWhenUnhealthy", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
 
-    await expect(runtime.runTask(task)).rejects.toMatchObject({
-      id: "taskHealthResourceNotReportable",
-      data: {
-        taskId: expect.stringMatching(
-          /task-health-detached-app\.tasks\.task-health-detached-task$/,
-        ),
-        resourceIds: [detached.id],
-      },
-    });
+    await expect(runtime.runTask(task)).rejects.toThrow(
+      `Definition "${detached.id}" not found.`,
+    );
 
     await runtime.dispose();
   });

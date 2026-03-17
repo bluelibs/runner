@@ -52,7 +52,7 @@ import { createSyntheticFrameworkRoot } from "./createSyntheticFrameworkRoot";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
 import type { ResourceCooldownAdmissionTargets } from "../types/resource";
 import { Match, check } from "../tools/check/engine";
-import { StoreLookup, resolveRequestedIdFromStore } from "./StoreLookup";
+import { StoreLookup } from "./StoreLookup";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import { resolveExecutionContextConfig } from "../tools/resolveExecutionContextConfig";
 import type { AccessViolation } from "./VisibilityTracker";
@@ -442,10 +442,7 @@ export class Store {
   private createEventManagerFacade(): EventManager {
     const resolveRuntimeSource = (
       source: RuntimeCallSource,
-    ): RuntimeCallSource => ({
-      ...source,
-      id: resolveRequestedIdFromStore(this, source.id) ?? source.id,
-    });
+    ): RuntimeCallSource => source;
     const manager = this.eventManager;
 
     return {

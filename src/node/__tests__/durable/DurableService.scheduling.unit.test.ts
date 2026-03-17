@@ -1,8 +1,12 @@
 import { r } from "../../..";
 import { DurableService } from "../../durable/core/DurableService";
-import type { Schedule } from "../../durable/core/types";
+import type { Schedule, Timer } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { createTaskExecutor, okTask } from "./DurableService.unit.helpers";
+
+function futureTimers(store: MemoryStore): Promise<Timer[]> {
+  return store.getReadyTimers(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
+}
 
 describe("durable: DurableService — scheduling (unit)", () => {
   it("supports one-off and cron schedules", async () => {
@@ -64,7 +68,8 @@ describe("durable: DurableService — scheduling (unit)", () => {
     expect((await store.getSchedule("s1"))?.status).toBe("active");
 
     await service.updateSchedule("s1", { input: { a: 1 } });
-    expect((await store.getSchedule("s1"))?.pattern).toBeUndefined();
+    expect((await store.getSchedule("s1"))?.pattern).toBe("1000");
+    expect((await store.getSchedule("s1"))?.input).toEqual({ a: 1 });
 
     await service.removeSchedule("s1");
     expect(await store.getSchedule("s1")).toBeNull();
@@ -138,6 +143,146 @@ describe("durable: DurableService — scheduling (unit)", () => {
 
     await service.updateSchedule("s1", { interval: 2000 });
     expect((await store.getSchedule("s1"))?.pattern).toBe("2000");
+  });
+
+  it("preserves cadence and pending fire time when only schedule input changes", async () => {
+    const store = new MemoryStore();
+    const task = r
+      .task<{ version: number }>("t-update-input")
+      .run(async () => "ok")
+      .build();
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    await service.schedule(task, { version: 1 }, { id: "s1", interval: 1000 });
+
+    const beforeTimer = (await futureTimers(store)).find(
+      (t) => t.id === "sched:s1",
+    );
+    expect(beforeTimer).toBeDefined();
+
+    await service.updateSchedule("s1", { input: { version: 2 } });
+
+    const schedule = await store.getSchedule("s1");
+    const afterTimer = (await futureTimers(store)).find(
+      (t) => t.id === "sched:s1",
+    );
+
+    expect(schedule?.type).toBe("interval");
+    expect(schedule?.pattern).toBe("1000");
+    expect(schedule?.input).toEqual({ version: 2 });
+    expect(afterTimer?.input).toEqual({ version: 2 });
+    expect(afterTimer?.fireAt.getTime()).toBe(beforeTimer?.fireAt.getTime());
+  });
+
+  it("re-arms the schedule and updates its type when changing cadence", async () => {
+    const store = new MemoryStore();
+    const task = r
+      .task<{ version: number }>("t-update-cadence")
+      .run(async () => "ok")
+      .build();
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    await service.schedule(task, { version: 1 }, { id: "s1", interval: 1000 });
+    const beforeTimer = (await futureTimers(store)).find(
+      (t) => t.id === "sched:s1",
+    );
+
+    await service.updateSchedule("s1", { cron: "*/5 * * * *" });
+
+    const schedule = await store.getSchedule("s1");
+    const afterTimer = (await futureTimers(store)).find(
+      (t) => t.id === "sched:s1",
+    );
+
+    expect(schedule?.type).toBe("cron");
+    expect(schedule?.pattern).toBe("*/5 * * * *");
+    expect(afterTimer?.fireAt.getTime()).toBeGreaterThan(
+      beforeTimer?.fireAt.getTime() ?? 0,
+    );
+  });
+
+  it("allows clearing scheduled input and no-ops when updating a missing schedule", async () => {
+    const store = new MemoryStore();
+    const task = r
+      .task<{ version: number }>("t-update-clear-input")
+      .run(async () => "ok")
+      .build();
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    await service.schedule(task, { version: 1 }, { id: "s1", interval: 1000 });
+    await service.updateSchedule("s1", { input: undefined });
+    await service.updateSchedule("missing", { input: { version: 2 } });
+
+    const schedule = await store.getSchedule("s1");
+    expect(schedule?.input).toBeUndefined();
+    expect(schedule?.pattern).toBe("1000");
+  });
+
+  it("updates paused schedules without re-arming their timer", async () => {
+    const store = new MemoryStore();
+    const task = r
+      .task<{ version: number }>("t-update-paused")
+      .run(async () => "ok")
+      .build();
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    await service.schedule(task, { version: 1 }, { id: "s1", interval: 1000 });
+    await service.pauseSchedule("s1");
+    await service.updateSchedule("s1", { input: { version: 2 } });
+
+    const schedule = await store.getSchedule("s1");
+    const timer = (await futureTimers(store)).find(
+      (entry) => entry.id === "sched:s1",
+    );
+
+    expect(schedule?.status).toBe("paused");
+    expect(schedule?.input).toEqual({ version: 2 });
+    expect(timer?.input).toEqual({ version: 1 });
+  });
+
+  it("updates active schedules without nextRun metadata without arming a timer", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+    });
+
+    await store.createSchedule({
+      id: "s1",
+      taskId: "t",
+      type: "interval",
+      pattern: "1000",
+      input: { version: 1 },
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await service.updateSchedule("s1", { input: { version: 2 } });
+
+    const schedule = await store.getSchedule("s1");
+    const timer = (await futureTimers(store)).find(
+      (entry) => entry.id === "sched:s1",
+    );
+
+    expect(schedule?.input).toEqual({ version: 2 });
+    expect(timer).toBeUndefined();
   });
 
   it("supports scheduling at a fixed date", async () => {

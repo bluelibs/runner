@@ -177,7 +177,9 @@ describe("run-runtime-exports transitive resource exports", () => {
       await runtime.runTask(deepTask);
     } catch (error: any) {
       expect(error.id).toBe("runtimeAccessViolation");
-      expect(String(error.remediation)).toContain("explicitly exports nothing");
+      expect(String(error.remediation)).toContain(
+        "declares exports but currently exports none",
+      );
     }
 
     await runtime.dispose();

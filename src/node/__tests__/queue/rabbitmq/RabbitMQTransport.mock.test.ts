@@ -58,7 +58,8 @@ describe("node: RabbitMQTransport", () => {
       queue: { name: "transport.default" },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");
@@ -97,7 +98,8 @@ describe("node: RabbitMQTransport", () => {
       queue: { name: "transport.cancel" },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");
@@ -119,7 +121,8 @@ describe("node: RabbitMQTransport", () => {
       logger: { error: jest.fn() },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");
@@ -141,8 +144,8 @@ describe("node: RabbitMQTransport", () => {
       logger: { error: loggerError },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => {
-        const text = content.toString();
+      decode: (message) => {
+        const text = message.content.toString();
         if (text === "null-payload") {
           return null;
         }
@@ -216,7 +219,8 @@ describe("node: RabbitMQTransport", () => {
       },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");
@@ -238,7 +242,8 @@ describe("node: RabbitMQTransport", () => {
       queue: { name: "transport.confirm" },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");
@@ -307,7 +312,8 @@ describe("node: RabbitMQTransport", () => {
       queue: { name: "transport.recover" },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");
@@ -346,7 +352,8 @@ describe("node: RabbitMQTransport", () => {
       },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");
@@ -392,7 +399,8 @@ describe("node: RabbitMQTransport", () => {
       },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");
@@ -425,7 +433,8 @@ describe("node: RabbitMQTransport", () => {
       },
       parseFailureLogMessage: "parse-failed",
       handlerFailureLogMessage: "handler-failed",
-      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      decode: (message) =>
+        JSON.parse(message.content.toString()) as { id?: string },
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => {
         throw new Error("transport not initialized");

@@ -23,6 +23,7 @@ import {
   runtimeAccessViolationError,
   runtimeElementNotFoundError,
   runtimeRootNotAvailableError,
+  shutdownLockdownError,
 } from "../errors";
 import { runtimeSource } from "../types/runtimeSource";
 import { HealthReporter } from "./HealthReporter";
@@ -37,7 +38,6 @@ import {
 import { globalResources } from "../globals/globalResources";
 import type { ITimers } from "../types/timers";
 import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
-import { resolveRequestedIdFromStore } from "./StoreLookup";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -163,6 +163,12 @@ export class RunResult<V> implements IRuntime<V> {
      * safe Runner-owned checkpoint and jump to direct resource disposal.
      */
     private readonly requestForceDispose: () => void,
+    /**
+     * Exposes whether force disposal was requested so runtime-facing business
+     * calls can stop admitting new work immediately, even while internal
+     * shutdown checkpoints are still unwinding through coolingDown.
+     */
+    private readonly isForceDisposeRequested: () => boolean,
   ) {
     this.healthReporter = new HealthReporter(this.store, {
       ensureAvailable: () => {
@@ -238,6 +244,10 @@ export class RunResult<V> implements IRuntime<V> {
   private ensureRuntimeAvailableForBusinessCalls() {
     if (this.#disposed) {
       runResultDisposedError.throw();
+    }
+
+    if (this.#disposing && this.isForceDisposeRequested()) {
+      shutdownLockdownError.throw();
     }
   }
 
@@ -351,7 +361,7 @@ export class RunResult<V> implements IRuntime<V> {
   ): TTask extends ITask<any, infer O, any> ? O : Promise<any> => {
     this.ensureRuntimeAvailableForBusinessCalls();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
-    const taskId = this.resolveRuntimeElementId(task);
+    const taskId = this.store.findIdByDefinition(task);
     if (!this.store.tasks.has(taskId)) {
       runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
     }
@@ -401,7 +411,7 @@ export class RunResult<V> implements IRuntime<V> {
   ) => {
     this.ensureRuntimeAvailableForBusinessCalls();
 
-    const eventId = this.resolveRuntimeElementId(event);
+    const eventId = this.store.findIdByDefinition(event);
     if (!this.store.events.has(eventId)) {
       runtimeElementNotFoundError.throw({
         type: "Event",
@@ -626,17 +636,7 @@ export class RunResult<V> implements IRuntime<V> {
   private getResourceId(
     resource: string | IResource<any, any, any, any, any>,
   ): string {
-    return this.resolveRuntimeElementId(resource);
-  }
-
-  /**
-   * Resolves either a definition object or a string id to the store's
-   * canonical id, with graceful fallback to the original string/object id.
-   */
-  private resolveRuntimeElementId(reference: string | { id: string }): string {
-    return (
-      resolveRequestedIdFromStore(this.store, reference) ?? String(reference)
-    );
+    return this.store.findIdByDefinition(resource);
   }
 
   private ensureAdmissionControlIsAvailable(): void {
@@ -690,8 +690,18 @@ export class RunResult<V> implements IRuntime<V> {
 
     if (options.force) {
       this.requestForceDispose();
-      this.store.beginDisposing();
-      this.store.cancelDrainWaiters();
+
+      const phase = this.store.getLifecycleAdmissionController().getPhase();
+      if (
+        phase === RuntimeLifecyclePhase.Disposing ||
+        phase === RuntimeLifecyclePhase.Drained
+      ) {
+        // A second force request during an already-running shutdown should wake
+        // any drain wait immediately, but it must not skip ahead and mutate the
+        // store phase here. The lifecycle runner remains the single place that
+        // decides when coolingDown transitions into disposing.
+        this.store.cancelDrainWaiters();
+      }
     }
 
     if (this.#disposePromise) {
@@ -700,11 +710,10 @@ export class RunResult<V> implements IRuntime<V> {
 
     this.#disposing = true;
     this.recoveryController.dispose();
-    if (options.force) {
-      this.store.beginDisposing();
-    } else {
-      this.store.beginCoolingDown();
-    }
+    // Even a first-call force dispose still enters the shared shutdown story
+    // here so cooldown hooks can register shutdown-specific admission targets
+    // before the lifecycle decides which remaining waits to skip.
+    this.store.beginCoolingDown();
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())

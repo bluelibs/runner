@@ -8,6 +8,7 @@ import {
   RabbitMQTransport,
   type RabbitMQTransportReconnectConfig,
 } from "../queue/rabbitmq/RabbitMQTransport";
+import type { ConsumeMessage } from "../queue/rabbitmq/RabbitMQTransport.types";
 import {
   EventLaneMessage,
   EventLaneMessageHandler,
@@ -76,14 +77,16 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
         "RabbitMQEventLaneQueue failed to parse incoming message; nacking without requeue.",
       handlerFailureLogMessage:
         "RabbitMQEventLaneQueue handler threw; leaving ack/nack to consumer.",
-      decode: (content) => this.decode(content),
-      resolveMessageId: (message) => message.id,
+      decode: (rawMessage) => this.decode(rawMessage),
+      resolveMessageId: (eventLaneMessage) => eventLaneMessage.id,
       throwNotInitialized: () => eventLaneQueueNotInitializedError.throw(),
     });
   }
 
-  private decode(content: Buffer): EventLaneMessage | null {
-    const parsed = JSON.parse(content.toString()) as Partial<EventLaneMessage>;
+  private decode(rawMessage: ConsumeMessage): EventLaneMessage | null {
+    const parsed = JSON.parse(
+      rawMessage.content.toString(),
+    ) as Partial<EventLaneMessage>;
     if (!parsed || typeof parsed.id !== "string") {
       return null;
     }

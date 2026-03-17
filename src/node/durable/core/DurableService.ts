@@ -261,8 +261,7 @@ export class DurableService implements IDurableService {
       if (
         exec.status === ExecutionStatus.Pending ||
         exec.status === ExecutionStatus.Running ||
-        exec.status === ExecutionStatus.Sleeping ||
-        exec.status === ExecutionStatus.Retrying
+        exec.status === ExecutionStatus.Sleeping
       ) {
         await this.executionManager.kickoffExecution(exec.id);
       }

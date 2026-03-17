@@ -249,11 +249,12 @@ export const runtimeAccessViolationError = error<
     ({ targetId, rootId }) =>
       `"${targetId}" is not exported by root resource "${rootId}" and cannot be accessed via the runtime API.`,
   )
-  .remediation(({ targetId, rootId, exportedIds }) => {
-    const exported =
-      exportedIds.length > 0
+  .remediation(({ targetId, rootId, exportedIds, exportsDeclared }) => {
+    const exported = !exportsDeclared
+      ? `Root "${rootId}" does not declare any exports.`
+      : exportedIds.length > 0
         ? `Root "${rootId}" currently exports: [${exportedIds.join(", ")}].`
-        : `Root "${rootId}" explicitly exports nothing.`;
+        : `Root "${rootId}" declares exports but currently exports none.`;
     return `${exported} Add "${targetId}" to the root's .isolate({ exports: [...] }) to allow runtime API access.`;
   })
   .build();

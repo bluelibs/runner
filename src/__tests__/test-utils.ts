@@ -60,6 +60,7 @@ export function createTestFixture() {
         testRunOptions,
         async () => store.dispose(),
         () => {},
+        () => false,
       ),
   };
 }

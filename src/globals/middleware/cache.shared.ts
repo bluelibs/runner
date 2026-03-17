@@ -15,6 +15,10 @@ export interface ICacheProvider {
     metadata?: CacheEntryMetadata,
   ): unknown | Promise<unknown>;
   clear(): void | Promise<void>;
+  /**
+   * Invalidates refs after the caller has already normalized and tenant-scoped
+   * them via normalizeCacheRefs() and applyTenantScopeToKey().
+   */
   invalidateRefs(refs: readonly string[]): number | Promise<number>;
   has?(key: string): boolean | Promise<boolean>;
 }
@@ -198,7 +202,7 @@ function createRefIndexedCacheInstance({
     invalidateRefs(refs: readonly string[]) {
       const keys = new Set<string>();
 
-      for (const ref of normalizeCacheRefs(refs)) {
+      for (const ref of refs) {
         for (const key of refIndex.keysByRef.get(ref) ?? []) {
           keys.add(key);
         }
@@ -229,8 +233,7 @@ function createLocalCache(
   refIndex: CacheRefIndexState,
   sharedBudget?: SharedCacheBudgetState,
 ) {
-  const { disposeAfter, sizeCalculation, ...rest } =
-    options as LRUCache.Options<string, CacheStoredValue, unknown>;
+  const { disposeAfter, sizeCalculation, ...rest } = options;
   const localSizeCalculation =
     rest.maxSize || rest.maxEntrySize
       ? sizeCalculation
@@ -239,15 +242,17 @@ function createLocalCache(
         : undefined
       : undefined;
 
-  return new LRUCache<string, CacheStoredEnvelope, unknown>({
-    ...(rest as LRUCache.Options<string, CacheStoredEnvelope, unknown>),
+  const localCacheOptions = {
+    ...rest,
     sizeCalculation: localSizeCalculation,
     disposeAfter: (entry, key, reason) => {
       unlinkCacheRefs(refIndex, key, entry.refs);
       sharedBudget && removeBudgetEntry(sharedBudget, taskId, key);
       disposeAfter?.(entry.value, key, reason);
     },
-  });
+  } as LRUCache.Options<string, CacheStoredEnvelope, unknown>;
+
+  return new LRUCache<string, CacheStoredEnvelope, unknown>(localCacheOptions);
 }
 
 function createCacheRefIndexState(): CacheRefIndexState {

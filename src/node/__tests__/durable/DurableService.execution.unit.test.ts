@@ -626,6 +626,48 @@ describe("durable: DurableService — execution (unit)", () => {
     expect(exec?.error?.message).toContain("timed out");
   });
 
+  it("does not schedule retries after the total execution timeout is exhausted", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-timeout-no-retry");
+
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({
+        [task.id]: async () =>
+          await new Promise<string>((resolve) =>
+            setTimeout(() => resolve("ok"), 25),
+          ),
+      }),
+      tasks: [task],
+      execution: { maxAttempts: 3 },
+    });
+
+    await store.saveExecution({
+      ...pendingExecution({ taskId: task.id, maxAttempts: 3 }),
+      id: "timeout-no-retry",
+      timeout: 1,
+      createdAt: new Date(Date.now() - 10_000),
+    });
+
+    await service.processExecution("timeout-no-retry");
+
+    const exec = await store.getExecution("timeout-no-retry");
+    const retryTimers = await store.getReadyTimers(
+      new Date(Date.now() + 60_000),
+    );
+
+    expect(exec?.status).toBe("failed");
+    expect(exec?.attempt).toBe(1);
+    expect(retryTimers).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          executionId: "timeout-no-retry",
+          type: "retry",
+        }),
+      ]),
+    );
+  });
+
   it("covers no-lock stores and waitForResult missing execution", async () => {
     const store = new MemoryStore();
     const task = okTask("t-ok");
@@ -677,6 +719,10 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await service.recover();
-    expect(queue.enqueued.length).toBe(4);
+    expect(queue.enqueued).toEqual([
+      { type: "execute", payload: { executionId: "p" } },
+      { type: "execute", payload: { executionId: "r" } },
+      { type: "execute", payload: { executionId: "s" } },
+    ]);
   });
 });

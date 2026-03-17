@@ -83,6 +83,26 @@ describe("durable: DurableWorker", () => {
     expect(queue.nackCalls).toEqual([{ id: "m1", requeue: true }]);
   });
 
+  it("stops requeueing when the queue retry budget is exhausted", async () => {
+    const queue = new TestQueue();
+    const service: IDurableExecutionProcessor = {
+      processExecution: jest.fn(async () => {
+        throw genericError.new({ message: "boom" });
+      }),
+    };
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    await queue.handler?.({
+      ...message({ executionId: "e1" }, "resume"),
+      attempts: 1,
+      maxAttempts: 1,
+    });
+
+    expect(queue.nackCalls).toEqual([{ id: "m1", requeue: false }]);
+  });
+
   it("uses a fallback logger when logger is omitted", async () => {
     const queue = new TestQueue();
     const service: IDurableExecutionProcessor = {

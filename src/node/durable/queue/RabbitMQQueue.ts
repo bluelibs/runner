@@ -5,6 +5,7 @@ import {
   RabbitMQTransport,
   type RabbitMQTransportReconnectConfig,
 } from "../../queue/rabbitmq/RabbitMQTransport";
+import type { ConsumeMessage } from "../../queue/rabbitmq/RabbitMQTransport.types";
 import type {
   IDurableQueue,
   MessageHandler,
@@ -72,14 +73,14 @@ export class RabbitMQQueue implements IDurableQueue {
         "RabbitMQQueue failed to parse incoming message; nacking without requeue.",
       handlerFailureLogMessage:
         "RabbitMQQueue handler threw; leaving ack/nack to consumer.",
-      decode: (content) => this.decode(content),
+      decode: (message) => this.decode(message),
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => durableQueueNotInitializedError.throw(),
     });
   }
 
-  private decode(content: Buffer): QueueMessage<unknown> | null {
-    const parsed = JSON.parse(content.toString()) as Partial<
+  private decode(message: ConsumeMessage): QueueMessage<unknown> | null {
+    const parsed = JSON.parse(message.content.toString()) as Partial<
       QueueMessage<unknown>
     >;
     if (!parsed || typeof parsed.id !== "string") {
@@ -87,14 +88,26 @@ export class RabbitMQQueue implements IDurableQueue {
     }
     const parsedAttempts =
       typeof parsed.attempts === "number" ? parsed.attempts : 0;
+    const headerAttempts = this.getDeliveryAttemptsFromHeaders(message);
     const currentAttempts = this.attemptsByMessageId.get(parsed.id);
-    const nextAttempts = Math.max(currentAttempts ?? 0, parsedAttempts) + 1;
+    const nextAttempts =
+      Math.max(currentAttempts ?? 0, parsedAttempts, headerAttempts ?? 0) + 1;
     this.attemptsByMessageId.set(parsed.id, nextAttempts);
 
     return {
       ...parsed,
       attempts: nextAttempts,
     } as QueueMessage<unknown>;
+  }
+
+  private getDeliveryAttemptsFromHeaders(
+    message: ConsumeMessage,
+  ): number | undefined {
+    const deliveryCount = message.properties?.headers?.["x-delivery-count"];
+    if (typeof deliveryCount === "number" && Number.isFinite(deliveryCount)) {
+      return deliveryCount;
+    }
+    return undefined;
   }
 
   async init(): Promise<void> {

@@ -489,6 +489,31 @@ export class ExecutionManager {
           this.config.determinism?.implicitInternalStepIds,
       },
     );
+    const failExecution = async (
+      reason: "failed" | "timed_out",
+      error: {
+        message: string;
+        stack?: string;
+      },
+    ): Promise<void> => {
+      const failedExecution: Execution = {
+        ...execution,
+        status: ExecutionStatus.Failed,
+        error,
+        completedAt: new Date(),
+      };
+      await this.config.store.updateExecution(execution.id, failedExecution);
+      await this.auditLogger.log({
+        kind: DurableAuditEntryKind.ExecutionStatusChanged,
+        executionId: execution.id,
+        taskId: execution.taskId,
+        attempt: execution.attempt,
+        from: ExecutionStatus.Running,
+        to: ExecutionStatus.Failed,
+        reason,
+      });
+      await this.notifyExecutionFinished(failedExecution);
+    };
 
     try {
       const contextProvider =
@@ -498,6 +523,7 @@ export class ExecutionManager {
           this.config.taskExecutor!.run(task, execution.input),
         ),
       );
+      const timeoutMessage = `Execution ${execution.id} timed out`;
 
       let result: unknown;
       if (execution.timeout) {
@@ -506,16 +532,13 @@ export class ExecutionManager {
         const remainingTimeout = Math.max(0, execution.timeout - elapsed);
 
         if (remainingTimeout === 0 && execution.timeout > 0) {
-          durableExecutionInvariantError.throw({
-            message: `Execution ${execution.id} timed out`,
+          await failExecution("timed_out", {
+            message: timeoutMessage,
           });
+          return;
         }
 
-        result = await withTimeout(
-          promise,
-          remainingTimeout,
-          `Execution ${execution.id} timed out`,
-        );
+        result = await withTimeout(promise, remainingTimeout, timeoutMessage);
       } else {
         result = await promise;
       }
@@ -572,25 +595,12 @@ export class ExecutionManager {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       };
+      const timedOut =
+        error instanceof Error &&
+        error.message === `Execution ${execution.id} timed out`;
 
-      if (execution.attempt >= execution.maxAttempts) {
-        const failedExecution: Execution = {
-          ...execution,
-          status: ExecutionStatus.Failed,
-          error: errorInfo,
-          completedAt: new Date(),
-        };
-        await this.config.store.updateExecution(execution.id, failedExecution);
-        await this.auditLogger.log({
-          kind: DurableAuditEntryKind.ExecutionStatusChanged,
-          executionId: execution.id,
-          taskId: execution.taskId,
-          attempt: execution.attempt,
-          from: ExecutionStatus.Running,
-          to: ExecutionStatus.Failed,
-          reason: "failed",
-        });
-        await this.notifyExecutionFinished(failedExecution);
+      if (timedOut || execution.attempt >= execution.maxAttempts) {
+        await failExecution(timedOut ? "timed_out" : "failed", errorInfo);
         return;
       }
 

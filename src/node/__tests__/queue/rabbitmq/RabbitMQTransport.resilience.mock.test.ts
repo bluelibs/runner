@@ -65,7 +65,8 @@ const createTransport = (overrides: Record<string, unknown> = {}) =>
     queue: { name: "transport.resilience" },
     parseFailureLogMessage: "parse-failed",
     handlerFailureLogMessage: "handler-failed",
-    decode: (content) => JSON.parse(content.toString()) as { id?: string },
+    decode: (message) =>
+      JSON.parse(message.content.toString()) as { id?: string },
     resolveMessageId: (message) => message.id,
     throwNotInitialized: () => {
       throw new Error("transport not initialized");

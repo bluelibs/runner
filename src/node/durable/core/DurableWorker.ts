@@ -42,7 +42,10 @@ export class DurableWorker {
         } catch {
           // Logging must not affect message acknowledgement flow.
         }
-        await this.queue.nack(message.id, true);
+        await this.queue.nack(
+          message.id,
+          message.attempts < message.maxAttempts,
+        );
       }
     });
   }

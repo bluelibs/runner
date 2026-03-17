@@ -85,15 +85,12 @@ describe("runtime forced disposal", () => {
     const inFlightTask = runtime.runTask(slowTask);
     const disposePromise = runtime.dispose({ force: true });
 
-    await expect(runtime.runTask(slowTask)).rejects.toThrow(
-      /shutdown|disposed/i,
-    );
-    await expect(disposePromise).resolves.toBeUndefined();
-
-    expect(lifecycleCalls).toEqual(["child:dispose", "parent:dispose"]);
+    expect(() => runtime.runTask(slowTask)).toThrow(/shutdown|disposed/i);
 
     releaseTask();
     await expect(inFlightTask).resolves.toBe("done");
+    await expect(disposePromise).resolves.toBeUndefined();
+    expect(lifecycleCalls).toEqual(["child:dispose", "parent:dispose"]);
   });
 
   it("escalates a graceful shutdown into forced disposal after cooldown has started", async () => {
@@ -195,5 +192,59 @@ describe("runtime forced disposal", () => {
     );
     await expect(disposePromise).resolves.toBeUndefined();
     expect(lazyInit).not.toHaveBeenCalled();
+  });
+
+  it("cancels drain waiting when force arrives after graceful shutdown reached drain", async () => {
+    let releaseTask!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseTask = resolve;
+    });
+    const lifecycleCalls: string[] = [];
+
+    const slowTask = defineTask({
+      id: "runtime-force-dispose-drain-task",
+      run: async () => {
+        await blocker;
+        return "done";
+      },
+    });
+
+    const app = defineResource({
+      id: "runtime-force-dispose-drain-app",
+      register: [slowTask],
+      async init() {
+        return "ready";
+      },
+      async cooldown() {
+        lifecycleCalls.push("cooldown");
+      },
+      async dispose() {
+        lifecycleCalls.push("dispose");
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      dispose: {
+        totalBudgetMs: 30_000,
+        drainingBudgetMs: 30_000,
+        cooldownWindowMs: 0,
+      },
+    });
+
+    const inFlightTask = runtime.runTask(slowTask);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const gracefulDisposePromise = runtime.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const forcedDisposePromise = runtime.dispose({ force: true });
+
+    expect(forcedDisposePromise).toBe(gracefulDisposePromise);
+    await expect(forcedDisposePromise).resolves.toBeUndefined();
+    expect(lifecycleCalls).toEqual(["cooldown", "dispose"]);
+
+    releaseTask();
+    await expect(inFlightTask).resolves.toBe("done");
   });
 });

@@ -20,6 +20,7 @@ import { ForceDisposalController } from "./ForceDisposalController";
 
 export type RunShutdownController = {
   readonly bootstrap: BootstrapCoordinator;
+  isForceDisposeRequested(): boolean;
   requestForceDispose(): void;
   assertNotAborted(): void;
   disposeAll(): Promise<void>;
@@ -95,7 +96,8 @@ export function createRunShutdownController(
       if (!bootstrap.isCompleted) {
         // During bootstrap we cannot dispose yet because the runtime contract
         // is not fully available, so we request shutdown and let bootstrap
-        // unwind through its own checkpoints first.
+        // unwind through its own checkpoints first. Only a successful bootstrap
+        // produces a runtime that can legally enter the normal disposal path.
         bootstrap.requestShutdown();
         await bootstrap.completion;
         if (bootstrap.succeeded) {
@@ -110,6 +112,9 @@ export function createRunShutdownController(
 
   return {
     bootstrap,
+    isForceDisposeRequested() {
+      return forceDisposal.isRequested;
+    },
     requestForceDispose() {
       forceDisposal.request();
     },

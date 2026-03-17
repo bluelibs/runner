@@ -30,10 +30,6 @@ import type { ExecutionFrame } from "../types/executionContext";
 import { globalTags } from "../globals/globalTags";
 import { HealthReporter } from "./HealthReporter";
 import { raceWithAbortSignal } from "../tools/abortSignals";
-import {
-  resolveRequestedIdFromStore,
-  toCanonicalDefinitionFromStore,
-} from "./StoreLookup";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -195,7 +191,7 @@ export class TaskRunner {
       if (options?.when) {
         const taskDefinition = input.task.definition;
         const canonicalTaskDefinition =
-          this.toCanonicalDefinition(taskDefinition);
+          this.store.resolveRegisteredDefinition(taskDefinition);
         if (!options.when(canonicalTaskDefinition as typeof taskDefinition)) {
           return next(input);
         }
@@ -242,7 +238,7 @@ export class TaskRunner {
     >,
   ): Promise<void> {
     const resourceIds = monitoredResources.map((resource) =>
-      this.resolveResourceId(resource),
+      this.store.findIdByDefinition(resource),
     );
     const nonReportableResourceIds = resourceIds.filter((resourceId) => {
       const resourceEntry = this.store.resources.get(resourceId);
@@ -267,19 +263,5 @@ export class TaskRunner {
         resourceIds: unhealthyResourceIds,
       });
     }
-  }
-
-  private resolveResourceId(
-    resource: string | IResource<any, any, any, any, any>,
-  ): string {
-    return (
-      resolveRequestedIdFromStore(this.store, resource) ?? String(resource)
-    );
-  }
-
-  private toCanonicalDefinition<TDefinition extends { id: string }>(
-    definition: TDefinition,
-  ): TDefinition {
-    return toCanonicalDefinitionFromStore(this.store, definition);
   }
 }

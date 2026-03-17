@@ -313,7 +313,13 @@ export class RedisCache implements ICacheProvider {
     );
 
     for (const ref of refs) {
-      await this.config.redis.srem(this.getRefMembersKey(ref), entryId);
+      // Shared-budget eviction can remove entries that belong to a different
+      // task cache than the current RedisCache instance. Use the evicted
+      // entry's task token so we unlink the correct ref membership set.
+      await this.config.redis.srem(
+        this.getRefMembersKeyForTask(ref, taskToken),
+        entryId,
+      );
     }
 
     if (entrySize !== 0) {
@@ -365,9 +371,11 @@ export class RedisCache implements ICacheProvider {
   }
 
   private getRefMembersKey(ref: string) {
-    return this.createKey(
-      `task:${this.taskToken}:ref:${hashValue(ref)}:members`,
-    );
+    return this.getRefMembersKeyForTask(ref, this.taskToken);
+  }
+
+  private getRefMembersKeyForTask(ref: string, taskToken: string) {
+    return this.createKey(`task:${taskToken}:ref:${hashValue(ref)}:members`);
   }
 
   private createKey(suffix: string) {

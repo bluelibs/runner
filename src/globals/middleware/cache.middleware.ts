@@ -45,6 +45,7 @@ type CacheMiddlewareConfig = CacheFactoryOptions &
 type ResolvedCacheMiddlewareConfig = {
   cacheOptions: CacheFactoryOptions;
   keyBuilder: (taskId: string, input: any) => CacheKeyBuilderResult;
+  tenantScope: TenantScopedMiddlewareConfig["tenantScope"];
 };
 
 const cacheMiddlewareConfigPattern = Match.ObjectIncluding({
@@ -109,6 +110,7 @@ export function resolveCacheMiddlewareConfig(
       ...defaultOptions,
       ...cacheOptions,
     },
+    tenantScope,
   };
 }
 
@@ -154,9 +156,15 @@ export const cacheMiddleware = defineTaskMiddleware({
     const cacheKey = normalizeCacheKeyBuilderResult(
       resolvedConfig.keyBuilder(taskId, task!.input),
     );
-    const key = applyTenantScopeToKey(cacheKey.cacheKey, config.tenantScope);
+    // Apply tenant scope from the normalized config, not the raw attachment.
+    // The resolver owns defaulting ("auto") and keeps cache key + refs aligned
+    // with the exact policy used for the provider instance itself.
+    const key = applyTenantScopeToKey(
+      cacheKey.cacheKey,
+      resolvedConfig.tenantScope,
+    );
     const refs = cacheKey.refs.map((ref) =>
-      applyTenantScopeToKey(ref, config.tenantScope),
+      applyTenantScopeToKey(ref, resolvedConfig.tenantScope),
     );
 
     const cachedValue = await cacheHolderForTask.get(key);

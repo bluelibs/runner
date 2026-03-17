@@ -99,16 +99,16 @@ describe("system.runtime", () => {
     const runtime = runtimeResult.getResourceValue(globalResources.runtime);
 
     expect(() => runtime.runTask("missing.task")).toThrow(
-      'Task "missing.task" not found.',
+      'Definition "missing.task" not found.',
     );
     expect(() => runtime.emitEvent("missing.event")).toThrow(
-      'Event "missing.event" not found.',
+      'Definition "missing.event" not found.',
     );
     expect(() => runtime.getResourceValue("missing.resource")).toThrow(
-      'Resource "missing.resource" not found.',
+      'Definition "missing.resource" not found.',
     );
     expect(() => runtime.getResourceConfig("missing.resource")).toThrow(
-      'Resource "missing.resource" not found.',
+      'Definition "missing.resource" not found.',
     );
 
     await runtimeResult.dispose();
@@ -174,6 +174,7 @@ describe("system.runtime", () => {
       },
       async () => {},
       () => {},
+      () => false,
     );
 
     expect(() => runtime.root).toThrow("Root resource is not available.");

@@ -1,12 +1,10 @@
 import { defineEvent, defineResource } from "../../define";
-import { RunResult } from "../../models/RunResult";
 import { toCanonicalDefinitionFromStore } from "../../models/StoreLookup";
-import { TaskRunner } from "../../models/TaskRunner";
 import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
 
 describe("core fallback coverage", () => {
-  it("Store falls back when owner, runtime source, root, and canonical definition lookups miss", async () => {
+  it("Store preserves runtime source ids and handles owner, root, and canonical definition misses", async () => {
     const fixture = createTestFixture();
     const { store, eventManager } = fixture;
     const registry = (store as unknown as { registry: any }).registry;
@@ -80,24 +78,18 @@ describe("core fallback coverage", () => {
     );
   });
 
-  it("TaskRunner and RunResult stringify unresolved references when store helpers miss", () => {
-    const taskRunner = Object.create(TaskRunner.prototype) as {
-      store: unknown;
-      resolveResourceId(resource: unknown): string;
-    };
-    taskRunner.store = {};
+  it("RunResult delegates runtime-element lookup to the store", () => {
+    const fixture = createTestFixture();
+    const taskRunner = fixture.createTaskRunner();
+    fixture.store.setTaskRunner(taskRunner);
+    const runtime = fixture.createRuntimeResult(taskRunner);
 
-    const runtime = Object.create(RunResult.prototype) as {
-      store: unknown;
-      resolveRuntimeElementId(reference: unknown): string;
-    };
-    runtime.store = {};
+    jest.spyOn(fixture.store, "findIdByDefinition").mockImplementation(() => {
+      throw new Error("boom");
+    });
 
-    expect(taskRunner.resolveResourceId({ missing: true })).toBe(
-      "[object Object]",
-    );
-    expect(runtime.resolveRuntimeElementId({ missing: true })).toBe(
-      "[object Object]",
-    );
+    expect(() =>
+      runtime.getResourceValue("store-core-runtime-missing"),
+    ).toThrow("boom");
   });
 });
