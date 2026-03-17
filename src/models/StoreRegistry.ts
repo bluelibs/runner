@@ -247,11 +247,9 @@ export class StoreRegistry {
     }
 
     if (isResourceWithConfig(reference)) {
-      const byResource = this.definitionAliases.get(reference.resource);
-      if (byResource) {
-        return byResource;
-      }
-      return reference.resource.id;
+      return (
+        this.definitionAliases.get(reference.resource) ?? reference.resource.id
+      );
     }
 
     const sourceId = getReferenceSourceId(reference);

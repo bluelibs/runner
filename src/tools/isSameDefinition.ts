@@ -57,11 +57,7 @@ function unwrapDefinitionReference(value: unknown): unknown {
   return current;
 }
 
-function hasRunnerDefinitionMetadata(value: unknown): boolean {
-  if (!isObjectLike(value)) {
-    return false;
-  }
-
+function hasRunnerDefinitionMetadata(value: object): boolean {
   const carrier = value as Record<PropertyKey, unknown>;
   return (
     carrier[symbolDefinitionIdentity] !== undefined ||
@@ -129,8 +125,8 @@ export function isSameDefinition(left: unknown, right: unknown): boolean {
   }
 
   if (
-    hasRunnerDefinitionMetadata(left) ||
-    hasRunnerDefinitionMetadata(right) ||
+    (isObjectLike(left) && hasRunnerDefinitionMetadata(left)) ||
+    (isObjectLike(right) && hasRunnerDefinitionMetadata(right)) ||
     hasRunnerDefinitionMetadata(normalizedLeft) ||
     hasRunnerDefinitionMetadata(normalizedRight)
   ) {

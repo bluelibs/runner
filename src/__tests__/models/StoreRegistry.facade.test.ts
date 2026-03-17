@@ -12,6 +12,7 @@ import { defineError } from "../../definers/defineError";
 import { Store } from "../../models/Store";
 import {
   symbolDefinitionIdentity,
+  symbolResourceWithConfig,
   symbolTagConfiguredFrom,
 } from "../../types/symbols";
 import { createTestFixture } from "../test-utils";
@@ -178,7 +179,7 @@ describe("StoreRegistry facade delegates", () => {
     );
   });
 
-  it("keeps alias registration as a no-op for primitives and resolves resource-with-config ids", () => {
+  it("keeps alias registration as a no-op and resolves resource-with-config ids via resource aliases", () => {
     const registry = (store as unknown as { registry: any }).registry;
     const resource = defineResource<{ enabled: boolean }>({
       id: "registry-alias-resource",
@@ -201,6 +202,22 @@ describe("StoreRegistry facade delegates", () => {
     ).not.toThrow();
 
     expect(registry.resolveDefinitionId(configured)).toBe(resource.id);
+
+    registry.registerDefinitionAlias(
+      resource,
+      "registry-alias-resource-canonical",
+    );
+    const manualConfigured = {
+      [symbolResourceWithConfig]: true as const,
+      resource,
+    };
+
+    expect(registry.resolveDefinitionId(manualConfigured)).toBe(
+      "registry-alias-resource-canonical",
+    );
+    expect(registry.resolveDefinitionId(configured)).toBe(
+      "registry-alias-resource-canonical",
+    );
   });
 
   it("fails fast when a definition alias is remapped to a different id", () => {
