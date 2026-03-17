@@ -201,6 +201,16 @@
   "overrides": {
     "test-exclude": "^7.0.1"
   },
+  "npmSkills": {
+    "publish": {
+      "source": ".agents/skills",
+      "export": [
+        "runner",
+        "runner-durable",
+        "runner-remote"
+      ]
+    }
+  },
   "prettier": {
     "trailingComma": "all",
     "tabWidth": 2,
