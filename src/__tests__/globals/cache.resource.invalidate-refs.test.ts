@@ -7,6 +7,9 @@ import {
   cacheResource,
 } from "../../globals/middleware/cache.middleware";
 import { loggerResource } from "../../globals/resources/logger.resource";
+import { storeResource } from "../../globals/resources/store.resource";
+import { MiddlewareResolver } from "../../models/middleware/MiddlewareResolver";
+import { getSubtreeMiddlewareDuplicateKey } from "../../tools/subtreeMiddleware";
 import { genericError } from "../../errors";
 
 describe("cache resource invalidateRefs", () => {
@@ -226,6 +229,85 @@ describe("cache resource invalidateRefs", () => {
     });
 
     await run(app);
+  });
+
+  it("includes subtree-inherited cache middleware when invalidating refs", async () => {
+    const invalidationCalls: Array<{
+      refs: readonly string[];
+      taskId: string;
+    }> = [];
+
+    const customProvider = defineResource({
+      id: "cache-invalidation-inherited-provider",
+      init:
+        async (): Promise<CacheProvider> =>
+        async ({ taskId }) => ({
+          get: async () => undefined,
+          set: async () => undefined,
+          clear: async () => undefined,
+          invalidateRefs: async (refs) => {
+            invalidationCalls.push({ refs, taskId });
+            return 1;
+          },
+        }),
+    });
+
+    const cachedTask = defineTask({
+      id: "cache-invalidation-inherited-task",
+      run: async () => "never-called",
+    });
+
+    const subtreeOwner = defineResource({
+      id: "cache-invalidation-inherited-owner",
+      subtree: {
+        tasks: {
+          middleware: [
+            cacheMiddleware.with({
+              keyBuilder: (_taskId: string, input: { userId: string }) => ({
+                cacheKey: `user:${input.userId}`,
+                refs: [`user:${input.userId}`],
+              }),
+            }),
+          ],
+        },
+      },
+      register: [cachedTask],
+      init: async () => "owner",
+    });
+
+    const app = defineResource({
+      id: "cache-invalidation-inherited-app",
+      register: [
+        cacheResource.with({
+          provider: customProvider,
+        }),
+        subtreeOwner,
+      ],
+      init: async () => "app",
+    });
+
+    const runtime = await run(app);
+    const cache = runtime.getResourceValue(cacheResource);
+    const store = runtime.getResourceValue(storeResource);
+    const applicableMiddlewares = new MiddlewareResolver(
+      store,
+    ).getApplicableTaskMiddlewares(cachedTask);
+
+    expect(
+      applicableMiddlewares.some(
+        (middleware) =>
+          getSubtreeMiddlewareDuplicateKey(middleware.id) ===
+          cacheMiddleware.id,
+      ),
+    ).toBe(true);
+
+    await expect(cache.invalidateRefs("user:u1")).resolves.toBe(1);
+    expect(invalidationCalls).toEqual([
+      {
+        refs: ["user:u1"],
+        taskId: "cache-invalidation-inherited-task",
+      },
+    ]);
   });
 
   it("keeps going when a cache target throws an Error instance during invalidation", async () => {

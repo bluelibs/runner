@@ -35,6 +35,55 @@ describe("Store lookup fallback coverage", () => {
     expect(ownerSpy).toHaveBeenNthCalledWith(2, "store-owner-input-b");
   });
 
+  it("canonicalizes known runtime source ids before forwarding emits", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager } = fixture;
+    const event = defineEvent<{ value: number }>({
+      id: "store-source-canonicalization-event",
+    });
+    const canonicalSourceId = "store-source-canonicalization.resources.worker";
+    const lookup = (
+      store as unknown as {
+        lookup: {
+          tryCanonicalId: (reference: unknown) => string | null;
+        };
+      }
+    ).lookup;
+
+    store.storeGenericItem(event);
+
+    const facade = (
+      store as unknown as {
+        createEventManagerFacade: () => {
+          emit(
+            eventDefinition: unknown,
+            data: unknown,
+            sourceDefinition: unknown,
+          ): Promise<unknown>;
+        };
+      }
+    ).createEventManagerFacade();
+
+    jest
+      .spyOn(lookup, "tryCanonicalId")
+      .mockImplementation((reference) =>
+        reference === "worker" ? canonicalSourceId : null,
+      );
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
+
+    await facade.emit(event, { value: 1 }, runtimeSource.resource("worker"));
+
+    expect(emitSpy).toHaveBeenCalledWith(
+      event,
+      { value: 1 },
+      {
+        source: runtimeSource.resource(canonicalSourceId),
+      },
+    );
+  });
+
   it("falls back to source.id when runtime source canonicalization is unavailable", async () => {
     const fixture = createTestFixture();
     const { store, eventManager } = fixture;

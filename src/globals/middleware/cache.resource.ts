@@ -25,11 +25,12 @@ import {
 import { isResource, isResourceWithConfig } from "../../define";
 import { storeResource } from "../resources/store.resource";
 import { loggerResource } from "../resources/logger.resource";
-import { isSameDefinition } from "../../tools/isSameDefinition";
 import { normalizeCacheRefs, toStableTaskId } from "./cache.key";
 import { applyTenantScopeToKey } from "./tenantScope.shared";
 import type { TenantScopeConfig } from "./tenantScope.shared";
 import type { Store } from "../../models/Store";
+import { MiddlewareResolver } from "../../models/middleware/MiddlewareResolver";
+import { getSubtreeMiddlewareDuplicateKey } from "../../tools/subtreeMiddleware";
 
 export type {
   CacheEntryMetadata,
@@ -166,7 +167,6 @@ export const cacheResource = defineResource<
       ttlAutopurge: true,
       ...(config?.defaultOptions ?? {}),
     };
-    const cacheTargets = getCacheEnabledTaskIds(store, defaultOptions);
 
     const cacheValue: CacheResourceValue = {
       map: new Map<string, ICacheProvider>(),
@@ -182,6 +182,7 @@ export const cacheResource = defineResource<
           return 0;
         }
 
+        const cacheTargets = getCacheEnabledTaskIds(store, defaultOptions);
         let deletedCount = 0;
 
         for (const target of cacheTargets) {
@@ -305,11 +306,16 @@ function getCacheEnabledTaskIds(
   defaultOptions: CacheFactoryOptions,
 ): CacheInvalidationTarget[] {
   const taskTargets = new Map<string, CacheInvalidationTarget>();
+  const middlewareResolver = new MiddlewareResolver(store);
 
   for (const { task } of store.tasks.values()) {
-    const cacheAttachment = task.middleware.find((middleware) =>
-      isSameDefinition(middleware, cacheMiddleware),
-    );
+    const cacheAttachment = middlewareResolver
+      .getApplicableTaskMiddlewares(task)
+      .find(
+        (middleware) =>
+          getSubtreeMiddlewareDuplicateKey(middleware.id) ===
+          cacheMiddleware.id,
+      );
 
     if (!cacheAttachment) {
       continue;
@@ -324,7 +330,7 @@ function getCacheEnabledTaskIds(
     taskTargets.set(taskId, {
       cacheOptions: resolvedConfig.cacheOptions,
       taskId,
-      tenantScope: cacheAttachment.config?.tenantScope,
+      tenantScope: resolvedConfig.tenantScope,
     });
   }
 
