@@ -45,6 +45,7 @@ import {
 } from "./isolatePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 import { isSameDefinition } from "../tools/isSameDefinition";
+import { isResourceWithConfig } from "./tools";
 
 function cloneThrowsList(throwsList: readonly string[] | undefined) {
   if (throwsList === undefined) return undefined;
@@ -416,7 +417,7 @@ export function defineResource<
       return undefined;
     }
 
-    if (symbolResourceWithConfig in target) {
+    if (isResourceWithConfig(target)) {
       return target.config;
     }
 
