@@ -88,6 +88,74 @@ describe("run() disposal signal", () => {
     expect(disposed).toContain("child");
   });
 
+  it("cancels bootstrap during resource ready hooks before the runtime goes online", async () => {
+    expect.assertions(4);
+
+    const disposed: string[] = [];
+    let releaseReady: (() => void) | undefined;
+    let readyStarted = false;
+    const skippedReady = jest.fn(async () => undefined);
+    const readyGate = new Promise<void>((resolve) => {
+      releaseReady = resolve;
+    });
+
+    const blockingReadyResource = defineResource({
+      id: "run-disposal-signal-ready-phase-resource",
+      async init() {
+        return "ready-phase";
+      },
+      async ready() {
+        readyStarted = true;
+        await readyGate;
+      },
+      async dispose(value) {
+        disposed.push(String(value));
+      },
+    });
+
+    const shouldBeSkipped = defineResource({
+      id: "run-disposal-signal-ready-phase-skipped-resource",
+      async init() {
+        return "skipped";
+      },
+      ready: skippedReady,
+    });
+
+    const app = defineResource({
+      id: "run-disposal-signal-ready-phase-app",
+      register: [blockingReadyResource, shouldBeSkipped],
+      async init() {
+        return "app";
+      },
+    });
+
+    const controller = new AbortController();
+    const runtimePromise = run(app, {
+      signal: controller.signal,
+      shutdownHooks: false,
+    });
+
+    await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(readyStarted).toBe(true);
+
+    controller.abort("outer shutdown");
+    await flushMicrotasks();
+
+    if (!releaseReady) {
+      throw genericError.new({
+        message: "Expected resource ready hook to start",
+      });
+    }
+    releaseReady();
+
+    await expect(runtimePromise).rejects.toThrow(
+      /outer shutdown during bootstrap \(resource ready hooks\)/,
+    );
+    expect(disposed).toContain("ready-phase");
+    expect(skippedReady).not.toHaveBeenCalled();
+  });
+
   it("starts disposal after the runtime is ready", async () => {
     const controller = new AbortController();
     const disposed: string[] = [];

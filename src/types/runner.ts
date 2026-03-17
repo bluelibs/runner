@@ -51,9 +51,11 @@ export interface IRuntimeRecoveryOptions {
  */
 export type RuntimeDisposeOptions = {
   /**
-   * Skips graceful shutdown orchestration and jumps directly to resource
-   * disposal. This bypasses `cooldown()`, `dispose.cooldownWindowMs`,
-   * `events.disposing`, drain wait, and `events.drained`.
+   * Skips any remaining graceful shutdown orchestration that has not started
+   * yet and jumps toward direct resource disposal. This can bypass
+   * `dispose.cooldownWindowMs`, `events.disposing`, drain wait, and
+   * `events.drained`, but it does not preempt work already in flight such as an
+   * active `cooldown()` call.
    */
   force?: boolean;
 };
@@ -191,7 +193,9 @@ export type RunOptions = {
   shutdownHooks?: boolean;
   /**
    * External shutdown trigger for the runtime lifecycle.
-   * Aborting this signal starts graceful disposal without affecting ambient execution signals.
+   * Aborting this signal cancels bootstrap before readiness (rolling back any
+   * initialized resources) or starts graceful disposal after the runtime is
+   * ready, without affecting ambient execution signals.
    */
   signal?: AbortSignal;
   /**

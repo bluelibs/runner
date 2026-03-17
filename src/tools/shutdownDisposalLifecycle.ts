@@ -1,4 +1,4 @@
-import { IEvent, IEventEmissionCallOptions } from "../defs";
+import { IEvent, IEventEmissionCallOptions, RegisterableItem } from "../defs";
 import { globalEvents } from "../globals/globalEvents";
 import { Logger } from "../models/Logger";
 import { RuntimeCallSource } from "../types/runtimeSource";
@@ -16,8 +16,9 @@ type LifecycleStore = {
   cooldown(options?: { shouldStop?: () => boolean }): Promise<void>;
   beginDrained(): void;
   waitForDrain(timeoutMs: number): Promise<boolean>;
-  findIdByDefinition(reference: unknown): string;
-  findDefinitionById(id: string): unknown;
+  resolveRegisteredDefinition<TDefinition extends RegisterableItem>(
+    definition: TDefinition,
+  ): TDefinition;
 };
 
 type LifecycleEventManager = {
@@ -172,8 +173,9 @@ async function emitLifecycleEvent(
   event: (typeof globalEvents)[keyof typeof globalEvents],
   runtimeLifecycleSource: RuntimeCallSource,
 ): Promise<void> {
-  const canonicalId = store.findIdByDefinition(event);
-  const registeredEvent = store.findDefinitionById(canonicalId) as IEvent<void>;
+  const registeredEvent = store.resolveRegisteredDefinition(
+    event,
+  ) as IEvent<void>;
 
   await eventManager.emitLifecycle(registeredEvent, undefined, {
     source: runtimeLifecycleSource,

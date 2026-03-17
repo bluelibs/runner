@@ -145,6 +145,48 @@ describe("run hook selectors", () => {
     await runtime.dispose();
   });
 
+  it("reuses selector resolution results after post-override visibility validation", async () => {
+    const selectorTag = defineTag({
+      id: "run-hook-selector-stable-resolution-tag",
+    });
+    const event = defineEvent<void>({
+      id: "run-hook-selector-stable-resolution-event",
+      tags: [selectorTag],
+    });
+
+    let targetEvaluationCount = 0;
+    const seen: string[] = [];
+    const hook = defineHook({
+      id: "run-hook-selector-stable-resolution-hook",
+      on: (candidate: IEvent<any>) => {
+        if (!selectorTag.exists(candidate)) {
+          return false;
+        }
+
+        targetEvaluationCount += 1;
+        return targetEvaluationCount === 2;
+      },
+      run: async (receivedEvent) => {
+        seen.push(receivedEvent.id);
+      },
+    });
+
+    const root = defineResource({
+      id: "run-hook-selector-stable-resolution-root",
+      register: [selectorTag, event, hook],
+    });
+
+    const runtime = await run(root);
+    const eventId = runtime.store.findIdByDefinition(event);
+
+    await runtime.emitEvent(event, undefined);
+
+    expect(targetEvaluationCount).toBe(2);
+    expect(seen).toEqual([eventId]);
+
+    await runtime.dispose();
+  });
+
   it("fails fast when mixed targets contain an unregistered exact event", async () => {
     const registeredEvent = defineEvent<void>({
       id: "run-hook-selector-registered-event",

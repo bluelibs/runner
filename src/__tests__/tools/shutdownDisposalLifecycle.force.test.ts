@@ -12,6 +12,9 @@ function createLifecycleInput(options?: {
 }) {
   const calls: string[] = [];
   const forceDisposal = new ForceDisposalController();
+  const resolveRegisteredDefinition = jest.fn(
+    <TDefinition extends { id: string }>(definition: TDefinition) => definition,
+  );
 
   const store = {
     beginCoolingDown: jest.fn(() => {
@@ -30,8 +33,7 @@ function createLifecycleInput(options?: {
       calls.push("waitForDrain");
       return true;
     }),
-    findIdByDefinition: jest.fn((reference: { id: string }) => reference.id),
-    findDefinitionById: jest.fn((id: string) => ({ id })),
+    resolveRegisteredDefinition,
   };
 
   const eventManager = {

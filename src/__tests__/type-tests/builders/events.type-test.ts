@@ -84,7 +84,19 @@ import type { HookRevertFn } from "../../../types/hook";
     .build();
 
   r.hook("builder-selector-tx-mixed-runtime-only")
-    .on([subtreeEvent, (event: IEvent<any>) => event.id === subtreeEvent.id])
+    .on([
+      subtreeEvent,
+      (event: IEvent<any>) => event.id === subtreeEvent.id,
+    ] as const)
+    .run(async () => async () => {})
+    .build();
+
+  r.hook("builder-selector-tx-mixed-fail")
+    .on([
+      subtreeEvent,
+      (event: IEvent<any>) => event.id === subtreeEvent.id,
+    ] as const)
+    // @ts-expect-error mixed selector subscriptions including transactional events must return undo closure
     .run(async () => {})
     .build();
 

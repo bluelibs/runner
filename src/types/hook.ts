@@ -56,18 +56,17 @@ type IsTransactionalEventDefinition<TEvent> = TEvent extends {
   ? IsTransactionalFlag<NonNullable<TTransactional>>
   : false;
 
-type IsTransactionalOn<TOn> =
-  HasSelectorEntry<TOn> extends true
-    ? false
-    : TOn extends "*"
-      ? false
-      : TOn extends readonly IEventDefinition<any>[]
-        ? true extends IsTransactionalEventDefinition<TOn[number]>
-          ? true
-          : false
-        : TOn extends IEventDefinition<any>
-          ? IsTransactionalEventDefinition<TOn>
-          : false;
+type ExactEventEntries<TOn> = TOn extends readonly unknown[]
+  ? Extract<TOn[number], IEventDefinition<any>>
+  : TOn extends IEventDefinition<any>
+    ? TOn
+    : never;
+
+type IsTransactionalOn<TOn> = TOn extends "*"
+  ? false
+  : true extends IsTransactionalEventDefinition<ExactEventEntries<TOn>>
+    ? true
+    : false;
 
 type HookRunResult<TOn> =
   IsTransactionalOn<TOn> extends true ? HookRevertFn : any;

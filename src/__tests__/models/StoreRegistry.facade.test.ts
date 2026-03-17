@@ -358,4 +358,56 @@ describe("StoreRegistry facade delegates", () => {
       }),
     ).toEqual([]);
   });
+
+  it("invalidates cached hook selector resolutions after additional registrations", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const firstEvent = defineEvent({
+      id: "registry-hook-cache-first-event",
+    });
+    const secondEvent = defineEvent({
+      id: "registry-hook-cache-second-event",
+    });
+    const hook = defineHook({
+      id: "registry-hook-cache-hook",
+      on: () => true,
+      run: async () => undefined,
+    });
+
+    store.storeGenericItem(firstEvent);
+    store.storeGenericItem(hook);
+
+    expect(registry.resolveHookTargets(hook)).toEqual([
+      { event: firstEvent, provenance: "selector" },
+    ]);
+
+    store.storeGenericItem(secondEvent);
+
+    expect(registry.resolveHookTargets(hook)).toEqual([
+      { event: firstEvent, provenance: "selector" },
+      { event: secondEvent, provenance: "selector" },
+    ]);
+  });
+
+  it("returns defensive copies from cached hook target resolutions", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const event = defineEvent({
+      id: "registry-hook-cache-copy-event",
+    });
+    const hook = defineHook({
+      id: "registry-hook-cache-copy-hook",
+      on: () => true,
+      run: async () => undefined,
+    });
+
+    store.storeGenericItem(event);
+    store.storeGenericItem(hook);
+
+    const firstResolution = registry.resolveHookTargets(hook);
+    firstResolution[0]!.provenance = "exact";
+    firstResolution.length = 0;
+
+    expect(registry.resolveHookTargets(hook)).toEqual([
+      { event, provenance: "selector" },
+    ]);
+  });
 });

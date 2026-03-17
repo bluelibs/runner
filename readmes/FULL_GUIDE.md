@@ -3384,7 +3384,7 @@ Pass as the second argument to `run(app, options)`.
 | `logs`             | `object`                                        | Configure log printing, formatting, and buffering. |
 | `errorBoundary`    | `boolean`                                       | Install process-level unhandled error capture. |
 | `shutdownHooks`    | `boolean`                                       | Install `SIGINT` / `SIGTERM` graceful shutdown hooks. |
-| `signal`           | `AbortSignal`                                   | Outer runtime shutdown trigger. Aborting it starts disposal and stays separate from `context.signal`. |
+| `signal`           | `AbortSignal`                                   | Outer runtime shutdown trigger. Aborting it cancels bootstrap before readiness or starts graceful disposal after readiness, and stays separate from `context.signal`. |
 | `dispose`          | `object`                                        | Configure shutdown budgets: `totalBudgetMs`, `drainingBudgetMs`, and `cooldownWindowMs`. |
 | `onUnhandledError` | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors caught by Runner. |
 | `dryRun`           | `boolean`                                       | Validate the graph without running resource lifecycle. |
@@ -3647,7 +3647,7 @@ await dispose();
 By default, Runner installs handlers for `SIGTERM` and `SIGINT`.
 Signal-based shutdown follows the standard disposal lifecycle sequence described in [Disposal Lifecycle Events](#disposal-lifecycle-events) below.
 
-If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup and performs the same graceful teardown path.
+If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup, stops remaining `ready()` / `events.ready` work at the next safe boundary, and performs the same graceful teardown path.
 
 Signal-based shutdown, `run(..., { signal })`, and manual `runtime.dispose()` follow the same graceful shutdown lifecycle (`coolingDown`, `disposing`, `drained`) and the same admission rules.
 
@@ -3674,7 +3674,7 @@ const runtime = await run(app, {
 controller.abort("container shutdown");
 ```
 
-That signal only starts runtime disposal. It does not become `context.signal` and is not exposed through the injected `runtime` resource.
+That signal cancels bootstrap before readiness or starts runtime disposal after readiness. It does not become `context.signal` and is not exposed through the injected `runtime` resource.
 
 To handle signals yourself:
 
@@ -3705,12 +3705,15 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 `runtime.dispose({ force: true })` is the exception:
 
 1. transition directly to shutdown lockdown
-2. skip `cooldown()`
-3. skip `dispose.cooldownWindowMs`
-4. skip `events.disposing`
-5. skip drain wait
-6. skip `events.drained`
-7. fully awaited resource disposal
+2. skip any remaining graceful phases that have not started yet
+3. this can skip `cooldown()`
+4. this can skip `dispose.cooldownWindowMs`
+5. this can skip `events.disposing`
+6. this can skip drain wait
+7. this can skip `events.drained`
+8. fully awaited resource disposal
+
+Important: `force: true` does not preempt lifecycle work that is already in flight, such as an active `cooldown()` call that has already started running.
 
 ```mermaid
 sequenceDiagram

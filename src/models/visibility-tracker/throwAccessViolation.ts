@@ -13,29 +13,26 @@ export function throwAccessViolation(data: {
   consumerType: string;
 }): never {
   const { violation, targetId, targetType, consumerId, consumerType } = data;
-  const toDisplayId = (id: string): string => id;
-  const displayTargetId = toDisplayId(targetId);
-  const displayConsumerId = toDisplayId(consumerId);
 
   if (violation.kind === "visibility") {
     return visibilityViolationError.throw({
-      targetId: displayTargetId,
+      targetId,
       targetType,
-      ownerResourceId: toDisplayId(violation.targetOwnerResourceId),
-      consumerId: displayConsumerId,
+      ownerResourceId: violation.targetOwnerResourceId,
+      consumerId,
       consumerType,
-      exportedIds: violation.exportedIds.map(toDisplayId),
+      exportedIds: violation.exportedIds,
     });
   }
 
   return isolateViolationError.throw({
-    targetId: displayTargetId,
+    targetId,
     targetType,
-    consumerId: displayConsumerId,
+    consumerId,
     consumerType,
-    policyResourceId: toDisplayId(violation.policyResourceId),
+    policyResourceId: violation.policyResourceId,
     matchedRuleType: violation.matchedRuleType,
-    matchedRuleId: toDisplayId(violation.matchedRuleId),
+    matchedRuleId: violation.matchedRuleId,
     channel: violation.channel,
   });
 }

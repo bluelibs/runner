@@ -1,6 +1,9 @@
 import { subtreeOf } from "../../..";
 import { defineEvent, defineResource } from "../../../define";
-import { resolveHookTargets } from "../../../models/hook/resolveHookTargets";
+import {
+  resolveHookTargets,
+  type HookTargetResolutionContext,
+} from "../../../models/hook/resolveHookTargets";
 import type { AccessViolation } from "../../../models/visibility-tracker/contracts";
 
 describe("resolveHookTargets", () => {
@@ -47,6 +50,20 @@ describe("resolveHookTargets", () => {
     ).toThrow(/Event "123" not found/i);
   });
 
+  it("keeps unresolved string targets readable in fail-fast errors", () => {
+    expect(() =>
+      resolveHookTargets({
+        context: createContext({
+          resolveDefinitionId(_reference) {
+            return undefined;
+          },
+        }),
+        hookId: "hook-resolve-unresolved-string-hook",
+        on: "hook-resolve-unresolved-string-event" as never,
+      }),
+    ).toThrow(/Event "hook-resolve-unresolved-string-event" not found/i);
+  });
+
   it("fails fast when an exact target resolves to an event id missing from the registry", () => {
     const missingEvent = defineEvent({ id: "hook-resolve-missing-event" });
 
@@ -59,7 +76,7 @@ describe("resolveHookTargets", () => {
     ).toThrow(/Event "hook-resolve-missing-event" not found/i);
   });
 
-  it("falls back to the target object's id when alias resolution misses for exact events", () => {
+  it("fails fast when exact targets do not resolve through definition identity", () => {
     const event = defineEvent({ id: "hook-resolve-object-fallback-event" });
     const context = createContext({
       events: [event],
@@ -68,13 +85,13 @@ describe("resolveHookTargets", () => {
       },
     });
 
-    const matches = resolveHookTargets({
-      context,
-      hookId: "hook-resolve-object-fallback-hook",
-      on: event,
-    });
-
-    expect(matches).toEqual([{ event, provenance: "exact" }]);
+    expect(() =>
+      resolveHookTargets({
+        context,
+        hookId: "hook-resolve-object-fallback-hook",
+        on: event,
+      }),
+    ).toThrow(/Event "hook-resolve-object-fallback-event" not found/i);
   });
 
   it("fails fast when subtreeOf() references an unknown resource", () => {
@@ -102,8 +119,8 @@ describe("resolveHookTargets", () => {
       subtreeMembership: {
         [resource.id]: new Set([event.id]),
       },
-      resolveDefinitionId(reference) {
-        return typeof reference === "string" ? undefined : undefined;
+      resolveDefinitionId(_reference) {
+        return undefined;
       },
     });
 
@@ -148,13 +165,9 @@ describe("resolveHookTargets", () => {
     const inaccessibleEvent = defineEvent({
       id: "hook-resolve-inaccessible-predicate-event",
     });
-    const predicate = jest.fn((event: { id: string }) => {
-      if (event.id === inaccessibleEvent.id) {
-        throw new Error("predicate should not receive inaccessible events");
-      }
-
-      return event.id === accessibleEvent.id;
-    });
+    const predicate = jest.fn(
+      (event: { id: string }) => event.id === accessibleEvent.id,
+    );
 
     const matches = resolveHookTargets({
       context: createContext({
@@ -179,7 +192,7 @@ function createContext(options?: {
   inaccessibleEventIds?: string[];
   subtreeMembership?: Record<string, Set<string>>;
   resolveDefinitionId?: (reference: unknown) => string | undefined;
-}) {
+}): HookTargetResolutionContext {
   const events = new Map(
     (options?.events ?? []).map((event) => [event.id, event] as const),
   );
@@ -219,7 +232,11 @@ function createContext(options?: {
     isWithinResourceSubtree(resourceId: string, itemId: string) {
       return subtreeMembership[resourceId]?.has(itemId) ?? false;
     },
-    getAccessViolation(targetId: string) {
+    getAccessViolation(
+      targetId: string,
+      _consumerId: string,
+      _channel: "listening",
+    ) {
       return inaccessibleEventIds.has(targetId)
         ? ({
             kind: "isolate",

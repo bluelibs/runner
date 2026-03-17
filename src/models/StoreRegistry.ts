@@ -119,6 +119,10 @@ export class StoreRegistry {
   >();
   private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
   private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
+  private readonly hookTargetResolutionCache = new Map<
+    string,
+    ReadonlyArray<HookTargetResolutionEntry>
+  >();
 
   // Kept on the registry for backward compatibility in tests/tools.
   public readonly tagIndex: Map<string, TagIndexBucket>;
@@ -351,22 +355,27 @@ export class StoreRegistry {
   }
 
   storeGenericItem<_C>(item: RegisterableItem) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeGenericItem<_C>(item);
   }
 
   storeError<_C>(item: IErrorHelper<any>) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeError<_C>(item);
   }
 
   storeAsyncContext<_C>(item: IAsyncContext<any>) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeAsyncContext<_C>(item);
   }
 
   storeTag(item: ITag<any, any, any>) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeTag(item);
   }
 
   storeHook<_C>(item: IHook<any, any>, overrideMode: StoringMode = "normal") {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeHook<_C>(item, overrideMode);
   }
 
@@ -374,6 +383,7 @@ export class StoreRegistry {
     item: ITaskMiddleware<any>,
     storingMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeTaskMiddleware<_C>(item, storingMode);
   }
 
@@ -381,10 +391,12 @@ export class StoreRegistry {
     item: IResourceMiddleware<any>,
     overrideMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeResourceMiddleware<_C>(item, overrideMode);
   }
 
   storeEvent<_C>(item: IEvent<void>) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeEvent<_C>(item);
   }
 
@@ -392,10 +404,12 @@ export class StoreRegistry {
     item: IResourceWithConfig<any, any, any>,
     storingMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeResourceWithConfig<_C>(item, storingMode);
   }
 
   computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
+    this.clearHookTargetResolutionCache();
     return this.writer.computeRegistrationDeeply(
       element,
       config,
@@ -407,6 +421,7 @@ export class StoreRegistry {
     item: IResource<any, any, any>,
     overrideMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeResource<_C>(item, overrideMode);
   }
 
@@ -414,6 +429,7 @@ export class StoreRegistry {
     item: ITask<any, any, {}>,
     storingMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeTask<_C>(item, storingMode);
   }
 
@@ -429,6 +445,16 @@ export class StoreRegistry {
     return buildEmissionGraph(this);
   }
 
+  clearHookTargetResolutionCache(): void {
+    this.hookTargetResolutionCache.clear();
+  }
+
+  private cloneHookTargetResolutions(
+    entries: ReadonlyArray<HookTargetResolutionEntry>,
+  ): HookTargetResolutionEntry[] {
+    return entries.map((entry) => ({ ...entry }));
+  }
+
   /**
    * Resolves a hook's `on` declaration into concrete registered events using
    * canonical ids plus current listening-visibility rules.
@@ -440,7 +466,12 @@ export class StoreRegistry {
       return [];
     }
 
-    return resolveHookTargets({
+    const cached = this.hookTargetResolutionCache.get(hook.id);
+    if (cached) {
+      return this.cloneHookTargetResolutions(cached);
+    }
+
+    const resolvedTargets = resolveHookTargets({
       context: {
         resolveDefinitionId: (reference) => this.resolveDefinitionId(reference),
         getEventById: (id) => this.events.get(id)?.event,
@@ -459,6 +490,13 @@ export class StoreRegistry {
       hookId: hook.id,
       on: hook.on,
     });
+
+    const cachedTargets = Object.freeze(
+      resolvedTargets.map((entry) => Object.freeze({ ...entry })),
+    );
+
+    this.hookTargetResolutionCache.set(hook.id, cachedTargets);
+    return this.cloneHookTargetResolutions(cachedTargets);
   }
 
   getTagAccessor<TTag extends ITag<any, any, any>>(

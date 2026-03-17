@@ -205,6 +205,12 @@ export class Store {
     return this.registry.visibilityTracker.getOwnerResourceId(resolvedItemId);
   }
 
+  public resolveHookTargets(
+    hook: Parameters<StoreRegistry["resolveHookTargets"]>[0],
+  ) {
+    return this.registry.resolveHookTargets(hook);
+  }
+
   public findIdByDefinition(definition: unknown): string {
     const canonicalId = this.lookup.resolveCandidateId(definition) ?? undefined;
     check(canonicalId, Match.NonEmptyString);
@@ -230,6 +236,27 @@ export class Store {
     }
 
     return definition as RegisterableItem;
+  }
+
+  /**
+   * Resolves a definition reference to the concrete registered definition owned
+   * by this store.
+   */
+  public resolveRegisteredDefinition<TDefinition extends RegisterableItem>(
+    definition: TDefinition,
+  ): TDefinition {
+    const canonicalId = this.findIdByDefinition(definition);
+    const resolvedDefinition = this.lookup.tryDefinitionById(canonicalId);
+    if (resolvedDefinition === null) {
+      runtimeElementNotFoundError.throw({
+        type: "Definition",
+        elementId: canonicalId,
+      });
+
+      return undefined as never;
+    }
+
+    return resolvedDefinition as TDefinition;
   }
 
   public hasDefinition(definition: unknown): boolean {
@@ -413,22 +440,6 @@ export class Store {
   }
 
   private createEventManagerFacade(): EventManager {
-    const resolveRegisteredEvent = <TInput>(
-      eventDefinition: IEvent<TInput>,
-    ): IEvent<TInput> => {
-      const eventId = this.findIdByDefinition(eventDefinition);
-      const storeEvent = this.events.get(eventId);
-      if (!storeEvent) {
-        runtimeElementNotFoundError.throw({
-          type: "Event",
-          elementId: eventId,
-        });
-
-        return undefined as never;
-      }
-
-      return storeEvent.event as IEvent<TInput>;
-    };
     const resolveRuntimeSource = (
       source: RuntimeCallSource,
     ): RuntimeCallSource => ({
@@ -453,7 +464,7 @@ export class Store {
               }
             : { source: resolveRuntimeSource(request) };
         return manager.emit(
-          resolveRegisteredEvent(eventDefinition),
+          this.resolveRegisteredDefinition(eventDefinition),
           data,
           options,
         );
@@ -471,7 +482,7 @@ export class Store {
               }
             : { source: resolveRuntimeSource(request) };
         return manager.emitLifecycle(
-          resolveRegisteredEvent(eventDefinition),
+          this.resolveRegisteredDefinition(eventDefinition),
           data,
           options,
         );
@@ -489,7 +500,7 @@ export class Store {
               }
             : { source: resolveRuntimeSource(request) };
         return manager.emitWithResult(
-          resolveRegisteredEvent(eventDefinition),
+          this.resolveRegisteredDefinition(eventDefinition),
           data,
           options,
         );
@@ -501,8 +512,8 @@ export class Store {
       ) =>
         manager.addListener(
           Array.isArray(event)
-            ? event.map((entry) => resolveRegisteredEvent(entry))
-            : resolveRegisteredEvent(event),
+            ? event.map((entry) => this.resolveRegisteredDefinition(entry))
+            : this.resolveRegisteredDefinition(event),
           handler as any,
           options as any,
         )) as EventManager["addListener"],
@@ -510,7 +521,7 @@ export class Store {
       removeListenerById: manager.removeListenerById.bind(manager),
       hasListeners: (<TInput>(eventDefinition: IEvent<TInput>) =>
         manager.hasListeners(
-          resolveRegisteredEvent(eventDefinition),
+          this.resolveRegisteredDefinition(eventDefinition),
         )) as EventManager["hasListeners"],
       intercept: manager.intercept.bind(manager),
       interceptHook: manager.interceptHook.bind(manager),
@@ -584,6 +595,7 @@ export class Store {
     this.bindFrameworkResourceValues(runtimeResult);
     const rootEntry = this.resolveRootEntry(root);
     this.root = rootEntry;
+    this.registry.clearHookTargetResolutionCache();
     this.validator.runSanityChecks();
 
     const overrideTraversalVisited = new Set<string>();
@@ -661,10 +673,16 @@ export class Store {
     return computeReadyWaves(this.resources, this.initWaves);
   }
 
-  /** @internal Executes startup-ready hooks for initialized resources. */
-  public async ready() {
+  /**
+   * @internal Executes startup-ready hooks for initialized resources.
+   *
+   * `shouldStop()` is a cooperative guard used by bootstrap so later ready
+   * waves do not keep running after shutdown was requested mid-startup.
+   */
+  public async ready(options?: { shouldStop?: () => void }) {
     for (const wave of this.getResourcesInReadyWaves()) {
-      await this.readyWave(wave);
+      options?.shouldStop?.();
+      await this.readyWave(wave, options);
     }
   }
 
@@ -763,11 +781,17 @@ export class Store {
     });
   }
 
-  private async readyWave(wave: DisposeWave): Promise<void> {
+  private async readyWave(
+    wave: DisposeWave,
+    options?: { shouldStop?: () => void },
+  ): Promise<void> {
     if (wave.parallel) {
       try {
         await Promise.all(
-          wave.resources.map((resource) => this.runReadyResource(resource)),
+          wave.resources.map((resource) => {
+            options?.shouldStop?.();
+            return this.runReadyResource(resource);
+          }),
         );
       } catch (error) {
         throw this.normalizeError(error);
@@ -777,6 +801,7 @@ export class Store {
 
     for (const resource of wave.resources) {
       try {
+        options?.shouldStop?.();
         await this.runReadyResource(resource);
       } catch (error) {
         throw this.normalizeError(error);
@@ -922,6 +947,7 @@ export class Store {
    */
   public processOverrides() {
     this.overrideManager.processOverrides();
+    this.registry.clearHookTargetResolutionCache();
     this.validator.runSanityChecks();
   }
 

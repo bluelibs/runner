@@ -65,6 +65,10 @@ import { subtreeOf } from "../../../";
     id: "define-selector-owner",
     register: [subtreeEvent],
   });
+  const mixedTransactionalSelectorOn = [
+    subtreeEvent,
+    (event: IEvent<any>) => event.id === subtreeEvent.id,
+  ] as const;
 
   defineHook({
     id: "define-selector-subtree-hook",
@@ -104,8 +108,8 @@ import { subtreeOf } from "../../../";
 
   defineHook({
     id: "define-selector-tx-mixed-runtime-only",
-    on: [subtreeEvent, (event: IEvent<any>) => event.id === subtreeEvent.id],
-    run: async () => {},
+    on: mixedTransactionalSelectorOn,
+    run: async () => async () => {},
   });
 
   defineHook({

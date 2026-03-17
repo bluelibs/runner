@@ -180,21 +180,33 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(capturedExitCalls[0]).toBe(0);
   });
 
-  it("disposes runtime when SIGTERM arrives late in bootstrap after cancellation checkpoints", async () => {
-    expect.assertions(2);
+  it("rolls back startup when SIGTERM arrives during the ready event checkpoint", async () => {
+    expect.assertions(4);
 
+    const controller = new AbortController();
     let disposed = false;
+    let trailingReadyHookRan = false;
     const emitShutdownOnInit = defineHook({
       id: "tests-app-shutdown-bootstrap-late-signal-hook",
       on: globalEvents.ready,
+      order: 1,
       async run() {
         process.emit("SIGTERM");
+        controller.abort("outer shutdown");
+      },
+    });
+    const trailingReadyHook = defineHook({
+      id: "tests-app-shutdown-bootstrap-late-signal-trailing-hook",
+      on: globalEvents.ready,
+      order: 2,
+      async run() {
+        trailingReadyHookRan = true;
       },
     });
 
     const app = defineResource({
       id: "tests-app-shutdown-bootstrap-late-signal",
-      register: [emitShutdownOnInit],
+      register: [emitShutdownOnInit, trailingReadyHook],
       async init() {
         return "ok";
       },
@@ -203,16 +215,19 @@ describe("run.ts shutdown hooks & error boundary", () => {
       },
     });
 
-    const runtime = await run(app, {
+    const runtimePromise = run(app, {
       errorBoundary: false,
       shutdownHooks: true,
+      signal: controller.signal,
     });
 
+    await expect(runtimePromise).rejects.toThrow(
+      /shutdown requested during bootstrap \(ready event\)/,
+    );
     await new Promise((r) => setTimeout(r, 0));
     expect(disposed).toBe(true);
     expect(capturedExitCalls[0]).toBe(0);
-    await runtime.dispose();
-    await new Promise((r) => setTimeout(r, 0));
+    expect(trailingReadyHookRan).toBe(false);
   });
 
   it("exits with code 1 when shutdown disposers fail", async () => {

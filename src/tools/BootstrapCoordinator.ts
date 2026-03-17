@@ -12,6 +12,9 @@ export class BootstrapCoordinator {
   private shutdownReason: string | undefined;
   private completed = false;
   private succeededFlag = false;
+  private readonly shutdownListeners = new Set<
+    (reason: string | undefined) => void
+  >();
   private resolveCompletion!: () => void;
   public readonly completion: Promise<void>;
 
@@ -24,6 +27,43 @@ export class BootstrapCoordinator {
   requestShutdown(reason?: string): void {
     this.shutdownRequested = true;
     this.shutdownReason ??= reason;
+    for (const listener of this.shutdownListeners) {
+      listener(this.shutdownReason);
+    }
+  }
+
+  /**
+   * Runs a bootstrap subphase with a cooperative abort signal that trips as
+   * soon as bootstrap shutdown is requested.
+   *
+   * This keeps long-running subphases signal-aware without pushing the
+   * subscription plumbing back into run.ts.
+   */
+  async withPhaseSignal<T>(
+    phase: string,
+    run: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const controller = new AbortController();
+    const abort = (reason: string | undefined) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      controller.abort(
+        reason ?? `shutdown requested during bootstrap (${phase})`,
+      );
+    };
+    const unsubscribe = this.subscribeToShutdown(abort);
+
+    if (this.shutdownRequested) {
+      abort(this.shutdownReason);
+    }
+
+    try {
+      return await run(controller.signal);
+    } finally {
+      unsubscribe();
+    }
   }
 
   /**
@@ -35,9 +75,10 @@ export class BootstrapCoordinator {
       return;
     }
 
-    const reason = this.shutdownReason
-      ? `Operation cancelled: ${this.shutdownReason} during bootstrap (${phase}).`
-      : `Operation cancelled: shutdown requested during bootstrap (${phase}).`;
+    const reason =
+      this.shutdownReason !== undefined
+        ? `Operation cancelled: ${this.shutdownReason} during bootstrap (${phase}).`
+        : `Operation cancelled: shutdown requested during bootstrap (${phase}).`;
 
     cancellationError.throw({
       reason,
@@ -64,5 +105,14 @@ export class BootstrapCoordinator {
 
   get succeeded(): boolean {
     return this.succeededFlag;
+  }
+
+  private subscribeToShutdown(
+    listener: (reason: string | undefined) => void,
+  ): () => void {
+    this.shutdownListeners.add(listener);
+    return () => {
+      this.shutdownListeners.delete(listener);
+    };
   }
 }

@@ -21,6 +21,9 @@ describe("Store coverage", () => {
 
     expect(store.findIdByDefinition(definition)).toBe(canonicalId);
     expect(store.findIdByDefinition(canonicalId)).toBe(canonicalId);
+    expect(store.resolveRegisteredDefinition(definition)).toBe(
+      store.findDefinitionById(canonicalId),
+    );
     expect(runtimeSource.runtime("runtime.literal")).toEqual(
       runtimeSource.runtime("runtime.literal"),
     );
@@ -305,9 +308,11 @@ describe("Store coverage", () => {
     expect(() => facade.hasListeners(event)).toThrow(
       /Cannot read properties of undefined \(reading 'id'\)/,
     );
-    expect(runtimeElementNotFoundSpy).toHaveBeenCalledWith({
-      type: "Event",
-      elementId: canonicalId,
-    });
+    expect(runtimeElementNotFoundSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "Definition",
+        elementId: canonicalId,
+      }),
+    );
   });
 });

@@ -2,9 +2,9 @@ import type {
   DependencyMapType,
   IHookDefinition,
   ITaskMeta,
-  OnType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
+import type { ValidOnTarget } from "./fluent-builder.interface";
 
 /**
  * Internal state for the HookFluentBuilder.
@@ -14,7 +14,7 @@ import type { ThrowsList } from "../../../types/error";
  */
 export type BuilderState<
   TDeps extends DependencyMapType,
-  TOn extends OnType | undefined,
+  TOn extends ValidOnTarget | undefined,
   TMeta extends ITaskMeta,
 > = Readonly<
   Omit<

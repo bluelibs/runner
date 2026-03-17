@@ -1,97 +1,21 @@
 import { IResource, IResourceWithConfig } from "./defs";
 import { globalEvents } from "./globals/globalEvents";
 import { RunResult } from "./models/RunResult";
-import {
-  ResolvedRunOptions,
-  ResourceLifecycleMode,
-  RunOptions,
-} from "./types/runner";
+import { ResolvedRunOptions, RunOptions } from "./types/runner";
 import { getPlatform } from "./platform";
 import {
   registerActiveRunResult,
   unregisterActiveRunResult,
 } from "./runtime/activeRunResults";
 import { runtimeSource } from "./types/runtimeSource";
+import { assertExecutionContextSupport } from "./tools/assertExecutionContextSupport";
 import { createRuntimeServices } from "./tools/createRuntimeServices";
 import { extractResourceAndConfig } from "./tools/extractResourceAndConfig";
-import { detectRunnerMode } from "./tools/detectRunnerMode";
-import { resolveExecutionContextConfig } from "./tools/resolveExecutionContextConfig";
+import { normalizeRunOptions } from "./tools/normalizeRunOptions";
 import {
   createRunShutdownController,
   type RunShutdownController,
 } from "./tools/runShutdownController";
-import { contextError } from "./errors";
-
-function resolveRegisteredEvent<TInput>(
-  store: {
-    findIdByDefinition(reference: unknown): string;
-    findDefinitionById(id: string): unknown;
-  },
-  eventDefinition: { id: string },
-): TInput {
-  const canonicalId = store.findIdByDefinition(eventDefinition);
-  return store.findDefinitionById(canonicalId) as TInput;
-}
-
-function normalizeRunOptions(options: RunOptions | undefined): Omit<
-  ResolvedRunOptions,
-  "onUnhandledError"
-> & {
-  onUnhandledErrorInput?: ResolvedRunOptions["onUnhandledError"];
-} {
-  const debug = options?.debug;
-  const errorBoundary = options?.errorBoundary ?? true;
-  const shutdownHooks = options?.shutdownHooks ?? true;
-  const dispose = Object.freeze({
-    totalBudgetMs: options?.dispose?.totalBudgetMs ?? 30_000,
-    drainingBudgetMs: options?.dispose?.drainingBudgetMs ?? 20_000,
-    cooldownWindowMs: options?.dispose?.cooldownWindowMs ?? 0,
-  });
-  const dryRun = options?.dryRun ?? false;
-  const lazy = options?.lazy ?? false;
-  const lifecycleMode =
-    options?.lifecycleMode === ResourceLifecycleMode.Parallel
-      ? ResourceLifecycleMode.Parallel
-      : ResourceLifecycleMode.Sequential;
-  const mode = detectRunnerMode(options?.mode);
-  const logs = {
-    printThreshold:
-      options?.logs?.printThreshold ??
-      (getPlatform().getEnv("NODE_ENV") === "test" ? null : "info"),
-    printStrategy: options?.logs?.printStrategy ?? "pretty",
-    bufferLogs: options?.logs?.bufferLogs ?? false,
-  };
-
-  return {
-    debug,
-    logs: Object.freeze(logs),
-    errorBoundary,
-    shutdownHooks,
-    signal: options?.signal,
-    dispose,
-    onUnhandledErrorInput: options?.onUnhandledError,
-    dryRun,
-    executionContext: resolveExecutionContextConfig(options?.executionContext),
-    lazy,
-    lifecycleMode,
-    mode,
-  };
-}
-
-function assertExecutionContextSupport(
-  executionContext: ResolvedRunOptions["executionContext"],
-): void {
-  if (!executionContext) {
-    return;
-  }
-
-  if (!getPlatform().hasAsyncLocalStorage()) {
-    contextError.throw({
-      details:
-        "Execution context requires AsyncLocalStorage and is not available in this environment.",
-    });
-  }
-}
 
 /**
  * This is the central function that kicks off your runner. You can run as many resources as you want in a single process, they will run in complete isolation.
@@ -182,19 +106,22 @@ export async function run<C, V extends Promise<any>>(
 
   // --- Bootstrap sequence ---
   try {
+    const throwIfShutdownRequested = (phase: string): void => {
+      shutdownController.bootstrap.throwIfShutdownRequested(phase);
+    };
+    const throwIfReadyHooksShutdownRequested = (): void => {
+      throwIfShutdownRequested("resource ready hooks");
+    };
+
     shutdownController.assertNotAborted();
     store.initializeStore(resource, config, runtimeResult, {
       debug: normalizedOptions.debug,
       executionContext: normalizedOptions.executionContext,
     });
-    shutdownController.bootstrap.throwIfShutdownRequested(
-      "store initialization",
-    );
+    throwIfShutdownRequested("store initialization");
 
     await store.processOverrides();
-    shutdownController.bootstrap.throwIfShutdownRequested(
-      "override processing",
-    );
+    throwIfShutdownRequested("override processing");
 
     store.validateDependencyGraph();
     store.validateEventEmissionGraph();
@@ -208,24 +135,18 @@ export async function run<C, V extends Promise<any>>(
 
     await runLogger.debug("Events stored. Attaching listeners...");
     await processor.attachListeners();
-    shutdownController.bootstrap.throwIfShutdownRequested(
-      "listener attachment",
-    );
+    throwIfShutdownRequested("listener attachment");
 
     await runLogger.debug("Listeners attached. Computing dependencies...");
     await processor.computeAllDependencies();
-    shutdownController.bootstrap.throwIfShutdownRequested(
-      "dependency computation",
-    );
+    throwIfShutdownRequested("dependency computation");
 
     await runLogger.debug(
       "Dependencies computed. Proceeding with initialization...",
     );
 
     await processor.initializeRoot();
-    shutdownController.bootstrap.throwIfShutdownRequested(
-      "root initialization",
-    );
+    throwIfShutdownRequested("root initialization");
 
     const startupUnusedResourceIds = new Set<string>(
       Array.from(store.resources.values())
@@ -236,18 +157,29 @@ export async function run<C, V extends Promise<any>>(
     store.lock();
     eventManager.lock();
     await logger.lock();
-    await store.ready();
+    throwIfShutdownRequested("logger lock");
 
-    await eventManager.emit(
-      resolveRegisteredEvent<typeof globalEvents.ready>(
-        store,
-        globalEvents.ready,
-      ),
-      undefined,
-      runtimeLifecycleSource,
+    await store.ready({
+      shouldStop: throwIfReadyHooksShutdownRequested,
+    });
+    throwIfReadyHooksShutdownRequested();
+
+    await shutdownController.bootstrap.withPhaseSignal(
+      "ready event",
+      async (signal) =>
+        eventManager.emit(
+          store.resolveRegisteredDefinition(globalEvents.ready),
+          undefined,
+          {
+            source: runtimeLifecycleSource,
+            signal,
+          },
+        ),
     );
+    throwIfShutdownRequested("ready event");
 
     await runLogger.info("Runner online. Awaiting tasks and events.");
+    throwIfShutdownRequested("startup finalization");
 
     runtimeResult.setLazyOptions({
       lazyMode: normalizedOptions.lazy,

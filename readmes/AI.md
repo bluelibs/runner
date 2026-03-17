@@ -169,7 +169,7 @@ Important run options:
 - `lazy: true`: keep startup-unused resources asleep until `getLazyResourceValue(...)` wakes them, then run their `ready()` when they initialize
 - `lifecycleMode: "parallel"`: preserve dependency ordering, but run same-wave lifecycle hooks in parallel
 - `shutdownHooks: true`: install graceful `SIGINT` / `SIGTERM` hooks; signals during bootstrap cancel startup and roll back initialized resources
-- `signal: AbortSignal`: let an outer owner start graceful runtime disposal without feeding ambient execution cancellation
+- `signal: AbortSignal`: let an outer owner cancel bootstrap before readiness or start graceful runtime disposal after readiness without feeding ambient execution cancellation
 - `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control bounded shutdown timing
 - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`
 - `executionContext: true | { ... }`: enable correlation ids and inherited execution signals, with optional frame tracking and cycle detection
@@ -207,12 +207,14 @@ Disposal modes:
 
 - `runtime.dispose()` is the normal graceful path above.
 - `runtime.dispose({ force: true })` is a manual fast path:
-  - skip `cooldown()`
-  - skip `dispose.cooldownWindowMs`
-  - skip `events.disposing`
-  - skip drain wait
-  - skip `events.drained`
+  - skip any remaining graceful phases that have not started yet
+  - this can skip `cooldown()`
+  - this can skip `dispose.cooldownWindowMs`
+  - this can skip `events.disposing`
+  - this can skip drain wait
+  - this can skip `events.drained`
   - jump directly to resource `dispose()` in reverse dependency order
+  - it does not preempt lifecycle work that is already in flight
 
 Pause and recovery:
 

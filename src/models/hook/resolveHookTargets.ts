@@ -24,14 +24,14 @@ import {
  * matches from selector-derived matches after bootstrap resolution.
  */
 export type HookTargetResolutionEntry = {
-  event: IEvent<any>;
+  event: IEvent<unknown>;
   provenance: "exact" | "selector";
 };
 
-type HookTargetResolutionContext = {
+export type HookTargetResolutionContext = {
   resolveDefinitionId(reference: unknown): string | null | undefined;
-  getEventById(id: string): IEvent<any> | undefined;
-  getRegisteredEvents(): Iterable<IEvent<any>>;
+  getEventById(id: string): IEvent<unknown> | undefined;
+  getRegisteredEvents(): Iterable<IEvent<unknown>>;
   getResourceById(id: string): unknown;
   isWithinResourceSubtree(resourceId: string, itemId: string): boolean;
   getAccessViolation(
@@ -106,22 +106,32 @@ function throwIfInaccessible(
   });
 }
 
+function toUnresolvedTargetId(target: unknown): string {
+  if (typeof target === "string") {
+    return target;
+  }
+
+  if (
+    typeof target === "object" &&
+    target !== null &&
+    "id" in target &&
+    typeof (target as { id?: unknown }).id === "string"
+  ) {
+    return (target as { id: string }).id;
+  }
+
+  return String(target);
+}
+
 function resolveExactEvent(
   context: HookTargetResolutionContext,
   hookId: string,
   target: unknown,
 ): HookTargetResolutionEntry {
-  const resolvedEventId =
-    context.resolveDefinitionId(target) ??
-    (typeof target === "object" &&
-    target !== null &&
-    "id" in target &&
-    typeof (target as { id?: unknown }).id === "string"
-      ? (target as { id: string }).id
-      : undefined);
+  const resolvedEventId = context.resolveDefinitionId(target);
 
   if (!resolvedEventId) {
-    throw eventNotFoundError.new({ id: String(target) });
+    throw eventNotFoundError.new({ id: toUnresolvedTargetId(target) });
   }
 
   const eventId = resolvedEventId;
