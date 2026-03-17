@@ -56,11 +56,11 @@ class UserService {
 Runner wires this class exactly as written — no modifications needed:
 
 ```ts
-import { Match, r } from "@bluelibs/runner";
+import { Match, r, resources } from "@bluelibs/runner";
 
 const userServiceResource = r
   .resource("app.services.user")
-  .dependencies({ repo: userRepository, logger: r.runner.logger })
+  .dependencies({ repo: userRepository, logger: resources.logger })
   .init(async (_config, { repo, logger }) => new UserService(repo, logger))
   .build();
 ```
@@ -155,7 +155,7 @@ const userRepository = r
 const mailerResource = r
   .resource("app.resources.mailer")
   .schema({ host: String, port: Number })
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .init(async (config, { logger }) => {
     const transport = await SmtpTransport.create(config);
     logger.info("SMTP connected", { host: config.host });
@@ -169,7 +169,7 @@ const mailerResource = r
 // Service: composed from other resources
 const userServiceResource = r
   .resource("app.services.user")
-  .dependencies({ repo: userRepository, logger: r.runner.logger })
+  .dependencies({ repo: userRepository, logger: resources.logger })
   .init(async (_config, { repo, logger }) => new UserService(repo, logger))
   .build();
 ```
@@ -270,7 +270,7 @@ const registerUserCommand = r
     repo: userRepository,
     mailer: mailerResource,
     hasher: passwordHasher,
-    logger: r.runner.logger,
+    logger: resources.logger,
   })
   .init(
     async (_config, deps) =>

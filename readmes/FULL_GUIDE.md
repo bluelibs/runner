@@ -1980,10 +1980,10 @@ Runner ships with built-in middleware for common reliability, admission-control,
 | cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; `keyBuilder` may return a string or `{ cacheKey, refs }` |
 | concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                                           |
 | circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                                 |
-| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key               |
-| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends                   |
+| debounce       | `{ ms, keyBuilder?, maxKeys? }`           | waits for inactivity, then runs once with the latest input for that key               |
+| throttle       | `{ ms, keyBuilder?, maxKeys? }`           | runs immediately, then suppresses burst calls until the window ends                   |
 | fallback       | `{ fallback }`                            | static value, function, or task fallback                                              |
-| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"                  |
+| rateLimit      | `{ windowMs, max, keyBuilder?, maxKeys? }` | fixed-window admission limit per key, for cases like "50 per second"                  |
 | requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution             |
 | retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                            |
 | timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`              |
@@ -2479,6 +2479,7 @@ const sensitiveTask = r
     middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
       max: 5, // Max 5 attempts per window
+      maxKeys: 1_000, // Optional hard cap for distinct live keys
     }),
   ])
   .run(async (credentials) => {
@@ -2492,7 +2493,7 @@ const sensitiveTask = r
 
 - **Fixed-window strategy**: Simple, predictable request counting.
 - **Isolation**: Limits are tracked per task definition.
-- **Error handling**: Throws `RateLimitError` when the limit is exceeded.
+- **Error handling**: Throws the built-in typed Runner rate-limit error.
 
 **Why would you need this?** For monitoring, you want to see remaining quota to implement client-side throttling.
 
@@ -2761,7 +2762,7 @@ const getUser = r
 
 > **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
 
-> **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. If that key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
+> **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
 > **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant value is `acme`. Cache refs are scoped with the same policy. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
 

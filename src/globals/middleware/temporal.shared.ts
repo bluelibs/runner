@@ -6,6 +6,7 @@ export interface DebounceState {
   resolveList: ((value: unknown) => void)[];
   rejectList: ((error: unknown) => void)[];
   key: string;
+  scheduledAt?: number;
 }
 
 export interface ThrottleState {
@@ -21,12 +22,22 @@ export interface ThrottleState {
 export interface TemporalResourceState<TConfig extends object = object> {
   debounceStates: WeakMap<TConfig, Map<string, DebounceState>>;
   throttleStates: WeakMap<TConfig, Map<string, ThrottleState>>;
+  debounceStateMaps?: Map<TConfig, Map<string, DebounceState>>;
+  throttleStateMaps?: Map<TConfig, Map<string, ThrottleState>>;
   trackedDebounceStates: Set<DebounceState>;
   trackedThrottleStates: Set<ThrottleState>;
+  disposeCleanupTimer?: () => void;
+  registerDebounceStateMap?: (
+    config: TConfig,
+    keyedStates: Map<string, DebounceState>,
+  ) => void;
+  registerThrottleStateMap?: (
+    config: TConfig,
+    keyedStates: Map<string, ThrottleState>,
+  ) => void;
+  sweepIdleStates?: (now: number) => void;
   isDisposed: boolean;
 }
-
-const TEMPORAL_STATE_PRUNE_THRESHOLD = 1_000;
 
 export function rejectDebounceState(state: DebounceState, error: Error) {
   if (state.timeoutId) {
@@ -38,6 +49,7 @@ export function rejectDebounceState(state: DebounceState, error: Error) {
   state.resolveList = [];
   state.rejectList = [];
   state.latestInput = undefined;
+  state.scheduledAt = undefined;
   rejectList.forEach((reject) => {
     reject(error);
   });
@@ -65,10 +77,6 @@ export function pruneIdleThrottleStates(
   now: number,
   windowMs: number,
 ) {
-  if (keyedStates.size < TEMPORAL_STATE_PRUNE_THRESHOLD) {
-    return;
-  }
-
   for (const [key, throttleState] of keyedStates) {
     const isIdle =
       throttleState.timeoutId === undefined &&
@@ -79,6 +87,28 @@ export function pruneIdleThrottleStates(
 
     if (isIdle) {
       trackedStates.delete(throttleState);
+      keyedStates.delete(key);
+    }
+  }
+}
+
+export function pruneStaleDebounceStates(
+  keyedStates: Map<string, DebounceState>,
+  trackedStates: Set<DebounceState>,
+  now: number,
+  waitMs: number,
+) {
+  for (const [key, debounceState] of keyedStates) {
+    const isStale =
+      debounceState.timeoutId === undefined &&
+      debounceState.resolveList.length === 0 &&
+      debounceState.rejectList.length === 0 &&
+      debounceState.latestInput === undefined &&
+      debounceState.scheduledAt !== undefined &&
+      now - debounceState.scheduledAt >= waitMs;
+
+    if (isStale) {
+      trackedStates.delete(debounceState);
       keyedStates.delete(key);
     }
   }

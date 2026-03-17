@@ -1,10 +1,14 @@
 import { defineResource, defineTask } from "../../../define";
+import {
+  middlewareKeyCapacityExceededError,
+  genericError,
+} from "../../../errors";
 import { run } from "../../../run";
 import {
   debounceTaskMiddleware,
   temporalResource,
 } from "../../../globals/middleware/temporal.middleware";
-import { genericError } from "../../../errors";
+import { pruneStaleDebounceStates } from "../../../globals/middleware/temporal.shared";
 
 describe("Temporal Middleware: Debounce", () => {
   it("should debounce task executions", async () => {
@@ -107,7 +111,7 @@ describe("Temporal Middleware: Debounce", () => {
         jest.advanceTimersByTime(50);
         await Promise.resolve();
         const results = await pending;
-        expect(temporal.debounceStates.get(middleware.config)?.size).toBe(0);
+        expect(temporal.debounceStates.get(middleware.config)).toBeUndefined();
         return results;
       },
     });
@@ -215,6 +219,122 @@ describe("Temporal Middleware: Debounce", () => {
     });
 
     await run(app);
+  });
+
+  it("rejects new distinct keys when maxKeys is reached but still allows the existing key", async () => {
+    jest.useFakeTimers();
+    const task = defineTask({
+      id: "debounce-max-keys",
+      middleware: [
+        debounceTaskMiddleware.with({
+          ms: 50,
+          maxKeys: 1,
+          keyBuilder: (_taskId, input) => String(input),
+        }),
+      ],
+      run: async (value: string) => value,
+    });
+
+    const app = defineResource({
+      id: "app-debounce-max-keys",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        const first = task("a");
+        const second = task("a");
+
+        let capacityError: unknown;
+        try {
+          await task("b");
+        } catch (error) {
+          capacityError = error;
+        }
+
+        jest.advanceTimersByTime(50);
+        await Promise.resolve();
+
+        await expect(first).resolves.toBe("a");
+        await expect(second).resolves.toBe("a");
+        expect(middlewareKeyCapacityExceededError.is(capacityError)).toBe(true);
+        expect(capacityError).toMatchObject({
+          data: {
+            middlewareId: "app-debounce-max-keys.tasks.debounce-max-keys",
+            maxKeys: 1,
+          },
+        });
+      },
+    });
+
+    try {
+      await run(app);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("frees capacity after completed debounce cycles", async () => {
+    jest.useFakeTimers();
+    const middleware = debounceTaskMiddleware.with({
+      ms: 50,
+      maxKeys: 1,
+      keyBuilder: (_taskId, input) => String(input),
+    });
+    const task = defineTask({
+      id: "debounce-capacity-release",
+      middleware: [middleware],
+      run: async (value: string) => value,
+    });
+
+    const app = defineResource({
+      id: "app-debounce-capacity-release",
+      register: [task],
+      init: async () => "ok",
+    });
+
+    try {
+      const runtime = await run(app);
+      const temporal = runtime.getResourceValue(temporalResource);
+      const first = runtime.runTask(task, "a");
+      jest.advanceTimersByTime(50);
+      await Promise.resolve();
+      await expect(first).resolves.toBe("a");
+      expect(temporal.debounceStates.get(middleware.config)).toBeUndefined();
+
+      const second = runtime.runTask(task, "b");
+      jest.advanceTimersByTime(50);
+      await Promise.resolve();
+      await expect(second).resolves.toBe("b");
+      await runtime.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("sweeps stale debounce states when they are orphaned", () => {
+    const config = { ms: 50 };
+    const keyedStates = new Map([
+      [
+        "stale",
+        {
+          key: "stale",
+          latestInput: undefined,
+          rejectList: [],
+          resolveList: [],
+          scheduledAt: Date.now() - 100,
+        },
+      ],
+    ]);
+    const trackedDebounceStates = new Set(keyedStates.values());
+
+    pruneStaleDebounceStates(
+      keyedStates,
+      trackedDebounceStates,
+      Date.now(),
+      config.ms,
+    );
+
+    expect(keyedStates.size).toBe(0);
+    expect(trackedDebounceStates.size).toBe(0);
   });
 
   it("should handle errors in debounced task", async () => {

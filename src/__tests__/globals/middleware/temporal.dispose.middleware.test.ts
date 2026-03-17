@@ -3,6 +3,7 @@ import { run } from "../../../run";
 import {
   type DebounceState,
   debounceTaskMiddleware,
+  type TemporalMiddlewareConfig,
   temporalResource,
   throttleTaskMiddleware,
   type ThrottleState,
@@ -10,15 +11,15 @@ import {
 } from "../../../globals/middleware/temporal.middleware";
 
 const createTemporalState = (
-  overrides: Partial<TemporalResourceState> = {},
-): TemporalResourceState => ({
+  overrides: Partial<TemporalResourceState<TemporalMiddlewareConfig>> = {},
+): TemporalResourceState<TemporalMiddlewareConfig> => ({
   isDisposed: false,
   debounceStates: new WeakMap<
-    Parameters<typeof debounceTaskMiddleware.run>[2],
+    TemporalMiddlewareConfig,
     Map<string, DebounceState>
   >(),
   throttleStates: new WeakMap<
-    Parameters<typeof throttleTaskMiddleware.run>[2],
+    TemporalMiddlewareConfig,
     Map<string, ThrottleState>
   >(),
   trackedDebounceStates: new Set(),
@@ -342,5 +343,35 @@ describe("Temporal Middleware: Dispose", () => {
         { ms: 10 },
       ),
     ).rejects.toThrow(/add/);
+  });
+
+  it("sweeps empty debounce maps and disposes the internal cleanup timer", async () => {
+    const cancel = jest.fn();
+    const state = await temporalResource.init?.(
+      undefined as never,
+      {
+        timers: {
+          setInterval: jest.fn(() => ({ cancel })),
+        },
+      } as never,
+      {} as never,
+    );
+    const config: TemporalMiddlewareConfig = { ms: 50 };
+    const staleState: DebounceState = {
+      key: "stale",
+      latestInput: undefined,
+      rejectList: [],
+      resolveList: [],
+      scheduledAt: Date.now() - 100,
+    };
+    const keyedStates = new Map<string, DebounceState>([["stale", staleState]]);
+
+    state?.registerDebounceStateMap?.(config, keyedStates);
+    state?.trackedDebounceStates.add(staleState);
+    state?.sweepIdleStates?.(Date.now());
+
+    expect(state?.debounceStates.get(config)).toBeUndefined();
+    state?.disposeCleanupTimer?.();
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 });

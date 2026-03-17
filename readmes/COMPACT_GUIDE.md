@@ -469,10 +469,10 @@ Important config surfaces:
 - `cache.with({ ttl, max, ttlAutopurge, keyBuilder, tenantScope })`
 - `concurrency.with({ limit, key?, semaphore? })`
 - `circuitBreaker.with({ failureThreshold, resetTimeout })`
-- `debounce.with({ ms, keyBuilder? })`
-- `throttle.with({ ms, keyBuilder? })`
+- `debounce.with({ ms, keyBuilder?, maxKeys? })`
+- `throttle.with({ ms, keyBuilder?, maxKeys? })`
 - `fallback.with({ fallback })`
-- `rateLimit.with({ windowMs, max, keyBuilder? })`
+- `rateLimit.with({ windowMs, max, keyBuilder?, maxKeys? })`
 - `retry.with({ retries, stopRetryIf, delayStrategy })`
 - `timeout.with({ ttl })`
 
@@ -483,7 +483,7 @@ Operational notes:
 - Call `resources.cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
-- `rateLimit`, `debounce`, and `throttle` default to `taskId` partitioning. Pass `keyBuilder(taskId, input)` to partition by user, tenant, request context, or similar keys.
+- `rateLimit`, `debounce`, and `throttle` default to `taskId` partitioning. Pass `keyBuilder(taskId, input)` to partition by user, tenant, request context, or similar keys, and use `maxKeys` when you need a hard cap on distinct live keys.
 - When `tenantScope` is active, Runner prefixes internal middleware keys with `<tenantId>:`. Cache refs are scoped the same way as cache keys.
 - Resource `retry` and `timeout` use the same semantics on `middleware.resource.*`.
 

@@ -100,7 +100,7 @@ Use when you want lane assignments present but transport bypassed entirely.
 - **Cons**: does not exercise transport boundaries
 
 ```typescript
-import { r } from "@bluelibs/runner";
+import { r, tags } from "@bluelibs/runner";
 import { eventLanesResource, rpcLanesResource } from "@bluelibs/runner/node";
 
 const lane = r.eventLane("notifications-lane").build();
@@ -236,7 +236,7 @@ const notificationRequested = r
   .event<{ userId: string; channel: "email" | "sms" }>(
     "app.events.notificationRequested",
   )
-  .tags([r.runner.tags.eventLane.with({ lane: notificationsLane })])
+  .tags([tags.eventLane.with({ lane: notificationsLane })])
   .build();
 
 // 3. Hook runs on the consumer side after relay
@@ -394,7 +394,7 @@ HTTP client transport options:
 ### Quick Start
 
 ```typescript
-import { r } from "@bluelibs/runner";
+import { r, tags } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";
 
 // 1. Define a lane
@@ -403,7 +403,7 @@ const billingLane = r.rpcLane("billing-lane").build();
 // 2. Tag the task for lane routing
 const chargeCard = r
   .task("billing.tasks.chargeCard")
-  .tags([r.runner.tags.rpcLane.with({ lane: billingLane })])
+  .tags([tags.rpcLane.with({ lane: billingLane })])
   .run(async (input: { amount: number }) => ({
     ok: true,
     amount: input.amount,
@@ -848,7 +848,7 @@ Legacy pre-lane event routing (`events` + `emit` + `eventDeliveryMode`) is remov
 | Legacy pre-lane pattern                  | v6 replacement                                          |
 | ---------------------------------------- | ------------------------------------------------------- |
 | `remoteResource.with({ events: [...] })` | `eventLanesResource.with({ topology, profile })`        |
-| `remoteResource.with({ emit: [...] })`   | Tag events with `r.runner.tags.eventLane.with({ lane })` |
+| `remoteResource.with({ emit: [...] })`   | Tag events with `tags.eventLane.with({ lane })` |
 | `eventDeliveryMode: "queue"`             | Event Lanes `mode: "network"` with queue binding        |
 | Sync remote task calls                   | RPC Lanes `mode: "network"` with communicator binding   |
 
@@ -876,7 +876,7 @@ When routing does not behave as expected, check in this order:
 - `applyTo` supports either:
   - A list of explicit targets (definitions or id strings), validated against container definitions and failing fast on invalid type/id.
   - A predicate function that is evaluated against container definitions at runtime.
-- `transactional + r.runner.tags.eventLane` is invalid.
+- `transactional + tags.eventLane` is invalid.
 - `transactional + parallel` is invalid.
 
 ### Event Lane Contract
@@ -884,7 +884,7 @@ When routing does not behave as expected, check in this order:
 | Concept          | API                                                              |
 | ---------------- | ---------------------------------------------------------------- |
 | Lane definition  | `r.eventLane("...").asyncContexts([...]).applyTo([...])` or `r.eventLane("...").asyncContexts([...]).applyTo((event) => boolean)` |
-| Event tagging    | `r.runner.tags.eventLane.with({ lane })` |
+| Event tagging    | `tags.eventLane.with({ lane })` |
 | Topology         | `r.eventLane.topology({ profiles, bindings })`                   |
 | Profile consume  | `profiles[profile].consume: lane[]`                              |
 | Binding          | `{ lane, queue, prefetch?, maxAttempts?, retryDelayMs? }`        |
@@ -895,7 +895,7 @@ When routing does not behave as expected, check in this order:
 | Concept            | API                                                              |
 | ------------------ | ---------------------------------------------------------------- |
 | Lane definition    | `r.rpcLane("...").asyncContexts([...]).applyTo([...])` or `r.rpcLane("...").asyncContexts([...]).applyTo((taskOrEvent) => boolean)` |
-| Task/event tagging | `r.runner.tags.rpcLane.with({ lane })`                            |
+| Task/event tagging | `tags.rpcLane.with({ lane })`                            |
 | Topology           | `r.rpcLane.topology({ profiles, bindings })`                     |
 | Profile serve      | `profiles[profile].serve: lane[]`                                |
 | Binding            | `{ lane, communicator, auth?, allowAsyncContext? }`              |

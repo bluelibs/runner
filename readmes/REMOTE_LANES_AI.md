@@ -10,7 +10,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - Optional lane-side assignment: `r.eventLane("...").applyTo([eventOrId])`.
 - Define topology with `r.eventLane.topology({ profiles, bindings })`.
 - Boundary reminder: Event Lanes are async fire-and-forget queue routing; use RPC Lanes for synchronous task/event RPC (`readmes/REMOTE_LANES.md`).
-- Tag events with `r.runner.tags.eventLane.with({ lane })`.
+- Tag events with `tags.eventLane.with({ lane })`.
 - Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`)
   - `bindings: [{ lane, queue, auth?, prefetch?, maxAttempts?, retryDelayMs? }]` where `queue` can be a queue instance or a queue resource
@@ -102,7 +102,7 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
 - Define lanes with `r.rpcLane("billing-lane").build()`.
 - Lane async-context policy is lane-level: `r.rpcLane("...").asyncContexts([...])` (default is `[]`, so none are forwarded unless explicitly allowlisted).
 - Optional lane-side assignment: `r.rpcLane("...").applyTo([taskOrEventOrId])`.
-- Tag tasks/events with `r.runner.tags.rpcLane.with({ lane })`.
+- Tag tasks/events with `tags.rpcLane.with({ lane })`.
 - Define topology with `r.rpcLane.topology({ profiles, bindings })`:
   - `profiles[profile].serve` selects lanes this runtime serves locally.
   - `bindings[]` maps `lane -> communicator resource` plus async-context policy and optional lane JWT material (`auth`).

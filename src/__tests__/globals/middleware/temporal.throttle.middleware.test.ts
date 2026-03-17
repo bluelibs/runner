@@ -1,4 +1,8 @@
 import { defineResource, defineTask } from "../../../define";
+import {
+  middlewareKeyCapacityExceededError,
+  genericError,
+} from "../../../errors";
 import { run } from "../../../run";
 import {
   type DebounceState,
@@ -6,7 +10,6 @@ import {
   temporalResource,
   throttleTaskMiddleware,
 } from "../../../globals/middleware/temporal.middleware";
-import { genericError } from "../../../errors";
 
 const createTemporalDeps = () => ({
   state: {
@@ -181,7 +184,7 @@ describe("Temporal Middleware: Throttle", () => {
     }
   });
 
-  it("prunes idle throttle state lazily after the window elapses", async () => {
+  it("removes idle throttle state on the background cleanup timer", async () => {
     jest.useFakeTimers();
     const middleware = throttleTaskMiddleware.with({ ms: 50 });
     const task = defineTask({
@@ -199,27 +202,61 @@ describe("Temporal Middleware: Throttle", () => {
         const keyedStates = temporal.throttleStates.get(middleware.config);
 
         expect(keyedStates?.size).toBe(1);
+        jest.advanceTimersByTime(1_100);
+        await Promise.resolve();
 
-        for (let index = 0; index < 999; index += 1) {
-          keyedStates?.set(`stale-key-${index}`, {
-            key: `stale-key-${index}`,
-            lastExecution: 0,
-            resolveList: [],
-            rejectList: [],
-          });
+        expect(keyedStates?.size).toBe(0);
+        expect(temporal.throttleStates.get(middleware.config)).toBeUndefined();
+      },
+    });
+
+    try {
+      await run(app);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("rejects new distinct keys when maxKeys is reached but still allows the existing key", async () => {
+    jest.useFakeTimers();
+    const task = defineTask({
+      id: "throttle-max-keys",
+      middleware: [
+        throttleTaskMiddleware.with({
+          ms: 50,
+          maxKeys: 1,
+          keyBuilder: (_taskId, input) => String(input),
+        }),
+      ],
+      run: async (value: string) => value,
+    });
+
+    const app = defineResource({
+      id: "app-throttle-max-keys",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task("a")).resolves.toBe("a");
+
+        const existingKeyPromise = task("a");
+        let capacityError: unknown;
+        try {
+          await task("b");
+        } catch (error) {
+          capacityError = error;
         }
 
-        expect(keyedStates?.size).toBe(1_000);
-
-        jest.advanceTimersByTime(100);
+        jest.advanceTimersByTime(50);
         await Promise.resolve();
-        await task("b");
 
-        expect(keyedStates?.size).toBe(1);
-        expect(keyedStates?.has("stale-key-0")).toBe(false);
-        expect(
-          keyedStates?.has("app-prune-idle.tasks.throttle-prune-idle"),
-        ).toBe(true);
+        await expect(existingKeyPromise).resolves.toBe("a");
+        expect(middlewareKeyCapacityExceededError.is(capacityError)).toBe(true);
+        expect(capacityError).toMatchObject({
+          data: {
+            middlewareId: "app-throttle-max-keys.tasks.throttle-max-keys",
+            maxKeys: 1,
+          },
+        });
       },
     });
 

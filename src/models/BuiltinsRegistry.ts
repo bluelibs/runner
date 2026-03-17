@@ -36,6 +36,7 @@ import {
   durableExecutionError,
   matchError,
   middlewareCircuitBreakerOpenError,
+  middlewareKeyCapacityExceededError,
   middlewareRateLimitExceededError,
   middlewareTimeoutError,
 } from "../errors";
@@ -104,6 +105,7 @@ export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
     checkJsonSchemaUnsupportedPatternError,
     middlewareTimeoutError,
     middlewareCircuitBreakerOpenError,
+    middlewareKeyCapacityExceededError,
     middlewareRateLimitExceededError,
     durableExecutionError,
   ]);
