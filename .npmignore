@@ -2,7 +2,6 @@
 !src/**/*
 !dist/**/*
 dist/**/__tests__/**/*
-!readmes/AI.md
-!readmes/FULL_GUIDE.md
+!.agents/skills/**/*
 !package.json
 !README.md
