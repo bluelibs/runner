@@ -4,4 +4,5 @@
 dist/**/__tests__/**/*
 !.agents/skills/**/*
 !package.json
+!readmes/**/*.md
 !README.md

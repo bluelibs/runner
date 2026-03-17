@@ -274,6 +274,7 @@ Resources model shared services and state. They are Runner's primary composition
 - `health(value, config, deps, context)` is an optional probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()`. Their resolved value is `undefined`.
+- Resource definitions expose `.extract(entry)` to read config from a matching `resource.with(...)` entry.
 - `.context(() => initialContext)` can hold mutable resource-local state shared across lifecycle phases.
 - If you register something, you are a non-leaf resource.
 - Non-leaf resources cannot be forked.
@@ -441,7 +442,8 @@ Core rules:
   - resource middleware attaches only to resources or `subtree.resources.middleware`
 - Owner-scoped auto-application is available through `resource.subtree({ tasks/resources: { middleware: [...] } })`.
 - Contract middleware can constrain task input and output types.
-- When a runtime predicate must match one exact definition, prefer `isSameDefinition(candidate, definitionRef)` over comparing public ids directly.
+- Middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment.
+- When a runtime predicate must match one exact definition, prefer `isSameDefinition(candidate, definitionRef)` over comparing public ids directly, including configured wrappers such as `resource.with(...)` and middleware `.with(...)`.
 
 Task vs resource middleware:
 
@@ -687,6 +689,7 @@ Other common patterns:
 - Typed validation is also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`.
 - Generic and typed validators both run when they match the same compiled definition.
 - Use the function form when subtree policy depends on resource config.
+- In subtree validators, prefer `isSameDefinition(...)` over direct id comparison when checking for one exact task/resource/middleware definition, including entries inside `task.middleware`.
 - Validators receive the compiled definition and should return `SubtreeViolation[]` for expected policy failures rather than throwing.
 
 ### Forks and Overrides
@@ -900,7 +903,8 @@ When your app needs extra runtime-validated fields such as `userId`, define your
 - `identity.use()` returns `{ tenantId: string }` and throws when missing.
 - `identity.tryUse()` returns the identity value or `undefined`.
 - `identity.has()` is the safe boolean check.
-- `identity.require()` enforces identity presence.
+- `identity.require()` enforces identity presence, but it does not validate optional fields such as `userId` on the built-in identity context.
+- Prefer your own authorization middleware when access rules depend on the active user. If you want user presence enforced at identity binding time, require `userId` in a custom identity context and pass it to `run(..., { identity })`.
 - Provide identity at ingress with `identity.provide({ tenantId }, fn)`.
 - `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
 

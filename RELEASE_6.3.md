@@ -9,6 +9,32 @@ subtrees or predicate-matched events at bootstrap time, and **semantic cache
 invalidation via refs** that enables cross-task cache purging by domain
 identity.
 
+The **tenant → identity rename** is the most significant breaking change in
+this release: `asyncContexts.tenant` becomes `asyncContexts.identity`,
+`ITenant` becomes `IIdentity` with newly optional `tenantId` and an added
+`userId` field, `tenantScope` middleware config becomes `identityScope` across
+all built-in middleware (cache, rate limit, debounce/throttle, concurrency),
+and a rich `IdentityScopeMode` replaces the simple `"auto" | "required" |
+"off"` union with user-aware partitioning modes (`"auto:userId"`,
+`"required:userId"`, `"full"`).
+
+A new **pluggable identity context** via `run(app, { identity })` lets
+applications supply a custom async context that Runner reads for all
+identity-aware framework behaviour — middleware partitioning, scope keys, and
+the new `identityContextResource` all bind to the configured context instead of
+hard-coded `asyncContexts.identity`.
+
+**Keyed middleware capacity management** adds `maxKeys` to rate limit and
+temporal (debounce/throttle) middleware configs with automatic stale-state
+pruning and a new `middlewareKeyCapacityExceededError` when the limit is
+breached. Default key builders now include serialized input so different
+payloads no longer silently share the same middleware bucket.
+
+**Event Lane topology hook policies** introduce `hooks.only` allowlists on
+consume entries, replacing the deprecated `tags.eventLaneHook` tag-based
+approach. Tag-based event lane routing (`tags.eventLane`) is also deprecated in
+favour of `r.eventLane(...).applyTo(...)`.
+
 This release also ships a major internal decomposition of `run()` into focused
 modules — the new `RunShutdownController`, `RunDisposalSignal`,
 `ForceDisposalController`, and `normalizeRunOptions` utilities keep shutdown
@@ -21,6 +47,12 @@ into a dedicated module.
 
 High-level takeaways:
 
+- **Breaking:** `asyncContexts.tenant` → `asyncContexts.identity` with
+  `IIdentity { tenantId?: string; userId?: string }`.
+- **Breaking:** `tenantScope` → `identityScope` across all built-in middleware,
+  with new modes including `"auto:userId"`, `"required:userId"`, and `"full"`.
+- **Breaking:** Event Lane topology profiles now use
+  `consume: [{ lane, hooks? }]` instead of `consume: [lane]`.
 - Pass an external `AbortSignal` to `run()` to cancel bootstrap or trigger
   graceful disposal without polluting ambient execution context signals.
 - Call `runtime.dispose({ force: true })` to skip remaining graceful phases and
@@ -29,12 +61,128 @@ High-level takeaways:
   mixed arrays alongside exact event references.
 - Cache key builders can return `{ cacheKey, refs }` and call
   `cacheResource.invalidateRefs(...)` to purge entries by semantic identity.
+- Use `run(app, { identity: myAsyncContext })` to override the runtime identity
+  source for all middleware partitioning.
+- Rate limit and temporal middleware accept `maxKeys` to cap tracked key
+  cardinality and avoid unbounded memory growth.
+- Event Lane hook policies via `consume[].hooks.only` filter which hooks run
+  during relay re-emits.
 - The `isOneOf()` event guard now requires definition identity — arbitrary
   `{ id }`-shaped objects no longer match.
 - Bootstrap phases are now interruptible: shutdown requested mid-startup
   cooperatively stops remaining ready waves.
 - Internal framework resources (`system`, `runner`) now carry metadata for
   tooling and documentation.
+
+---
+
+## Breaking Changes
+
+### Tenant → Identity Rename
+
+The entire tenant subsystem has been renamed to "identity" to reflect that the
+context now carries both tenant and user dimensions.
+
+| Before (6.2)                           | After (6.3)                                  |
+| -------------------------------------- | -------------------------------------------- |
+| `asyncContexts.tenant`                 | `asyncContexts.identity`                     |
+| `ITenant`                              | `IIdentity`                                  |
+| `TenantContextValue`                   | `IdentityContextValue`                       |
+| `tenantScope` (middleware config)      | `identityScope`                              |
+| `TenantScopeMode`                      | `IdentityScopeMode`                          |
+| `TenantScopedMiddlewareConfig`         | `IdentityScopedMiddlewareConfig`             |
+| `TenantScopeConfig`                    | `IdentityScopeConfig`                        |
+| `tenantContextRequiredError`           | `identityContextRequiredError`               |
+| `tenantInvalidContextError`            | `identityInvalidContextError`                |
+| `tenant.asyncContext.ts`               | `identity.asyncContext.ts`                    |
+| `tenantScope.shared.ts`               | `identityScope.shared.ts`                    |
+
+**`IIdentity` payload changes:**
+
+```ts
+// Before (6.2)
+interface ITenant {
+  tenantId: string; // required
+}
+
+// After (6.3)
+interface IIdentity {
+  tenantId?: string; // now optional
+  userId?: string;   // new, optional
+}
+```
+
+Both fields are optional at the ambient context level so apps can establish
+identity gradually across request/auth boundaries. Middleware that opts into
+identity partitioning validates the fields it actually needs at use time.
+
+**Fix:** rename all `tenantScope` middleware config keys to `identityScope`,
+replace `ITenant` / `TenantContextValue` with `IIdentity` /
+`IdentityContextValue`, and update `asyncContexts.tenant` references to
+`asyncContexts.identity`.
+
+---
+
+### Identity Scope Modes Expanded
+
+The simple `"auto" | "required" | "off"` union is replaced by a richer
+`IdentityScopeMode`:
+
+| Mode               | Behaviour                                                      |
+| ------------------ | -------------------------------------------------------------- |
+| `"auto"`           | Partition by `tenantId` when present (same as old `"auto"`)    |
+| `"auto:userId"`    | Like `"auto"` but appends `userId` when present                |
+| `"required"`       | Require `tenantId` (same as old `"required"`)                  |
+| `"required:userId"`| Require `tenantId` + append `userId` when present              |
+| `"full"`           | Require both `tenantId` AND `userId`, prefix as `<tenantId>:<userId>:…` |
+| `"off"`            | Disable identity partitioning (same as old `"off"`)            |
+
+**Fix:** existing `tenantScope: "auto"` migrates to `identityScope: "auto"` and
+keeps the same semantics. Only update the config key name unless you want finer
+user-aware scoping.
+
+---
+
+### Event Lane Topology Profile Consume Shape
+
+Profile `consume` arrays now contain entry objects instead of bare lane
+references:
+
+```ts
+// Before (6.2)
+profiles: {
+  worker: { consume: [ordersLane, paymentsLane] }
+}
+
+// After (6.3)
+profiles: {
+  worker: {
+    consume: [
+      { lane: ordersLane },
+      { lane: paymentsLane, hooks: { only: [auditHook] } },
+    ]
+  }
+}
+```
+
+**Fix:** wrap each lane reference in `{ lane: <ref> }`. Optionally add
+`hooks: { only: [...] }` for hook policy filtering.
+
+---
+
+### Default Middleware Key Builder Now Includes Serialized Input
+
+**Previously:** the default key builder for rate limit and temporal middleware
+returned the bare `taskId`, so all calls to the same task shared a single
+bucket regardless of input.
+
+**Now:** the default key builder returns
+`canonicalTaskKey + ":" + serialized(input)`, so different payloads get
+isolated middleware state. A `MiddlewareKeyBuilderHelpers` object is passed as
+the third argument to custom key builders.
+
+**Fix:** if your middleware intentionally shares state across all inputs for a
+task, provide an explicit `keyBuilder: (taskId) => taskId`.
 
 ---
 
@@ -228,8 +376,8 @@ Key details:
 
 - `keyBuilder` may return a plain `string` (unchanged) or
   `{ cacheKey: string, refs?: CacheRef[] }`.
-- Refs are indexed alongside cache entries and scoped by tenant when
-  `tenantScope` is active.
+- Refs are indexed alongside cache entries and scoped by identity when
+  `identityScope` is active.
 - `invalidateRefs()` returns the count of deleted entries.
 - The feature works with both the built-in in-memory provider and the Redis
   cache provider.
@@ -279,7 +427,176 @@ const boot = r
 
 ---
 
+### Pluggable Identity Context via `run(..., { identity })`
+
+Applications can now override which async context Runner reads for all
+identity-aware framework behaviour by passing `identity` to `run()`:
+
+```ts
+import { r, run, asyncContexts } from "@bluelibs/runner";
+
+// Define a custom identity async context
+const myIdentity = r.asyncContext("myIdentity").build();
+
+const runtime = await run(app, {
+  identity: myIdentity,
+});
+```
+
+When specified, all built-in middleware (cache, rate limit, debounce/throttle,
+concurrency) read identity from the supplied context instead of the default
+`asyncContexts.identity`. The identity context is surfaced as the system
+`identityContextResource` and automatically registered in the store.
+
+Requires `AsyncLocalStorage` support — a
+`identityRunOptionRequiresAsyncLocalStorageError` is thrown at startup on
+platforms without it.
+
+New types:
+
+| Type                   | Description                                             |
+| ---------------------- | ------------------------------------------------------- |
+| `IdentityAsyncContext` | Async context accessor compatible with `run({ identity })` |
+
+---
+
+### Keyed Middleware Capacity Management (`maxKeys`)
+
+Rate limit and temporal middleware now accept an optional `maxKeys` config that
+caps the number of distinct live keys tracked per config instance:
+
+```ts
+const limited = rateLimitTaskMiddleware.with({
+  windowMs: 60_000,
+  max: 10,
+  maxKeys: 1_000,
+});
+
+const debounced = debounceTaskMiddleware.with({
+  ms: 500,
+  maxKeys: 500,
+});
+```
+
+When a new key would exceed the limit, Runner first prunes stale/expired
+entries. If the count is still at capacity, a
+`middlewareKeyCapacityExceededError` (HTTP 429) is thrown.
+
+Background cleanup timers are managed by the extracted `temporalResource` and
+`rateLimitResource`, sweeping idle keys at an interval derived from the
+shortest configured window.
+
+New error:
+
+| Error                                | HTTP | Description                                  |
+| ------------------------------------ | ---- | -------------------------------------------- |
+| `middlewareKeyCapacityExceededError`  | 429  | Key cardinality exceeded `maxKeys` threshold |
+
+---
+
+### Event Lane Topology Hook Policies
+
+Consume entries in Event Lane topology profiles can now declare hook allowlists
+that filter which hooks run during relay re-emits:
+
+```ts
+const eventLanes = r.eventLane("orders").build();
+
+const auditHook = r.hook("audit").on("*").run(async () => {}).build();
+const metricsHook = r.hook("metrics").on("*").run(async () => {}).build();
+
+const app = r
+  .resource("app")
+  .register([eventLanes, auditHook, metricsHook])
+  .with({
+    eventLanes: {
+      topology: {
+        profiles: {
+          worker: {
+            consume: [
+              // Only auditHook runs for relayed orders events
+              { lane: eventLanes, hooks: { only: [auditHook] } },
+            ],
+          },
+        },
+      },
+    },
+  })
+  .build();
+```
+
+When `hooks.only` is specified, the relay interceptor checks the allowlist
+before executing each hook. Hooks not in the list are silently skipped. Omit
+`hooks` entirely to allow all hooks (default behaviour).
+
+Bootstrap validates that all hook references in `hooks.only` are registered,
+throwing `eventLaneHookPolicyHookReferenceInvalidError` for unknown hooks.
+Duplicate lane entries within a profile are caught by
+`eventLaneConsumeDuplicateLaneError`.
+
+---
+
+### Identity Context Resource
+
+A new system resource `identityContextResource` wraps the active identity
+async context (either the default `asyncContexts.identity` or a custom one
+supplied via `run({ identity })`). Built-in middleware now depends on this
+resource instead of directly importing the global identity async context:
+
+```ts
+// Internal middleware usage
+dependencies: {
+  identityContext: identityContextResource,
+},
+async run({ task, next }, { identityContext }, config) {
+  const identity = identityContext?.tryUse();
+  // ...
+}
+```
+
+This indirection is what enables the pluggable identity described above.
+
+---
+
 ## Behavioural Changes
+
+### Deprecated: Tag-Based Event Lane Routing
+
+`globalTags.eventLane` is now deprecated. Using it throws
+`eventLaneTagDeprecatedError` at bootstrap with a remediation pointing to
+`r.eventLane(...).applyTo(...)`.
+
+Similarly, `globalTags.eventLaneHook` is deprecated in favour of topology
+`consume[].hooks.only` configuration. Using the tag throws
+`eventLaneHookTagDeprecatedError`.
+
+The old tag-based routing code path that resolved `eventLane` tags into lane
+assignments has been removed from `EventLaneAssignments`. Only `applyTo()`
+-based routing is supported going forward.
+
+---
+
+### Transactional Event Lane Conflict Moved to Controller
+
+**Previously:** transactional events were validated against `eventLane` tags in
+the universal `EventValidator`.
+
+**Now:** transactional validation against event lane assignments happens inside
+`EventLanesController` after topology resolution, using the actual resolved
+route map. The error payload now includes `laneId` instead of `tagId`.
+
+---
+
+### Rate Limit Errors Use Runner Error System
+
+**Previously:** `RateLimitError` was a custom `RunnerError` subclass thrown via
+`throw new RateLimitError(...)`.
+
+**Now:** rate limit violations use the standard
+`middlewareRateLimitExceededError.throw(...)` pattern consistent with all other
+Runner errors.
+
+---
 
 ### `isOneOf()` Now Requires Definition Identity
 
@@ -473,6 +790,65 @@ correct ref membership set is cleaned up.
 
 ---
 
+### Rate Limit and Temporal Resource Extraction
+
+The `rateLimitResource` and `temporalResource` have been extracted from their
+respective middleware files into dedicated resource modules
+(`rateLimit.resource.ts`, `temporal.resource.ts`). Resource state now includes
+proper lifecycle management:
+
+- Background cleanup timers sweep stale keyed state at intervals derived from
+  the shortest configured window.
+- `cooldown()` cancels timers; `dispose()` clears tracked state and rejects
+  in-flight debounce/throttle promises.
+- Fine-grained pruning functions are exported for use by middleware capacity
+  enforcement.
+
+A new shared module `keyedState.shared.ts` centralises `ensureKeyedStateCapacity`,
+`deriveKeyedStateCleanupInterval`, and `syncCleanupTimer` logic used by both
+resources.
+
+---
+
+### Event Lane Assignment Refactoring
+
+Tag-based event lane routing has been removed from `resolveEventLaneAssignments()`.
+Only `applyTo()`-based lane assignments are now resolved. The deprecated
+`globalTags.eventLane` and `globalTags.eventLaneHook` tags throw bootstrap
+errors when used.
+
+The `EventLanesInternals` module now builds per-lane hook allowlists from
+topology `consume[].hooks.only`, and relay interceptors check these allowlists
+before executing hooks during relay re-emits.
+
+---
+
+### Middleware Key Builder Helpers
+
+Custom key builders now receive a `MiddlewareKeyBuilderHelpers` third argument:
+
+```ts
+interface MiddlewareKeyBuilderHelpers {
+  canonicalKey: string; // task id minus the ".tasks." namespace marker
+}
+```
+
+The default key builder uses `canonicalKey + ":" + serialized(input)` to produce
+stable, human-readable partition keys. Non-serializable inputs throw a
+`validationError` with a remediation suggesting an explicit `keyBuilder`.
+
+---
+
+### Store Auto-Registers Runtime Identity Context
+
+`Store.initializeStore()` now calls `ensureRuntimeIdentityContextRegistered()`
+to guarantee the active identity async context is registered in the store,
+even if it was not explicitly added to the app's registration tree. This
+enables middleware that depends on `identityContextResource` to resolve correctly
+regardless of how identity was configured.
+
+---
+
 ### Cache Resource: Resilient Ref Invalidation
 
 `invalidateRefs()` is a best-effort fan-out across all task-local caches. A
@@ -562,6 +938,19 @@ rescheduling, ensuring the timer is always armed with the correct status.
 
 ---
 
+#### Delivery-Exhausted Executions Properly Failed
+
+**Previously:** when a message exhausted its delivery attempts in the queue
+(e.g. maxAttempts reached), the execution could be left in a non-terminal
+state if the worker nacked the message.
+
+**Now:** `ExecutionManager.failExecutionDeliveryExhausted()` transitions the
+execution to `Failed` with a `"delivery_attempts_exhausted"` reason, including
+the message id, attempt counts, and the error message. Terminal executions are
+skipped to avoid double-transitioning.
+
+---
+
 ### RabbitMQ Queue Improvements
 
 #### Accurate Attempt Tracking via `x-delivery-count` Header
@@ -591,20 +980,23 @@ broker-level redeliveries.
   event emission flow and transactional rollback, documented selector-based hook
   targets with `subtreeOf(...)` and predicates, clarified `tags.excludeFromGlobalHooks` interaction with selectors.
 - `guide-units/02d-middleware.md` — expanded middleware documentation with new
-  cache ref invalidation patterns.
+  cache ref invalidation patterns and `maxKeys` capacity management.
 - `guide-units/03-runtime-lifecycle.md` — documented forced disposal mode,
   external abort signal integration, and interruptible bootstrap phases.
 - `guide-units/02-resources.md` — added framework namespace resource
   documentation for `system` and `runner`.
-- `guide-units/04c-multi-tenant.md` — added cache ref scoping notes for tenant
+- `guide-units/04c-multi-tenant.md` — updated for tenant → identity rename,
+  added identity scope mode documentation, cache ref scoping notes for identity
   mode.
 - `guide-units/05-observability.md` — observability updates.
 - `guide-units/06-meta-and-internals.md` — documented `StoreRegistry`
   extraction.
-- `readmes/AI.md` — updated with `signal` run option, `dispose({ force: true })`
-  semantics, hook selector subscription forms, cache `keyBuilder` ref support,
-  `invalidateRefs()`, framework namespace resources, and `tag.startup()`.
+- `readmes/AI.md` renamed to `readmes/COMPACT_GUIDE.md` — updated with
+  `signal` run option, `dispose({ force: true })` semantics, hook selector
+  subscription forms, cache `keyBuilder` ref support, `invalidateRefs()`,
+  framework namespace resources, `tag.startup()`, and identity context changes.
 - `readmes/FLUENT_BUILDERS.md` — hook builder selector support.
+- `readmes/DURABLE_WORKFLOWS_AI.md` — durable workflow documentation updates.
 
 ---
 
@@ -640,18 +1032,51 @@ All new functionality ships with full test coverage:
 
 Additional test files in the latest round:
 
-| Test File                                           | Focus                                                           |
-| --------------------------------------------------- | --------------------------------------------------------------- |
-| `cache.resource.invalidate-refs.test.ts`            | Resilient ref invalidation fan-out, concurrent provider dedup   |
-| `runShutdownController.test.ts`                     | Shutdown controller integration, force dispose propagation      |
-| `runtimeAccessViolationError.test.ts`               | Remediation message variants for export states                  |
-| `redisCache.refs.test.ts`                           | Cross-task ref unlinking in Redis cache                         |
-| `DurableService.execution.unit.test.ts` (expanded)  | Timeout failure path, graceful execution marking                |
-| `DurableService.scheduling.unit.test.ts` (expanded) | Schedule update rescheduling, resume status, input-only updates |
-| `DurableWorker.test.ts` (expanded)                  | Nack respects maxAttempts                                       |
-| `RabbitMQQueue.mock.test.ts`                        | `x-delivery-count` header parsing, attempt tracking             |
-| `RunResult.coverage.test.ts` (expanded)             | `shutdownLockdownError` during force dispose                    |
-| `VisibilityTracker.deny-mode.test.ts` (expanded)    | Deny-mode isolation channel access checks                       |
+| Test File                                                   | Focus                                                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `cache.resource.invalidate-refs.test.ts`                    | Resilient ref invalidation fan-out, concurrent provider dedup            |
+| `runShutdownController.test.ts`                             | Shutdown controller integration, force dispose propagation               |
+| `runtimeAccessViolationError.test.ts`                       | Remediation message variants for export states                           |
+| `redisCache.refs.test.ts`                                   | Cross-task ref unlinking in Redis cache                                  |
+| `DurableService.execution.unit.test.ts` (expanded)          | Timeout failure path, graceful execution marking                         |
+| `DurableService.scheduling.unit.test.ts` (expanded)         | Schedule update rescheduling, resume status, input-only updates          |
+| `DurableWorker.test.ts` (expanded)                          | Nack respects maxAttempts                                                |
+| `RabbitMQQueue.mock.test.ts`                                | `x-delivery-count` header parsing, attempt tracking                      |
+| `RunResult.coverage.test.ts` (expanded)                     | `shutdownLockdownError` during force dispose                             |
+| `VisibilityTracker.deny-mode.test.ts` (expanded)            | Deny-mode isolation channel access checks                                |
 
-111 files changed, 7121 insertions, 830 deletions across source, tests, and
-documentation.
+Test files from the identity & middleware capacity round:
+
+| Test File                                                   | Focus                                                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `identity.runtime-option.integration.test.ts`               | Identity run option integration: pluggable async context, middleware binding |
+| `identityScope.middleware.test.ts`                          | Identity scope modes across all middleware (renamed from `tenantScope`)   |
+| `keyedState.shared.test.ts`                                 | Keyed state capacity enforcement, cleanup interval derivation            |
+| `rateLimit.middleware.test.ts` (expanded)                   | `maxKeys` enforcement, capacity pruning, identity scope integration      |
+| `temporal.debounce.middleware.test.ts` (expanded)           | Debounce `maxKeys`, identity scope, cleanup timer lifecycle              |
+| `temporal.throttle.middleware.test.ts` (expanded)           | Throttle `maxKeys`, identity scope, cleanup timer lifecycle              |
+| `temporal.dispose.middleware.test.ts` (expanded)            | Dispose behaviour with cleanup timers                                    |
+| `default-keyed-middleware.behavior.test.ts`                 | Default key builder serialization, canonical key, non-serializable input errors |
+| `identityContext.resource.test.ts`                          | Identity context resource config validation, `tryUse()` delegation       |
+| `run.identity-option.test.ts`                               | `run(app, { identity })` option wiring, platform checks                  |
+| `identity-scope.type-test.ts`                               | Type-level tests for identity scope config                               |
+| `key-builder-helpers.type-test.ts`                          | Type-level tests for `MiddlewareKeyBuilderHelpers`                       |
+| `run-identity-option.type-test.ts`                          | Type-level tests for identity run option                                 |
+| `EventValidator.coverage.test.ts`                           | Event lane hook policy validation, deprecated tag errors, duplicate lane detection |
+| `globalTags.eventLane.test.ts`                              | Deprecated event lane tag validation                                     |
+| `eventLanes.deprecated-tags.integration.test.ts`            | End-to-end deprecated tag error behaviour                                |
+| `eventLanes.hook-isolation.integration.test.ts`             | Hook allowlist filtering in relay re-emits                               |
+| `eventLane.topology.type-test.ts` (expanded)                | Type-level tests for consume entry shape                                 |
+| `Store.lookup-fallback.coverage.test.ts`                    | Store lookup fallback resolution                                         |
+| `Store.test.ts` (expanded)                                  | Identity context auto-registration                                       |
+| `Store.sanity-transactional-events.test.ts` (updated)       | Transactional event lane conflict validation                             |
+| `system.tenantContext.test.ts` (updated)                    | Renamed identity context tests                                           |
+| `DurableService.scheduling.edge-cases.unit.test.ts`         | Schedule edge cases: delivery exhaustion, re-kick guards                 |
+| `ExecutionManager.idempotency.cancel.unit.test.ts`          | Execution manager idempotency and cancellation                           |
+| `EventLaneAssignments.unit.test.ts` (updated)               | Removed tag-based assignment tests                                       |
+| `EventLanesInternals.unit.test.ts` (expanded)               | Hook allowlist building                                                  |
+| `RabbitMQEventLaneQueue.mock.test.ts` (expanded)            | Delivery count header parsing                                            |
+| `typed-errors.test.ts` (expanded)                           | `middlewareKeyCapacityExceededError` typing                              |
+
+249 files changed, 21,534 insertions, 38,059 deletions across source, tests,
+and documentation (83 non-test source files: +4,231 / −1,207).

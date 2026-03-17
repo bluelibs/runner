@@ -14,6 +14,7 @@ import type {
 } from "../types/utilities";
 import type { AnyError, ThrowsList } from "../types/error";
 import {
+  symbolDefinitionIdentity,
   symbolForkedFrom,
   symbolResource,
   symbolFilePath,
@@ -43,6 +44,7 @@ import {
   createIsolatePolicyDeclaration,
 } from "./isolatePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
+import { isSameDefinition } from "../tools/isSameDefinition";
 
 function cloneThrowsList(throwsList: readonly string[] | undefined) {
   if (throwsList === undefined) return undefined;
@@ -248,6 +250,7 @@ export function defineResource<
     },
   );
   assertTagTargetsApplicableTo("resources", "Resource", id, constConfig.tags);
+  const definitionIdentity = {};
 
   const isolateDeclarations =
     constConfig[symbolResourceIsolateDeclarations] ??
@@ -264,6 +267,7 @@ export function defineResource<
   const subtree = createDisplaySubtreePolicy(subtreeDeclarations);
 
   const base = {
+    [symbolDefinitionIdentity]: definitionIdentity,
     [symbolResource]: true,
     [symbolResourceRegistersChildren]:
       constConfig.register !== undefined ? true : undefined,
@@ -378,6 +382,7 @@ export function defineResource<
     }
 
     const configured = {
+      [symbolDefinitionIdentity]: definitionIdentity,
       [symbolResourceWithConfig]: true,
       id: currentId,
       resource: current,
@@ -392,6 +397,30 @@ export function defineResource<
       TMiddleware
     >;
     return freezeIfLineageLocked(current, configured);
+  };
+
+  base.extract = function (
+    target:
+      | IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
+      | IResourceWithConfig<
+          TConfig,
+          TValue,
+          TDeps,
+          TPrivate,
+          TMeta,
+          TTags,
+          TMiddleware
+        >,
+  ) {
+    if (!isSameDefinition(target, this)) {
+      return undefined;
+    }
+
+    if (symbolResourceWithConfig in target) {
+      return target.config;
+    }
+
+    return undefined;
   };
 
   base.optional = function () {

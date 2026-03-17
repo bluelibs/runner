@@ -101,6 +101,8 @@ export interface ITaskMiddleware<
     TEnforceOutputContract,
     TDependencies
   >;
+  /** Extract the configured payload from a matching middleware entry. */
+  extract: (target: ITaskMiddleware<any, any, any, any>) => TConfig | undefined;
   /** Normalized tags attached to the middleware. */
   tags: TaskMiddlewareTagType[];
 }

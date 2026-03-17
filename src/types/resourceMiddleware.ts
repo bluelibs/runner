@@ -96,6 +96,10 @@ export interface IResourceMiddleware<
     TEnforceOutputContract,
     TDependencies
   >;
+  /** Extract the configured payload from a matching middleware entry. */
+  extract: (
+    target: IResourceMiddleware<any, any, any, any>,
+  ) => TConfig | undefined;
   [symbolFilePath]: string;
   /** Normalized tags attached to the middleware. */
   tags: ResourceMiddlewareTagType[];

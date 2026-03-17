@@ -22,6 +22,7 @@ export type {
   IsolationChannel,
 } from "../tools/scope";
 import {
+  symbolDefinitionIdentity,
   symbolFilePath,
   symbolForkedFrom,
   symbolResourceIsolateDeclarations,
@@ -502,6 +503,12 @@ export interface IResource<
     TTags,
     TMiddleware
   >;
+  /** Extract the configured payload from a matching resource entry. */
+  extract(
+    target:
+      | IResource<any, any, any, any, any, any, any>
+      | IResourceWithConfig<any, any, any, any, any, any, any>,
+  ): TConfig | undefined;
   register:
     | Array<RegisterableItem>
     | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
@@ -511,6 +518,8 @@ export interface IResource<
     | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);
   /** Normalized middleware attachments applied to the resource lifecycle. */
   middleware: TMiddleware;
+  /** Stable lineage identity shared across configured wrappers and projections. */
+  [symbolDefinitionIdentity]?: object;
   [symbolFilePath]: string;
   [symbolResource]: true;
   /** @internal Tracks whether the resource explicitly declared `.register(...)`. */
@@ -581,6 +590,8 @@ export interface IResourceWithConfig<
   TMiddleware extends IResourceMiddleware<any, any, any, any>[] =
     IResourceMiddleware[],
 > {
+  /** Stable lineage identity shared with the underlying resource definition. */
+  [symbolDefinitionIdentity]?: object;
   [symbolResourceWithConfig]: true;
   /** The id of the underlying resource. */
   id: string;

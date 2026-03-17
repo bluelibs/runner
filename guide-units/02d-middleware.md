@@ -35,6 +35,7 @@ Key rules that keep the middleware model predictable:
 - first listed middleware is the outermost wrapper
 - task middleware can attach only to tasks or `subtree.tasks.middleware`
 - resource middleware can attach only to resources or `subtree.resources.middleware`
+- middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment
 
 ```mermaid
 flowchart LR

@@ -1,10 +1,17 @@
-import { defineTag, defineTask } from "../../define";
+import {
+  defineResource,
+  defineResourceMiddleware,
+  defineTag,
+  defineTask,
+  defineTaskMiddleware,
+} from "../../define";
 import {
   hasDefinitionIdentity,
   isSameDefinition,
 } from "../../tools/isSameDefinition";
 import {
   symbolDefinitionIdentity,
+  symbolMiddlewareConfiguredFrom,
   symbolTagConfiguredFrom,
 } from "../../types/symbols";
 
@@ -78,6 +85,93 @@ describe("isSameDefinition()", () => {
     expect(isSameDefinition(foreignConfiguredClone, tag)).toBe(false);
     expect(isSameDefinition(invalidConfiguredClone, tag)).toBe(false);
     expect(isSameDefinition(nullIdentityConfiguredClone, tag)).toBe(false);
+  });
+
+  it("matches configured task middleware by stable identity", () => {
+    const middleware = defineTaskMiddleware({
+      id: "same-definition-task-middleware",
+      async run({ next, task }) {
+        return next(task.input);
+      },
+    });
+
+    const configuredA = middleware.with({ ttl: 1_000 });
+    const configuredB = middleware.with({ ttl: 2_000 });
+    const sibling = defineTaskMiddleware({
+      id: "same-definition-task-middleware",
+      async run({ next, task }) {
+        return next(task.input);
+      },
+    });
+
+    expect(isSameDefinition(configuredA, middleware)).toBe(true);
+    expect(isSameDefinition(configuredA, configuredB)).toBe(true);
+    expect(isSameDefinition(configuredA, sibling)).toBe(false);
+  });
+
+  it("matches configured resource middleware by stable identity", () => {
+    const middleware = defineResourceMiddleware({
+      id: "same-definition-configured-resource-middleware",
+      async run({ next, resource }) {
+        return next(resource.config);
+      },
+    });
+
+    const configuredA = middleware.with({ ttl: 1_000 });
+    const configuredB = middleware.with({ ttl: 2_000 });
+    const sibling = defineResourceMiddleware({
+      id: "same-definition-configured-resource-middleware",
+      async run({ next, resource }) {
+        return next(resource.config);
+      },
+    });
+
+    expect(isSameDefinition(configuredA, middleware)).toBe(true);
+    expect(isSameDefinition(configuredA, configuredB)).toBe(true);
+    expect(isSameDefinition(configuredA, sibling)).toBe(false);
+  });
+
+  it("resolves configured-from fallback identities for middleware-like clones", () => {
+    const middleware = defineResourceMiddleware({
+      id: "same-definition-resource-middleware",
+      async run({ next, resource }) {
+        return next(resource.config);
+      },
+    });
+    const configuredClone = {
+      [symbolMiddlewareConfiguredFrom]: middleware,
+    };
+    const foreignConfiguredClone = {
+      [symbolMiddlewareConfiguredFrom]: {
+        [symbolDefinitionIdentity]: {},
+      },
+    };
+
+    expect(isSameDefinition(configuredClone, middleware)).toBe(true);
+    expect(isSameDefinition(foreignConfiguredClone, middleware)).toBe(false);
+  });
+
+  it("matches configured resources by stable identity", () => {
+    const resource = defineResource({
+      id: "same-definition-resource",
+      async init(config: { region: string }) {
+        return config.region;
+      },
+    });
+
+    const configuredA = resource.with({ region: "eu" });
+    const configuredB = resource.with({ region: "us" });
+    const sibling = defineResource({
+      id: "same-definition-resource",
+      async init(config: { region: string }) {
+        return config.region;
+      },
+    });
+
+    expect(isSameDefinition(configuredA, resource)).toBe(true);
+    expect(isSameDefinition(configuredA, configuredB)).toBe(true);
+    expect(isSameDefinition(configuredA, sibling)).toBe(false);
+    expect(hasDefinitionIdentity(configuredA)).toBe(true);
   });
 
   it("reports whether a value retains Runner definition identity", () => {

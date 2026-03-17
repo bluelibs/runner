@@ -14,6 +14,7 @@ import {
 import { validationError } from "../errors";
 import { isMatchError } from "../tools/check/errors";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { isSameDefinition } from "../tools/isSameDefinition";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
@@ -145,6 +146,15 @@ export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
         ] = configuredFrom;
 
         return freezeIfLineageLocked(current, configured);
+      },
+      extract: function (target: Obj) {
+        if (!isSameDefinition(target, this)) {
+          return undefined;
+        }
+
+        return target[symbolMiddlewareConfigured] === true
+          ? (target.config as TConfig)
+          : undefined;
       },
     };
   };

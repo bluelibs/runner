@@ -64,7 +64,21 @@ export const symbolHook: unique symbol = Symbol.for("runner.hook");
 // );
 /** @internal Marks a tag definition */
 export const symbolTag: unique symbol = Symbol.for("runner.tag");
-/** @internal Stable lineage identity preserved across clones/public projections. */
+/**
+ * @internal Stable definition-lineage identity.
+ *
+ * This is intentionally different from object reference equality:
+ * multiple objects may represent the same Runner definition lineage
+ * (for example runtime/public projections, configured wrappers, or emitted
+ * values that preserve their originating definition).
+ *
+ * `isSameDefinition(...)` uses this symbol to answer "do these values refer to
+ * the same logical Runner definition?" rather than "are these the same object?".
+ *
+ * StoreRegistry also uses this identity for canonical alias resolution, so do
+ * not attach it to reusable definitions unless one lineage must map to exactly
+ * one canonical registration.
+ */
 export const symbolDefinitionIdentity: unique symbol = Symbol.for(
   "runner.definitionIdentity",
 );

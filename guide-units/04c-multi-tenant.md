@@ -39,7 +39,9 @@ const listProjects = r
 const app = r.resource("app").register([projectRepo, listProjects]).build();
 const runtime = await run(app);
 
-await identity.provide({ tenantId: "acme" }, () => runtime.runTask(listProjects));
+await identity.provide({ tenantId: "acme" }, () =>
+  runtime.runTask(listProjects),
+);
 ```
 
 This keeps tenant identity in async context instead of global mutable state.
@@ -54,10 +56,11 @@ Use a custom async context when identity-aware framework behavior should follow 
 import { middleware, r, run } from "@bluelibs/runner";
 
 const identity = r
-  .asyncContext<{ tenantId: string; userId: string }>("appTenant")
+  .asyncContext("appTenant")
   .configSchema({
     tenantId: String,
     userId: String,
+    locale: String,
   })
   .build();
 
@@ -97,6 +100,7 @@ Use identity access in two modes:
 
 - strict: `identity.use()` when running without an identity would be a correctness bug
 - safe: `identity.tryUse()` or `identity.has()` in shared helpers that may execute outside identity-bound work
+- `identity.require()` only enforces that an identity value exists. With the built-in `asyncContexts.identity`, that means tenant identity is present, not that `userId` exists too. Prefer your own authorization middleware when access rules depend on the active user. If you still want user presence enforced at identity binding time, make `userId` required in your custom identity context schema and pass that context to `run(..., { identity })`.
 
 ```typescript
 import { asyncContexts } from "@bluelibs/runner";
@@ -115,6 +119,7 @@ That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` prefi
 
 - Use `identity.provide({ tenantId }, fn)` at HTTP, RPC, queue, or job ingress.
 - Use `identity.require()` or `identity.use()` when running without an identity would be a correctness bug.
+- `identity.require()` does not validate optional fields such as `userId` on the built-in identity context. Prefer your own authorization middleware when access rules depend on the active user, or use a custom identity context when you want `userId` required as part of the identity contract itself.
 - Omit `identityScope` for the default `"auto"` behavior.
 - Use `identityScope: "auto"` when you want to make that default explicit in config.
 - Use `identityScope: "auto:userId"` when you want tenant partitioning plus optional `userId` partitioning when the active identity context provides it.

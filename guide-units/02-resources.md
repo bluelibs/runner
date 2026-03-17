@@ -229,6 +229,8 @@ Do not use `cooldown()` as a general teardown phase for support resources such a
 
 Resources can be configured with type-safe options.
 
+- resource definitions expose `.extract(entry)` to read config from a matching `resource.with(...)` entry
+
 ```typescript
 import { r } from "@bluelibs/runner";
 
@@ -601,6 +603,8 @@ Validation rules:
 - validators receive compiled definitions, not raw builder state
 - generic and typed validators both run when they match the same definition
 - use exported guards such as `isTask(...)`, `isResource(...)`, `isEvent(...)`, `isHook(...)`, `isTag(...)`, `isTaskMiddleware(...)`, and `isResourceMiddleware(...)`
+- definitions still expose `.id`, but policy checks that need one exact definition should prefer `isSameDefinition(...)` over comparing ids directly
+- when a subtree task validator checks whether `task.middleware` contains a specific middleware definition, compare each entry with `isSameDefinition(middlewareEntry, someMiddleware)` instead of `middlewareEntry.id === someMiddleware.id`
 - return `SubtreeViolation[]` for expected policy failures
 - do not throw for normal validation failures
 
