@@ -2,82 +2,26 @@ import { asyncContexts } from "../../asyncContexts";
 import {
   GLOBAL_IDENTITY_NAMESPACE,
   IDENTITY_SCOPE_SEPARATOR,
-} from "../../async-contexts/identity.asyncContext";
+} from "../../async-contexts/identity.constants";
 import {
   identityContextRequiredError,
   identityInvalidContextError,
 } from "../../errors";
 import type { IdentityContextValue } from "../../public-types";
 import { Match } from "../../tools/check";
+import {
+  normalizeIdentityScopeConfig,
+  type IdentityScopeConfig,
+} from "./identityScope.contract";
 
-/**
- * Controls whether identity-aware middleware partitions its internal state by
- * the active identity payload.
- *
- * Omit the option to keep the shared cross-identity keyspace.
- * Provide `{ tenant: true }` to require tenant partitioning.
- * Add `user: true` for `<tenantId>:<userId>:...` partitioning.
- * Set `required: false` when identity should refine the key only when present.
- */
-export interface IdentityScopeConfig {
-  /**
-   * Tenant partitioning is always explicit when identity scoping is enabled.
-   */
-  tenant: true;
-  /**
-   * Append `userId` after `tenantId` when it exists.
-   *
-   * When `required` is not set to `false`, `userId` becomes mandatory.
-   */
-  user?: boolean;
-  /**
-   * Require the scoped identity fields to exist.
-   *
-   * Defaults to `true`. Set to `false` when identity should only refine the
-   * key when available.
-   */
-  required?: boolean;
-}
-
-interface NormalizedIdentityScopeConfig {
-  required: boolean;
-  tenant: true;
-  user: boolean;
-}
-
-export interface IdentityScopedMiddlewareConfig {
-  /**
-   * Controls identity partitioning for middleware-managed state.
-   *
-   * Omit this option to keep the shared cross-identity keyspace.
-   */
-  identityScope?: IdentityScopeConfig;
-}
-
-function isIdentityScopeConfig(value: unknown): value is IdentityScopeConfig {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  const keys = Object.keys(candidate);
-
-  return (
-    candidate.tenant === true &&
-    (candidate.user === undefined || typeof candidate.user === "boolean") &&
-    (candidate.required === undefined ||
-      typeof candidate.required === "boolean") &&
-    keys.every(
-      (key) => key === "tenant" || key === "user" || key === "required",
-    )
-  );
-}
-
-export const identityScopePattern = Match.Optional(
-  Match.Where((value: unknown): value is IdentityScopeConfig =>
-    isIdentityScopeConfig(value),
-  ),
-);
+export {
+  identityScopePattern,
+  identityScopesMatch,
+  isIdentityScopeConfig,
+  normalizeIdentityScopeConfig,
+  type IdentityScopedMiddlewareConfig,
+  type IdentityScopeConfig,
+} from "./identityScope.contract";
 
 function validateScopedIdentityField(
   fieldName: "tenantId" | "userId",
@@ -104,23 +48,6 @@ function validateScopedIdentityField(
   }
 
   return validated;
-}
-
-/**
- * Applies the runtime defaults for an explicit `identityScope` config.
- */
-export function normalizeIdentityScopeConfig(
-  identityScope: IdentityScopeConfig | undefined,
-): NormalizedIdentityScopeConfig | undefined {
-  if (identityScope === undefined) {
-    return undefined;
-  }
-
-  return {
-    required: identityScope.required ?? true,
-    tenant: true,
-    user: identityScope.user ?? false,
-  };
 }
 
 /**

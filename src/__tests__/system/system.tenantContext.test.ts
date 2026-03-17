@@ -81,6 +81,12 @@ describe("asyncContexts.identity", () => {
     expect(() =>
       asyncContexts.identity.provide(tenantValue("__global__"), () => "nope"),
     ).toThrow(/reserved for the shared non-identity namespace/);
+    expect(() =>
+      asyncContexts.identity.provide(
+        { tenantId: "acme", region: "eu-west", roles: ["ADMIN", ""] },
+        () => "nope",
+      ),
+    ).toThrow();
 
     try {
       asyncContexts.identity.provide(tenantValue(""), () => "nope");
@@ -99,6 +105,24 @@ describe("asyncContexts.identity", () => {
     } catch (error) {
       expect(identityInvalidContextError.is(error)).toBe(true);
     }
+
+    try {
+      asyncContexts.identity.provide(
+        { tenantId: "acme", region: "eu-west", roles: ["ADMIN", ""] },
+        () => "nope",
+      );
+    } catch (error) {
+      expect(identityInvalidContextError.is(error)).toBe(true);
+    }
+  });
+
+  it("preserves roles on the built-in identity payload", async () => {
+    const result = await asyncContexts.identity.provide(
+      { tenantId: "acme", region: "eu-west", userId: "u1", roles: ["ADMIN"] },
+      async () => asyncContexts.identity.use(),
+    );
+
+    expect(result.roles).toEqual(["ADMIN"]);
   });
 
   it("propagates identity context through task -> event -> hook execution", async () => {

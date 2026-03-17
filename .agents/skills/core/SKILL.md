@@ -19,7 +19,7 @@ When the task needs deeper documentation, open the matching chapter from `./refe
 - `03-runtime-lifecycle.md` for `run(...)`, startup, shutdown, pause/resume, and run options
 - `04-features.md` for advanced built-in features such as HTTP shutdown patterns, execution context and signal propagation, cron scheduling, semaphores, and queue/semaphore utilities
 - `04b-serialization-validation.md` for serialization, validation, DTO boundaries, and trust-boundary parsing
-- `04c-multi-tenant.md` for tenant-aware execution and isolation patterns
+- `04c-security.md` for identity-aware execution, partitioning, and security patterns
 - `05-observability.md` for logs, metrics, traces, and health strategy
 - `06-meta-and-internals.md` for `meta(...)`, canonical ids and namespacing, and built-in internal services such as `resources.runtime`, `resources.store`, and `resources.taskRunner`
 - `08-testing.md` for unit, focused integration, and full integration testing

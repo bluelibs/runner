@@ -31,15 +31,21 @@ export type IsUnknown<T> = unknown extends T
 export type UnknownToNever<T> = IsUnknown<T> extends true ? never : T;
 
 // Generic extractors from any IContractable via the CONTRACT brand
-export type ExtractContractOf<T, Kind extends "input" | "output"> =
+export type ExtractContractOf<T, Kind extends "config" | "input" | "output"> =
   T extends IContractable<any, infer I, infer O>
-    ? UnknownToNever<Kind extends "input" ? NonVoid<I> : NonVoid<O>>
+    ? UnknownToNever<
+        Kind extends "config"
+          ? NonVoid<T[CONTRACT]["config"]>
+          : Kind extends "input"
+            ? NonVoid<I>
+            : NonVoid<O>
+      >
     : never;
 
 // Filter that preserves tuple shape; array -> Array<Union>
 export type FilterContractsKind<
   TItems extends readonly unknown[],
-  Kind extends "input" | "output",
+  Kind extends "config" | "input" | "output",
   Acc extends readonly unknown[] = [],
 > = TItems extends readonly [infer H, ...infer R]
   ? ExtractContractOf<H, Kind> extends never
@@ -49,11 +55,14 @@ export type FilterContractsKind<
 
 export type ExtractContractsFromCollection<
   TItems extends readonly unknown[],
-  Kind extends "input" | "output",
+  Kind extends "config" | "input" | "output",
 > =
   IsTuple<TItems> extends true
     ? FilterContractsKind<TItems, Kind>
     : Array<ExtractContractOf<TItems[number], Kind>>;
+
+export type ExtractConfigTypeFromContracts<TItems extends readonly unknown[]> =
+  ExtractContractsFromCollection<TItems, "config">;
 
 // Public API you asked for
 export type ExtractInputTypeFromContracts<TItems extends readonly unknown[]> =
@@ -63,6 +72,11 @@ export type ExtractOutputTypeFromContracts<TItems extends readonly unknown[]> =
   ExtractContractsFromCollection<TItems, "output">;
 
 // Unions and intersections
+export type ContractsUnionConfigs<TItems extends readonly unknown[]> =
+  ExtractConfigTypeFromContracts<TItems> extends readonly (infer U)[]
+    ? U
+    : never;
+
 export type ContractsUnionInputs<TItems extends readonly unknown[]> =
   ExtractInputTypeFromContracts<TItems> extends readonly (infer U)[]
     ? U
@@ -73,6 +87,9 @@ export type ContractsUnionOutputs<TItems extends readonly unknown[]> =
     ? U
     : never;
 
+export type ContractsIntersectionConfigs<TItems extends readonly unknown[]> =
+  UnionToIntersection<ContractsUnionConfigs<TItems>>;
+
 export type ContractsIntersectionInputs<TItems extends readonly unknown[]> =
   UnionToIntersection<ContractsUnionInputs<TItems>>;
 
@@ -80,6 +97,12 @@ export type ContractsIntersectionOutputs<TItems extends readonly unknown[]> =
   UnionToIntersection<ContractsUnionOutputs<TItems>>;
 
 // Booleans
+export type HasConfigContracts<TItems extends readonly unknown[]> = [
+  ContractsUnionConfigs<TItems>,
+] extends [never]
+  ? false
+  : true;
+
 export type HasInputContracts<TItems extends readonly unknown[]> = [
   ContractsUnionInputs<TItems>,
 ] extends [never]
@@ -125,7 +148,25 @@ export type OutputContractViolationError<
   received: TActual;
 };
 
+export type ConfigContractViolationError<
+  TItems extends readonly unknown[],
+  TActual,
+> = {
+  message: "Value does not satisfy all config contracts";
+  expected: Simplify<ContractsIntersectionConfigs<TItems>>;
+  received: TActual;
+};
+
 // Enforcement helpers (Promise-aware)
+export type EnsureConfigSatisfiesContracts<
+  TItems extends readonly unknown[],
+  TValue,
+> = [ContractsUnionConfigs<TItems>] extends [never]
+  ? TValue
+  : TValue extends ContractsIntersectionConfigs<TItems>
+    ? TValue
+    : ConfigContractViolationError<TItems, TValue>;
+
 export type EnsureInputSatisfiesContracts<
   TItems extends readonly unknown[],
   TValue,
@@ -155,6 +196,20 @@ export type EnsureOutputSatisfiesContracts<
     : TResponse extends ContractsIntersectionOutputs<TItems>
       ? TResponse
       : OutputContractViolationError<TItems, TResponse>;
+
+export type InferConfigOrViolationFromContracts<
+  TItems extends readonly unknown[],
+> =
+  HasConfigContracts<TItems> extends false
+    ? void
+    : ContractsIntersectionConfigs<TItems> extends infer C
+      ? IsImpossibleIntersection<C> extends true
+        ? ConfigContractViolationError<
+            TItems,
+            Simplify<C extends never ? never : C>
+          >
+        : Simplify<C>
+      : never;
 
 // Inferred-input API
 // - No input contracts -> void (so the arg can be omitted)

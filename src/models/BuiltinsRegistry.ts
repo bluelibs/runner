@@ -2,6 +2,7 @@ import type { RegisterableItem } from "../defs";
 import { globalEventsArray } from "../globals/globalEvents";
 import { globalResources } from "../globals/globalResources";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
+import { identityCheckerTaskMiddleware } from "../globals/middleware/identityChecker.middleware";
 import {
   retryTaskMiddleware,
   retryResourceMiddleware,
@@ -83,6 +84,7 @@ export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
       .filter(([key]) => key !== "system")
       .map(([, tag]) => tag),
     requireContextTaskMiddleware,
+    identityCheckerTaskMiddleware,
     retryTaskMiddleware,
     timeoutTaskMiddleware,
     concurrencyTaskMiddleware,

@@ -1,10 +1,11 @@
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
-  ResolveValidationSchemaInput,
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
   IMiddlewareMeta,
+  ResolvedResourceMiddlewareConfig,
+  ResolveValidationSchemaInput,
   ResourceMiddlewareTagType,
   ValidationSchemaInput,
 } from "../../../defs";
@@ -15,18 +16,23 @@ export interface ResourceMiddlewareFluentBuilderBeforeRun<
   In = void,
   Out = void,
   D extends DependencyMapType = {},
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
 > {
   id: string;
   /** Adds middleware dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
-    deps: TNewDeps | ((config: C) => TNewDeps),
+    deps:
+      | TNewDeps
+      | ((config: ResolvedResourceMiddlewareConfig<C, TTags>) => TNewDeps),
     options?: { override?: false },
-  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D & TNewDeps>;
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D & TNewDeps, TTags>;
   /** Replaces previously declared middleware dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
-    deps: TNewDeps | ((config: C) => TNewDeps),
+    deps:
+      | TNewDeps
+      | ((config: ResolvedResourceMiddlewareConfig<C, TTags>) => TNewDeps),
     options: { override: true },
-  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps>;
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps, TTags>;
   /** Declares the middleware configuration schema. */
   configSchema<
     TNew = never,
@@ -38,7 +44,8 @@ export interface ResourceMiddlewareFluentBuilderBeforeRun<
     ResolveValidationSchemaInput<TNew, TSchema>,
     In,
     Out,
-    D
+    D,
+    TTags
   >;
 
   /**
@@ -54,26 +61,38 @@ export interface ResourceMiddlewareFluentBuilderBeforeRun<
     ResolveValidationSchemaInput<TNew, TSchema>,
     In,
     Out,
-    D
+    D,
+    TTags
   >;
 
   /** Sets the middleware implementation and advances the builder into its post-run phase. */
   run(
-    fn: IResourceMiddlewareDefinition<C, In, Out, D>["run"],
-  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
-  /** Adds or replaces middleware tags. */
-  tags<TNewTags extends ResourceMiddlewareTagType[]>(
+    fn: IResourceMiddlewareDefinition<C, In, Out, D, TTags>["run"],
+  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags>;
+  /** Adds middleware tags, merging by default unless `override: true` is used. */
+  tags<const TNewTags extends ResourceMiddlewareTagType[]>(
     t: EnsureTagsForTarget<"resourceMiddlewares", TNewTags>,
-    options?: { override?: boolean },
-  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+    options?: { override?: false },
+  ): ResourceMiddlewareFluentBuilderBeforeRun<
+    C,
+    In,
+    Out,
+    D,
+    [...TTags, ...TNewTags]
+  >;
+  /** Replaces previously declared middleware tags. */
+  tags<const TNewTags extends ResourceMiddlewareTagType[]>(
+    t: EnsureTagsForTarget<"resourceMiddlewares", TNewTags>,
+    options: { override: true },
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TNewTags>;
   /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
-  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TTags>;
   /** Declare which typed errors this middleware may throw (declarative only). */
   throws(
     list: ThrowsList,
-  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TTags>;
 }
 
 export interface ResourceMiddlewareFluentBuilderAfterRun<
@@ -81,18 +100,19 @@ export interface ResourceMiddlewareFluentBuilderAfterRun<
   In = void,
   Out = void,
   D extends DependencyMapType = {},
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
 > {
   id: string;
   /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
-  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags>;
   /** Declare which typed errors this middleware may throw (declarative only). */
   throws(
     list: ThrowsList,
-  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags>;
   /** Materializes the final middleware definition for registration or reuse. */
-  build(): IResourceMiddleware<C, In, Out, D>;
+  build(): IResourceMiddleware<C, In, Out, D, TTags>;
 }
 
 export type ResourceMiddlewareFluentBuilder<
@@ -100,7 +120,8 @@ export type ResourceMiddlewareFluentBuilder<
   In = void,
   Out = void,
   D extends DependencyMapType = {},
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
   THasRun extends boolean = false,
 > = THasRun extends true
-  ? ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>
-  : ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+  ? ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags>
+  : ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TTags>;

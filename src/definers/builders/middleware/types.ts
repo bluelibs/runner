@@ -12,13 +12,19 @@ import type { ThrowsList } from "../../../types/error";
 /**
  * Internal state for the TaskMiddlewareFluentBuilder.
  */
-export type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
+export type TaskMwState<
+  C,
+  In,
+  Out,
+  D extends DependencyMapType,
+  TTags extends TaskMiddlewareTagType[],
+> = Readonly<{
   id: string;
   dependencies: D | ((config: C) => D);
   configSchema: ValidationSchemaInput<C> | undefined;
-  run: ITaskMiddlewareDefinition<any, In, Out, any>["run"] | undefined;
+  run: ITaskMiddlewareDefinition<any, In, Out, any, TTags>["run"] | undefined;
   meta: IMiddlewareMeta;
-  tags: TaskMiddlewareTagType[];
+  tags: TTags;
   filePath: string;
   /** Declarative error contract. */
   throws?: ThrowsList;
@@ -27,13 +33,21 @@ export type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
 /**
  * Internal state for the ResourceMiddlewareFluentBuilder.
  */
-export type ResMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
+export type ResMwState<
+  C,
+  In,
+  Out,
+  D extends DependencyMapType,
+  TTags extends ResourceMiddlewareTagType[],
+> = Readonly<{
   id: string;
   dependencies: D | ((config: C) => D);
   configSchema: ValidationSchemaInput<C> | undefined;
-  run: IResourceMiddlewareDefinition<any, In, Out, any>["run"] | undefined;
+  run:
+    | IResourceMiddlewareDefinition<any, In, Out, any, TTags>["run"]
+    | undefined;
   meta: IMiddlewareMeta;
-  tags: ResourceMiddlewareTagType[];
+  tags: TTags;
   filePath: string;
   /** Declarative error contract. */
   throws?: ThrowsList;

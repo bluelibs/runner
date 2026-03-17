@@ -136,7 +136,7 @@ Rules:
 
 ### Middleware Type Contracts
 
-Middleware can enforce input and output contracts on the tasks that use it. This is useful for:
+Middleware can enforce input and output contracts on the tasks that use it, and middleware tags can also enforce middleware config contracts. This is useful for:
 
 - **Authentication**: ensure all tasks using auth-middleware have `userId` in input
 - **API standardization**: enforce consistent response shapes across task groups
@@ -170,6 +170,7 @@ const authMiddleware = r.middleware
 ```
 
 If you use multiple contract middleware, their contracts combine.
+If you tag middleware with a contract tag whose config includes extra fields, that contract also flows into the middleware's dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
 
 ### Built-In Middleware
 
@@ -183,6 +184,7 @@ Runner ships with built-in middleware for common reliability, admission-control,
 | debounce       | `{ ms, keyBuilder?, maxKeys? }`           | waits for inactivity, then runs once with the latest input for that key               |
 | throttle       | `{ ms, keyBuilder?, maxKeys? }`           | runs immediately, then suppresses burst calls until the window ends                   |
 | fallback       | `{ fallback }`                            | static value, function, or task fallback                                              |
+| identityChecker | `{ tenant?, user?, roles? }`             | blocks task execution unless the active identity satisfies the gate                   |
 | rateLimit      | `{ windowMs, max, keyBuilder?, maxKeys? }` | fixed-window admission limit per key, for cases like "50 per second"                  |
 | requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution             |
 | retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                            |
@@ -196,6 +198,7 @@ Resource equivalents:
 Recommended ordering:
 
 - fallback outermost
+- identityChecker near the outside when auth should fail before expensive work
 - timeout inside retry when you want per-attempt budgets
 - rate-limit for admission control such as "max 50 calls per second"
 - concurrency for in-flight control

@@ -26,6 +26,7 @@ import {
   rateLimitResource,
   type RateLimitState,
 } from "./rateLimit.resource";
+import { globalTags } from "../globalTags";
 import { identityContextResource } from "../resources/identityContext.resource";
 
 export interface RateLimitMiddlewareConfig extends IdentityScopedMiddlewareConfig {
@@ -104,6 +105,7 @@ export const journalKeys = {
  */
 export const rateLimitTaskMiddleware = defineTaskMiddleware({
   id: "rateLimit",
+  tags: [globalTags.identityScoped],
   meta: {
     title: "Rate Limit",
     description:

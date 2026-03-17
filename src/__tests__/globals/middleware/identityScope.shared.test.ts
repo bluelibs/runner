@@ -2,6 +2,8 @@ import { asyncContexts } from "../../../";
 import { identityInvalidContextError } from "../../../errors";
 import {
   applyIdentityScopeToKey,
+  identityScopesMatch,
+  isIdentityScopeConfig,
   normalizeIdentityScopeConfig,
   resolveIdentityContext,
 } from "../../../globals/middleware/identityScope.shared";
@@ -40,6 +42,16 @@ describe("identityScope shared helpers", () => {
       tenant: true,
       user: true,
     });
+  });
+
+  it("re-exports identity scope contract helpers", () => {
+    expect(isIdentityScopeConfig({ tenant: true, user: true })).toBe(true);
+    expect(isIdentityScopeConfig({ tenant: true, bogus: true } as never)).toBe(
+      false,
+    );
+    expect(
+      identityScopesMatch({ tenant: true }, { required: true, tenant: true }),
+    ).toBe(true);
   });
 
   it("rejects invalid identityScope values at config time", () => {

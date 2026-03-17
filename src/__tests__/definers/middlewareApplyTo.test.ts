@@ -3,6 +3,9 @@ import {
   mergeResourceSubtreePolicy,
   normalizeResourceSubtreePolicy,
 } from "../../definers/subtreePolicy";
+const tenantScope = { tenant: true } as const;
+const userScope = { tenant: true, user: true } as const;
+const roleGate = { roles: ["ADMIN"] } as const;
 
 describe("subtree policy normalization", () => {
   const taskMw = defineTaskMiddleware({
@@ -147,6 +150,308 @@ describe("subtree policy normalization", () => {
     expect(result?.resources?.middleware).toEqual([]);
   });
 
+  it("normalizes middleware.identityScope when provided", () => {
+    const result = normalizeResourceSubtreePolicy({
+      middleware: {
+        identityScope: userScope,
+      },
+    });
+
+    expect(result?.middleware?.identityScope).toEqual(userScope);
+    expect(result?.tasks).toBeUndefined();
+  });
+
+  it("normalizes tasks.identity when provided", () => {
+    const result = normalizeResourceSubtreePolicy({
+      tasks: {
+        identity: { user: true, roles: ["ADMIN", "CUSTOMER"] },
+      },
+    });
+
+    expect(result?.tasks?.identity).toEqual([
+      {
+        tenant: true,
+        user: true,
+        roles: ["ADMIN", "CUSTOMER"],
+      },
+    ]);
+  });
+
+  it("normalizes an empty middleware policy branch", () => {
+    const result = normalizeResourceSubtreePolicy({
+      middleware: {},
+    });
+
+    expect(result?.middleware).toEqual({});
+  });
+
+  it("creates an empty middleware policy branch when merging an empty incoming branch", () => {
+    const merged = mergeResourceSubtreePolicy(undefined, {
+      middleware: {},
+    });
+
+    expect(merged.middleware).toEqual({});
+  });
+
+  it("overrides resource middleware without validators when neither side declares validate", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        resources: {
+          middleware: [resourceMw],
+        },
+      },
+      {
+        resources: {
+          middleware: [],
+        },
+      },
+      { override: true },
+    );
+
+    expect(merged.resources?.middleware).toEqual([]);
+    expect(merged.resources?.validate).toBeUndefined();
+  });
+
+  it("keeps existing middleware.identityScope when incoming branch omits it", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        middleware: {
+          identityScope: userScope,
+        },
+      },
+      {
+        tasks: {
+          middleware: [],
+        },
+      },
+      { override: true },
+    );
+
+    expect(merged.middleware?.identityScope).toEqual(userScope);
+  });
+
+  it("keeps existing middleware.identityScope when the incoming middleware branch is empty", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        middleware: {
+          identityScope: userScope,
+        },
+      },
+      {
+        middleware: {},
+      },
+      { override: true },
+    );
+
+    expect(merged.middleware?.identityScope).toEqual(userScope);
+  });
+
+  it("keeps an existing empty middleware branch when override receives another empty middleware branch", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        middleware: {},
+      },
+      {
+        middleware: {},
+      },
+      { override: true },
+    );
+
+    expect(merged.middleware).toEqual({});
+  });
+
+  it("replaces middleware.identityScope when the incoming branch provides one", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        middleware: {
+          identityScope: tenantScope,
+        },
+      },
+      {
+        middleware: {
+          identityScope: userScope,
+        },
+      },
+    );
+
+    expect(merged.middleware?.identityScope).toEqual(userScope);
+  });
+
+  it("rejects invalid middleware.identityScope values", () => {
+    expect(() =>
+      normalizeResourceSubtreePolicy({
+        middleware: {
+          identityScope: [] as never,
+        },
+      }),
+    ).toThrow(/middleware\.identityScope/i);
+
+    expect(() =>
+      normalizeResourceSubtreePolicy({
+        middleware: {
+          identityScope: { tenant: true, required: "yes" } as never,
+        },
+      }),
+    ).toThrow(/middleware\.identityScope/i);
+
+    expect(() =>
+      normalizeResourceSubtreePolicy({
+        middleware: {
+          identityScope: { tenant: true, bogus: true } as never,
+        },
+      }),
+    ).toThrow(/middleware\.identityScope/i);
+  });
+
+  it("rejects invalid tasks.identity values", () => {
+    expect(() =>
+      normalizeResourceSubtreePolicy({
+        tasks: {
+          identity: [] as never,
+        },
+      }),
+    ).toThrow(/tasks\.identity/i);
+
+    expect(() =>
+      normalizeResourceSubtreePolicy({
+        tasks: {
+          identity: { roles: [1] } as never,
+        },
+      }),
+    ).toThrow(/tasks\.identity/i);
+
+    expect(() =>
+      normalizeResourceSubtreePolicy({
+        tasks: {
+          identity: { tenant: false } as never,
+        },
+      }),
+    ).toThrow(/tasks\.identity/i);
+  });
+
+  it("keeps existing middleware identityScope when override omits it", () => {
+    const taskValidator = () => [{ code: "custom" as const, message: "kept" }];
+
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [taskMw],
+          validate: [taskValidator],
+        },
+        middleware: {
+          identityScope: tenantScope,
+        },
+      },
+      {
+        tasks: {
+          middleware: [],
+        },
+      },
+      { override: true },
+    );
+
+    expect(merged.middleware?.identityScope).toEqual(tenantScope);
+    expect(merged.tasks?.validate).toEqual([taskValidator]);
+  });
+
+  it("replaces middleware identityScope and task validators when override provides them", () => {
+    const firstValidator = () => [
+      { code: "custom" as const, message: "first" },
+    ];
+    const secondValidator = () => [
+      { code: "custom" as const, message: "second" },
+    ];
+
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [taskMw],
+          validate: [firstValidator],
+        },
+        middleware: {
+          identityScope: tenantScope,
+        },
+      },
+      {
+        tasks: {
+          middleware: [],
+          validate: [secondValidator],
+        },
+        middleware: {
+          identityScope: userScope,
+        },
+      },
+      { override: true },
+    );
+
+    expect(merged.middleware?.identityScope).toEqual(userScope);
+    expect(merged.tasks?.validate).toEqual([secondValidator]);
+  });
+
+  it("keeps existing middleware.identityScope on additive merges when incoming omits it", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [taskMw],
+        },
+        middleware: {
+          identityScope: tenantScope,
+        },
+      },
+      {
+        tasks: {
+          middleware: [taskMw.with({})],
+        },
+      },
+    );
+
+    expect(merged.middleware?.identityScope).toEqual(tenantScope);
+  });
+
+  it("keeps existing middleware.identityScope on additive merges when the incoming middleware branch is empty", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        middleware: {
+          identityScope: tenantScope,
+        },
+      },
+      {
+        middleware: {},
+      },
+    );
+
+    expect(merged.middleware?.identityScope).toEqual(tenantScope);
+  });
+
+  it("keeps an existing empty middleware branch on additive merges when the incoming middleware branch is empty", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        middleware: {},
+      },
+      {
+        middleware: {},
+      },
+    );
+
+    expect(merged.middleware).toEqual({});
+  });
+
+  it("preserves an existing empty middleware branch when other subtree branches are merged", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        middleware: {},
+      },
+      {
+        tasks: {
+          middleware: [taskMw],
+        },
+      },
+    );
+
+    expect(merged.middleware).toEqual({});
+    expect(merged.tasks?.middleware).toEqual([taskMw]);
+  });
+
   it("returns a shallow copy when incoming subtree policy is undefined", () => {
     const existing = {
       tasks: {
@@ -162,5 +467,178 @@ describe("subtree policy normalization", () => {
 
   it("returns an empty object when both existing and incoming are undefined", () => {
     expect(mergeResourceSubtreePolicy(undefined, undefined as any)).toEqual({});
+  });
+
+  it("appends tasks.identity additively by default", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [],
+          identity: [roleGate],
+        },
+      },
+      {
+        tasks: {
+          identity: { user: true },
+        },
+      },
+    );
+
+    expect(merged.tasks?.identity).toEqual([
+      { roles: ["ADMIN"] },
+      { tenant: true, user: true, roles: [] },
+    ]);
+  });
+
+  it("adds incoming tasks.identity when the existing branch had none", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [],
+        },
+      },
+      {
+        tasks: {
+          identity: { roles: ["ADMIN"] },
+        },
+      },
+    );
+
+    expect(merged.tasks?.identity).toEqual([
+      { tenant: true, user: false, roles: ["ADMIN"] },
+    ]);
+  });
+
+  it("appends existing and incoming tasks.identity arrays on additive merges", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [],
+          identity: [{ tenant: true, user: false, roles: ["ADMIN"] }],
+        },
+      },
+      {
+        tasks: {
+          identity: { roles: ["SUPPORT"] },
+        },
+      },
+    );
+
+    expect(merged.tasks?.identity).toEqual([
+      { tenant: true, user: false, roles: ["ADMIN"] },
+      { tenant: true, user: false, roles: ["SUPPORT"] },
+    ]);
+  });
+
+  it("replaces tasks.identity when override provides one", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [],
+          identity: [roleGate],
+        },
+      },
+      {
+        tasks: {
+          identity: { roles: ["CUSTOMER"] },
+        },
+      },
+      { override: true },
+    );
+
+    expect(merged.tasks?.identity).toEqual([
+      { tenant: true, user: false, roles: ["CUSTOMER"] },
+    ]);
+  });
+
+  it("keeps tasks.identity when override omits it", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [],
+          identity: [roleGate],
+        },
+      },
+      {
+        tasks: {
+          middleware: [taskMw],
+        },
+      },
+      { override: true },
+    );
+
+    expect(merged.tasks?.identity).toEqual([{ roles: ["ADMIN"] }]);
+  });
+
+  it("keeps tasks.identity on additive merges when the incoming branch omits it", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        tasks: {
+          middleware: [],
+          identity: [{ tenant: true, user: false, roles: ["ADMIN"] }],
+        },
+      },
+      {
+        tasks: {
+          middleware: [taskMw],
+        },
+      },
+    );
+
+    expect(merged.tasks?.identity).toEqual([
+      { tenant: true, user: false, roles: ["ADMIN"] },
+    ]);
+  });
+
+  it("preserves existing resource validators on override when incoming validate is omitted", () => {
+    const resourceValidator = () => [
+      { code: "custom" as const, message: "resource" },
+    ];
+
+    const merged = mergeResourceSubtreePolicy(
+      {
+        resources: {
+          middleware: [resourceMw],
+          validate: [resourceValidator],
+        },
+      },
+      {
+        resources: {
+          middleware: [],
+        },
+      },
+      { override: true },
+    );
+
+    expect(merged.resources?.middleware).toEqual([]);
+    expect(merged.resources?.validate).toEqual([resourceValidator]);
+  });
+
+  it("replaces resource validators on override when incoming validate is provided", () => {
+    const firstValidator = () => [
+      { code: "custom" as const, message: "first" },
+    ];
+    const secondValidator = () => [
+      { code: "custom" as const, message: "second" },
+    ];
+
+    const merged = mergeResourceSubtreePolicy(
+      {
+        resources: {
+          middleware: [resourceMw],
+          validate: [firstValidator],
+        },
+      },
+      {
+        resources: {
+          middleware: [],
+          validate: [secondValidator],
+        },
+      },
+      { override: true },
+    );
+
+    expect(merged.resources?.middleware).toEqual([]);
+    expect(merged.resources?.validate).toEqual([secondValidator]);
   });
 });

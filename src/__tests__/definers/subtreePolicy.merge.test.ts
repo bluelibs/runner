@@ -361,6 +361,16 @@ describe("mergeResourceSubtreePolicy", () => {
     });
   });
 
+  it("falls back to an empty object when a static display policy resolves undefined", () => {
+    expect(
+      createDisplaySubtreePolicy([
+        {
+          policy: undefined as never,
+        },
+      ]),
+    ).toEqual({});
+  });
+
   it("merges resource middleware branches with typed validators", () => {
     const firstValidator = jest.fn(() => []);
     const secondValidator = jest.fn(() => []);

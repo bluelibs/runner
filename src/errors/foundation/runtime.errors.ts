@@ -316,6 +316,21 @@ export const identityInvalidContextError = error<
   )
   .build();
 
+export const identityAuthorizationError = error<
+  { requiredRoles?: string[] } & DefaultErrorType
+>("identityAuthorization")
+  .format(({ requiredRoles }) =>
+    requiredRoles && requiredRoles.length > 0
+      ? `Identity is present but does not satisfy the required roles: [${requiredRoles.join(", ")}].`
+      : "Identity is present but does not satisfy the required authorization policy.",
+  )
+  .remediation(({ requiredRoles }) =>
+    requiredRoles && requiredRoles.length > 0
+      ? `Provide an identity whose roles include at least one of [${requiredRoles.join(", ")}], or relax the task identity gate if that access is intentional.`
+      : "Provide an identity that satisfies the task identity gate, or relax the configured gate if broader access is intended.",
+  )
+  .build();
+
 export const identityRunOptionRequiresAsyncLocalStorageError = error<
   { contextId: string } & DefaultErrorType
 >("identityRunOptionRequiresAsyncLocalStorage")
@@ -326,6 +341,19 @@ export const identityRunOptionRequiresAsyncLocalStorageError = error<
   .remediation(
     ({ contextId }) =>
       `Use run(..., { identity: ${contextId} }) only on platforms with AsyncLocalStorage support, or omit the identity run option in browser-like runtimes.`,
+  )
+  .build();
+
+export const identityFeatureRequiresAsyncLocalStorageError = error<
+  { feature: string; sourceId: string } & DefaultErrorType
+>("identityFeatureRequiresAsyncLocalStorage")
+  .format(
+    ({ feature, sourceId }) =>
+      `Identity-sensitive feature "${feature}" on "${sourceId}" requires AsyncLocalStorage, but it is not available in this environment.`,
+  )
+  .remediation(
+    ({ feature, sourceId }) =>
+      `Run "${sourceId}" on a platform with AsyncLocalStorage support, or remove the explicit "${feature}" identity configuration when cross-identity sharing is intentional.`,
   )
   .build();
 

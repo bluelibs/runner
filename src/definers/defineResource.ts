@@ -13,6 +13,7 @@ import type {
   ValidationSchemaInput,
 } from "../types/utilities";
 import type { AnyError, ThrowsList } from "../types/error";
+import type { ResourceSubtreePolicyInput } from "../types/subtree";
 import {
   symbolDefinitionIdentity,
   symbolForkedFrom,
@@ -263,7 +264,11 @@ export function defineResource<
   const subtreeDeclarations =
     constConfig[symbolResourceSubtreeDeclarations] ??
     (constConfig.subtree
-      ? Object.freeze([createSubtreePolicyDeclaration(constConfig.subtree)])
+      ? Object.freeze([
+          createSubtreePolicyDeclaration(
+            constConfig.subtree as ResourceSubtreePolicyInput<TConfig>,
+          ),
+        ])
       : undefined);
   const subtree = createDisplaySubtreePolicy(subtreeDeclarations);
 

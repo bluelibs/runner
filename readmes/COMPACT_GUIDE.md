@@ -441,6 +441,8 @@ Core rules:
   - task middleware attaches only to tasks or `subtree.tasks.middleware`
   - resource middleware attaches only to resources or `subtree.resources.middleware`
 - Owner-scoped auto-application is available through `resource.subtree({ tasks/resources: { middleware: [...] } })`.
+- `resource.subtree({ middleware: { identityScope: { tenant: true, user: true } } })` can enforce one shared identity scope across task middleware tagged with `tags.identityScoped`. (cache, rateLimit, etc)
+- `resource.subtree({ tasks: { identity: { user: true, roles: ["ADMIN"] } } })` adds an execution gate to every task in that subtree. Mentioning `identity` implies `tenant: true`, nested resources add more gates, and all gates must pass.
 - Contract middleware can constrain task input and output types.
 - Middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment.
 - When a runtime predicate must match one exact definition, prefer `isSameDefinition(candidate, definitionRef)` over comparing public ids directly, including configured wrappers such as `resource.with(...)` and middleware `.with(...)`.
@@ -475,6 +477,7 @@ Important config surfaces:
 - `debounce.with({ ms, keyBuilder?, maxKeys? })`
 - `throttle.with({ ms, keyBuilder?, maxKeys? })`
 - `fallback.with({ fallback })`
+- `identityChecker.with({ tenant?, user?, roles? })`
 - `rateLimit.with({ windowMs, max, keyBuilder?, maxKeys? })`
 - `retry.with({ retries, stopRetryIf, delayStrategy })`
 - `timeout.with({ ttl })`
@@ -487,7 +490,15 @@ Operational notes:
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `rateLimit`, `debounce`, and `throttle` default to `canonicalTaskKey + ":" + serialized input` partitioning and fail fast when the input cannot be serialized. Pass `keyBuilder(taskId, input, { canonicalKey })` when you want broader grouping such as per user, tenant, or request context, and use `maxKeys` when you need a hard cap on distinct live keys.
-- When `identityScope` is present, Runner prefixes internal middleware keys with `<tenantId>:`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` when identity should only refine the key when present. Cache refs stay raw; for tenant-aware invalidation, build refs through an app helper such as `CacheRefs.getTenantId()` so the same ref format is reused in `keyBuilder` and `invalidateRefs(...)`.
+- Omit `identityScope` for shared middleware state. Runner only prefixes internal middleware keys when you opt in.
+- When `identityScope` is present, `required` defaults to `true`. Use `{ tenant: true }` for `<tenantId>:` partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` only when identity should refine the key when present instead of being mandatory.
+- Missing required identity fields fail fast with `identityContextRequiredError`.
+- `middleware.identityChecker` is a task gate, not key partitioning. Mentioning it implies tenant identity by default, `user: true` adds `userId`, and `roles` require at least one matching role.
+- `subtree.tasks.identity` uses the same gate contract as `identityChecker`. Gates are additive across nested resources: roles are OR within one gate and AND across layers.
+- Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `subtree.tasks.identity`, `middleware.task.identityChecker`, explicit middleware `identityScope`, and `subtree.middleware.identityScope`.
+- Cache refs stay raw. For tenant-aware or user-aware invalidation, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same ref format.
+- Middleware tags can enforce middleware config contracts. That contract flows into middleware dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
+- `tags.identityScoped` means: this task middleware supports optional `identityScope`, so subtree `middleware.identityScope` policy may fill a missing scope and require the same effective scope when one is already declared.
 - Resource `retry` and `timeout` use the same semantics on `middleware.resource.*`.
 
 Built-in journal keys exist for middleware introspection, for example cache hits, retry attempts, circuit-breaker state, and timeout abort controllers.
@@ -894,20 +905,23 @@ Key rules:
 - Remote lanes hydrate only registered contexts that are allowlisted via `eventLane.asyncContexts([...])` or `rpcLane.asyncContexts([...])`.
 - Async context also requires `AsyncLocalStorage` for propagation.
 
-### Multi-Tenant Systems
+### Security
 
-Runner's official same-runtime multi-tenant pattern uses a shared identity async context.
+Runner gives you the right hooks to propagate identity, partition framework-managed state, and enforce task-level access rules consistently.
+Authentication itself is still decided by your app, not by Runner.
+Runner's official same-runtime security pattern uses a shared identity async context.
 If you do nothing, Runner reads the built-in `asyncContexts.identity`.
 When your app needs extra runtime-validated fields such as `userId`, define your own async context, register it, and pass it to `run(..., { identity })`.
 
 - `identity.use()` returns `{ tenantId: string }` and throws when missing.
 - `identity.tryUse()` returns the identity value or `undefined`.
 - `identity.has()` is the safe boolean check.
-- `identity.require()` enforces identity presence, but it does not validate optional fields such as `userId` on the built-in identity context.
-- Prefer your own authorization middleware when access rules depend on the active user. If you want user presence enforced at identity binding time, require `userId` in a custom identity context and pass it to `run(..., { identity })`.
+- `identity.require()` enforces identity presence, but it does not validate optional fields such as `userId` or `roles` on the built-in identity context.
+- Prefer `middleware.task.identityChecker` or `subtree({ tasks: { identity: ... } })` when access rules depend on the active user or roles. If you want those fields enforced at identity binding time instead, require them in a custom identity context and pass it to `run(..., { identity })`.
 - Provide identity at ingress with `identity.provide({ tenantId }, fn)`.
-- In Runner, `identity` is the async-context payload used to partition framework-managed state such as cache keys, rate limits, concurrency, and scheduling. It is not an identity-provider abstraction.
+- In Runner, `identity` is the async-context payload used to partition framework-managed state and enforce identity gates. It is not an identity-provider abstraction.
 - `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
+- `roles`, when present, must be a string array with no empty entries.
 
 ```ts
 import { r, run } from "@bluelibs/runner";
@@ -949,6 +963,14 @@ Fast rule of thumb:
 - use `{ tenant: true, user: true }` for strict tenant+user partitioning
 - add `required: false` when identity should be an optional refinement instead of a requirement
 - if the app is effectively single-tenant, use a constant tenant such as `"app"` and then `{ tenant: true, user: true }` for per-user buckets
+
+Task identity gates are separate from middleware partitioning:
+
+- `subtree({ tasks: { identity: {} } })` means every task in that subtree requires tenant identity.
+- `subtree({ tasks: { identity: { user: true } } })` means tenant + user.
+- `subtree({ tasks: { identity: { roles: ["ADMIN", "SUPPORT"] } } })` still implies tenant identity and requires at least one listed role.
+- Nested `tasks.identity` policies are additive across owner resources, so every layer must pass.
+- `middleware.task.identityChecker.with(...)` uses the same contract for one explicit task or subtree-added middleware layer.
 
 Platform note:
 

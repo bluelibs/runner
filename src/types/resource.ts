@@ -39,7 +39,7 @@ import {
   InferInputOrViolationFromContracts,
 } from "./contracts";
 import type {
-  NormalizedResourceSubtreePolicy,
+  DisplayResourceSubtreePolicy,
   ResourceSubtreePolicyDeclaration,
   ResourceSubtreePolicyInput,
 } from "./subtree";
@@ -57,6 +57,7 @@ export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
 export type { ResourceTagType, TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
 export type {
+  DisplayResourceSubtreePolicy,
   ResourceSubtreePolicy,
   ResourceSubtreePolicyDeclaration,
   ResourceSubtreePolicyInput,
@@ -414,7 +415,9 @@ export interface IResourceDefinition<
   /**
    * Declares subtree policies for tasks/resources registered under this resource.
    */
-  subtree?: ResourceSubtreePolicyInput<TConfig>;
+  subtree?:
+    | ResourceSubtreePolicyInput<TConfig>
+    | DisplayResourceSubtreePolicy<TConfig>;
   /** @internal Ordered subtree declarations preserved across builder composition. */
   [symbolResourceSubtreeDeclarations]?: ReadonlyArray<
     ResourceSubtreePolicyDeclaration<TConfig>
@@ -477,7 +480,7 @@ export interface IResource<
     TTags,
     TMiddleware
   >,
-  "throws"
+  "throws" | "subtree"
 > {
   /** Normalized validation schema for resource config. */
   configSchema?: IValidationSchema<TConfig>;
@@ -537,7 +540,7 @@ export interface IResource<
    */
   subtree?:
     | ResourceSubtreePolicyInput<TConfig>
-    | NormalizedResourceSubtreePolicy;
+    | DisplayResourceSubtreePolicy<TConfig>;
   /** @internal Ordered subtree declarations preserved across builder composition. */
   [symbolResourceSubtreeDeclarations]?: ReadonlyArray<
     ResourceSubtreePolicyDeclaration<TConfig>

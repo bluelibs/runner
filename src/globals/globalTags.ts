@@ -7,6 +7,7 @@ import type {
 } from "../defs";
 import { Match } from "../tools/check";
 import { cronTag } from "./cron/cron.tag";
+import type { IdentityScopedMiddlewareConfig } from "./middleware/identityScope.shared";
 import { debugTag } from "./resources/debug/debug.tag";
 
 /** @deprecated Internal framework definitions no longer rely on this tag. */
@@ -106,6 +107,20 @@ const globalTagsBase = {
       title: "Fail When Unhealthy",
       description:
         "Blocks task execution when any selected resource currently reports unhealthy health status.",
+    },
+  }),
+  identityScoped: defineTag<
+    IdentityScopedMiddlewareConfig,
+    void,
+    void,
+    "taskMiddlewares"
+  >({
+    id: "identityScoped",
+    targets: ["taskMiddlewares"] as const,
+    meta: {
+      title: "Identity Scoped Middleware",
+      description:
+        "Marks task middleware that support optional identityScope config and can participate in subtree middleware.identityScope enforcement.",
     },
   }),
 };

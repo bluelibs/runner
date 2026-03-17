@@ -90,6 +90,39 @@ export interface IIdentity {
    * when present.
    */
   userId?: string;
+  /**
+   * Optional roles attached to the active identity.
+   *
+   * Runner does not interpret these automatically unless a task identity gate
+   * or `middleware.task.identityChecker` explicitly requests them.
+   */
+  roles?: readonly string[];
+}
+
+/**
+ * Task-level identity gate requirement used by subtree policy and the built-in
+ * identity checker middleware.
+ *
+ * Mentioning an identity requirement implies tenant identity by default, so
+ * `{ user: true }` means tenant + user and `{ roles: ["ADMIN"] }` still
+ * requires tenant presence.
+ */
+export interface IdentityRequirementConfig {
+  /**
+   * Tenant identity is required whenever an identity gate is present.
+   *
+   * The field is optional only for ergonomics; omitting it still behaves as
+   * `tenant: true`.
+   */
+  tenant?: true;
+  /**
+   * Require `userId` in addition to `tenantId`.
+   */
+  user?: boolean;
+  /**
+   * Require at least one matching role on the active identity.
+   */
+  roles?: readonly string[];
 }
 
 /**

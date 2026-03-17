@@ -160,4 +160,40 @@ describe("run subtree middleware predicates", () => {
 
     await expect(run(app)).rejects.toThrow(/Duplicate middleware id/);
   });
+
+  it("fails fast when nested subtree policies contribute the same task middleware id", async () => {
+    const middleware = defineTaskMiddleware<{ label: string }>({
+      id: "tests-subtree-predicate-nested-duplicate-task-middleware",
+      run: async ({ task, next }, _deps, config) => {
+        const value = await next(task.input);
+        return `${config.label}:${String(value)}`;
+      },
+    });
+
+    const task = defineTask({
+      id: "tests-subtree-predicate-nested-duplicate-task",
+      run: async () => "value",
+    });
+    const feature = defineResource({
+      id: "tests-subtree-predicate-nested-duplicate-feature",
+      subtree: {
+        tasks: {
+          middleware: [middleware.with({ label: "child" })],
+        },
+      },
+      register: [task],
+      init: async () => "ok",
+    });
+    const app = defineResource({
+      id: "tests-subtree-predicate-nested-duplicate-app",
+      subtree: {
+        tasks: {
+          middleware: [middleware.with({ label: "root" })],
+        },
+      },
+      register: [middleware, feature],
+    });
+
+    await expect(run(app)).rejects.toThrow(/Duplicate middleware id/);
+  });
 });

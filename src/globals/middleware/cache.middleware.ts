@@ -4,6 +4,7 @@ import { Match } from "../../tools/check";
 import type { ValidationSchemaInput } from "../../types/utilities";
 import { loggerResource } from "../resources/logger.resource";
 import { identityContextResource } from "../resources/identityContext.resource";
+import { globalTags } from "../globalTags";
 import {
   normalizeCacheKeyBuilderResult,
   toStableTaskId,
@@ -127,6 +128,7 @@ export function resolveCacheMiddlewareConfig(
 
 export const cacheMiddleware = defineTaskMiddleware({
   id: "cache",
+  tags: [globalTags.identityScoped],
   meta: {
     title: "Task Cache",
     description:

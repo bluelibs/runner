@@ -9,18 +9,21 @@ import { Match } from "../tools/check";
 import { freezeIfLineageLocked } from "../tools/deepFreeze";
 import type { IAsyncContext } from "../types/asyncContext";
 import {
+  GLOBAL_IDENTITY_NAMESPACE,
+  IDENTITY_SCOPE_SEPARATOR,
+} from "./identity.constants";
+import {
   symbolAsyncContext,
   symbolFilePath,
   symbolOptionalDependency,
 } from "../types/symbols";
 
 export const IDENTITY_ASYNC_CONTEXT_ID = "identity";
-export const GLOBAL_IDENTITY_NAMESPACE = "__global__";
-export const IDENTITY_SCOPE_SEPARATOR = ":";
 
 export const identityContextValuePattern = Match.ObjectIncluding({
   tenantId: Match.Optional(Match.NonEmptyString),
   userId: Match.Optional(Match.NonEmptyString),
+  roles: Match.Optional(Match.ArrayOf(Match.NonEmptyString)),
 });
 
 const baseIdentityAsyncContext = defineAsyncContext<IdentityContextValue>({

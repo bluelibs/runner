@@ -15,8 +15,8 @@ import { TaskCallOptions } from "./utilities";
  * Async context type accepted by `run(..., { identity })`.
  *
  * Apps usually pass a built `r.asyncContext(...).configSchema(...).build()`
- * accessor whose value shape may include `tenantId` and `userId`, alongside
- * any other app-owned identity fields.
+ * accessor whose value shape may include `tenantId`, `userId`, and `roles`,
+ * alongside any other app-owned identity fields.
  */
 export type IdentityAsyncContext = IAsyncContext<any>;
 

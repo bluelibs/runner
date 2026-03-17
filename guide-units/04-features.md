@@ -394,7 +394,7 @@ Transport rules:
 
 > **Platform Note:** User-defined async contexts require `AsyncLocalStorage`. They work on the Node build and on compatible Bun/Deno universal runtimes that expose async-local storage. In browsers and other runtimes without it, `use()`, `tryUse()`, and `provide()` are not available for user-defined `r.asyncContext(...)` contracts.
 
-For Runner's tenant-aware framework behavior, prefer the pattern in [`04c-multi-tenant`](./04c-multi-tenant.md): use the built-in `asyncContexts.identity` when `{ tenantId }` is enough, or pass your own registered `r.asyncContext(...).configSchema(...)` to `run(..., { identity })` when you need a richer contract.
+For Runner's identity-aware security behavior, prefer the pattern in [`04c-security`](./04c-security.md): use the built-in `asyncContexts.identity` when `{ tenantId }` is enough, or pass your own registered `r.asyncContext(...).configSchema(...)` to `run(..., { identity })` when you need a richer contract.
 
 ---
 

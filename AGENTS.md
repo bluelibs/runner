@@ -2,7 +2,7 @@
 
 - Be passionate about what you do, be precise, thoughtful and clear.
 - As you are working do not modify, revert other changes without user confirmation.
-- The code should be designed awithout being over-engineered.
+- The code should be designed without being over-engineered.
 - The code should be human-friendly (descriptive variables, function names, comments that describe the 'why'), code readability are a big plus.
 - Keep functions small, decouple early on. Make code be read like a story.
 - Keep non-documentation files small (under 300 lines) (including tests). Decouple/destructure early on.
@@ -31,11 +31,12 @@
 - Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds, if working only on docs, don't run it)
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
-- This is a framework, it's documentation is composed dynamically into FULL_GUIDE.md (which should not be read/manipulated by AI), read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
+- This is a framework, its documentation is composed dynamically into FULL_GUIDE.md (which should not be read/manipulated by AI), read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
 - Attention when coding defensively (especially when using 'unknown' and lots of typeof), we use typescript and we want to offer public and inner surface absolute type-safety. This means once the trust-boundary has passed (user-input ended), we can be sure of the types.
 - Use check/Match when you have to validate values at runtime, much cleaner.
 - Be careful when polluting your context with FULL_GUIDE.md, it's generated so don't worry about it.
 - All public surfaces direct or indirect through types must have propper JSDoc comments.
+- Careful when dealing with local id vs canonical id (which are formed within runtime)
 
 ## New Feature/Changes
 

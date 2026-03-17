@@ -28,10 +28,11 @@ export function makeResourceMiddlewareBuilder<
   In,
   Out,
   D extends DependencyMapType,
+  TTags extends ResourceMiddlewareTagType[],
   THasRun extends boolean = false,
 >(
-  state: ResMwState<C, In, Out, D>,
-): ResourceMiddlewareFluentBuilder<C, In, Out, D, THasRun> {
+  state: ResMwState<C, In, Out, D, TTags>,
+): ResourceMiddlewareFluentBuilder<C, In, Out, D, TTags, THasRun> {
   const builder = {
     id: state.id,
 
@@ -46,7 +47,18 @@ export function makeResourceMiddlewareBuilder<
         override,
       );
 
-      const next = cloneRes<C, In, Out, D, C, In, Out, D & TNewDeps>(state, {
+      const next = cloneRes<
+        C,
+        In,
+        Out,
+        D,
+        TTags,
+        C,
+        In,
+        Out,
+        D & TNewDeps,
+        TTags
+      >(state, {
         dependencies: nextDependencies as D & TNewDeps,
       });
 
@@ -56,20 +68,32 @@ export function makeResourceMiddlewareBuilder<
           In,
           Out,
           D & TNewDeps,
+          TTags,
           C,
           In,
           Out,
-          TNewDeps
+          TNewDeps,
+          TTags
         >(next, {
           dependencies: nextDependencies as TNewDeps,
         });
-        return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps, false>(
-          overridden,
-        );
+        return makeResourceMiddlewareBuilder<
+          C,
+          In,
+          Out,
+          TNewDeps,
+          TTags,
+          false
+        >(overridden);
       }
-      return makeResourceMiddlewareBuilder<C, In, Out, D & TNewDeps, false>(
-        next,
-      );
+      return makeResourceMiddlewareBuilder<
+        C,
+        In,
+        Out,
+        D & TNewDeps,
+        TTags,
+        false
+      >(next);
     },
 
     configSchema<
@@ -83,10 +107,12 @@ export function makeResourceMiddlewareBuilder<
         In,
         Out,
         D,
+        TTags,
         ResolveValidationSchemaInput<TNew, TSchema>,
         In,
         Out,
-        D
+        D,
+        TTags
       >(state, {
         configSchema: schema,
       });
@@ -95,6 +121,7 @@ export function makeResourceMiddlewareBuilder<
         In,
         Out,
         D,
+        TTags,
         false
       >(next);
     },
@@ -108,14 +135,14 @@ export function makeResourceMiddlewareBuilder<
       return builder.configSchema(schema);
     },
 
-    run(fn: IResourceMiddlewareDefinition<C, In, Out, D>["run"]) {
+    run(fn: IResourceMiddlewareDefinition<C, In, Out, D, TTags>["run"]) {
       const next = cloneRes(state, { run: fn as typeof state.run });
-      return makeResourceMiddlewareBuilder<C, In, Out, D, true>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, TTags, true>(next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
       const next = cloneRes(state, { meta: m as IMiddlewareMeta });
-      return makeResourceMiddlewareBuilder<C, In, Out, D, THasRun>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, TTags, THasRun>(next);
     },
 
     tags<TNewTags extends ResourceMiddlewareTagType[]>(
@@ -123,19 +150,50 @@ export function makeResourceMiddlewareBuilder<
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
-      const next = cloneRes(state, {
-        tags: mergeArray(
-          state.tags,
-          t,
-          override,
-        ) as ResourceMiddlewareTagType[],
+      if (override) {
+        const nextTags = mergeArray(state.tags, t, true) as TNewTags;
+        const next = cloneRes<C, In, Out, D, TTags, C, In, Out, D, TNewTags>(
+          state,
+          {
+            tags: nextTags,
+          },
+        );
+        return makeResourceMiddlewareBuilder<C, In, Out, D, TNewTags, false>(
+          next,
+        );
+      }
+
+      const nextTags = mergeArray(state.tags, t, false) as [
+        ...TTags,
+        ...TNewTags,
+      ];
+      const next = cloneRes<
+        C,
+        In,
+        Out,
+        D,
+        TTags,
+        C,
+        In,
+        Out,
+        D,
+        [...TTags, ...TNewTags]
+      >(state, {
+        tags: nextTags,
       });
-      return makeResourceMiddlewareBuilder<C, In, Out, D, false>(next);
+      return makeResourceMiddlewareBuilder<
+        C,
+        In,
+        Out,
+        D,
+        [...TTags, ...TNewTags],
+        false
+      >(next);
     },
 
     throws(list: ThrowsList) {
       const next = cloneRes(state, { throws: list });
-      return makeResourceMiddlewareBuilder<C, In, Out, D, THasRun>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, TTags, THasRun>(next);
     },
 
     build() {
@@ -150,7 +208,7 @@ export function makeResourceMiddlewareBuilder<
       }
 
       const middleware = defineResourceMiddleware({
-        ...(state as IResourceMiddlewareDefinition<C, In, Out, D>),
+        ...(state as IResourceMiddlewareDefinition<C, In, Out, D, TTags>),
       });
       return deepFreeze({
         ...middleware,
@@ -159,7 +217,13 @@ export function makeResourceMiddlewareBuilder<
     },
   };
 
-  return builder as ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D> &
-    ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D> &
-    ResourceMiddlewareFluentBuilder<C, In, Out, D, THasRun>;
+  return builder as ResourceMiddlewareFluentBuilderBeforeRun<
+    C,
+    In,
+    Out,
+    D,
+    TTags
+  > &
+    ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags> &
+    ResourceMiddlewareFluentBuilder<C, In, Out, D, TTags, THasRun>;
 }

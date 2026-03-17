@@ -520,6 +520,7 @@ Keep the two APIs distinct:
 - `.subtree((config) => ({ ... }))` and `.subtree((config) => [{ ... }, { ... }])` let subtree policy depend on the owning resource config
 - `subtree.validate` can be one function or an array of functions
 - typed validator branches are also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`
+- `subtree.middleware.identityScope` can enforce a required identityScope policy for identity-aware task middleware tagged with `tags.identityScoped`
 - if subtree middleware and local middleware resolve to the same middleware id on one target, Runner fails fast
 
 Use the generic validator with exported type guards when you need type-specific checks:

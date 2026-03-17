@@ -12,8 +12,41 @@ import {
   symbolMiddlewareConfigured,
   symbolResourceMiddleware,
 } from "./symbols";
-import { IContractable } from "./contracts";
+import {
+  EnsureConfigSatisfiesContracts,
+  HasConfigContracts,
+  IContractable,
+  InferConfigOrViolationFromContracts,
+} from "./contracts";
 import type { NormalizedThrowsList, ThrowsList } from "./error";
+
+type IsUnspecifiedMiddlewareConfig<T> = [T] extends [void]
+  ? true
+  : [T] extends [undefined]
+    ? true
+    : false;
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+type ResolveMiddlewareConfigContract<
+  TConfig,
+  TTags extends ResourceMiddlewareTagType[],
+> =
+  HasConfigContracts<TTags> extends true
+    ? IsAny<TConfig> extends true
+      ? InferConfigOrViolationFromContracts<TTags>
+      : IsUnspecifiedMiddlewareConfig<TConfig> extends true
+        ? InferConfigOrViolationFromContracts<TTags>
+        : EnsureConfigSatisfiesContracts<TTags, TConfig>
+    : TConfig;
+
+/**
+ * Effective middleware config after applying any config-contract tags.
+ */
+export type ResolvedResourceMiddlewareConfig<
+  TConfig,
+  TTags extends ResourceMiddlewareTagType[],
+> = ResolveMiddlewareConfigContract<TConfig, TTags>;
 
 /**
  * Declarative resource-middleware definition contract.
@@ -23,16 +56,23 @@ export interface IResourceMiddlewareDefinition<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
 > {
   /** Stable middleware identifier. */
   id: string;
   /** Static or lazy dependency map. */
-  dependencies?: TDependencies | ((config: TConfig) => TDependencies);
+  dependencies?:
+    | TDependencies
+    | ((
+        config: ResolvedResourceMiddlewareConfig<TConfig, TTags>,
+      ) => TDependencies);
   /**
    * Optional validation schema for runtime config validation.
    * When provided, middleware config will be validated when .with() is called.
    */
-  configSchema?: ValidationSchemaInput<TConfig>;
+  configSchema?: ValidationSchemaInput<
+    ResolvedResourceMiddlewareConfig<TConfig, TTags>
+  >;
   /**
    * The middleware body, called with resource execution input.
    */
@@ -42,12 +82,12 @@ export interface IResourceMiddlewareDefinition<
       TEnforceOutputContract extends void ? any : TEnforceOutputContract
     >,
     dependencies: DependencyValuesType<TDependencies>,
-    config: TConfig,
+    config: ResolvedResourceMiddlewareConfig<TConfig, TTags>,
   ) => Promise<any>;
   /** Optional metadata used by docs and tooling. */
   meta?: IMiddlewareMeta;
   /** Tags applied to the middleware definition. */
-  tags?: ResourceMiddlewareTagType[];
+  tags?: TTags;
   /**
    * Declares which typed errors are part of this middleware's contract.
    * Declarative only — does not imply DI or enforcement.
@@ -63,6 +103,7 @@ export interface IResourceMiddleware<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
 >
   extends
     Omit<
@@ -70,39 +111,51 @@ export interface IResourceMiddleware<
         TConfig,
         TEnforceInputContract,
         TEnforceOutputContract,
-        TDependencies
+        TDependencies,
+        TTags
       >,
       "throws"
     >,
-    IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
+    IContractable<
+      ResolvedResourceMiddlewareConfig<TConfig, TTags>,
+      TEnforceInputContract,
+      TEnforceOutputContract
+    > {
   [symbolResourceMiddleware]: true;
 
   id: string;
   path?: string;
   /** Normalized dependency declaration. */
-  dependencies: TDependencies | ((config: TConfig) => TDependencies);
+  dependencies:
+    | TDependencies
+    | ((
+        config: ResolvedResourceMiddlewareConfig<TConfig, TTags>,
+      ) => TDependencies);
   /** Normalized list of error ids declared via `throws`. */
   throws?: NormalizedThrowsList;
   /** Current configuration object (empty by default). */
-  config: TConfig;
+  config: ResolvedResourceMiddlewareConfig<TConfig, TTags>;
   /** Normalized validation schema for middleware config. */
-  configSchema?: IValidationSchema<TConfig>;
+  configSchema?: IValidationSchema<
+    ResolvedResourceMiddlewareConfig<TConfig, TTags>
+  >;
   /** Configure the middleware and return a marked, configured instance. */
   with: (
-    config: TConfig,
+    config: ResolvedResourceMiddlewareConfig<TConfig, TTags>,
   ) => IResourceMiddlewareConfigured<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
-    TDependencies
+    TDependencies,
+    TTags
   >;
   /** Extract the configured payload from a matching middleware entry. */
   extract: (
-    target: IResourceMiddleware<any, any, any, any>,
-  ) => TConfig | undefined;
+    target: IResourceMiddleware<any, any, any, any, any>,
+  ) => ResolvedResourceMiddlewareConfig<TConfig, TTags> | undefined;
   [symbolFilePath]: string;
   /** Normalized tags attached to the middleware. */
-  tags: ResourceMiddlewareTagType[];
+  tags: TTags;
 }
 
 /**
@@ -113,13 +166,16 @@ export interface IResourceMiddlewareConfigured<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
 > extends IResourceMiddleware<
   TConfig,
   TEnforceInputContract,
   TEnforceOutputContract,
-  TDependencies
+  TDependencies,
+  TTags
 > {
   [symbolMiddlewareConfigured]: true;
+  config: ResolvedResourceMiddlewareConfig<TConfig, TTags>;
 }
 
 /**

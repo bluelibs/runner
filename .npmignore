@@ -1,5 +1,4 @@
 *
-!src/**/*
 !dist/**/*
 dist/**/__tests__/**/*
 !.agents/skills/**/*

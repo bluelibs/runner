@@ -1,4 +1,5 @@
 import type {
+  DisplayResourceSubtreePolicy,
   NormalizedResourceSubtreePolicy,
   ResourceSubtreePolicyDeclaration,
   ResourceSubtreePolicyInput,
@@ -16,6 +17,14 @@ import type {
   SubtreeTaskValidator,
 } from "../types/subtree";
 import type { RunnerMode } from "../types/runner";
+import type { IdentityRequirementConfig } from "../public-types";
+import { validationError } from "../errors";
+import {
+  cloneIdentityRequirementConfig,
+  isIdentityRequirementConfig,
+  normalizeIdentityRequirementConfig,
+} from "../globals/middleware/identityRequirement.shared";
+import { isIdentityScopeConfig } from "../globals/middleware/identityScope.contract";
 import { isResourceMiddleware, isTaskMiddleware } from "./tools";
 
 function toArray<T>(value: T | T[] | undefined): T[] {
@@ -27,6 +36,14 @@ function toArray<T>(value: T | T[] | undefined): T[] {
 
 function cloneValidatorArray<T>(value: T[] | undefined): T[] {
   return value === undefined ? [] : [...value];
+}
+
+function isSubtreeTaskIdentityConfig(value: unknown): boolean {
+  return value === undefined || isIdentityRequirementConfig(value);
+}
+
+function isSubtreeIdentityScopeConfig(value: unknown): boolean {
+  return value === undefined || isIdentityScopeConfig(value);
 }
 
 function hasConditionalSubtreeMiddlewareEntry<TEntry extends object>(
@@ -58,7 +75,12 @@ function cloneSubtreeMiddlewareBranch<TEntry extends object, TValidator>(
         validate?: TValidator[];
       }
     | undefined,
-): { middleware: TEntry[]; validate?: TValidator[] } | undefined {
+):
+  | {
+      middleware: TEntry[];
+      validate?: TValidator[];
+    }
+  | undefined {
   if (!branch) {
     return undefined;
   }
@@ -67,6 +89,62 @@ function cloneSubtreeMiddlewareBranch<TEntry extends object, TValidator>(
     middleware: branch.middleware.map(cloneSubtreeConditionalMiddlewareEntry),
     ...("validate" in branch
       ? { validate: cloneValidatorArray(branch.validate) }
+      : {}),
+  };
+}
+
+function cloneSubtreeTaskBranch(
+  branch:
+    | {
+        middleware: SubtreeTaskMiddlewareEntry[];
+        identity?: IdentityRequirementConfig[];
+        validate?: SubtreeTaskValidator[];
+      }
+    | undefined,
+):
+  | {
+      middleware: SubtreeTaskMiddlewareEntry[];
+      identity?: IdentityRequirementConfig[];
+      validate?: SubtreeTaskValidator[];
+    }
+  | undefined {
+  if (!branch) {
+    return undefined;
+  }
+
+  return {
+    middleware: branch.middleware.map(
+      cloneSubtreeConditionalMiddlewareEntry<SubtreeTaskMiddlewareEntry>,
+    ),
+    ...("identity" in branch
+      ? {
+          identity: branch.identity?.map(cloneIdentityRequirementConfig),
+        }
+      : {}),
+    ...("validate" in branch
+      ? { validate: cloneValidatorArray(branch.validate) }
+      : {}),
+  };
+}
+
+function cloneSubtreeMiddlewarePolicyBranch<TIdentityScope>(
+  branch:
+    | {
+        identityScope?: TIdentityScope;
+      }
+    | undefined,
+):
+  | {
+      identityScope?: TIdentityScope;
+    }
+  | undefined {
+  if (!branch) {
+    return undefined;
+  }
+
+  return {
+    ...("identityScope" in branch
+      ? { identityScope: branch.identityScope }
       : {}),
   };
 }
@@ -93,10 +171,8 @@ function cloneNormalizedSubtreePolicy(
   }
 
   return {
-    tasks: cloneSubtreeMiddlewareBranch<
-      SubtreeTaskMiddlewareEntry,
-      SubtreeTaskValidator
-    >(policy.tasks),
+    tasks: cloneSubtreeTaskBranch(policy.tasks),
+    middleware: cloneSubtreeMiddlewarePolicyBranch(policy.middleware),
     resources: cloneSubtreeMiddlewareBranch<
       SubtreeResourceMiddlewareEntry,
       SubtreeResourceValidator
@@ -129,14 +205,48 @@ export function normalizeResourceSubtreePolicy(
   const normalized: NormalizedResourceSubtreePolicy = {};
 
   if (policy.tasks) {
+    if (!isSubtreeTaskIdentityConfig(policy.tasks.identity)) {
+      validationError.throw({
+        subject: "Subtree policy",
+        id: "tasks.identity",
+        originalError:
+          "Subtree tasks.identity must be a valid identity requirement object when provided.",
+      });
+    }
+
+    const normalizedIdentity = normalizeIdentityRequirementConfig(
+      policy.tasks.identity,
+    );
     normalized.tasks = {
       middleware: (policy.tasks.middleware ?? []).map(
         cloneSubtreeConditionalMiddlewareEntry<SubtreeTaskMiddlewareEntry>,
       ),
+      ...(normalizedIdentity
+        ? {
+            identity: [normalizedIdentity],
+          }
+        : {}),
       ...("validate" in policy.tasks
         ? {
             validate: toArray<SubtreeTaskValidator>(policy.tasks.validate),
           }
+        : {}),
+    };
+  }
+
+  if (policy.middleware) {
+    if (!isSubtreeIdentityScopeConfig(policy.middleware.identityScope)) {
+      validationError.throw({
+        subject: "Subtree policy",
+        id: "middleware.identityScope",
+        originalError:
+          "Subtree middleware.identityScope must be a valid identityScope config object when provided.",
+      });
+    }
+
+    normalized.middleware = {
+      ...("identityScope" in policy.middleware
+        ? { identityScope: policy.middleware.identityScope }
         : {}),
     };
   }
@@ -241,18 +351,32 @@ function mergeSubtreePolicyList(
 function mergeSubtreeMiddlewareBranch<
   TEntry,
   TValidator,
-  TBranch extends { middleware: TEntry[]; validate?: TValidator[] },
+  TBranch extends {
+    middleware: TEntry[];
+    validate?: TValidator[];
+  },
 >(
   existing: TBranch | undefined,
   incoming: TBranch,
   override: boolean,
 ): TBranch {
-  if (!existing || override) {
+  if (!existing) {
     return {
       middleware: [...incoming.middleware],
       ...("validate" in incoming
         ? { validate: cloneValidatorArray(incoming.validate) }
         : {}),
+    } as TBranch;
+  }
+
+  if (override) {
+    return {
+      middleware: [...incoming.middleware],
+      ...("validate" in incoming
+        ? { validate: cloneValidatorArray(incoming.validate) }
+        : "validate" in existing
+          ? { validate: cloneValidatorArray(existing.validate) }
+          : {}),
     } as TBranch;
   }
 
@@ -271,6 +395,98 @@ function mergeSubtreeMiddlewareBranch<
           }
         : {}),
   } as TBranch;
+}
+
+function mergeSubtreeTaskBranch(
+  existing:
+    | {
+        middleware: SubtreeTaskMiddlewareEntry[];
+        identity?: IdentityRequirementConfig[];
+        validate?: SubtreeTaskValidator[];
+      }
+    | undefined,
+  incoming: {
+    middleware: SubtreeTaskMiddlewareEntry[];
+    identity?: IdentityRequirementConfig[];
+    validate?: SubtreeTaskValidator[];
+  },
+  override: boolean,
+):
+  | {
+      middleware: SubtreeTaskMiddlewareEntry[];
+      identity?: IdentityRequirementConfig[];
+      validate?: SubtreeTaskValidator[];
+    }
+  | undefined {
+  const cloneIdentityArray = (
+    value: IdentityRequirementConfig[] | undefined,
+  ): IdentityRequirementConfig[] | undefined =>
+    value?.map(cloneIdentityRequirementConfig);
+
+  if (!existing) {
+    return {
+      middleware: incoming.middleware.map(
+        cloneSubtreeConditionalMiddlewareEntry<SubtreeTaskMiddlewareEntry>,
+      ),
+      ...("identity" in incoming
+        ? { identity: cloneIdentityArray(incoming.identity) }
+        : {}),
+      ...("validate" in incoming
+        ? { validate: cloneValidatorArray(incoming.validate) }
+        : {}),
+    };
+  }
+
+  if (override) {
+    return {
+      middleware: incoming.middleware.map(
+        cloneSubtreeConditionalMiddlewareEntry<SubtreeTaskMiddlewareEntry>,
+      ),
+      ...("identity" in incoming
+        ? { identity: cloneIdentityArray(incoming.identity) }
+        : "identity" in existing
+          ? { identity: cloneIdentityArray(existing.identity) }
+          : {}),
+      ...("validate" in incoming
+        ? { validate: cloneValidatorArray(incoming.validate) }
+        : "validate" in existing
+          ? { validate: cloneValidatorArray(existing.validate) }
+          : {}),
+    };
+  }
+
+  return {
+    middleware: [
+      ...existing.middleware.map(
+        cloneSubtreeConditionalMiddlewareEntry<SubtreeTaskMiddlewareEntry>,
+      ),
+      ...incoming.middleware.map(
+        cloneSubtreeConditionalMiddlewareEntry<SubtreeTaskMiddlewareEntry>,
+      ),
+    ],
+    // The incoming side is guaranteed by normalization whenever this branch
+    // runs; only the existing side can legitimately be absent.
+    ...("identity" in incoming
+      ? {
+          identity: [
+            ...(cloneIdentityArray(existing.identity) ?? []),
+            ...cloneIdentityArray(incoming.identity)!,
+          ],
+        }
+      : "identity" in existing
+        ? { identity: cloneIdentityArray(existing.identity) }
+        : {}),
+    ...("validate" in incoming
+      ? {
+          validate: [
+            ...cloneValidatorArray(existing.validate),
+            ...cloneValidatorArray(incoming.validate),
+          ],
+        }
+      : "validate" in existing
+        ? { validate: cloneValidatorArray(existing.validate) }
+        : {}),
+  };
 }
 
 function mergeSubtreeValidateBranch<TValidator>(
@@ -302,6 +518,48 @@ function mergeSubtreeValidateBranch<TValidator>(
   };
 }
 
+function mergeSubtreeMiddlewarePolicyBranch<TIdentityScope>(
+  existing:
+    | {
+        identityScope?: TIdentityScope;
+      }
+    | undefined,
+  incoming: {
+    identityScope?: TIdentityScope;
+  },
+  override: boolean,
+):
+  | {
+      identityScope?: TIdentityScope;
+    }
+  | undefined {
+  if (!existing) {
+    return {
+      ...("identityScope" in incoming
+        ? { identityScope: incoming.identityScope }
+        : {}),
+    };
+  }
+
+  if (override) {
+    return {
+      ...("identityScope" in incoming
+        ? { identityScope: incoming.identityScope }
+        : "identityScope" in existing
+          ? { identityScope: existing.identityScope }
+          : {}),
+    };
+  }
+
+  return {
+    ...("identityScope" in incoming
+      ? { identityScope: incoming.identityScope }
+      : "identityScope" in existing
+        ? { identityScope: existing.identityScope }
+        : {}),
+  };
+}
+
 export function mergeResourceSubtreePolicy(
   existing: NormalizedResourceSubtreePolicy | undefined,
   incoming: ResourceSubtreePolicy,
@@ -318,9 +576,17 @@ export function mergeResourceSubtreePolicy(
   const merged = cloneNormalizedSubtreePolicy(existing);
 
   if (normalizedIncoming.tasks) {
-    merged.tasks = mergeSubtreeMiddlewareBranch(
+    merged.tasks = mergeSubtreeTaskBranch(
       merged.tasks,
       normalizedIncoming.tasks,
+      override,
+    );
+  }
+
+  if (normalizedIncoming.middleware) {
+    merged.middleware = mergeSubtreeMiddlewarePolicyBranch(
+      merged.middleware,
+      normalizedIncoming.middleware,
       override,
     );
   }
@@ -418,9 +684,21 @@ export function resolveResourceSubtreeDeclarations<TConfig>(
   config: TConfig,
   mode?: RunnerMode,
 ): NormalizedResourceSubtreePolicy | undefined {
-  let merged: NormalizedResourceSubtreePolicy | undefined;
+  if (!declarations) {
+    return undefined;
+  }
 
-  for (const declaration of declarations ?? []) {
+  return resolveNonEmptyResourceSubtreeDeclarations(declarations, config, mode);
+}
+
+function resolveNonEmptyResourceSubtreeDeclarations<TConfig>(
+  declarations: ReadonlyArray<ResourceSubtreePolicyDeclaration<TConfig>>,
+  config: TConfig,
+  mode?: RunnerMode,
+): NormalizedResourceSubtreePolicy {
+  let merged: NormalizedResourceSubtreePolicy = {};
+
+  for (const declaration of declarations) {
     const policyList =
       typeof declaration.policy === "function"
         ? declaration.policy(config, mode)
@@ -435,7 +713,7 @@ export function createDisplaySubtreePolicy<TConfig>(
   declarations:
     | ReadonlyArray<ResourceSubtreePolicyDeclaration<TConfig>>
     | undefined,
-): ResourceSubtreePolicyInput<TConfig> | undefined {
+): DisplayResourceSubtreePolicy<TConfig> | undefined {
   if (!declarations || declarations.length === 0) {
     return undefined;
   }
@@ -445,30 +723,19 @@ export function createDisplaySubtreePolicy<TConfig>(
   );
 
   if (!hasDynamic) {
-    let merged: NormalizedResourceSubtreePolicy | undefined;
-
-    for (const declaration of declarations) {
-      merged = mergeSubtreePolicyList(
-        merged,
-        declaration.policy as ResourceSubtreePolicyList,
-        declaration.options,
-      );
-    }
-
-    return merged;
+    return resolveNonEmptyResourceSubtreeDeclarations(
+      declarations,
+      {} as TConfig,
+    );
   }
 
   return (config: TConfig, mode?: RunnerMode) =>
-    resolveResourceSubtreeDeclarations(
-      declarations,
-      config,
-      mode,
-    ) as NormalizedResourceSubtreePolicy;
+    resolveNonEmptyResourceSubtreeDeclarations(declarations, config, mode);
 }
 
 export function getStoredSubtreePolicy<TConfig>(resource: {
   subtree?:
-    | NormalizedResourceSubtreePolicy
+    | DisplayResourceSubtreePolicy<TConfig>
     | ResourceSubtreePolicyInput<TConfig>;
 }): NormalizedResourceSubtreePolicy | undefined {
   return resource.subtree as NormalizedResourceSubtreePolicy | undefined;

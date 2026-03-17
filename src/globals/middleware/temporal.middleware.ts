@@ -25,6 +25,7 @@ import {
   pruneThrottleStatesForCapacity,
   temporalResource,
 } from "./temporal.resource";
+import { globalTags } from "../globalTags";
 import { identityContextResource } from "../resources/identityContext.resource";
 
 export interface TemporalMiddlewareConfig extends IdentityScopedMiddlewareConfig {
@@ -94,6 +95,7 @@ export type {
  */
 export const debounceTaskMiddleware = defineTaskMiddleware({
   id: "debounce",
+  tags: [globalTags.identityScoped],
   meta: {
     title: "Debounce",
     description:
@@ -209,6 +211,7 @@ export { temporalResource } from "./temporal.resource";
  */
 export const throttleTaskMiddleware = defineTaskMiddleware({
   id: "throttle",
+  tags: [globalTags.identityScoped],
   meta: {
     title: "Throttle",
     description:

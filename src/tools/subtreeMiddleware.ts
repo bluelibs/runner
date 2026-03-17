@@ -9,6 +9,8 @@ import type {
 import { isResourceMiddleware, isTaskMiddleware } from "../definers/tools";
 import { getStoredSubtreePolicy } from "../definers/subtreePolicy";
 import { validationError } from "../errors";
+import type { IdentityScopeConfig } from "../globals/middleware/identityScope.shared";
+import type { IdentityRequirementConfig } from "../public-types";
 
 type SubtreeLookup = {
   getOwnerResourceId: (itemId: string) => string | undefined;
@@ -324,6 +326,55 @@ export function resolveApplicableSubtreeTaskMiddlewares(
     (resource) => getStoredSubtreePolicy(resource)?.tasks?.middleware,
     resolveTaskSubtreeMiddlewareEntry,
   );
+}
+
+export function resolveNearestSubtreeMiddlewareIdentityScope(
+  lookup: SubtreeLookup,
+  task: ITask<any, any, any, any, any, any>,
+): IdentityScopeConfig | undefined {
+  const chain = getTargetOwnerResourceChain(lookup, {
+    targetId: task.id,
+    isResourceTarget: false,
+  });
+
+  for (const ownerResourceId of chain) {
+    const ownerResource = lookup.getResource(ownerResourceId);
+    const identityScope = ownerResource
+      ? getStoredSubtreePolicy(ownerResource)?.middleware?.identityScope
+      : undefined;
+
+    if (identityScope !== undefined) {
+      return identityScope;
+    }
+  }
+
+  return undefined;
+}
+
+export function resolveTaskIdentityRequirements(
+  lookup: SubtreeLookup,
+  task: ITask<any, any, any, any, any, any>,
+): IdentityRequirementConfig[] {
+  const chain = getTargetOwnerResourceChain(lookup, {
+    targetId: task.id,
+    isResourceTarget: false,
+  });
+  const requirements: IdentityRequirementConfig[] = [];
+
+  for (const ownerResourceId of [...chain].reverse()) {
+    const ownerResource = lookup.getResource(ownerResourceId);
+    const identityRequirements = ownerResource
+      ? getStoredSubtreePolicy(ownerResource)?.tasks?.identity
+      : undefined;
+
+    if (!identityRequirements?.length) {
+      continue;
+    }
+
+    requirements.push(...identityRequirements);
+  }
+
+  return requirements;
 }
 
 export function resolveApplicableSubtreeResourceMiddlewares(

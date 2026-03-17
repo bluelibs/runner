@@ -12,6 +12,7 @@ import {
   identityScopePattern,
   type IdentityScopedMiddlewareConfig,
 } from "./identityScope.shared";
+import { globalTags } from "../globalTags";
 import { identityContextResource } from "../resources/identityContext.resource";
 
 export interface ConcurrencyMiddlewareConfig extends IdentityScopedMiddlewareConfig {
@@ -111,6 +112,7 @@ export const concurrencyResource = defineResource({
  */
 export const concurrencyTaskMiddleware = defineTaskMiddleware({
   id: "concurrency",
+  tags: [globalTags.identityScoped],
   meta: {
     title: "Concurrency Limit",
     description:
