@@ -1,6 +1,5 @@
 import { Logger } from "../../../models/Logger";
 import { allFalse } from "../../../globals/resources/debug/types";
-import { globalTags } from "../../../globals/globalTags";
 import { globalEventListener } from "../../../globals/resources/debug/globalEvent.hook";
 import { runtimeSource } from "../../../types/runtimeSource";
 
@@ -8,10 +7,7 @@ type GlobalEventRun = NonNullable<typeof globalEventListener.run>;
 type GlobalEventRunDeps = Parameters<GlobalEventRun>[1];
 type GlobalEventRunInput = Parameters<GlobalEventRun>[0];
 
-function createEvent(
-  id: string,
-  tags: GlobalEventRunInput["tags"] = [],
-): GlobalEventRunInput {
+function createEvent(id: string): GlobalEventRunInput {
   let propagationStopped = false;
   return {
     id,
@@ -27,7 +23,7 @@ function createEvent(
     isPropagationStopped() {
       return propagationStopped;
     },
-    tags,
+    tags: [],
   };
 }
 
@@ -52,7 +48,7 @@ describe("runner.debug.globalEventListener (unit)", () => {
     expect(messages).toEqual([]);
   });
 
-  it("returns early for system-tagged events", async () => {
+  it("returns early for framework-owned events", async () => {
     const messages: string[] = [];
     const logger = new Logger({
       printThreshold: null,
@@ -67,10 +63,7 @@ describe("runner.debug.globalEventListener (unit)", () => {
       debugConfig: { ...allFalse, logEventEmissionOnRun: true },
     } satisfies GlobalEventRunDeps;
 
-    await globalEventListener.run?.(
-      createEvent("tests.event.system", [globalTags.system]),
-      deps,
-    );
+    await globalEventListener.run?.(createEvent("system.events.ready"), deps);
 
     expect(messages).toEqual([]);
   });

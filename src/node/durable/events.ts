@@ -2,7 +2,6 @@ import { r, tags } from "../../index";
 import type { IEvent } from "../../defs";
 import { DurableAuditEntryKind, type DurableAuditEntry } from "./core/audit";
 
-const systemTag = tags.system;
 const excludeFromGlobalHooksTag = tags.excludeFromGlobalHooks;
 
 export const durableEvents = {
@@ -14,7 +13,7 @@ export const durableEvents = {
         description:
           "Emitted when a durable audit entry is produced (for logging/mirroring). Persistence depends on store support and audit configuration.",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
   },
 
@@ -30,7 +29,7 @@ export const durableEvents = {
         title: "Durable Execution Status Changed",
         description: "Emitted when a durable execution transitions status.",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
   },
 
@@ -47,7 +46,7 @@ export const durableEvents = {
         description:
           "Emitted when a durable step is completed (including internals).",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
   },
 
@@ -63,7 +62,7 @@ export const durableEvents = {
         title: "Durable Sleep Scheduled",
         description: "Emitted when a durable sleep timer is scheduled.",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
 
     completed: r
@@ -78,7 +77,7 @@ export const durableEvents = {
         description:
           "Emitted when a durable sleep timer fires and the step completes.",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
   },
 
@@ -95,7 +94,7 @@ export const durableEvents = {
         description:
           "Emitted when a durable execution starts waiting for a signal.",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
 
     delivered: r
@@ -110,7 +109,7 @@ export const durableEvents = {
         description:
           "Emitted when a signal payload is delivered to a waiting execution.",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
 
     timedOut: r
@@ -124,7 +123,7 @@ export const durableEvents = {
         title: "Durable Signal Timed Out",
         description: "Emitted when a waiting signal times out.",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
   },
 
@@ -141,7 +140,7 @@ export const durableEvents = {
         description:
           "Emitted when durableContext.emit(...) publishes to the durable event bus (replay-safe).",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
   },
 
@@ -155,7 +154,7 @@ export const durableEvents = {
         description:
           "Emitted when durableContext.note(...) records an audit note.",
       })
-      .tags([systemTag, excludeFromGlobalHooksTag])
+      .tags([excludeFromGlobalHooksTag])
       .build(),
   },
 } as const;

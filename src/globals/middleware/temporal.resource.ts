@@ -1,7 +1,6 @@
 import { defineResource } from "../../definers/defineResource";
 import { middlewareTemporalDisposedError } from "../../errors";
 import type { ITimers } from "../../types/timers";
-import { globalTags } from "../globalTags";
 import { timersResource } from "../resources/timers.resource";
 import {
   deriveKeyedStateCleanupInterval,
@@ -85,7 +84,6 @@ export function pruneThrottleStatesForCapacity<TConfig extends { ms: number }>(
 
 export const temporalResource = defineResource({
   id: "temporal",
-  tags: [globalTags.system],
   dependencies: { timers: timersResource },
   context: (): TemporalResourceContext => ({}),
   init: async (

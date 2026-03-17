@@ -20,7 +20,7 @@ const FRAMEWORK_NAMESPACE_META = {
   [FRAMEWORK_SYSTEM_RESOURCE_ID]: {
     title: "System Namespace",
     description:
-      "Synthetic framework namespace that owns Runner's locked internal infrastructure such as store, eventManager, taskRunner, middlewareManager, runtime, lifecycle events, and the internal system tag.",
+      "Synthetic framework namespace that owns Runner's locked internal infrastructure such as store, eventManager, taskRunner, middlewareManager, runtime, and lifecycle events.",
   },
   [FRAMEWORK_RUNNER_RESOURCE_ID]: {
     title: "Runner Namespace",

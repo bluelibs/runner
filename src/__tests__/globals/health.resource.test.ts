@@ -65,7 +65,7 @@ describe("runner.health", () => {
     await runtime.dispose();
   });
 
-  it("is intentionally not system-tagged", () => {
+  it("does not carry the deprecated system tag", () => {
     expect(globalResources.health.tags?.includes(globalTags.system)).toBe(
       false,
     );

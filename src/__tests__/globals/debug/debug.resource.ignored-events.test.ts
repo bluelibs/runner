@@ -6,8 +6,8 @@ import { globalTags } from "../../../globals/globalTags";
 import { defineEvent, defineHook } from "../../../define";
 import type { ILog } from "../../../models/Logger";
 
-describe("debug resource - ignored system/lifecycle events", () => {
-  it("does not log system/lifecycle events from global listener", async () => {
+describe("debug resource - framework event filtering", () => {
+  it("does not log framework lifecycle events from the global listener", async () => {
     const logs: ILog[] = [];
 
     const collector = defineResource({
@@ -42,7 +42,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     ).toBe(false);
   });
 
-  it("does not track system-tagged task execution in middleware (early return branch)", async () => {
+  it("keeps tracking user tasks even when they use the deprecated system tag", async () => {
     const messages: string[] = [];
 
     const collector = defineResource({
@@ -76,15 +76,23 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     await run(app);
 
-    expect(messages).not.toContain("Task tests-system-task is running...");
     expect(
       messages.some((message) =>
-        /Task tests-system-task completed in \d+ms/.test(message),
+        message.includes(
+          "Task tests-app-ignored-task.tasks.tests-system-task is running...",
+        ),
       ),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      messages.some((message) =>
+        /Task tests-app-ignored-task\.tasks\.tests-system-task completed in \d+ms/.test(
+          message,
+        ),
+      ),
+    ).toBe(true);
   });
 
-  it("does not log system-tagged hook triggered/completed messages", async () => {
+  it("keeps logging user hooks even when they use the deprecated system tag", async () => {
     const messages: string[] = [];
 
     const collector = defineResource({
@@ -121,11 +129,23 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     await run(app);
 
-    expect(messages).not.toContain("Hook triggered for tests-system-hook");
-    expect(messages).not.toContain("Hook completed for tests-system-hook");
+    expect(
+      messages.some((message) =>
+        message.includes(
+          "Hook triggered for tests-app-hooks-ignored.hooks.tests-system-hook",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      messages.some((message) =>
+        message.includes(
+          "Hook completed for tests-app-hooks-ignored.hooks.tests-system-hook",
+        ),
+      ),
+    ).toBe(true);
   });
 
-  it("does not log system-tagged events via global event listener", async () => {
+  it("keeps logging user events even when they use the deprecated system tag", async () => {
     const messages: string[] = [];
 
     const collector = defineResource({
@@ -171,6 +191,10 @@ describe("debug resource - ignored system/lifecycle events", () => {
     await rr.runTask(emitSystemEvent);
 
     const joined = messages.join("\n");
-    expect(joined.includes("Event tests-system-event emitted")).toBe(false);
+    expect(
+      joined.includes(
+        "Event tests-app-system-event.events.tests-system-event emitted",
+      ),
+    ).toBe(true);
   });
 });

@@ -296,7 +296,7 @@ Ownership and ids:
 - Only the internal synthetic framework root is invisible to user-facing ids.
 - `runtime-framework-root` is reserved and cannot be used as a user resource id.
 - Runner also creates two real framework namespace resources:
-  - `system`: owns locked internals such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, lifecycle events, and the internal system tag
+  - `system`: owns locked internals such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, and lifecycle events
   - `runner`: owns built-in utility globals such as `resources.mode`, `resources.health`, `resources.timers`, `resources.logger`, `resources.serializer`, `resources.queue`, core tags, middleware, and framework errors
 - `system` and `runner` carry proper `.meta.title` and `.meta.description` for docs and tooling, even though the transparent `runtime-framework-root` stays internal-only.
 
@@ -744,7 +744,7 @@ Key rules:
 - `.for([...])` restricts which definition kinds can receive the tag.
 - Tag config schemas accept the same schema types as other config surfaces.
 - Contract tags can shape task or resource typing without changing runtime behavior.
-- Built-in tags such as `tags.system`, `tags.debug`, and `tags.excludeFromGlobalHooks` affect framework behavior.
+- Built-in tag`tags.excludeFromGlobalHooks` affect framework behavior.
 - `tags.debug` supports preset levels or fine-grained per-component config.
 - `tags.failWhenUnhealthy.with([db, cache])` blocks task execution only when one of those resources reports `unhealthy`.
   `degraded` still runs, bootstrap-time task calls are not gated, and sleeping lazy resources stay skipped.

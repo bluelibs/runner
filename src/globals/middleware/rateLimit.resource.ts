@@ -1,5 +1,4 @@
 import { defineResource } from "../../definers/defineResource";
-import { globalTags } from "../globalTags";
 import {
   deriveKeyedStateCleanupInterval,
   syncCleanupTimer,
@@ -57,7 +56,6 @@ export function pruneRateLimitStatesForCapacity(
 
 export const rateLimitResource = defineResource({
   id: "rateLimit",
-  tags: [globalTags.system],
   dependencies: { timers: timersResource },
   context: (): RateLimitResourceContext => ({}),
   init: async (

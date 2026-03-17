@@ -9,14 +9,15 @@ import { Match } from "../tools/check";
 import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
 
-const internalTag = defineTag<{
+/** @deprecated Internal framework definitions no longer rely on this tag. */
+const deprecatedSystemTag = defineTag<{
   metadata?: Record<string, any>;
 }>({
   id: "internal",
   meta: {
-    title: "System Internal",
+    title: "System Internal (Deprecated)",
     description:
-      "Marks framework-owned internals and infrastructure definitions.",
+      "Deprecated: internal framework definitions now rely on reserved framework namespaces instead of this tag.",
   },
 });
 
@@ -30,7 +31,7 @@ const eventLaneHookConfigPattern = Match.ObjectStrict({
 });
 
 const globalTagsBase = {
-  system: internalTag,
+  system: deprecatedSystemTag,
   excludeFromGlobalHooks: defineTag<{
     metadata?: Record<string, any>;
   }>({

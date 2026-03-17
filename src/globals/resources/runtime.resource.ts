@@ -1,8 +1,5 @@
 import { defineResource } from "../../definers/defineResource";
-import { globalTags } from "../globalTags";
 import type { RunResult } from "../../models/RunResult";
-
-const systemTag = globalTags.system;
 
 export const runtimeResource = defineResource<
   void,
@@ -14,5 +11,4 @@ export const runtimeResource = defineResource<
     description:
       "Safe runtime facade for advanced in-resource operations (task/event execution, resource reads, root definition access).",
   },
-  tags: [systemTag],
 });

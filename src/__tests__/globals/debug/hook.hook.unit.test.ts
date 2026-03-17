@@ -1,5 +1,4 @@
 import { defineHook } from "../../../define";
-import { globalTags } from "../../../globals/globalTags";
 import { allFalse } from "../../../globals/resources/debug/types";
 import { hookInterceptorResource } from "../../../globals/resources/debug/hook.hook";
 import { Logger } from "../../../models/Logger";
@@ -85,7 +84,7 @@ describe("runner.debug.hookInterceptorResource (unit)", () => {
     ).toBe(true);
   });
 
-  it("skips logging for system hooks and for disabled flags", async () => {
+  it("skips logging for framework hooks and for disabled flags", async () => {
     const messages: string[] = [];
     const logger = new Logger({
       printThreshold: null,
@@ -98,12 +97,9 @@ describe("runner.debug.hookInterceptorResource (unit)", () => {
 
     let nextCalls = 0;
     let interceptionDone: Promise<void> | undefined;
-    const systemHook = defineHook({
-      id: "tests-hook-system",
-      on: "*",
-      run: async () => undefined,
-      tags: [globalTags.system],
-    });
+    const systemHook = {
+      id: "runner.hooks.systemHook",
+    } as Parameters<HookExecutionInterceptor>[1];
     const disabledHook = defineHook({
       id: "tests-hook-disabled",
       on: "*",

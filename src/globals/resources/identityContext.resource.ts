@@ -3,7 +3,6 @@ import type { IdentityAsyncContext } from "../../types/runner";
 import type { ValidationSchemaInput } from "../../types/utilities";
 import { Match } from "../../tools/check";
 import { defineResource } from "../../definers/defineResource";
-import { globalTags } from "../globalTags";
 
 export interface IdentityContextResourceConfig {
   /**
@@ -54,7 +53,6 @@ export const identityContextResource = defineResource<
 >({
   id: "identityContext",
   configSchema: identityContextConfigPattern,
-  tags: [globalTags.system],
   init: async (config, _dependencies, _context) => ({
     tryUse() {
       return config.context.tryUse();

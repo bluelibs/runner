@@ -23,7 +23,7 @@
 
 ## Project Specifics
 
-- This library has 100% code coverage.
+- You are working inside runner framework source code. This library has 100% code coverage.
 - Node specific code (Async Context, Durable Workflows, Remote Lanes, etc) goes under ./src/node/ folder. It is exported only for node.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - When User asking questions like "did you check the tests?" if it would've been obvious to run the tests do it pro-actively instead of just saying no.

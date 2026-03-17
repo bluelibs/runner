@@ -3069,7 +3069,7 @@ const performanceMiddleware = r.middleware
   .build();
 ```
 
-### System Tags
+### Built-in Tags
 
 Built-in tags can affect framework behavior.
 
@@ -3077,9 +3077,9 @@ Built-in tags can affect framework behavior.
 import { tags, r } from "@bluelibs/runner";
 
 // Assuming `performCleanup` is your own application function.
-const internalTask = r
-  .task("internalTask")
-  .tags([tags.internal, tags.debug.with({ logTaskInput: true })])
+const observedTask = r
+  .task("observedTask")
+  .tags([tags.debug.with("verbose")])
   .run(async () => performCleanup())
   .build();
 
@@ -3089,7 +3089,7 @@ const internalEvent = r
   .build();
 ```
 
-Tasks can also opt into runtime health gating with `tags.failWhenUnhealthy.with([db, cache])`.
+`tags.system` is deprecated and no longer used by framework internals. Tasks can also opt into runtime health gating with `tags.failWhenUnhealthy.with([db, cache])`.
 
 ### Contract Tags
 
@@ -6302,7 +6302,7 @@ Runner registers a set of built-in resources during bootstrap. These are useful 
 
 These built-ins sit under two synthetic framework namespace resources:
 
-- `system`: owns locked internal infrastructure such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, lifecycle events, and the internal system tag
+- `system`: owns locked internal infrastructure such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, and lifecycle events
 - `runner`: owns built-in utility globals such as `resources.mode`, `resources.health`, `resources.timers`, `resources.logger`, `resources.serializer`, `resources.queue`, core tags, middleware, framework errors, and optional debug/execution-context resources
 
 Both namespace resources are real Runner resources and expose `.meta.title` / `.meta.description` for docs and tooling. The transparent `runtime-framework-root` above them remains internal-only and does not appear in user-facing canonical ids.

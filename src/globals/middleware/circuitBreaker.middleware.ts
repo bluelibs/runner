@@ -1,7 +1,6 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
-import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareCircuitBreakerOpenError, RunnerErrorId } from "../../errors";
 import { Match } from "../../tools/check";
@@ -77,7 +76,6 @@ export const journalKeys = {
 
 export const circuitBreakerResource = defineResource({
   id: "circuitBreaker",
-  tags: [globalTags.system],
   init: async () => {
     return {
       statusMap: new Map<string, CircuitBreakerStatus>(),

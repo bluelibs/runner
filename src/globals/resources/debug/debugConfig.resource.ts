@@ -1,6 +1,5 @@
 import { defineResource } from "../../../definers/defineResource";
 import { DebugFriendlyConfig, getConfig } from "./types";
-import { globalTags } from "../../../globals/globalTags";
 import { Match } from "../../../tools/check";
 
 const debugConfigPattern = Match.ObjectIncluding({
@@ -33,7 +32,6 @@ export const debugConfig = defineResource({
     title: "Debug Config",
     description: "Debug config. This is used to debug the system.",
   },
-  tags: [globalTags.system],
   init: async (config: DebugFriendlyConfig) => {
     const myConfig = { ...getConfig(config) };
 

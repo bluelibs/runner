@@ -1,7 +1,6 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { Semaphore } from "../../models/Semaphore";
-import { globalTags } from "../globalTags";
 import {
   middlewareConcurrencyConflictError,
   validationError,
@@ -85,7 +84,6 @@ function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
 
 export const concurrencyResource = defineResource({
   id: "concurrency",
-  tags: [globalTags.system],
   init: async () => ({
     semaphoresByConfig: new WeakMap<
       ConcurrencyMiddlewareConfig,

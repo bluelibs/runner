@@ -1,7 +1,6 @@
 import { defineHook } from "../../../definers/defineHook";
 import { loggerResource as logger } from "../logger.resource";
-import { globalTags } from "../../globalTags";
-import { hasSystemTag } from "./utils";
+import { isFrameworkDefinition } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { getConfig } from "./types";
 
@@ -13,7 +12,7 @@ export const globalEventListener = defineHook({
     debugConfig,
   },
   run: async (event, { logger, debugConfig }) => {
-    if (hasSystemTag(event) || event!.id.startsWith("system.")) {
+    if (isFrameworkDefinition(event)) {
       return;
     }
 
@@ -29,8 +28,7 @@ export const globalEventListener = defineHook({
     }
   },
   meta: {
-    title: "Non-system Event Logger",
-    description: "Logs all non-system events.",
+    title: "Non-framework Event Logger",
+    description: "Logs all non-framework events.",
   },
-  tags: [globalTags.system],
 });

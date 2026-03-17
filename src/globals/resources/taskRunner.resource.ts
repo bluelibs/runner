@@ -1,6 +1,5 @@
 import { defineResource } from "../../definers/defineResource";
 import type { TaskRunner } from "../../models/TaskRunner";
-import { globalTags } from "../globalTags";
 
 export const taskRunnerResource = defineResource<void, Promise<TaskRunner>>({
   id: "taskRunner",
@@ -9,5 +8,4 @@ export const taskRunnerResource = defineResource<void, Promise<TaskRunner>>({
     description:
       "Manages the execution of tasks and task dependencies. This is meant to be used internally for most use-cases.",
   },
-  tags: [globalTags.system],
 });

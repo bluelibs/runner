@@ -1,8 +1,7 @@
 import { defineResource } from "../../../definers/defineResource";
 import { loggerResource as logger } from "../logger.resource";
 import { eventManagerResource as eventManager } from "../eventManager.resource";
-import { globalTags } from "../../globalTags";
-import { hasSystemTag } from "./utils";
+import { isFrameworkDefinition } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { getConfig } from "./types";
 
@@ -19,9 +18,8 @@ export const hookInterceptorResource = defineResource<
   meta: {
     title: "Hook Interceptor",
     description:
-      "Intercepts hooks for debug logging, skipping system-tagged hooks.",
+      "Intercepts hooks for debug logging, skipping framework-owned hooks.",
   },
-  tags: [globalTags.system],
   dependencies: {
     logger,
     debugConfig,
@@ -31,8 +29,8 @@ export const hookInterceptorResource = defineResource<
     deps.eventManager.interceptHook(async (next, hook, event) => {
       const { logger, debugConfig } = deps;
 
-      // Skip logging for system-tagged observability events
-      if (hasSystemTag(hook)) {
+      // Skip logging for framework-owned observability hooks.
+      if (isFrameworkDefinition(hook)) {
         return await next(hook, event);
       }
 

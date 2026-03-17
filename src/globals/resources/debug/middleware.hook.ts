@@ -1,10 +1,9 @@
 import { defineResource } from "../../../definers/defineResource";
 import { loggerResource as logger } from "../logger.resource";
 import { middlewareManagerResource as middlewareManager } from "../middlewareManager.resource";
-import { globalTags } from "../../globalTags";
 import { getConfig } from "./types";
 import { debugConfig } from "./debugConfig.resource";
-import { hasSystemTag } from "./utils";
+import { isFrameworkDefinition } from "./utils";
 import { ITaskMiddlewareExecutionInput } from "../../../types/taskMiddleware";
 import { IResourceMiddlewareExecutionInput } from "../../../types/resourceMiddleware";
 
@@ -22,9 +21,8 @@ export const middlewareInterceptorResource = defineResource<
   meta: {
     title: "Middleware Interceptor",
     description:
-      "Intercepts task and resource middleware, skipping system-tagged entities.",
+      "Intercepts task and resource middleware, skipping framework-owned definitions.",
   },
-  tags: [globalTags.system],
   dependencies: {
     logger,
     debugConfig,
@@ -41,7 +39,7 @@ export const middlewareInterceptorResource = defineResource<
         input: ITaskMiddlewareExecutionInput<any>,
       ) => {
         const taskDef = input.task.definition;
-        if (!hasSystemTag(taskDef)) {
+        if (!isFrameworkDefinition(taskDef)) {
           const cfg = getConfig(debugConfig, event!);
           if (cfg.logMiddlewareBeforeRun) {
             const msg = `Middleware triggered for task ${String(taskDef.id)}`;
@@ -53,7 +51,7 @@ export const middlewareInterceptorResource = defineResource<
 
         const result = await next(input);
 
-        if (!hasSystemTag(taskDef)) {
+        if (!isFrameworkDefinition(taskDef)) {
           const cfg = getConfig(debugConfig, event!);
           if (cfg.logMiddlewareAfterRun) {
             const msg = `Middleware completed for task ${String(taskDef.id)}`;
@@ -75,7 +73,7 @@ export const middlewareInterceptorResource = defineResource<
         input: IResourceMiddlewareExecutionInput<any>,
       ) => {
         const resourceDef = input.resource.definition;
-        if (!hasSystemTag(resourceDef)) {
+        if (!isFrameworkDefinition(resourceDef)) {
           const cfg = getConfig(debugConfig, event!);
           if (cfg.logMiddlewareBeforeRun) {
             const msg = `Middleware triggered for resource ${String(
@@ -89,7 +87,7 @@ export const middlewareInterceptorResource = defineResource<
 
         const result = await next(input);
 
-        if (!hasSystemTag(resourceDef)) {
+        if (!isFrameworkDefinition(resourceDef)) {
           const cfg = getConfig(debugConfig, event!);
           if (cfg.logMiddlewareAfterRun) {
             const msg = `Middleware completed for resource ${String(

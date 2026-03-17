@@ -1,10 +1,6 @@
-import { ITaggable } from "../../../defs";
-import { globalTags } from "../../globalTags";
+const FRAMEWORK_NAMESPACE_PREFIXES = ["system.", "runner."] as const;
 
-export const hasSystemTag = (definition: ITaggable) => {
-  const maybeTags = definition.tags;
-  if (!Array.isArray(maybeTags)) {
-    return false;
-  }
-  return globalTags.system.exists(definition);
-};
+export const isFrameworkDefinition = (definition: { id: string }): boolean =>
+  FRAMEWORK_NAMESPACE_PREFIXES.some((prefix) =>
+    String(definition.id).startsWith(prefix),
+  );
