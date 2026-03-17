@@ -205,9 +205,9 @@
     "publish": {
       "source": ".agents/skills",
       "export": [
-        "runner",
-        "runner-durable",
-        "runner-remote"
+        "core",
+        "durable-workflows",
+        "remote-lanes"
       ]
     }
   },
