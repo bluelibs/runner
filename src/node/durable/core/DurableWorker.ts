@@ -34,6 +34,35 @@ export class DurableWorker {
         await this.handleMessage(message);
         await this.queue.ack(message.id);
       } catch (error) {
+        let shouldRequeue = message.attempts < message.maxAttempts;
+
+        if (!shouldRequeue) {
+          const executionId = this.extractExecutionId(message.payload);
+          if (executionId) {
+            try {
+              await this.service.failExecutionDeliveryExhausted(executionId, {
+                messageId: message.id,
+                attempts: message.attempts,
+                maxAttempts: message.maxAttempts,
+                errorMessage: this.extractErrorMessage(error),
+              });
+            } catch (terminalizationError) {
+              shouldRequeue = true;
+              try {
+                await this.logger.error(
+                  "Durable worker failed to mark exhausted delivery as terminal.",
+                  {
+                    error: terminalizationError,
+                    data: { messageId: message.id, executionId },
+                  },
+                );
+              } catch {
+                // Logging must not affect message acknowledgement flow.
+              }
+            }
+          }
+        }
+
         try {
           await this.logger.error("Durable worker failed to process message.", {
             error,
@@ -42,10 +71,7 @@ export class DurableWorker {
         } catch {
           // Logging must not affect message acknowledgement flow.
         }
-        await this.queue.nack(
-          message.id,
-          message.attempts < message.maxAttempts,
-        );
+        await this.queue.nack(message.id, shouldRequeue);
       }
     });
   }
@@ -67,6 +93,11 @@ export class DurableWorker {
       return typeof value === "string" ? value : null;
     }
     return null;
+  }
+
+  private extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
   }
 }
 

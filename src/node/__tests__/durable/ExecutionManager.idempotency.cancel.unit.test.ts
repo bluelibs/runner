@@ -609,6 +609,245 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     );
   });
 
+  it("updates failures with a minimal patch when attempts are exhausted", async () => {
+    const updateExecution = jest.fn(
+      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
+        undefined,
+    );
+
+    const execution: Execution = {
+      id: "e-fail-patch",
+      taskId: TaskId.T,
+      input: { hello: "world" },
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const store: IDurableStore = {
+      saveExecution: async () => {},
+      getExecution: async () => execution,
+      updateExecution,
+      listIncompleteExecutions: async () => [],
+      getStepResult: async () => null,
+      saveStepResult: async () => {},
+      createTimer: async () => {},
+      getReadyTimers: async () => [],
+      markTimerFired: async () => {},
+      deleteTimer: async () => {},
+      createSchedule: async () => {},
+      getSchedule: async () => null,
+      updateSchedule: async () => {},
+      deleteSchedule: async () => {},
+      listSchedules: async () => [],
+      listActiveSchedules: async () => [],
+    };
+
+    const taskExecutor: ITaskExecutor = {
+      run: async () => {
+        throw genericError.new({ message: "kaboom" });
+      },
+    };
+
+    const manager = createManager({ store, taskExecutor });
+    await manager.processExecution(execution.id);
+
+    expect(updateExecution).toHaveBeenNthCalledWith(
+      1,
+      execution.id,
+      expect.objectContaining({ status: ExecutionStatus.Running }),
+    );
+
+    const failedCall = updateExecution.mock.calls[1];
+    expect(failedCall).toBeDefined();
+    if (!failedCall) {
+      throw new Error("Expected failure update call to be recorded");
+    }
+    const failedPatch = failedCall[1] as Record<string, unknown>;
+    expect(failedPatch.status).toBe(ExecutionStatus.Failed);
+    expect(failedPatch.error).toEqual(
+      expect.objectContaining({ message: "kaboom" }),
+    );
+    expect(failedPatch.completedAt).toBeInstanceOf(Date);
+    expect(Object.keys(failedPatch).sort()).toEqual([
+      "completedAt",
+      "error",
+      "status",
+    ]);
+  });
+
+  it("fails executions when queue delivery attempts are exhausted", async () => {
+    const updateExecution = jest.fn(
+      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
+        undefined,
+    );
+
+    const execution: Execution = {
+      id: "e-exhausted",
+      taskId: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Retrying,
+      attempt: 2,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const store: IDurableStore = {
+      saveExecution: async () => {},
+      getExecution: async () => execution,
+      updateExecution,
+      listIncompleteExecutions: async () => [],
+      getStepResult: async () => null,
+      saveStepResult: async () => {},
+      createTimer: async () => {},
+      getReadyTimers: async () => [],
+      markTimerFired: async () => {},
+      deleteTimer: async () => {},
+      createSchedule: async () => {},
+      getSchedule: async () => null,
+      updateSchedule: async () => {},
+      deleteSchedule: async () => {},
+      listSchedules: async () => [],
+      listActiveSchedules: async () => [],
+    };
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await manager.failExecutionDeliveryExhausted(execution.id, {
+      messageId: "m-exhausted",
+      attempts: 3,
+      maxAttempts: 3,
+      errorMessage: "broker rejected message",
+    });
+
+    const updateCall = updateExecution.mock.calls[0];
+    expect(updateCall).toBeDefined();
+    if (!updateCall) {
+      throw new Error("Expected exhausted delivery update call to exist");
+    }
+    const patch = updateCall[1] as Record<string, unknown>;
+    expect(updateExecution).toHaveBeenCalledTimes(1);
+    expect(updateExecution).toHaveBeenCalledWith(
+      execution.id,
+      expect.objectContaining({
+        status: ExecutionStatus.Failed,
+      }),
+    );
+    expect(patch.error).toEqual(
+      expect.objectContaining({
+        message: expect.stringContaining("m-exhausted"),
+      }),
+    );
+    expect(Object.keys(patch).sort()).toEqual([
+      "completedAt",
+      "error",
+      "status",
+    ]);
+  });
+
+  it("ignores exhausted delivery notifications for missing executions", async () => {
+    const updateExecution = jest.fn(
+      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
+        undefined,
+    );
+
+    const store: IDurableStore = {
+      saveExecution: async () => {},
+      getExecution: async () => null,
+      updateExecution,
+      listIncompleteExecutions: async () => [],
+      getStepResult: async () => null,
+      saveStepResult: async () => {},
+      createTimer: async () => {},
+      getReadyTimers: async () => [],
+      markTimerFired: async () => {},
+      deleteTimer: async () => {},
+      createSchedule: async () => {},
+      getSchedule: async () => null,
+      updateSchedule: async () => {},
+      deleteSchedule: async () => {},
+      listSchedules: async () => [],
+      listActiveSchedules: async () => [],
+    };
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await expect(
+      manager.failExecutionDeliveryExhausted("missing-execution", {
+        messageId: "m-missing",
+        attempts: 3,
+        maxAttempts: 3,
+        errorMessage: "broker rejected message",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(updateExecution).not.toHaveBeenCalled();
+  });
+
+  it("ignores exhausted delivery notifications for terminal executions", async () => {
+    const updateExecution = jest.fn(
+      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
+        undefined,
+    );
+
+    const execution: Execution = {
+      id: "e-terminal",
+      taskId: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Failed,
+      attempt: 3,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+      error: { message: "already failed" },
+    };
+
+    const store: IDurableStore = {
+      saveExecution: async () => {},
+      getExecution: async () => execution,
+      updateExecution,
+      listIncompleteExecutions: async () => [],
+      getStepResult: async () => null,
+      saveStepResult: async () => {},
+      createTimer: async () => {},
+      getReadyTimers: async () => [],
+      markTimerFired: async () => {},
+      deleteTimer: async () => {},
+      createSchedule: async () => {},
+      getSchedule: async () => null,
+      updateSchedule: async () => {},
+      deleteSchedule: async () => {},
+      listSchedules: async () => [],
+      listActiveSchedules: async () => [],
+    };
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await expect(
+      manager.failExecutionDeliveryExhausted(execution.id, {
+        messageId: "m-terminal",
+        attempts: 3,
+        maxAttempts: 3,
+        errorMessage: "broker rejected message",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(updateExecution).not.toHaveBeenCalled();
+  });
+
   it("notifies finished executions via event bus", async () => {
     const published: Array<{ channel: string; type: string }> = [];
 

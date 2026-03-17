@@ -123,7 +123,10 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
 
     const parsedAttempts =
       typeof parsed.attempts === "number" ? parsed.attempts : 0;
-    const nextAttempts = parsedAttempts + 1;
+    const headerAttempts = this.getDeliveryAttemptsFromHeaders(rawMessage);
+    const currentAttempts = this.messagesById.get(parsed.id)?.attempts;
+    const nextAttempts =
+      Math.max(currentAttempts ?? 0, parsedAttempts, headerAttempts ?? 0) + 1;
     const maxAttempts =
       typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : 1;
 
@@ -140,6 +143,16 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
     this.messagesById.set(message.id, message);
 
     return message;
+  }
+
+  private getDeliveryAttemptsFromHeaders(
+    message: ConsumeMessage,
+  ): number | undefined {
+    const deliveryCount = message.properties?.headers?.["x-delivery-count"];
+    if (typeof deliveryCount === "number" && Number.isFinite(deliveryCount)) {
+      return deliveryCount;
+    }
+    return undefined;
   }
 
   async init(): Promise<void> {

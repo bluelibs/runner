@@ -309,9 +309,9 @@ export const tenantInvalidContextError = error<
   .format(
     ({ reason }) =>
       reason ??
-      'Tenant context must be an object containing a non-empty string "tenantId".',
+      'Tenant context must be an object containing a non-empty string "tenantId" that does not contain ":" and is not "__global__".',
   )
   .remediation(
-    'Pass asyncContexts.tenant.provide({ tenantId: "your-tenant" }, fn) with a valid non-empty tenant id.',
+    'Pass asyncContexts.tenant.provide({ tenantId: "your-tenant" }, fn) with a valid non-empty tenant id that does not contain ":" and is not "__global__".',
   )
   .build();

@@ -890,6 +890,7 @@ Runner's official same-runtime multi-tenant pattern uses `asyncContexts.tenant`.
 - `tenant.require()` enforces tenant presence.
 - Augment `TenantContextValue` when your app needs extra tenant metadata.
 - Provide tenant identity at ingress with `tenant.provide({ tenantId }, fn)`.
+- `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because tenant-aware middleware reserves those for internal namespace partitioning.
 
 Tenant-sensitive middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` default to `tenantScope: "auto"`:
 

@@ -313,6 +313,21 @@ export class DurableService implements IDurableService {
     return this.executionManager.processExecution(executionId);
   }
 
+  async failExecutionDeliveryExhausted(
+    executionId: string,
+    details: {
+      messageId: string;
+      attempts: number;
+      maxAttempts: number;
+      errorMessage: string;
+    },
+  ): Promise<void> {
+    return this.executionManager.failExecutionDeliveryExhausted(
+      executionId,
+      details,
+    );
+  }
+
   getEventBus() {
     return this.config.eventBus ?? new NoopEventBus();
   }

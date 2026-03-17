@@ -64,9 +64,27 @@ describe("asyncContexts.tenant", () => {
     expect(() =>
       asyncContexts.tenant.provide(tenantValue(""), () => "nope"),
     ).toThrow();
+    expect(() =>
+      asyncContexts.tenant.provide(tenantValue("acme:west"), () => "nope"),
+    ).toThrow(/cannot contain ":"/);
+    expect(() =>
+      asyncContexts.tenant.provide(tenantValue("__global__"), () => "nope"),
+    ).toThrow(/reserved for the shared non-tenant namespace/);
 
     try {
       asyncContexts.tenant.provide(tenantValue(""), () => "nope");
+    } catch (error) {
+      expect(tenantInvalidContextError.is(error)).toBe(true);
+    }
+
+    try {
+      asyncContexts.tenant.provide(tenantValue("acme:west"), () => "nope");
+    } catch (error) {
+      expect(tenantInvalidContextError.is(error)).toBe(true);
+    }
+
+    try {
+      asyncContexts.tenant.provide(tenantValue("__global__"), () => "nope");
     } catch (error) {
       expect(tenantInvalidContextError.is(error)).toBe(true);
     }

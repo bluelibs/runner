@@ -341,37 +341,15 @@ export class ExecutionManager {
   async processExecution(executionId: string): Promise<void> {
     const execution = await this.config.store.getExecution(executionId);
     if (!execution) return;
-    if (
-      execution.status === ExecutionStatus.Completed ||
-      execution.status === ExecutionStatus.Failed ||
-      execution.status === ExecutionStatus.CompensationFailed ||
-      execution.status === ExecutionStatus.Cancelled
-    )
-      return;
+    if (this.isExecutionTerminal(execution.status)) return;
 
     const task = this.taskRegistry.find(execution.taskId);
     if (!task) {
-      const error = { message: `Task not registered: ${execution.taskId}` };
-      const completedAt = new Date();
-      await this.config.store.updateExecution(execution.id, {
-        status: ExecutionStatus.Failed,
-        error,
-        completedAt,
-      });
-      await this.auditLogger.log({
-        kind: DurableAuditEntryKind.ExecutionStatusChanged,
-        executionId: execution.id,
-        taskId: execution.taskId,
-        attempt: execution.attempt,
+      await this.transitionExecutionToFailed({
+        execution,
         from: execution.status,
-        to: ExecutionStatus.Failed,
         reason: "task_not_registered",
-      });
-      await this.notifyExecutionFinished({
-        ...execution,
-        status: ExecutionStatus.Failed,
-        error,
-        completedAt,
+        error: { message: `Task not registered: ${execution.taskId}` },
       });
       return;
     }
@@ -398,6 +376,32 @@ export class ExecutionManager {
         await this.config.store.releaseLock(lockResource, lockId);
       }
     }
+  }
+
+  async failExecutionDeliveryExhausted(
+    executionId: string,
+    details: {
+      messageId: string;
+      attempts: number;
+      maxAttempts: number;
+      errorMessage: string;
+    },
+  ): Promise<void> {
+    const execution = await this.config.store.getExecution(executionId);
+    if (!execution) return;
+    if (this.isExecutionTerminal(execution.status)) return;
+
+    const message =
+      `Queue delivery attempts exhausted for execution ${executionId} ` +
+      `(message ${details.messageId}, attempts ${details.attempts}/${details.maxAttempts}): ` +
+      details.errorMessage;
+
+    await this.transitionExecutionToFailed({
+      execution,
+      from: execution.status,
+      reason: "delivery_attempts_exhausted",
+      error: { message },
+    });
   }
 
   private startLockHeartbeat(params: {
@@ -496,23 +500,12 @@ export class ExecutionManager {
         stack?: string;
       },
     ): Promise<void> => {
-      const failedExecution: Execution = {
-        ...execution,
-        status: ExecutionStatus.Failed,
-        error,
-        completedAt: new Date(),
-      };
-      await this.config.store.updateExecution(execution.id, failedExecution);
-      await this.auditLogger.log({
-        kind: DurableAuditEntryKind.ExecutionStatusChanged,
-        executionId: execution.id,
-        taskId: execution.taskId,
-        attempt: execution.attempt,
+      await this.transitionExecutionToFailed({
+        execution,
         from: ExecutionStatus.Running,
-        to: ExecutionStatus.Failed,
         reason,
+        error,
       });
-      await this.notifyExecutionFinished(failedExecution);
     };
 
     try {
@@ -647,5 +640,50 @@ export class ExecutionManager {
       });
     }
     return resolved!;
+  }
+
+  private isExecutionTerminal(status: ExecutionStatus): boolean {
+    return (
+      status === ExecutionStatus.Completed ||
+      status === ExecutionStatus.Failed ||
+      status === ExecutionStatus.CompensationFailed ||
+      status === ExecutionStatus.Cancelled
+    );
+  }
+
+  private async transitionExecutionToFailed(params: {
+    execution: Execution<unknown, unknown>;
+    from: ExecutionStatus;
+    reason:
+      | "failed"
+      | "timed_out"
+      | "task_not_registered"
+      | "delivery_attempts_exhausted";
+    error: {
+      message: string;
+      stack?: string;
+    };
+  }): Promise<void> {
+    const completedAt = new Date();
+    const failedPatch = {
+      status: ExecutionStatus.Failed,
+      error: params.error,
+      completedAt,
+    };
+
+    await this.config.store.updateExecution(params.execution.id, failedPatch);
+    await this.auditLogger.log({
+      kind: DurableAuditEntryKind.ExecutionStatusChanged,
+      executionId: params.execution.id,
+      taskId: params.execution.taskId,
+      attempt: params.execution.attempt,
+      from: params.from,
+      to: ExecutionStatus.Failed,
+      reason: params.reason,
+    });
+    await this.notifyExecutionFinished({
+      ...params.execution,
+      ...failedPatch,
+    });
   }
 }

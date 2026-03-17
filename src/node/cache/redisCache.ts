@@ -280,8 +280,10 @@ export class RedisCache implements ICacheProvider {
     previousRefs: readonly string[],
     nextRefs: readonly string[],
   ) {
-    const refsToRemove = previousRefs.filter((ref) => !nextRefs.includes(ref));
-    const refsToAdd = nextRefs.filter((ref) => !previousRefs.includes(ref));
+    const previousRefSet = new Set(previousRefs);
+    const nextRefSet = new Set(nextRefs);
+    const refsToRemove = previousRefs.filter((ref) => !nextRefSet.has(ref));
+    const refsToAdd = nextRefs.filter((ref) => !previousRefSet.has(ref));
 
     for (const ref of refsToRemove) {
       await this.config.redis.srem(this.getRefMembersKey(ref), entryId);

@@ -10,6 +10,8 @@ import { Match } from "../tools/check";
 import type { IAsyncContext } from "../types/asyncContext";
 
 export const TENANT_ASYNC_CONTEXT_ID = "tenant";
+export const GLOBAL_TENANT_NAMESPACE = "__global__";
+export const TENANT_ID_SEPARATOR = ":";
 
 export const tenantContextValuePattern = Match.ObjectIncluding({
   tenantId: Match.NonEmptyString,
@@ -55,6 +57,20 @@ function getTenantAsyncContext(): IAsyncContext<TenantContextValue> | null {
 export function validateTenantContextValue(value: unknown): TenantContextValue {
   if (!Match.test(value, tenantContextValuePattern)) {
     throw tenantInvalidContextError.new({});
+  }
+
+  const tenantId = value.tenantId;
+
+  if (tenantId === GLOBAL_TENANT_NAMESPACE) {
+    throw tenantInvalidContextError.new({
+      reason: `Tenant context "tenantId" cannot be "${GLOBAL_TENANT_NAMESPACE}" because that value is reserved for the shared non-tenant namespace.`,
+    });
+  }
+
+  if (tenantId.includes(TENANT_ID_SEPARATOR)) {
+    throw tenantInvalidContextError.new({
+      reason: `Tenant context "tenantId" cannot contain "${TENANT_ID_SEPARATOR}" because tenant-scoped middleware keys use it as a separator.`,
+    });
   }
 
   // App-level TenantContextValue augmentation may require fields that Runner

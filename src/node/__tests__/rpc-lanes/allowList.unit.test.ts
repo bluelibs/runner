@@ -81,4 +81,41 @@ describe("computeRpcLaneAllowList", () => {
     expect(allowList.taskIds.size).toBe(0);
     expect(allowList.eventIds.size).toBe(0);
   });
+
+  it("conservatively merges async context decisions across overlapping resources", () => {
+    const taskId = "tests-rpc-lanes-overlap-task";
+    const eventId = "tests-rpc-lanes-overlap-event";
+    const store = createStore([
+      {
+        tags: [globalTags.rpcLanes],
+        value: {
+          serveTaskIds: [taskId],
+          serveEventIds: [eventId],
+          taskAllowAsyncContext: { [taskId]: false },
+          eventAllowAsyncContext: { [eventId]: false },
+          taskAsyncContextAllowList: { [taskId]: ["ctx-a"] },
+          eventAsyncContextAllowList: { [eventId]: ["ctx-a"] },
+        },
+      },
+      {
+        tags: [globalTags.rpcLanes],
+        value: {
+          serveTaskIds: [taskId],
+          serveEventIds: [eventId],
+          taskAllowAsyncContext: { [taskId]: true },
+          eventAllowAsyncContext: { [eventId]: true },
+          taskAsyncContextAllowList: { [taskId]: ["ctx-b"] },
+          eventAsyncContextAllowList: { [eventId]: ["ctx-b"] },
+        },
+      },
+    ]);
+
+    const allowList = computeRpcLaneAllowList(store);
+    expect(allowList.taskAcceptsAsyncContext.get(taskId)).toBe(false);
+    expect(allowList.eventAcceptsAsyncContext.get(eventId)).toBe(false);
+    expect(allowList.taskAsyncContextAllowList.get(taskId)).toEqual(["ctx-b"]);
+    expect(allowList.eventAsyncContextAllowList.get(eventId)).toEqual([
+      "ctx-b",
+    ]);
+  });
 });

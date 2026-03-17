@@ -8,14 +8,26 @@ class FakeRedis {
   private readonly zsets = new Map<string, Map<string, number>>();
 
   async del(...keys: string[]) {
+    let deletedCount = 0;
     for (const key of keys) {
-      this.strings.delete(key);
-      this.hashes.delete(key);
-      this.sets.delete(key);
-      this.zsets.delete(key);
+      if (this.strings.delete(key)) {
+        deletedCount += 1;
+        continue;
+      }
+      if (this.hashes.delete(key)) {
+        deletedCount += 1;
+        continue;
+      }
+      if (this.sets.delete(key)) {
+        deletedCount += 1;
+        continue;
+      }
+      if (this.zsets.delete(key)) {
+        deletedCount += 1;
+      }
     }
 
-    return keys.length;
+    return deletedCount;
   }
 
   async exists(key: string) {
@@ -32,15 +44,18 @@ class FakeRedis {
       return 0;
     }
 
+    let deletedCount = 0;
     for (const field of fields) {
-      hash.delete(field);
+      if (hash.delete(field)) {
+        deletedCount += 1;
+      }
     }
 
     if (hash.size === 0) {
       this.hashes.delete(key);
     }
 
-    return fields.length;
+    return deletedCount;
   }
 
   async hget(key: string, field: string) {
@@ -63,11 +78,15 @@ class FakeRedis {
 
   async sadd(key: string, ...members: string[]) {
     const set = this.sets.get(key) ?? new Set<string>();
+    let addedCount = 0;
     for (const member of members) {
+      if (!set.has(member)) {
+        addedCount += 1;
+      }
       set.add(member);
     }
     this.sets.set(key, set);
-    return set.size;
+    return addedCount;
   }
 
   async set(key: string, value: string) {
@@ -85,15 +104,18 @@ class FakeRedis {
       return 0;
     }
 
+    let removedCount = 0;
     for (const member of members) {
-      set.delete(member);
+      if (set.delete(member)) {
+        removedCount += 1;
+      }
     }
 
     if (set.size === 0) {
       this.sets.delete(key);
     }
 
-    return members.length;
+    return removedCount;
   }
 
   async zadd(key: string, score: number, member: string) {
@@ -113,15 +135,18 @@ class FakeRedis {
       return 0;
     }
 
+    let removedCount = 0;
     for (const member of members) {
-      zset.delete(member);
+      if (zset.delete(member)) {
+        removedCount += 1;
+      }
     }
 
     if (zset.size === 0) {
       this.zsets.delete(key);
     }
 
-    return members.length;
+    return removedCount;
   }
 }
 

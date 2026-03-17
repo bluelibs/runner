@@ -55,6 +55,91 @@ describe("Store", () => {
     expect(cooldownResource.resource.cooldown).not.toHaveBeenCalled();
   });
 
+  it("should await started parallel ready tasks when shouldStop throws mid-wave", async () => {
+    const startedReady = new Promise<void>((resolve) => {
+      setTimeout(resolve, 5);
+    });
+    const readyResource = {
+      isInitialized: true,
+      resource: {
+        id: "store-ready-wave-started-resource",
+        ready: jest.fn(async () => startedReady),
+      },
+    };
+    const skippedResource = {
+      isInitialized: true,
+      resource: {
+        id: "store-ready-wave-skipped-resource",
+        ready: jest.fn(async () => undefined),
+      },
+    };
+    let shouldStopCalls = 0;
+    const stopError = genericError.new({ message: "stop-ready-wave" });
+
+    const readyWavePromise = (store as any).readyWave(
+      {
+        parallel: true,
+        resources: [readyResource, skippedResource],
+      },
+      {
+        shouldStop: () => {
+          shouldStopCalls += 1;
+          if (shouldStopCalls > 1) {
+            throw stopError;
+          }
+        },
+      },
+    );
+
+    const pendingState = await Promise.race([
+      readyWavePromise.then(
+        () => "settled",
+        () => "settled",
+      ),
+      new Promise<"pending">((resolve) =>
+        setTimeout(() => resolve("pending"), 0),
+      ),
+    ]);
+
+    expect(pendingState).toBe("pending");
+    await expect(readyWavePromise).rejects.toMatchObject({
+      id: "genericError",
+      data: { message: "stop-ready-wave" },
+    });
+    expect(readyResource.resource.ready).toHaveBeenCalledTimes(1);
+    expect(skippedResource.resource.ready).not.toHaveBeenCalled();
+  });
+
+  it("should stop parallel ready waves before starting resources", async () => {
+    const readyResource = {
+      isInitialized: true,
+      resource: {
+        id: "store-ready-wave-never-started-resource",
+        ready: jest.fn(async () => undefined),
+      },
+    };
+    const stopError = genericError.new({ message: "stop-before-ready-wave" });
+
+    await expect(
+      (store as any).readyWave(
+        {
+          parallel: true,
+          resources: [readyResource],
+        },
+        {
+          shouldStop: () => {
+            throw stopError;
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      id: "genericError",
+      data: { message: "stop-before-ready-wave" },
+    });
+
+    expect(readyResource.resource.ready).not.toHaveBeenCalled();
+  });
+
   it("should expose visibility helper methods", () => {
     const rootResource = defineResource({
       id: "store-visibility-helpers-root",

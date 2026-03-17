@@ -92,6 +92,7 @@ That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` prefi
 - Use `tenantScope: "auto"` when you want to make that default explicit in config.
 - Use `tenantScope: "required"` when middleware correctness depends on tenant context being present.
 - Use `tenantScope: "off"` only for intentional cross-tenant sharing.
+- `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because tenant-aware middleware reserves those for internal namespace partitioning.
 
 ```typescript
 import { middleware } from "@bluelibs/runner";

@@ -783,16 +783,25 @@ export class Store {
     options?: { shouldStop?: () => void },
   ): Promise<void> {
     if (wave.parallel) {
+      const runningReadyPromises: Promise<void>[] = [];
       try {
-        await Promise.all(
-          wave.resources.map((resource) => {
-            options?.shouldStop?.();
-            return this.runReadyResource(resource);
-          }),
-        );
+        for (const resource of wave.resources) {
+          options?.shouldStop?.();
+          runningReadyPromises.push(this.runReadyResource(resource));
+        }
+      } catch (error) {
+        if (runningReadyPromises.length > 0) {
+          await Promise.allSettled(runningReadyPromises);
+        }
+        throw this.normalizeError(error);
+      }
+
+      try {
+        await Promise.all(runningReadyPromises);
       } catch (error) {
         throw this.normalizeError(error);
       }
+
       return;
     }
 

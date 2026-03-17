@@ -86,6 +86,31 @@ describe("durable: DurableService — execution (unit)", () => {
     await expect(service.startAndWait(task)).rejects.toThrow("taskExecutor");
   });
 
+  it("delegates exhausted delivery failures to the execution manager", async () => {
+    const service = new DurableService({
+      store: new MemoryStore(),
+      tasks: [],
+    });
+
+    const failExecutionDeliveryExhausted = jest
+      .spyOn(service._executionManager, "failExecutionDeliveryExhausted")
+      .mockResolvedValue(undefined);
+
+    await service.failExecutionDeliveryExhausted("e-delegated", {
+      messageId: "m-delegated",
+      attempts: 3,
+      maxAttempts: 3,
+      errorMessage: "queue exhausted",
+    });
+
+    expect(failExecutionDeliveryExhausted).toHaveBeenCalledWith("e-delegated", {
+      messageId: "m-delegated",
+      attempts: 3,
+      maxAttempts: 3,
+      errorMessage: "queue exhausted",
+    });
+  });
+
   it("resolves a task by id string for startAndWait/schedule", async () => {
     const store = new MemoryStore();
     const task = r

@@ -174,6 +174,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
     expect(schedule?.type).toBe("interval");
     expect(schedule?.pattern).toBe("1000");
     expect(schedule?.input).toEqual({ version: 2 });
+    expect(afterTimer).toBeDefined();
     expect(afterTimer?.input).toEqual({ version: 2 });
     expect(afterTimer?.fireAt.getTime()).toBe(beforeTimer?.fireAt.getTime());
   });
@@ -194,6 +195,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
     const beforeTimer = (await futureTimers(store)).find(
       (t) => t.id === "sched:s1",
     );
+    expect(beforeTimer).toBeDefined();
 
     await service.updateSchedule("s1", { cron: "*/5 * * * *" });
 
@@ -201,6 +203,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
     const afterTimer = (await futureTimers(store)).find(
       (t) => t.id === "sched:s1",
     );
+    expect(afterTimer).toBeDefined();
 
     expect(schedule?.type).toBe("cron");
     expect(schedule?.pattern).toBe("*/5 * * * *");

@@ -30,7 +30,7 @@ High-level takeaways:
 - Cache key builders can return `{ cacheKey, refs }` and call
   `cacheResource.invalidateRefs(...)` to purge entries by semantic identity.
 - The `isOneOf()` event guard now requires definition identity — arbitrary
-  `{ id }` shaped objects no longer match.
+  `{ id }`-shaped objects no longer match.
 - Bootstrap phases are now interruptible: shutdown requested mid-startup
   cooperatively stops remaining ready waves.
 - Internal framework resources (`system`, `runner`) now carry metadata for
@@ -102,6 +102,12 @@ When `force: true` is used, Runner:
 Important: force disposal does not preempt lifecycle work already in flight. If
 `cooldown()` is mid-execution, it completes before disposal proceeds. The
 escalation only skips phases that have not started yet.
+
+Once force disposal is requested, any new business calls (`runTask`,
+`emitEvent`, `getResourceValue`, etc.) are immediately rejected with the typed
+`shutdownLockdownError` instead of being admitted into the cooling-down
+runtime. This prevents new work from sneaking in while the remaining graceful
+phases are being skipped.
 
 The `ForceDisposalController` coordinates internally via a promise-based signal
 that the shutdown disposal lifecycle checks at each phase boundary.
@@ -282,7 +288,7 @@ const boot = r
 marker.
 
 **Now:** `isOneOf()` only checks definition identity via `isSameDefinition()`.
-Arbitrary `{ id }` shaped objects that are not actual Runner definitions no
+Arbitrary `{ id }`-shaped objects that are not actual Runner definitions no
 longer match.
 
 ```ts
@@ -457,6 +463,128 @@ ref-based invalidation:
 
 ---
 
+### Redis Cache: Cross-Task Ref Unlinking Fix
+
+Shared-budget eviction in `RedisCache` could remove entries belonging to a
+different task cache. The ref membership set was always keyed by the current
+instance's task token, causing stale ref pointers when eviction crossed task
+boundaries. The unlink logic now uses the evicted entry's task token so the
+correct ref membership set is cleaned up.
+
+---
+
+### Cache Resource: Resilient Ref Invalidation
+
+`invalidateRefs()` is a best-effort fan-out across all task-local caches. A
+failure in one provider no longer stops the remaining targets from cleaning up.
+Errors are logged with the cache source and ref details, and invalidation
+continues across the remaining task caches.
+
+Concurrent invalidations for the same task now reuse in-flight provider
+creation promises instead of creating duplicate disposable cache instances.
+
+---
+
+### Improved Access Violation Error Remediation
+
+The `runtimeAccessViolationError` remediation message now distinguishes between
+three states:
+
+- Root does not declare any exports (no isolation policy)
+- Root declares exports and currently exports specific ids
+- Root declares exports but currently exports none
+
+This provides clearer guidance when debugging runtime API access violations.
+
+---
+
+## Bug Fixes
+
+### Durable Workflows
+
+#### Execution Timeout Now Fails Gracefully Instead of Throwing Invariant Error
+
+**Previously:** when a durable execution timed out, `ExecutionManager` threw a
+`durableExecutionInvariantError`, which could crash the worker process or leave
+the execution in an inconsistent state.
+
+**Now:** timed-out executions are marked as `Failed` with a `"timed_out"`
+reason through the normal failure path. The execution is properly audited and
+finished notifications are sent. Timeouts no longer trigger retries — a
+timed-out execution fails immediately regardless of remaining attempts.
+
+---
+
+#### DurableWorker Respects `maxAttempts` on Nack
+
+**Previously:** `DurableWorker` always nacked with `requeue: true`, so messages
+that had exhausted their retry budget kept cycling through the queue
+indefinitely.
+
+**Now:** nack only requeues when `message.attempts < message.maxAttempts`.
+Exhausted messages are dead-lettered or discarded by the broker.
+
+---
+
+#### DurableService No Longer Re-Kicks Retrying Executions
+
+**Previously:** `DurableService.rehydrate()` included `ExecutionStatus.Retrying`
+in the set of statuses that trigger `kickoffExecution()`, which could
+re-dispatch an execution that was already waiting for its retry delay.
+
+**Now:** only `Pending`, `Running`, and `Sleeping` executions are re-kicked
+during rehydration.
+
+---
+
+#### Schedule Update Now Properly Reschedules Active Timers
+
+**Previously:** `ScheduleManager.update()` wrote the new pattern to the store
+but did not reschedule the timer. An active schedule with a changed cron or
+interval would keep firing on the old cadence until the next manual
+reschedule.
+
+**Now:** `update()` reschedules the timer when cron or interval changes. For
+input-only updates on active schedules, the existing `nextRun` is preserved
+and the timer is re-armed with the updated input. Inactive schedules skip
+timer operations entirely.
+
+---
+
+#### Schedule Resume Preserves Active Status
+
+**Previously:** `ScheduleManager.resume()` called `reschedule()` with the
+stored schedule object, which might still carry `paused` status in the local
+copy even though the store had already been updated.
+
+**Now:** `resume()` merges `status: Active` into the schedule before
+rescheduling, ensuring the timer is always armed with the correct status.
+
+---
+
+### RabbitMQ Queue Improvements
+
+#### Accurate Attempt Tracking via `x-delivery-count` Header
+
+**Previously:** RabbitMQ queue message attempt counts relied solely on
+in-memory tracking and the serialized `attempts` field. Broker-level redeliveries
+(connection drops, nack-requeue cycles) were invisible, causing attempt counters
+to undercount.
+
+**Now:** both `RabbitMQQueue` and the underlying `createConsumeHandler` receive
+the full `ConsumeMessage` (including `properties.headers`). The
+`x-delivery-count` header — set by RabbitMQ's quorum queues and some
+plugins — is factored into the attempt calculation:
+
+```ts
+nextAttempts = Math.max(localAttempts, serializedAttempts, headerAttempts) + 1;
+```
+
+This ensures message handlers see accurate attempt numbers even after
+broker-level redeliveries.
+
+---
+
 ## Documentation
 
 - `guide-units/02c-events-and-hooks.md` — added Mermaid sequence diagrams for
@@ -510,5 +638,20 @@ All new functionality ships with full test coverage:
 | `define/events.type-test.ts` (expanded)           | Type-level tests for `HookOnPredicate`, `HookSelectorTarget`                                    |
 | `cache-provider.type-test.ts` (expanded)          | Type-level tests for `CacheKeyDescriptor`                                                       |
 
-85 files changed, 5703 insertions, 628 deletions across source, tests, and
+Additional test files in the latest round:
+
+| Test File                                           | Focus                                                                 |
+| --------------------------------------------------- | --------------------------------------------------------------------- |
+| `cache.resource.invalidate-refs.test.ts`            | Resilient ref invalidation fan-out, concurrent provider dedup         |
+| `runShutdownController.test.ts`                     | Shutdown controller integration, force dispose propagation            |
+| `runtimeAccessViolationError.test.ts`               | Remediation message variants for export states                        |
+| `redisCache.refs.test.ts`                           | Cross-task ref unlinking in Redis cache                               |
+| `DurableService.execution.unit.test.ts` (expanded)  | Timeout failure path, graceful execution marking                      |
+| `DurableService.scheduling.unit.test.ts` (expanded) | Schedule update rescheduling, resume status, input-only updates       |
+| `DurableWorker.test.ts` (expanded)                  | Nack respects maxAttempts                                             |
+| `RabbitMQQueue.mock.test.ts`                        | `x-delivery-count` header parsing, attempt tracking                   |
+| `RunResult.coverage.test.ts` (expanded)             | `shutdownLockdownError` during force dispose                          |
+| `VisibilityTracker.deny-mode.test.ts` (expanded)    | Deny-mode isolation channel access checks                             |
+
+111 files changed, 7121 insertions, 830 deletions across source, tests, and
 documentation.

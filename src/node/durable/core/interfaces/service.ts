@@ -210,4 +210,18 @@ export interface IDurableService {
 
 export interface IDurableExecutionProcessor {
   processExecution(executionId: string): Promise<void>;
+
+  /**
+   * Marks an execution as terminally failed when queue delivery attempts are
+   * exhausted and the message is being dropped.
+   */
+  failExecutionDeliveryExhausted(
+    executionId: string,
+    details: {
+      messageId: string;
+      attempts: number;
+      maxAttempts: number;
+      errorMessage: string;
+    },
+  ): Promise<void>;
 }

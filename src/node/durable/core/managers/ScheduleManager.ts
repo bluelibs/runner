@@ -181,6 +181,7 @@ export class ScheduleManager {
   async resume(id: string): Promise<void> {
     const schedule = await this.store.getSchedule(id);
     if (!schedule) return;
+    if (schedule.status === ScheduleStatus.Active) return;
 
     await this.store.updateSchedule(id, {
       status: ScheduleStatus.Active,
@@ -212,19 +213,23 @@ export class ScheduleManager {
       "input",
     );
 
-    const type =
-      updates.cron !== undefined
-        ? ScheduleType.Cron
-        : updates.interval !== undefined
-          ? ScheduleType.Interval
-          : existing.type;
-    const pattern =
-      updates.cron ??
-      (updates.interval !== undefined
-        ? String(updates.interval)
-        : existing.pattern);
+    const { type, pattern } = this.resolveUpdatedCadence(existing, updates);
     const input = hasInputUpdate ? updates.input : existing.input;
     const updatedAt = new Date();
+    const cadenceChanged =
+      type !== existing.type || pattern !== existing.pattern;
+    const updatedSchedule: Schedule = {
+      ...existing,
+      type,
+      pattern,
+      input,
+      updatedAt,
+    };
+
+    // Fail fast before persisting an invalid cadence update.
+    if (cadenceChanged) {
+      this.computeNextRun(updatedSchedule);
+    }
 
     await this.store.updateSchedule(id, {
       type,
@@ -237,15 +242,7 @@ export class ScheduleManager {
       return;
     }
 
-    const updatedSchedule: Schedule = {
-      ...existing,
-      type,
-      pattern,
-      input,
-      updatedAt,
-    };
-
-    if (updates.cron !== undefined || updates.interval !== undefined) {
+    if (cadenceChanged) {
       await this.reschedule(updatedSchedule);
       return;
     }
@@ -261,6 +258,11 @@ export class ScheduleManager {
     }
 
     const intervalMs = Number(schedule.pattern);
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+      durableScheduleConfigError.throw({
+        message: `Schedule '${schedule.id}' has invalid interval '${schedule.pattern}'`,
+      });
+    }
     return new Date(Date.now() + intervalMs);
   }
 
@@ -281,6 +283,30 @@ export class ScheduleManager {
 
   async remove(id: string): Promise<void> {
     await this.store.deleteSchedule(id);
+  }
+
+  private resolveUpdatedCadence(
+    existing: Schedule,
+    updates: { cron?: string; interval?: number },
+  ): Pick<Schedule, "type" | "pattern"> {
+    if (updates.cron !== undefined) {
+      return {
+        type: ScheduleType.Cron,
+        pattern: updates.cron,
+      };
+    }
+
+    if (updates.interval !== undefined) {
+      return {
+        type: ScheduleType.Interval,
+        pattern: String(updates.interval),
+      };
+    }
+
+    return {
+      type: existing.type,
+      pattern: existing.pattern,
+    };
   }
 
   private resolveTaskReference(

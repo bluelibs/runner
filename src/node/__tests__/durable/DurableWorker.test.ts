@@ -52,28 +52,71 @@ describe("durable: DurableWorker", () => {
     });
   }
 
+  function createService(params?: {
+    processExecution?: (executionId: string) => Promise<void>;
+    failExecutionDeliveryExhausted?: (
+      executionId: string,
+      details: {
+        messageId: string;
+        attempts: number;
+        maxAttempts: number;
+        errorMessage: string;
+      },
+    ) => Promise<void>;
+  }): {
+    service: IDurableExecutionProcessor;
+    processExecution: jest.MockedFunction<
+      (executionId: string) => Promise<void>
+    >;
+    failExecutionDeliveryExhausted: jest.MockedFunction<
+      (
+        executionId: string,
+        details: {
+          messageId: string;
+          attempts: number;
+          maxAttempts: number;
+          errorMessage: string;
+        },
+      ) => Promise<void>
+    >;
+  } {
+    const processExecution = jest.fn(
+      params?.processExecution ?? (async () => {}),
+    );
+    const failExecutionDeliveryExhausted = jest.fn(
+      params?.failExecutionDeliveryExhausted ?? (async () => {}),
+    );
+
+    return {
+      service: {
+        processExecution,
+        failExecutionDeliveryExhausted,
+      },
+      processExecution,
+      failExecutionDeliveryExhausted,
+    };
+  }
+
   it("acks successful execution messages", async () => {
     const queue = new TestQueue();
-    const service: IDurableExecutionProcessor = {
-      processExecution: jest.fn(async () => {}),
-    };
+    const { service, processExecution } = createService();
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
     await worker.start();
 
     await queue.handler?.(message({ executionId: "e1" }, "execute"));
 
-    expect(service.processExecution).toHaveBeenCalledWith("e1");
+    expect(processExecution).toHaveBeenCalledWith("e1");
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
   it("nacks on handler errors", async () => {
     const queue = new TestQueue();
-    const service: IDurableExecutionProcessor = {
-      processExecution: jest.fn(async () => {
+    const { service, failExecutionDeliveryExhausted } = createService({
+      processExecution: async () => {
         throw genericError.new({ message: "boom" });
-      }),
-    };
+      },
+    });
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
     await worker.start();
@@ -81,15 +124,16 @@ describe("durable: DurableWorker", () => {
     await queue.handler?.(message({ executionId: "e1" }, "resume"));
 
     expect(queue.nackCalls).toEqual([{ id: "m1", requeue: true }]);
+    expect(failExecutionDeliveryExhausted).not.toHaveBeenCalled();
   });
 
-  it("stops requeueing when the queue retry budget is exhausted", async () => {
+  it("marks execution as failed when queue retries are exhausted", async () => {
     const queue = new TestQueue();
-    const service: IDurableExecutionProcessor = {
-      processExecution: jest.fn(async () => {
+    const { service, failExecutionDeliveryExhausted } = createService({
+      processExecution: async () => {
         throw genericError.new({ message: "boom" });
-      }),
-    };
+      },
+    });
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
     await worker.start();
@@ -101,57 +145,133 @@ describe("durable: DurableWorker", () => {
     });
 
     expect(queue.nackCalls).toEqual([{ id: "m1", requeue: false }]);
+    expect(failExecutionDeliveryExhausted).toHaveBeenCalledWith("e1", {
+      messageId: "m1",
+      attempts: 1,
+      maxAttempts: 1,
+      errorMessage: "boom",
+    });
+  });
+
+  it("requeues exhausted messages when terminalization fails", async () => {
+    const queue = new TestQueue();
+    const { service, failExecutionDeliveryExhausted } = createService({
+      processExecution: async () => {
+        throw genericError.new({ message: "boom" });
+      },
+      failExecutionDeliveryExhausted: async () => {
+        throw genericError.new({ message: "terminalization failed" });
+      },
+    });
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    await queue.handler?.({
+      ...message({ executionId: "e1" }, "resume"),
+      attempts: 1,
+      maxAttempts: 1,
+    });
+
+    expect(failExecutionDeliveryExhausted).toHaveBeenCalledWith("e1", {
+      messageId: "m1",
+      attempts: 1,
+      maxAttempts: 1,
+      errorMessage: "boom",
+    });
+    expect(queue.nackCalls).toEqual([{ id: "m1", requeue: true }]);
+  });
+
+  it("forwards non-Error failures as string messages", async () => {
+    const queue = new TestQueue();
+    const { service, failExecutionDeliveryExhausted } = createService({
+      processExecution: async () => {
+        throw "plain boom";
+      },
+    });
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    await queue.handler?.({
+      ...message({ executionId: "e1" }, "resume"),
+      attempts: 1,
+      maxAttempts: 1,
+    });
+
+    expect(failExecutionDeliveryExhausted).toHaveBeenCalledWith("e1", {
+      messageId: "m1",
+      attempts: 1,
+      maxAttempts: 1,
+      errorMessage: "plain boom",
+    });
+    expect(queue.nackCalls).toEqual([{ id: "m1", requeue: false }]);
+  });
+
+  it("drops exhausted messages when processing fails before an execution id can be derived", async () => {
+    const queue = new TestQueue();
+    const { service, failExecutionDeliveryExhausted } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    jest
+      .spyOn(
+        worker as never as { handleMessage: () => Promise<void> },
+        "handleMessage",
+      )
+      .mockRejectedValue(genericError.new({ message: "boom" }));
+    await worker.start();
+
+    await queue.handler?.({
+      ...message("bad-payload", "resume"),
+      attempts: 1,
+      maxAttempts: 1,
+    });
+
+    expect(failExecutionDeliveryExhausted).not.toHaveBeenCalled();
+    expect(queue.nackCalls).toEqual([{ id: "m1", requeue: false }]);
   });
 
   it("uses a fallback logger when logger is omitted", async () => {
     const queue = new TestQueue();
-    const service: IDurableExecutionProcessor = {
-      processExecution: jest.fn(async () => {}),
-    };
+    const { service, processExecution } = createService();
 
     const worker = new DurableWorker(service, queue);
     await worker.start();
 
     await queue.handler?.(message({ executionId: "e1" }, "execute"));
 
-    expect(service.processExecution).toHaveBeenCalledWith("e1");
+    expect(processExecution).toHaveBeenCalledWith("e1");
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
   it("ignores unknown payload shapes", async () => {
     const queue = new TestQueue();
-    const service: IDurableExecutionProcessor = {
-      processExecution: jest.fn(async () => {}),
-    };
+    const { service, processExecution } = createService();
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
     await worker.start();
 
     await queue.handler?.(message("bad", "execute"));
     await queue.handler?.(message({ executionId: 123 }, "execute"));
-    expect(service.processExecution).not.toHaveBeenCalled();
+    expect(processExecution).not.toHaveBeenCalled();
     expect(queue.ackCalls).toEqual(["m1", "m1"]);
   });
 
   it("ignores non-execution message types", async () => {
     const queue = new TestQueue();
-    const service: IDurableExecutionProcessor = {
-      processExecution: jest.fn(async () => {}),
-    };
+    const { service, processExecution } = createService();
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
     await worker.start();
 
     await queue.handler?.(message({ executionId: "e1" }, "schedule"));
-    expect(service.processExecution).toHaveBeenCalledWith("e1");
+    expect(processExecution).toHaveBeenCalledWith("e1");
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
   it("acks unsupported message types without processing executions", async () => {
     const queue = new TestQueue();
-    const service: IDurableExecutionProcessor = {
-      processExecution: jest.fn(async () => {}),
-    };
+    const { service, processExecution } = createService();
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
     await worker.start();
@@ -159,7 +279,7 @@ describe("durable: DurableWorker", () => {
     const unknown = { ...message({ executionId: "e1" }, "execute"), type: "x" };
     await queue.handler?.(unknown as QueueMessage);
 
-    expect(service.processExecution).not.toHaveBeenCalled();
+    expect(processExecution).not.toHaveBeenCalled();
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 });

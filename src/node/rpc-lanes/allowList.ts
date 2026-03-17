@@ -41,6 +41,14 @@ export function computeRpcLaneAllowList(store: Store): RpcLaneAllowList {
     e.resource.tags?.some((t: ITag) => t?.id === globalTags.rpcLanes.id),
   );
 
+  const mergeAsyncContextDecision = (
+    currentDecision: boolean | undefined,
+    nextDecision: boolean,
+  ): boolean => {
+    if (currentDecision === false || nextDecision === false) return false;
+    return true;
+  };
+
   for (const entry of rpcLaneEntries) {
     const value = entry?.value as RpcLanesResourceValue | undefined;
     if (!value || typeof value !== "object") continue;
@@ -56,14 +64,21 @@ export function computeRpcLaneAllowList(store: Store): RpcLaneAllowList {
     const eventContextAllowListMap = value.eventAsyncContextAllowList ?? {};
     for (const taskId of serveTaskIds) {
       taskIds.add(taskId);
-      taskAcceptsAsyncContext.set(taskId, allowContextMap[taskId] !== false);
+      const nextDecision = allowContextMap[taskId] !== false;
+      const currentDecision = taskAcceptsAsyncContext.get(taskId);
+      taskAcceptsAsyncContext.set(
+        taskId,
+        mergeAsyncContextDecision(currentDecision, nextDecision),
+      );
       taskAsyncContextAllowList.set(taskId, taskContextAllowListMap[taskId]);
     }
     for (const eventId of serveEventIds) {
       eventIds.add(eventId);
+      const nextDecision = eventAllowContextMap[eventId] !== false;
+      const currentDecision = eventAcceptsAsyncContext.get(eventId);
       eventAcceptsAsyncContext.set(
         eventId,
-        eventAllowContextMap[eventId] !== false,
+        mergeAsyncContextDecision(currentDecision, nextDecision),
       );
       eventAsyncContextAllowList.set(
         eventId,

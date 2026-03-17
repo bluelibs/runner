@@ -454,6 +454,61 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
     expect(republishedPayload.maxAttempts).toBe(1);
   });
 
+  it("uses x-delivery-count headers to preserve attempts across broker redeliveries", async () => {
+    await queue.init();
+    let consumer:
+      | ((
+          msg: {
+            content: Buffer;
+            properties?: { headers?: Record<string, unknown> };
+          } | null,
+        ) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+
+    const handler = jest.fn(async () => {});
+    await queue.consume(handler);
+
+    const payload = Buffer.from(
+      JSON.stringify({
+        id: "msg-redelivery-count",
+        laneId: "lane.a",
+        eventId: "event.a",
+        payload: "{}",
+        source: { kind: "runtime", id: "tests" },
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: new Date().toISOString(),
+      }),
+    );
+
+    await consumer?.({ content: payload });
+    (
+      queue as unknown as { messagesById: Map<string, unknown> }
+    ).messagesById.clear();
+    await consumer?.({
+      content: payload,
+      properties: { headers: { "x-delivery-count": 1 } },
+    });
+
+    expect(handler).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        id: "msg-redelivery-count",
+        attempts: 1,
+      }),
+    );
+    expect(handler).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        id: "msg-redelivery-count",
+        attempts: 2,
+      }),
+    );
+  });
+
   it("forwards durable/assert/arguments and publishOptions to transport", async () => {
     const configuredQueue = new RabbitMQEventLaneQueue({
       queue: {

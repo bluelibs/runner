@@ -291,9 +291,27 @@ describe("tenantScope middleware support", () => {
 
   it("fails fast on invalid tenant payloads when resolving tenant scope", () => {
     expect(() => resolveTenantContext("auto", () => tenantValue(""))).toThrow();
+    expect(() =>
+      resolveTenantContext("auto", () => tenantValue("acme:west")),
+    ).toThrow(/cannot contain ":"/);
+    expect(() =>
+      resolveTenantContext("auto", () => tenantValue("__global__")),
+    ).toThrow(/reserved for the shared non-tenant namespace/);
 
     try {
       resolveTenantContext("auto", () => tenantValue(""));
+    } catch (error) {
+      expect(tenantInvalidContextError.is(error)).toBe(true);
+    }
+
+    try {
+      resolveTenantContext("auto", () => tenantValue("acme:west"));
+    } catch (error) {
+      expect(tenantInvalidContextError.is(error)).toBe(true);
+    }
+
+    try {
+      resolveTenantContext("auto", () => tenantValue("__global__"));
     } catch (error) {
       expect(tenantInvalidContextError.is(error)).toBe(true);
     }
