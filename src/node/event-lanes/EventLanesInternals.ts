@@ -35,6 +35,7 @@ export interface EventLanesResourceContext {
   coolingDown: boolean;
   disposed: boolean;
   activeBindingsByQueue: Map<IEventLaneQueue, Set<string>>;
+  consumedLaneIds: Set<string>;
   hookAllowlistByLaneId: Map<string, Set<string>>;
   bindingsByLaneId: Map<string, EventLanesResolvedBinding>;
   eventRouteByEventId: Map<string, EventLaneRoute>;
@@ -269,6 +270,7 @@ function buildContext(
     coolingDown: false,
     disposed: false,
     activeBindingsByQueue,
+    consumedLaneIds: new Set(profile.consume.map((entry) => entry.lane.id)),
     hookAllowlistByLaneId,
     bindingsByLaneId,
     eventRouteByEventId,

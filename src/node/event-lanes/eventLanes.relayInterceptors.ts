@@ -14,31 +14,45 @@ type RelayInterceptorDeps = {
   serializer: SerializerLike;
 };
 
+const LOCAL_SIMULATED_RELAY_SUFFIX = ":local-simulated";
+
 function extractRelayLaneId(
   sourceId: string,
   relaySourcePrefix: string,
+  profile: string,
+  consumedLaneIds: ReadonlySet<string>,
 ): string | undefined {
   const relayPayload = sourceId.slice(relaySourcePrefix.length);
-  const profileSeparatorIndex = relayPayload.indexOf(":");
-  if (
-    profileSeparatorIndex < 0 ||
-    profileSeparatorIndex === relayPayload.length - 1
-  ) {
+  const profilePrefix = `${profile}:`;
+  if (!relayPayload.startsWith(profilePrefix)) {
     return undefined;
   }
 
-  const laneAndSuffix = relayPayload.slice(profileSeparatorIndex + 1);
-  const optionalSuffixIndex = laneAndSuffix.indexOf(":");
-  return optionalSuffixIndex < 0
-    ? laneAndSuffix
-    : laneAndSuffix.slice(0, optionalSuffixIndex);
+  const lanePayload = relayPayload.slice(profilePrefix.length);
+  if (!lanePayload) {
+    return undefined;
+  }
+
+  if (consumedLaneIds.has(lanePayload)) {
+    return lanePayload;
+  }
+
+  if (!lanePayload.endsWith(LOCAL_SIMULATED_RELAY_SUFFIX)) {
+    return undefined;
+  }
+
+  const laneId = lanePayload.slice(0, -LOCAL_SIMULATED_RELAY_SUFFIX.length);
+  return laneId && consumedLaneIds.has(laneId) ? laneId : undefined;
 }
 
 export function registerEventLaneRelayInterceptors(options: {
   dependencies: RelayInterceptorDeps;
   context: Pick<
     EventLanesResourceContext,
-    "relaySourcePrefix" | "hookAllowlistByLaneId"
+    | "relaySourcePrefix"
+    | "profile"
+    | "consumedLaneIds"
+    | "hookAllowlistByLaneId"
   >;
 }): void {
   const { dependencies, context } = options;
@@ -56,6 +70,8 @@ export function registerEventLaneRelayInterceptors(options: {
       const relayLaneId = extractRelayLaneId(
         emission.source.id,
         context.relaySourcePrefix,
+        context.profile,
+        context.consumedLaneIds,
       );
 
       if (relayLaneId === undefined && context.hookAllowlistByLaneId.size > 0) {
