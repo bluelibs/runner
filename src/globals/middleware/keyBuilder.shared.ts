@@ -6,13 +6,13 @@ import { Serializer } from "../../serializer";
  */
 export interface MiddlewareKeyBuilderHelpers {
   /**
-   * Canonical task key without the serialized-input suffix.
+   * Full canonical task identity for stateful middleware storage keys.
    *
    * This preserves the full canonical task lineage so keyed middleware does not
    * accidentally share state across sibling resources that reuse the same local
    * task id.
    */
-  canonicalKey: string;
+  storageTaskId: string;
 }
 
 /**
@@ -27,15 +27,11 @@ export type MiddlewareKeyBuilder = (
 const middlewareKeySerializer = new Serializer();
 const KEY_SEPARATOR = ":";
 
-export function toCanonicalTaskKey(taskId: string): string {
-  return taskId;
-}
-
 export function createMiddlewareKeyBuilderHelpers(
   taskId: string,
 ): MiddlewareKeyBuilderHelpers {
   return {
-    canonicalKey: toCanonicalTaskKey(taskId),
+    storageTaskId: taskId,
   };
 }
 
@@ -70,6 +66,4 @@ export const defaultTaskKeyBuilder: MiddlewareKeyBuilder = (
   input,
   helpers,
 ) =>
-  `${
-    helpers?.canonicalKey ?? toCanonicalTaskKey(taskId)
-  }${KEY_SEPARATOR}${serializeDefaultMiddlewareKeyInput(taskId, input)}`;
+  `${helpers?.storageTaskId ?? taskId}${KEY_SEPARATOR}${serializeDefaultMiddlewareKeyInput(taskId, input)}`;

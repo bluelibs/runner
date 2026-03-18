@@ -1,130 +1,216 @@
-import { r } from "../../../";
 import { defineResource, defineTask } from "../../../define";
-import { run } from "../../../run";
+import {
+  type CacheProvider,
+  cacheMiddleware,
+  cacheResource,
+} from "../../../globals/middleware/cache.middleware";
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
 import {
   debounceTaskMiddleware,
   throttleTaskMiddleware,
 } from "../../../globals/middleware/temporal.middleware";
+import { withSiblingTaskCollisionRuntime } from "./keyedMiddlewareCollision.shared";
 
 describe("default keyed middleware behavior", () => {
-  it("keeps full task lineage in default keys across sibling resources", async () => {
-    const billingSync = defineTask({
-      id: "sync",
-      middleware: [rateLimitTaskMiddleware.with({ windowMs: 1_000, max: 1 })],
-      run: async (input: string) => `billing:${input}`,
-    });
-    const crmSync = defineTask({
-      id: "sync",
-      middleware: [rateLimitTaskMiddleware.with({ windowMs: 1_000, max: 1 })],
-      run: async (input: string) => `crm:${input}`,
-    });
-    const app = defineResource({
-      id: "app",
-      register: [
-        r.resource("billing").register([billingSync]).build(),
-        r.resource("crm").register([crmSync]).build(),
-      ],
+  it("keeps shared rate-limit state isolated by full task lineage across sibling resources", async () => {
+    const sharedRateLimit = rateLimitTaskMiddleware.with({
+      windowMs: 1_000,
+      max: 1,
     });
 
-    const runtime = await run(app);
-
-    try {
-      await expect(
-        runtime.runTask("app.billing.tasks.sync", "same"),
-      ).resolves.toBe("billing:same");
-      await expect(runtime.runTask("app.crm.tasks.sync", "same")).resolves.toBe(
-        "crm:same",
-      );
-      await expect(
-        runtime.runTask("app.billing.tasks.sync", "same"),
-      ).rejects.toThrow(/rate limit exceeded/i);
-      await expect(
-        runtime.runTask("app.crm.tasks.sync", "same"),
-      ).rejects.toThrow(/rate limit exceeded/i);
-    } finally {
-      await runtime.dispose();
-    }
+    await withSiblingTaskCollisionRuntime({
+      appId: "app-rate-limit-lineage",
+      createTask: (scope) =>
+        defineTask({
+          id: "sync",
+          middleware: [sharedRateLimit],
+          run: async (input: string) => `${scope}:${input}`,
+        }),
+      test: async ({ runtime, taskIds }) => {
+        await expect(runtime.runTask(taskIds.billing, "same")).resolves.toBe(
+          "billing:same",
+        );
+        await expect(runtime.runTask(taskIds.crm, "same")).resolves.toBe(
+          "crm:same",
+        );
+        await expect(runtime.runTask(taskIds.billing, "same")).rejects.toThrow(
+          /rate limit exceeded/i,
+        );
+        await expect(runtime.runTask(taskIds.crm, "same")).rejects.toThrow(
+          /rate limit exceeded/i,
+        );
+      },
+    });
   });
 
-  it("isolates rate limits per serialized input by default", async () => {
-    const task = defineTask({
-      id: "rateLimit-default-input-aware",
-      middleware: [rateLimitTaskMiddleware.with({ windowMs: 1_000, max: 1 })],
-      run: async (input: string) => input,
-    });
+  it("keeps shared cache middleware task-scoped across sibling resources with the same local id", async () => {
+    const sharedCache = cacheMiddleware.with({ ttl: 60_000 });
+    const runCounts = { billing: 0, crm: 0 };
 
-    const app = defineResource({
-      id: "app-rateLimit-default-input-aware",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await expect(task("a")).resolves.toBe("a");
-        await expect(task("b")).resolves.toBe("b");
-        await expect(task("a")).rejects.toThrow(/rate limit exceeded/i);
+    await withSiblingTaskCollisionRuntime({
+      appId: "app-cache-lineage",
+      register: [cacheResource],
+      createTask: (scope) =>
+        defineTask({
+          id: "sync",
+          middleware: [sharedCache],
+          run: async (input: string) =>
+            `${scope}:${++runCounts[scope]}:${input}`,
+        }),
+      test: async ({ runtime, taskIds }) => {
+        await expect(runtime.runTask(taskIds.billing, "same")).resolves.toBe(
+          "billing:1:same",
+        );
+        await expect(runtime.runTask(taskIds.crm, "same")).resolves.toBe(
+          "crm:1:same",
+        );
+        await expect(runtime.runTask(taskIds.billing, "same")).resolves.toBe(
+          "billing:1:same",
+        );
+        await expect(runtime.runTask(taskIds.crm, "same")).resolves.toBe(
+          "crm:1:same",
+        );
+
+        const cache = runtime.getResourceValue(cacheResource);
+        expect(cache.map.has(taskIds.billing)).toBe(true);
+        expect(cache.map.has(taskIds.crm)).toBe(true);
       },
     });
 
-    await run(app);
+    expect(runCounts).toEqual({ billing: 1, crm: 1 });
   });
 
-  it("debounces only matching serialized inputs by default", async () => {
+  it("keeps cache invalidation targets and transient providers isolated by canonical task lineage", async () => {
+    const createCalls: string[] = [];
+    const invalidationCalls: Array<{
+      refs: readonly string[];
+      taskId: string;
+    }> = [];
+    const sharedCache = cacheMiddleware.with({
+      keyBuilder: (_taskId, input: { userId: string }, helpers) => ({
+        cacheKey: `${helpers!.storageTaskId}:user:${input.userId}`,
+        refs: [`user:${input.userId}`],
+      }),
+    });
+    const customProvider = defineResource({
+      id: "cache-lineage-provider",
+      init:
+        async (): Promise<CacheProvider> =>
+        async ({ taskId }) => {
+          createCalls.push(taskId);
+          return {
+            get: async () => undefined,
+            set: async () => undefined,
+            clear: async () => undefined,
+            invalidateRefs: async (refs) => {
+              invalidationCalls.push({ refs, taskId });
+              return 1;
+            },
+          };
+        },
+    });
+
+    await withSiblingTaskCollisionRuntime({
+      appId: "app-cache-invalidation-lineage",
+      register: [cacheResource.with({ provider: customProvider })],
+      createTask: () =>
+        defineTask({
+          id: "sync",
+          middleware: [sharedCache],
+          run: async () => "never-called",
+        }),
+      test: async ({ runtime, taskIds }) => {
+        const cache = runtime.getResourceValue(cacheResource);
+
+        await expect(cache.invalidateRefs("user:u1")).resolves.toBe(2);
+        await expect(cache.invalidateRefs("user:u1")).resolves.toBe(2);
+
+        expect(createCalls).toEqual([taskIds.billing, taskIds.crm]);
+        expect(invalidationCalls).toEqual([
+          { refs: ["user:u1"], taskId: taskIds.billing },
+          { refs: ["user:u1"], taskId: taskIds.crm },
+          { refs: ["user:u1"], taskId: taskIds.billing },
+          { refs: ["user:u1"], taskId: taskIds.crm },
+        ]);
+      },
+    });
+  });
+
+  it("keeps shared debounce state isolated by full task lineage across sibling resources", async () => {
     jest.useFakeTimers();
-    let callCount = 0;
-
-    const task = defineTask({
-      id: "debounce-default-input-aware",
-      middleware: [debounceTaskMiddleware.with({ ms: 50 })],
-      run: async (input: string) => {
-        callCount += 1;
-        return input;
-      },
-    });
-
-    const app = defineResource({
-      id: "app-debounce-default-input-aware",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        const pending = Promise.all([task("a"), task("b")]);
-        jest.advanceTimersByTime(50);
-        await Promise.resolve();
-        return pending;
-      },
-    });
+    const sharedDebounce = debounceTaskMiddleware.with({ ms: 50 });
+    const runCounts = { billing: 0, crm: 0 };
 
     try {
-      const results = (await run(app)).value;
-      expect(results).toEqual(["a", "b"]);
-      expect(callCount).toBe(2);
+      await withSiblingTaskCollisionRuntime({
+        appId: "app-debounce-lineage",
+        createTask: (scope) =>
+          defineTask({
+            id: "sync",
+            middleware: [sharedDebounce],
+            run: async (input: string) =>
+              `${scope}:${++runCounts[scope]}:${input}`,
+          }),
+        test: async ({ runtime, taskIds }) => {
+          const pending = Promise.all([
+            runtime.runTask(taskIds.billing, "same"),
+            runtime.runTask(taskIds.crm, "same"),
+          ]);
+
+          jest.advanceTimersByTime(50);
+          await Promise.resolve();
+
+          await expect(pending).resolves.toEqual([
+            "billing:1:same",
+            "crm:1:same",
+          ]);
+        },
+      });
     } finally {
       jest.useRealTimers();
     }
+
+    expect(runCounts).toEqual({ billing: 1, crm: 1 });
   });
 
-  it("throttles only matching serialized inputs by default", async () => {
-    let callCount = 0;
+  it("keeps shared throttle state isolated by full task lineage across sibling resources", async () => {
+    jest.useFakeTimers();
+    const sharedThrottle = throttleTaskMiddleware.with({ ms: 50 });
+    const runCounts = { billing: 0, crm: 0 };
 
-    const task = defineTask({
-      id: "throttle-default-input-aware",
-      middleware: [throttleTaskMiddleware.with({ ms: 50 })],
-      run: async (input: string) => {
-        callCount += 1;
-        return input;
-      },
-    });
+    try {
+      await withSiblingTaskCollisionRuntime({
+        appId: "app-throttle-lineage",
+        createTask: (scope) =>
+          defineTask({
+            id: "sync",
+            middleware: [sharedThrottle],
+            run: async (input: string) =>
+              `${scope}:${++runCounts[scope]}:${input}`,
+          }),
+        test: async ({ runtime, taskIds }) => {
+          const pending = Promise.all([
+            runtime.runTask(taskIds.billing, "first"),
+            runtime.runTask(taskIds.crm, "first"),
+            runtime.runTask(taskIds.billing, "second"),
+            runtime.runTask(taskIds.crm, "second"),
+          ]);
 
-    const app = defineResource({
-      id: "app-throttle-default-input-aware",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        return await Promise.all([task("a"), task("b")]);
-      },
-    });
+          jest.advanceTimersByTime(50);
+          await Promise.resolve();
 
-    const results = (await run(app)).value;
-    expect(results).toEqual(["a", "b"]);
-    expect(callCount).toBe(2);
+          await expect(pending).resolves.toEqual([
+            "billing:1:first",
+            "crm:1:first",
+            "billing:2:second",
+            "crm:2:second",
+          ]);
+        },
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(runCounts).toEqual({ billing: 2, crm: 2 });
   });
 });

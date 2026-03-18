@@ -27,10 +27,15 @@ describe("cache middleware coverage", () => {
     expect(resolved.keyBuilder("task", { ok: true })).toBe('task:{"ok":true}');
   });
 
-  it("exposes the full canonical task key helper to key builders", () => {
+  it("exposes the storage identity helper to key builders", () => {
     const resolved = resolveCacheMiddlewareConfig(
       {
-        keyBuilder: (_taskId, _input, helpers) => helpers!.canonicalKey,
+        keyBuilder: (_taskId, _input, helpers) => {
+          expect(helpers).toEqual({
+            storageTaskId: "app.tasks.lookup",
+          });
+          return helpers!.storageTaskId;
+        },
       },
       {},
     );

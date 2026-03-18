@@ -26,7 +26,7 @@ import {
 import { isResource, isResourceWithConfig } from "../../define";
 import { storeResource } from "../resources/store.resource";
 import { loggerResource } from "../resources/logger.resource";
-import { normalizeCacheRefs, toStableTaskId } from "./cache.key";
+import { normalizeCacheRefs } from "./cache.key";
 import type { Store } from "../../models/Store";
 import { MiddlewareResolver } from "../../models/middleware/MiddlewareResolver";
 import { getSubtreeMiddlewareDuplicateKey } from "../../tools/subtreeMiddleware";
@@ -327,7 +327,7 @@ function getCacheEnabledTaskIds(
       continue;
     }
 
-    const taskId = toStableTaskId(task.id);
+    const taskId = task.id;
     const resolvedConfig = resolveCacheMiddlewareConfig(
       cacheAttachment.config,
       defaultOptions,

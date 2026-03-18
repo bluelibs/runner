@@ -35,7 +35,7 @@ export interface TemporalMiddlewareConfig extends IdentityScopedMiddlewareConfig
   ms: number;
   /**
    * Builds the partition key for collapse/coalescing behavior.
-   * Defaults to `canonicalTaskKey + ":" + serialized input`, so different
+   * Defaults to `storageTaskId + ":" + serialized input`, so different
    * payloads stay isolated unless you intentionally provide a broader grouping
    * key.
    */

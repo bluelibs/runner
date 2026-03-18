@@ -39,7 +39,7 @@ describe("cache middleware coverage branches", () => {
         payload: "ok",
       },
       {
-        canonicalKey: "legacy-task-id",
+        storageTaskId: "legacy-task-id",
       },
     );
     expect(next).toHaveBeenCalledWith({ payload: "ok" });

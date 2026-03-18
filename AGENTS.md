@@ -51,3 +51,5 @@
 ## Review
 
 - Before doing a final review pass to your code, re-read this document to have it as context.
+- When a helper or code path uses an id, identify whether it needs local id, source id, canonical id, storage identity, or display name.
+- Lossy id normalization must never be used on stateful framework internals unless the grouping is explicitly user-configured.

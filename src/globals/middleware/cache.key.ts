@@ -1,5 +1,4 @@
 import { validationError } from "../../errors";
-import { toCanonicalTaskKey } from "./keyBuilder.shared";
 
 /**
  * Semantic cache reference used for cross-task invalidation.
@@ -40,10 +39,6 @@ export type CacheKeyBuilderResult = string | CacheKeyDescriptor;
 export interface NormalizedCacheKeyDescriptor {
   cacheKey: string;
   refs: readonly CacheRef[];
-}
-
-export function toStableTaskId(taskId: string): string {
-  return toCanonicalTaskKey(taskId);
 }
 
 export function normalizeCacheRefs(

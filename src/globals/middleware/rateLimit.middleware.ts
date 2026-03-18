@@ -40,7 +40,7 @@ export interface RateLimitMiddlewareConfig extends IdentityScopedMiddlewareConfi
   max: number;
   /**
    * Builds the partition key used to isolate fixed-window counters.
-   * Defaults to `canonicalTaskKey + ":" + serialized input`.
+   * Defaults to `storageTaskId + ":" + serialized input`.
    * Provide an explicit key when you want broader grouping, such as per user or
    * per identity admission limits.
    */

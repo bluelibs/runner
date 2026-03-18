@@ -7,7 +7,6 @@ import { identityContextResource } from "../resources/identityContext.resource";
 import { globalTags } from "../globalTags";
 import {
   normalizeCacheKeyBuilderResult,
-  toStableTaskId,
   type CacheKeyBuilderResult,
 } from "./cache.key";
 import {
@@ -147,7 +146,7 @@ export const cacheMiddleware = defineTaskMiddleware({
       cache.defaultOptions,
     );
 
-    const taskId = toStableTaskId(task!.definition.id);
+    const taskId = task!.definition.id;
     let cacheHolderForTask = cache.map.get(taskId)!;
     if (!cacheHolderForTask) {
       const pendingCreate = cache.pendingCreates.get(taskId);
