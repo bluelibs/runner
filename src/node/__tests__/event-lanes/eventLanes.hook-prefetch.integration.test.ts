@@ -1,5 +1,5 @@
 import { genericError } from "../../../errors";
-import { r, run, tags } from "../../..";
+import { r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -99,11 +99,13 @@ async function waitUntil(
 
 describe("event-lanes: hook relay behavior + prefetch", () => {
   it("runs all matching hooks on relay emissions and applies binding prefetch", async () => {
-    const laneA = r.eventLane("tests-event-lanes-hook-lane-a").build();
     const queue = new CoverageQueue();
     const event = r
       .event<{ id: string }>("tests-event-lanes-hook-lane-event")
-      .tags([tags.eventLane.with({ lane: laneA })])
+      .build();
+    const laneA = r
+      .eventLane("tests-event-lanes-hook-lane-a")
+      .applyTo([event])
       .build();
 
     let callsA = 0;
@@ -141,7 +143,7 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [laneA] } },
+            profiles: { worker: { consume: [{ lane: laneA }] } },
             bindings: [{ lane: laneA, queue, prefetch: 6 }],
           },
         }),
@@ -170,7 +172,7 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
           mode: "transparent",
           topology: {
             profiles: {
-              worker: { consume: [lane] },
+              worker: { consume: [{ lane }] },
             },
             bindings: [{ lane, queue }],
           },
@@ -194,7 +196,7 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
           // Intentional runtime-invalid profile: cast to bypass compile-time key narrowing.
           profile: missingProfile as "default",
           topology: {
-            profiles: { default: { consume: [lane] } },
+            profiles: { default: { consume: [{ lane }] } },
             bindings: [{ lane, queue }],
           },
         }),

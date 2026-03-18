@@ -1,19 +1,21 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { Semaphore } from "../../models/Semaphore";
-import { globalTags } from "../globalTags";
 import {
   middlewareConcurrencyConflictError,
   validationError,
 } from "../../errors";
 import { Match } from "../../tools/check";
+import type { ValidationSchemaInput } from "../../types/utilities";
 import {
-  getTenantNamespace,
-  tenantScopePattern,
-  type TenantScopedMiddlewareConfig,
-} from "./tenantScope.shared";
+  getIdentityNamespace,
+  identityScopePattern,
+  type IdentityScopedMiddlewareConfig,
+} from "./identityScope.shared";
+import { globalTags } from "../globalTags";
+import { identityContextResource } from "../resources/identityContext.resource";
 
-export interface ConcurrencyMiddlewareConfig extends TenantScopedMiddlewareConfig {
+export interface ConcurrencyMiddlewareConfig extends IdentityScopedMiddlewareConfig {
   /**
    * Maximum number of concurrent executions.
    * If provided, a Semaphore will be created and shared for this config object.
@@ -41,12 +43,13 @@ export interface ConcurrencyState {
   semaphores: Set<Semaphore>;
 }
 
-const concurrencyConfigPattern = Match.ObjectIncluding({
-  limit: Match.Optional(Match.PositiveInteger),
-  key: Match.Optional(Match.NonEmptyString),
-  semaphore: Match.Optional(Semaphore),
-  tenantScope: tenantScopePattern,
-});
+const concurrencyConfigPattern: ValidationSchemaInput<ConcurrencyMiddlewareConfig> =
+  Match.ObjectIncluding({
+    limit: Match.Optional(Match.PositiveInteger),
+    key: Match.Optional(Match.NonEmptyString),
+    semaphore: Match.Optional(Semaphore),
+    identityScope: identityScopePattern,
+  });
 
 function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
   const hasSemaphore = config.semaphore !== undefined;
@@ -82,7 +85,11 @@ function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
 
 export const concurrencyResource = defineResource({
   id: "concurrency",
-  tags: [globalTags.system],
+  meta: {
+    title: "Concurrency State",
+    description:
+      "Tracks shared semaphores for the built-in concurrency middleware, including keyed and identity-scoped partitions.",
+  },
   init: async () => ({
     semaphoresByConfig: new WeakMap<
       ConcurrencyMiddlewareConfig,
@@ -105,18 +112,34 @@ export const concurrencyResource = defineResource({
  */
 export const concurrencyTaskMiddleware = defineTaskMiddleware({
   id: "concurrency",
+  tags: [globalTags.identityScoped],
+  meta: {
+    title: "Concurrency Limit",
+    description:
+      "Limits concurrent task executions with semaphores, supporting shared keys and optional identity scoping.",
+  },
   throws: [middlewareConcurrencyConflictError],
   configSchema: concurrencyConfigPattern,
-  dependencies: { state: concurrencyResource },
-  async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
+  dependencies: {
+    state: concurrencyResource,
+    identityContext: identityContextResource,
+  },
+  async run(
+    { task, next },
+    { state, identityContext },
+    config: ConcurrencyMiddlewareConfig,
+  ) {
     assertConcurrencyConfig(config);
 
     let semaphore = config.semaphore;
-    const tenantNamespace = getTenantNamespace(config.tenantScope);
+    const identityNamespace = getIdentityNamespace(
+      config.identityScope,
+      identityContext?.tryUse,
+    );
 
     if (!semaphore && config.limit !== undefined) {
       if (config.key !== undefined) {
-        const scopedKey = `${tenantNamespace}:${config.key}`;
+        const scopedKey = `${identityNamespace}:${config.key}`;
         const existing = state.semaphoresByKey.get(scopedKey);
         if (existing) {
           if (existing.limit !== config.limit) {
@@ -136,17 +159,17 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
           });
         }
       } else {
-        let semaphoresByTenant = state.semaphoresByConfig.get(config);
-        if (!semaphoresByTenant) {
-          semaphoresByTenant = new Map<string, Semaphore>();
-          state.semaphoresByConfig.set(config, semaphoresByTenant);
+        let semaphoresByIdentity = state.semaphoresByConfig.get(config);
+        if (!semaphoresByIdentity) {
+          semaphoresByIdentity = new Map<string, Semaphore>();
+          state.semaphoresByConfig.set(config, semaphoresByIdentity);
         }
 
-        semaphore = semaphoresByTenant.get(tenantNamespace);
+        semaphore = semaphoresByIdentity.get(identityNamespace);
         if (!semaphore) {
           semaphore = new Semaphore(config.limit);
           state.semaphores.add(semaphore);
-          semaphoresByTenant.set(tenantNamespace, semaphore);
+          semaphoresByIdentity.set(identityNamespace, semaphore);
         }
       }
     }

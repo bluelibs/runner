@@ -2,7 +2,7 @@
 
 - Be passionate about what you do, be precise, thoughtful and clear.
 - As you are working do not modify, revert other changes without user confirmation.
-- The code should be designed awithout being over-engineered.
+- The code should be designed without being over-engineered.
 - The code should be human-friendly (descriptive variables, function names, comments that describe the 'why'), code readability are a big plus.
 - Keep functions small, decouple early on. Make code be read like a story.
 - Keep non-documentation files small (under 300 lines) (including tests). Decouple/destructure early on.
@@ -23,19 +23,20 @@
 
 ## Project Specifics
 
-- This library has 100% code coverage.
+- You are working inside runner framework source code. This library has 100% code coverage.
 - Node specific code (Async Context, Durable Workflows, Remote Lanes, etc) goes under ./src/node/ folder. It is exported only for node.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - When User asking questions like "did you check the tests?" if it would've been obvious to run the tests do it pro-actively instead of just saying no.
-- AI.md (readmes/AI.md) contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
+- The compact guide is inside the runner's skill in .agents/skills. Changes/updates should be also included in the COMPACT_GUIDE.md (in references) as minimal as possible.
 - Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds, if working only on docs, don't run it)
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
-- This is a framework, it's documentation is composed dynamically into FULL_GUIDE.md (which should not be read/manipulated by AI), read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
+- This is a framework, its documentation is composed dynamically into FULL_GUIDE.md (which should not be read/manipulated by AI), read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
 - Attention when coding defensively (especially when using 'unknown' and lots of typeof), we use typescript and we want to offer public and inner surface absolute type-safety. This means once the trust-boundary has passed (user-input ended), we can be sure of the types.
 - Use check/Match when you have to validate values at runtime, much cleaner.
 - Be careful when polluting your context with FULL_GUIDE.md, it's generated so don't worry about it.
 - All public surfaces direct or indirect through types must have propper JSDoc comments.
+- Careful when dealing with local id vs canonical id (which are formed within runtime)
 
 ## New Feature/Changes
 
@@ -43,12 +44,12 @@
 - When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
 - Code retain 100% test coverage.
 - Use check() as much as you can for runtime constraints, it's very useful (and powerful) and avoids typeof hell. (hint: Custom WithMessage error h)
-- Ensure readmes/AI.md (minimal version of README) and that the guide-units with the full guide are updated accordingly.
 - Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
 - Use runner errors instead of 'throw new Error()' for better error handling and consistency.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.
-- Do not include deprecated values/information in AI.md.
 
 ## Review
 
 - Before doing a final review pass to your code, re-read this document to have it as context.
+- When a helper or code path uses an id, identify whether it needs local id, source id, canonical id, storage identity, or display name.
+- Lossy id normalization must never be used on stateful framework internals unless the grouping is explicitly user-configured.

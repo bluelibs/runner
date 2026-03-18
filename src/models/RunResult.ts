@@ -23,20 +23,20 @@ import {
   runtimeAccessViolationError,
   runtimeElementNotFoundError,
   runtimeRootNotAvailableError,
+  shutdownLockdownError,
 } from "../errors";
 import { runtimeSource } from "../types/runtimeSource";
-import { HealthReporter } from "./HealthReporter";
 import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import {
   IRuntimeRecoveryHandle,
   IRuntimeRecoveryOptions,
   ResolvedRunOptions,
+  RuntimeDisposeOptions,
   RuntimeState,
 } from "../types/runner";
 import { globalResources } from "../globals/globalResources";
 import type { ITimers } from "../types/timers";
 import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
-import { resolveRequestedIdFromStore } from "./StoreLookup";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -114,7 +114,6 @@ export class RunResult<V> implements IRuntime<V> {
    * When enabled, unused resources are not initialized until accessed.
    */
   private lazyOptions: RunResultLazyOptions = {};
-  private readonly healthReporter: HealthReporter;
   private readonly recoveryController: RuntimeRecoveryController;
 
   /**
@@ -153,25 +152,22 @@ export class RunResult<V> implements IRuntime<V> {
      */
     public readonly runOptions: ResolvedRunOptions,
     /**
-     * Function to call during disposal.
-     * Disposes all resources in reverse initialization order.
+     * Function to call during disposal after the synchronous shutdown
+     * admission state has already been updated.
      */
     private readonly disposeFn: () => Promise<void>,
+    /**
+     * Requests that any in-flight graceful shutdown stop waiting at the next
+     * safe Runner-owned checkpoint and jump to direct resource disposal.
+     */
+    private readonly requestForceDispose: () => void,
+    /**
+     * Exposes whether force disposal was requested so runtime-facing business
+     * calls can stop admitting new work immediately, even while internal
+     * shutdown checkpoints are still unwinding through coolingDown.
+     */
+    private readonly isForceDisposeRequested: () => boolean,
   ) {
-    this.healthReporter = new HealthReporter(this.store, {
-      ensureAvailable: () => {
-        this.ensureRuntimeIsActive();
-        if (this.#isBootstrapping) {
-          runtimeHealthDuringBootstrapError.throw();
-        }
-      },
-      assertResourceAccess: (resourceId) =>
-        this.assertRuntimeAccess(resourceId, "Resource"),
-      isResourceAccessible: (resourceId) =>
-        this.isRuntimeAccessible(resourceId),
-      isSleepingResource: (resourceId) =>
-        this.store.resources.get(resourceId)!.isInitialized !== true,
-    });
     this.recoveryController = new RuntimeRecoveryController({
       getRuntimeState: () => this.getRuntimeState(),
       getTimers: () => this.getTimersResourceValue(),
@@ -233,6 +229,10 @@ export class RunResult<V> implements IRuntime<V> {
     if (this.#disposed) {
       runResultDisposedError.throw();
     }
+
+    if (this.#disposing && this.isForceDisposeRequested()) {
+      shutdownLockdownError.throw();
+    }
   }
 
   /**
@@ -268,6 +268,7 @@ export class RunResult<V> implements IRuntime<V> {
         targetType,
         rootId,
         exportedIds,
+        exportsDeclared: this.store.hasExportsDeclaration(rootId),
       });
     }
   }
@@ -344,7 +345,7 @@ export class RunResult<V> implements IRuntime<V> {
   ): TTask extends ITask<any, infer O, any> ? O : Promise<any> => {
     this.ensureRuntimeAvailableForBusinessCalls();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
-    const taskId = this.resolveRuntimeElementId(task);
+    const taskId = this.store.findIdByDefinition(task);
     if (!this.store.tasks.has(taskId)) {
       runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
     }
@@ -394,7 +395,7 @@ export class RunResult<V> implements IRuntime<V> {
   ) => {
     this.ensureRuntimeAvailableForBusinessCalls();
 
-    const eventId = this.resolveRuntimeElementId(event);
+    const eventId = this.store.findIdByDefinition(event);
     if (!this.store.events.has(eventId)) {
       runtimeElementNotFoundError.throw({
         type: "Event",
@@ -582,7 +583,21 @@ export class RunResult<V> implements IRuntime<V> {
    */
   public getHealth = async (
     resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
-  ) => this.healthReporter.getHealth(resourceDefs);
+  ) =>
+    this.store.getHealthReporter().getHealth(resourceDefs, {
+      ensureAvailable: () => {
+        this.ensureRuntimeIsActive();
+        if (this.#isBootstrapping) {
+          runtimeHealthDuringBootstrapError.throw();
+        }
+      },
+      assertResourceAccess: (resourceId) =>
+        this.assertRuntimeAccess(resourceId, "Resource"),
+      isResourceAccessible: (resourceId) =>
+        this.isRuntimeAccessible(resourceId),
+      isSleepingResource: (resourceId) =>
+        this.store.resources.get(resourceId)!.isInitialized !== true,
+    });
 
   public pause = (_reason?: string): void => {
     this.ensureRuntimeIsActive();
@@ -619,17 +634,7 @@ export class RunResult<V> implements IRuntime<V> {
   private getResourceId(
     resource: string | IResource<any, any, any, any, any>,
   ): string {
-    return this.resolveRuntimeElementId(resource);
-  }
-
-  /**
-   * Resolves either a definition object or a string id to the store's
-   * canonical id, with graceful fallback to the original string/object id.
-   */
-  private resolveRuntimeElementId(reference: string | { id: string }): string {
-    return (
-      resolveRequestedIdFromStore(this.store, reference) ?? String(reference)
-    );
+    return this.store.findIdByDefinition(resource);
   }
 
   private ensureAdmissionControlIsAvailable(): void {
@@ -669,9 +674,10 @@ export class RunResult<V> implements IRuntime<V> {
    *
    * @example
    * await runtime.dispose();
+   * await runtime.dispose({ force: true });
    * // All resources cleaned up, runtime is now inactive
    */
-  public dispose = () => {
+  public dispose = (options: RuntimeDisposeOptions = {}) => {
     if (this.#isBootstrapping) {
       runResultDisposeDuringBootstrapError.throw();
     }
@@ -680,12 +686,31 @@ export class RunResult<V> implements IRuntime<V> {
       return Promise.resolve();
     }
 
+    if (options.force) {
+      this.requestForceDispose();
+
+      const phase = this.store.getLifecycleAdmissionController().getPhase();
+      if (
+        phase === RuntimeLifecyclePhase.Disposing ||
+        phase === RuntimeLifecyclePhase.Drained
+      ) {
+        // A second force request during an already-running shutdown should wake
+        // any drain wait immediately, but it must not skip ahead and mutate the
+        // store phase here. The lifecycle runner remains the single place that
+        // decides when coolingDown transitions into disposing.
+        this.store.cancelDrainWaiters();
+      }
+    }
+
     if (this.#disposePromise) {
       return this.#disposePromise;
     }
 
     this.#disposing = true;
     this.recoveryController.dispose();
+    // Even a first-call force dispose still enters the shared shutdown story
+    // here so cooldown hooks can register shutdown-specific admission targets
+    // before the lifecycle decides which remaining waits to skip.
     this.store.beginCoolingDown();
 
     this.#disposePromise = Promise.resolve()

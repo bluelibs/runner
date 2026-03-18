@@ -3,7 +3,6 @@ import type { DependencyMapType } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
 import { storeResource } from "../resources/store.resource";
 import { taskRunnerResource } from "../resources/taskRunner.resource";
-import { globalTags } from "../globalTags";
 import { cronTag } from "./cron.tag";
 import { CronResourceConfig, CronResourceValue } from "./types";
 import { CronScheduler } from "./CronScheduler";
@@ -69,7 +68,6 @@ export const cronResource = defineResource<
     await context.scheduler.dispose();
     context.scheduler = undefined;
   },
-  tags: [globalTags.system],
   meta: {
     title: "Cron Scheduler",
     description:

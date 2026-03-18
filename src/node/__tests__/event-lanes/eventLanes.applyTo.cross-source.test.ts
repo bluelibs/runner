@@ -32,7 +32,7 @@ describe("eventLanes applyTo cross-source topology checks", () => {
           profile: "worker",
           mode: "transparent",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane: lane }] } },
             bindings: [],
           },
         }),
@@ -78,7 +78,7 @@ describe("eventLanes applyTo cross-source topology checks", () => {
           profile: "worker",
           mode: "transparent",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane: lane }] } },
             bindings: [],
           },
         }),

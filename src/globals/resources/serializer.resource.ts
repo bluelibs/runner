@@ -1,6 +1,5 @@
 import { defineResource } from "../../definers/defineResource";
 import type { SerializerLike as Serializer } from "../../serializer";
-import { globalTags } from "../globalTags";
 
 export const serializerResource = defineResource<void, Promise<Serializer>>({
   id: "serializer",
@@ -9,5 +8,4 @@ export const serializerResource = defineResource<void, Promise<Serializer>>({
     description:
       "Serializes and deserializes data. Supports stringify/parse and custom type registration via addType.",
   },
-  tags: [globalTags.system],
 });

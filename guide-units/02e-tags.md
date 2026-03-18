@@ -163,7 +163,7 @@ const performanceMiddleware = r.middleware
   .build();
 ```
 
-### System Tags
+### Built-in Tags
 
 Built-in tags can affect framework behavior.
 
@@ -171,9 +171,9 @@ Built-in tags can affect framework behavior.
 import { tags, r } from "@bluelibs/runner";
 
 // Assuming `performCleanup` is your own application function.
-const internalTask = r
-  .task("internalTask")
-  .tags([tags.internal, tags.debug.with({ logTaskInput: true })])
+const observedTask = r
+  .task("observedTask")
+  .tags([tags.debug.with("verbose")])
   .run(async () => performCleanup())
   .build();
 

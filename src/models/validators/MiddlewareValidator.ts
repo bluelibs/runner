@@ -3,6 +3,7 @@ import { getStoredSubtreePolicy } from "../../definers/subtreePolicy";
 import {
   getSubtreeResourceMiddlewareAttachment,
   getSubtreeTaskMiddlewareAttachment,
+  resolveApplicableSubtreeTaskMiddlewares,
 } from "../../tools/subtreeMiddleware";
 import type { ValidatorContext } from "./ValidatorContext";
 
@@ -13,6 +14,7 @@ export function validateMiddlewareRegistrations(ctx: ValidatorContext): void {
   validateTaskMiddlewareAttachments(ctx);
   validateResourceMiddlewareAttachments(ctx);
   validateSubtreeMiddlewareAttachments(ctx);
+  validateSubtreeTaskMiddlewareComposition(ctx);
 }
 
 function validateTaskMiddlewareAttachments(ctx: ValidatorContext): void {
@@ -82,5 +84,18 @@ function validateSubtreeMiddlewareAttachments(ctx: ValidatorContext): void {
         });
       }
     }
+  }
+}
+
+function validateSubtreeTaskMiddlewareComposition(ctx: ValidatorContext): void {
+  const lookup = {
+    getOwnerResourceId: (itemId: string) =>
+      ctx.registry.visibilityTracker.getOwnerResourceId(itemId),
+    getResource: (resourceId: string) =>
+      ctx.registry.resources.get(resourceId)?.resource,
+  };
+
+  for (const { task } of ctx.registry.tasks.values()) {
+    resolveApplicableSubtreeTaskMiddlewares(lookup, task);
   }
 }

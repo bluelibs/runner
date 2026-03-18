@@ -1,5 +1,6 @@
 .DS_Store
 .claude
+.codex
 /todos
 TODO.md
 CLAUDE.md
@@ -7,10 +8,10 @@ coverage
 dist
 /docs
 node_modules
+examples/**/node_modules
+examples/**/package-lock.json
 npm-debug.log
 typings
-yarn-error.log
-yarn.lock
 .vscode
 junit.xml
 /baseline.json

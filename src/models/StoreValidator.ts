@@ -3,6 +3,7 @@ import type { StoreRegistry } from "./StoreRegistry";
 import {
   ValidatorContext,
   validateMiddlewareRegistrations,
+  validateIdentityAsyncContextSupport,
   validateEventConstraints,
   validateSubtreePolicies,
   validateTagConstraints,
@@ -77,6 +78,7 @@ export class StoreValidator {
 
   runSanityChecks(): void {
     validateMiddlewareRegistrations(this.validatorContext);
+    validateIdentityAsyncContextSupport(this.validatorContext);
     validateEventConstraints(this.validatorContext);
     validateSubtreePolicies(this.validatorContext);
     validateTagConstraints(this.validatorContext);

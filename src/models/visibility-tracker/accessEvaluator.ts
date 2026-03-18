@@ -5,6 +5,7 @@ import { findIsolationViolation } from "./isolationAccess";
 import { findVisibilityViolation } from "./visibilityAccess";
 
 export { getRootAccessInfo } from "./visibilityAccess";
+export { hasExportsDeclaration } from "./visibilityAccess";
 
 export function isAccessible(
   state: VisibilityTrackerState,

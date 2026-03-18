@@ -1,6 +1,7 @@
 import { IEventLaneMeta } from "./meta";
 import type { IEventDefinition } from "./event";
 import type { IAsyncContext } from "./asyncContext";
+import type { IHook } from "./hook";
 import type { RemoteLaneBindingAuth } from "./remoteLaneAuth";
 import { symbolEventLane, symbolFilePath } from "./utilities";
 
@@ -40,12 +41,33 @@ export interface IEventLaneTopologyBinding {
 }
 
 /**
+ * Optional relay hook policy applied by a consuming profile for one lane.
+ */
+export interface IEventLaneTopologyHookPolicy {
+  /**
+   * Allowlist of hooks that may run for relay re-emits consumed from this lane.
+   * Omit to allow all matching hooks.
+   */
+  only?: readonly IHook[];
+}
+
+/**
+ * One consumed event-lane entry for a specific profile.
+ */
+export interface IEventLaneTopologyConsumeEntry<
+  TLane extends IEventLaneDefinition = IEventLaneDefinition,
+> {
+  lane: TLane;
+  hooks?: IEventLaneTopologyHookPolicy;
+}
+
+/**
  * Named event-lane profile listing the lanes a consumer should subscribe to.
  */
 export interface IEventLaneTopologyProfile<
   TLane extends IEventLaneDefinition = IEventLaneDefinition,
 > {
-  consume: readonly TLane[];
+  consume: readonly IEventLaneTopologyConsumeEntry<TLane>[];
 }
 
 /**

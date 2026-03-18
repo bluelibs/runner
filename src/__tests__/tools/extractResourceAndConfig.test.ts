@@ -26,4 +26,16 @@ describe("extractResourceAndConfig", () => {
     expect(result.resource).toBe(bareResource);
     expect(result.config).toBeUndefined();
   });
+
+  it("lets resource definitions extract config from matching entries", () => {
+    const configured = resource.with({ port: 3000 });
+    const sibling = defineResource<{ port: number }>({
+      id: "extract-test-resource",
+      init: async (config) => config.port,
+    });
+
+    expect(resource.extract(configured)).toEqual({ port: 3000 });
+    expect(resource.extract(resource)).toBeUndefined();
+    expect(resource.extract(sibling)).toBeUndefined();
+  });
 });

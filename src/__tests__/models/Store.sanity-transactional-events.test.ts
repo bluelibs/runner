@@ -1,10 +1,6 @@
-import {
-  defineEvent,
-  defineEventLane,
-  defineResource,
-  defineRpcLane,
-} from "../../define";
+import { defineEvent, defineEventLane, defineResource } from "../../define";
 import { globalTags } from "../../globals/globalTags";
+import { eventLanesResource } from "../../node/event-lanes";
 import { run } from "../../run";
 import { RunnerMode } from "../../types/runner";
 
@@ -29,45 +25,50 @@ describe("Store sanity checks (transactional events)", () => {
     expect(rootInit).not.toHaveBeenCalled();
   });
 
-  it("fails before initialization when a transactional event has an event lane tag", async () => {
+  it("fails before initialization when a transactional event is assigned through eventLane.applyTo", async () => {
     const rootInit = jest.fn(async () => "ok");
-    const notificationsLane = defineEventLane({
-      id: "app-lanes-tx-invalid",
-    });
-
     const invalidEvent = defineEvent({
       id: "app-events-tx-lane-invalid",
       transactional: true,
-      tags: [globalTags.eventLane.with({ lane: notificationsLane })],
+    });
+    const notificationsLane = defineEventLane({
+      id: "app-lanes-tx-invalid",
+      applyTo: [invalidEvent],
     });
 
     const app = defineResource({
       id: "app-root-tx-lane-invalid",
-      register: [invalidEvent],
+      register: [
+        invalidEvent,
+        eventLanesResource.with({
+          profile: "worker",
+          mode: "transparent",
+          topology: {
+            profiles: {
+              worker: { consume: [{ lane: notificationsLane }] },
+            },
+            bindings: [],
+          },
+        }),
+      ],
       init: rootInit,
     });
 
     await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
-      /cannot be transactional while using lane tag/i,
+      /cannot be transactional while assigned to eventLane/i,
     );
     expect(rootInit).not.toHaveBeenCalled();
   });
 
-  it("fails before initialization when an event has both eventLane and rpcLane tags", async () => {
+  it("fails before initialization when an event uses deprecated eventLane tags", async () => {
     const rootInit = jest.fn(async () => "ok");
     const notificationsLane = defineEventLane({
       id: "app-lanes-event-invalid",
     });
-    const billingLane = defineRpcLane({
-      id: "app-lanes-rpc-invalid",
-    });
 
     const invalidEvent = defineEvent({
       id: "app-events-lanes-invalid",
-      tags: [
-        globalTags.eventLane.with({ lane: notificationsLane }),
-        globalTags.rpcLane.with({ lane: billingLane }),
-      ],
+      tags: [globalTags.eventLane.with({ lane: notificationsLane })],
     });
 
     const app = defineResource({
@@ -77,7 +78,7 @@ describe("Store sanity checks (transactional events)", () => {
     });
 
     await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
-      /cannot define both lane tags/i,
+      /uses deprecated tag "eventLane"/i,
     );
     expect(rootInit).not.toHaveBeenCalled();
   });

@@ -2,6 +2,7 @@ import type {
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
   DependencyMapType,
+  TaskMiddlewareTagType,
 } from "../types/taskMiddleware";
 import type {
   InferValidationSchemaInput,
@@ -30,6 +31,7 @@ export function defineTaskMiddleware<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 >(
   middlewareDef: MiddlewareDefWithInferredSchema<TSchema, TDependencies> &
     Pick<
@@ -37,7 +39,8 @@ export function defineTaskMiddleware<
         InferValidationSchemaInput<TSchema>,
         TEnforceInputContract,
         TEnforceOutputContract,
-        TDependencies
+        TDependencies,
+        TTags
       >,
       "run"
     >,
@@ -45,43 +48,50 @@ export function defineTaskMiddleware<
   InferValidationSchemaInput<TSchema>,
   TEnforceInputContract,
   TEnforceOutputContract,
-  TDependencies
+  TDependencies,
+  TTags
 >;
 export function defineTaskMiddleware<
   TConfig = any,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 >(
   middlewareDef: ITaskMiddlewareDefinition<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
-    TDependencies
+    TDependencies,
+    TTags
   >,
 ): ITaskMiddleware<
   TConfig,
   TEnforceInputContract,
   TEnforceOutputContract,
-  TDependencies
+  TDependencies,
+  TTags
 >;
 export function defineTaskMiddleware<
   TConfig = any,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 >(
   middlewareDef: ITaskMiddlewareDefinition<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
-    TDependencies
+    TDependencies,
+    TTags
   >,
 ): ITaskMiddleware<
   TConfig,
   TEnforceInputContract,
   TEnforceOutputContract,
-  TDependencies
+  TDependencies,
+  TTags
 > {
   return defineMiddlewareCore<TConfig, TDependencies>(
     taskVariant,
@@ -91,6 +101,7 @@ export function defineTaskMiddleware<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
-    TDependencies
+    TDependencies,
+    TTags
   >;
 }

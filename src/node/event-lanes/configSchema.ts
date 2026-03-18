@@ -1,4 +1,5 @@
 import type { IValidationSchema } from "../../defs";
+import { isHook } from "../../define";
 import { Match } from "../../tools/check";
 import type { EventLanesResourceConfig } from "./types";
 import {
@@ -11,11 +12,20 @@ const laneReferenceShapePattern = Match.ObjectIncluding({
 });
 
 const laneReferencePattern = laneReferenceShapePattern;
+const hookReferencePattern = Match.Where(isHook, "Expected Hook definition.");
 
 const eventLaneQueueReferencePattern = Match.Any;
+const eventLaneConsumeEntryPattern = Match.ObjectIncluding({
+  lane: laneReferencePattern,
+  hooks: Match.Optional(
+    Match.ObjectIncluding({
+      only: Match.Optional(Match.ArrayOf(hookReferencePattern)),
+    }),
+  ),
+});
 
 const eventLanesProfilePattern = Match.ObjectIncluding({
-  consume: Match.ArrayOf(laneReferencePattern),
+  consume: Match.ArrayOf(eventLaneConsumeEntryPattern),
 });
 
 const eventLanesResourceConfigPattern = Match.ObjectIncluding({

@@ -1,11 +1,10 @@
 import { defineResource } from "../../../definers/defineResource";
-import { globalTags } from "../../globalTags";
 import { loggerResource as logger } from "../logger.resource";
 import { taskRunnerResource as taskRunner } from "../taskRunner.resource";
 import { middlewareManagerResource as middlewareManager } from "../middlewareManager.resource";
 import { debugConfig } from "./debugConfig.resource";
 import { getConfig } from "./types";
-import { hasSystemTag } from "./utils";
+import { isFrameworkDefinition } from "./utils";
 import type { IResourceMiddlewareExecutionInput } from "../../../types/resourceMiddleware";
 
 const id = "executionTracker";
@@ -26,7 +25,6 @@ export const executionTrackerResource = defineResource<
     description:
       "Tracks task and resource execution using global interceptors without subtree middleware cycles.",
   },
-  tags: [globalTags.system],
   dependencies: {
     logger,
     debugConfig,
@@ -38,7 +36,7 @@ export const executionTrackerResource = defineResource<
 
     taskRunner.intercept(async (next, input) => {
       const taskDefinition = input.task.definition;
-      if (hasSystemTag(taskDefinition)) {
+      if (isFrameworkDefinition(taskDefinition)) {
         return next(input);
       }
 
@@ -78,7 +76,7 @@ export const executionTrackerResource = defineResource<
         input: IResourceMiddlewareExecutionInput<any, any>,
       ) => {
         const resourceDefinition = input.resource.definition;
-        if (hasSystemTag(resourceDefinition)) {
+        if (isFrameworkDefinition(resourceDefinition)) {
           return next(input);
         }
 

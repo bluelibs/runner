@@ -9,6 +9,7 @@ describe("cache middleware coverage branches", () => {
       has: jest.fn(async () => false),
       set: jest.fn(async () => undefined),
       clear: jest.fn(async () => undefined),
+      invalidateRefs: jest.fn(async () => 0),
     };
     const cache = {
       map: new Map([["legacy-task-id", cacheInstance]]),
@@ -32,9 +33,15 @@ describe("cache middleware coverage branches", () => {
     );
 
     expect(result).toEqual({ input: { payload: "ok" } });
-    expect(keyBuilder).toHaveBeenCalledWith("legacy-task-id", {
-      payload: "ok",
-    });
+    expect(keyBuilder).toHaveBeenCalledWith(
+      "legacy-task-id",
+      {
+        payload: "ok",
+      },
+      {
+        storageTaskId: "legacy-task-id",
+      },
+    );
     expect(next).toHaveBeenCalledWith({ payload: "ok" });
   });
 });

@@ -244,15 +244,17 @@ describe("RunResult", () => {
     const app = defineResource({ id: "rr-empty" });
     const r = await run(app);
 
-    expect(() => r.runTask("nope-task")).toThrow('Task "nope-task" not found.');
+    expect(() => r.runTask("nope-task")).toThrow(
+      'Definition "nope-task" not found.',
+    );
     expect(() => r.emitEvent("nope-event")).toThrow(
-      'Event "nope-event" not found.',
+      'Definition "nope-event" not found.',
     );
     expect(() => r.getResourceValue("nope-res")).toThrow(
-      'Resource "nope-res" not found.',
+      'Definition "nope-res" not found.',
     );
     expect(() => r.getResourceConfig("nope-res")).toThrow(
-      'Resource "nope-res" not found.',
+      'Definition "nope-res" not found.',
     );
     await expect(r.getLazyResourceValue("nope-res")).rejects.toThrow(
       /only available when run\(\.\.\., \{ lazy: true \}\)/,
@@ -642,7 +644,7 @@ describe("RunResult", () => {
 
     await expect(
       runtime.getLazyResourceValue("rr-lazy-missing"),
-    ).rejects.toThrow('Resource "rr-lazy-missing" not found.');
+    ).rejects.toThrow('Definition "rr-lazy-missing" not found.');
   });
 
   it("returns stored value in lazy mode when no lazy loader is configured", async () => {
@@ -757,6 +759,7 @@ describe("RunResult", () => {
           maxRepetitions: 2,
         },
       },
+      identity: null,
       lazy: true,
       lifecycleMode: ResourceLifecycleMode.Parallel,
       mode: RunnerMode.PROD,

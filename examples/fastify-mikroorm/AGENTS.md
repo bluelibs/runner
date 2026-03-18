@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Authoritative guidance for working inside this repository as an agent. This app uses BlueLibs Runner, Fastify, and MikroORM (PostgreSQL). Read `README.md` and `readmes/runner-AI.md` for broader context. If `readmes/runner-AI.md` is missing, sync docs with `npx ts-node scripts/sync-docs.ts`.
+Authoritative guidance for working inside this repository as an agent. This app uses BlueLibs Runner, Fastify, and MikroORM (PostgreSQL). Read `README.md` and `readmes/runner-COMPACT_GUIDE.md` for broader context. If `readmes/runner-COMPACT_GUIDE.md` is missing, sync docs with `npx ts-node scripts/sync-docs.ts`.
 
 ## Repo Orientation
 

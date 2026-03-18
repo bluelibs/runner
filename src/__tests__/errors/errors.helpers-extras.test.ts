@@ -19,6 +19,8 @@ import {
   parallelInitSchedulingError,
   platformUnreachableError,
   eventLaneEventNotRegisteredError,
+  eventLaneConsumeDuplicateLaneError,
+  eventLaneHookPolicyHookReferenceInvalidError,
   eventLaneRpcLaneConflictError,
   eventLaneAssignmentConflictError,
   rpcLaneTaskAssignmentConflictError,
@@ -161,7 +163,28 @@ describe("error helpers extra branches", () => {
             rpcLaneTagId: "tags.rpcLane",
           }),
         ),
-      ).toContain('Event "evt.lanes.invalid" cannot define both lane tags');
+      ).toContain(
+        "route it through r.eventLane(...).applyTo([...]) for async queue delivery",
+      );
+      expect(
+        captureMessage(() =>
+          eventLaneConsumeDuplicateLaneError.throw({
+            resourceId: "app.eventLanes",
+            profile: "worker",
+            laneId: "lane.dup",
+          }),
+        ),
+      ).toContain('declares lane "lane.dup" more than once');
+      expect(
+        captureMessage(() =>
+          eventLaneHookPolicyHookReferenceInvalidError.throw({
+            resourceId: "app.eventLanes",
+            profile: "worker",
+            laneId: "lane.a",
+            hookId: "hooks.audit",
+          }),
+        ),
+      ).toContain('references hook "hooks.audit" in hooks.only');
       expect(
         captureMessage(() =>
           rpcLaneTaskAssignmentConflictError.throw({

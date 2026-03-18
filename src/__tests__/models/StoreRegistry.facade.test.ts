@@ -12,6 +12,7 @@ import { defineError } from "../../definers/defineError";
 import { Store } from "../../models/Store";
 import {
   symbolDefinitionIdentity,
+  symbolResourceWithConfig,
   symbolTagConfiguredFrom,
 } from "../../types/symbols";
 import { createTestFixture } from "../test-utils";
@@ -178,7 +179,7 @@ describe("StoreRegistry facade delegates", () => {
     );
   });
 
-  it("keeps alias registration as a no-op for primitives and resolves resource-with-config ids", () => {
+  it("keeps alias registration as a no-op and resolves resource-with-config ids via resource aliases", () => {
     const registry = (store as unknown as { registry: any }).registry;
     const resource = defineResource<{ enabled: boolean }>({
       id: "registry-alias-resource",
@@ -201,6 +202,22 @@ describe("StoreRegistry facade delegates", () => {
     ).not.toThrow();
 
     expect(registry.resolveDefinitionId(configured)).toBe(resource.id);
+
+    registry.registerDefinitionAlias(
+      resource,
+      "registry-alias-resource-canonical",
+    );
+    const manualConfigured = {
+      [symbolResourceWithConfig]: true as const,
+      resource,
+    };
+
+    expect(registry.resolveDefinitionId(manualConfigured)).toBe(
+      "registry-alias-resource-canonical",
+    );
+    expect(registry.resolveDefinitionId(configured)).toBe(
+      "registry-alias-resource-canonical",
+    );
   });
 
   it("fails fast when a definition alias is remapped to a different id", () => {
@@ -340,5 +357,74 @@ describe("StoreRegistry facade delegates", () => {
         (entry: { definition: { id: string } }) => entry.definition.id,
       ),
     ).toEqual([task.id]);
+  });
+
+  it("returns an empty resolution set for hooks without explicit targets or wildcard targets", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+
+    expect(
+      registry.resolveHookTargets({
+        id: "registry-empty-hook",
+        on: undefined,
+      }),
+    ).toEqual([]);
+    expect(
+      registry.resolveHookTargets({
+        id: "registry-wildcard-hook",
+        on: "*",
+      }),
+    ).toEqual([]);
+  });
+
+  it("invalidates cached hook selector resolutions after additional registrations", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const firstEvent = defineEvent({
+      id: "registry-hook-cache-first-event",
+    });
+    const secondEvent = defineEvent({
+      id: "registry-hook-cache-second-event",
+    });
+    const hook = defineHook({
+      id: "registry-hook-cache-hook",
+      on: () => true,
+      run: async () => undefined,
+    });
+
+    store.storeGenericItem(firstEvent);
+    store.storeGenericItem(hook);
+
+    expect(registry.resolveHookTargets(hook)).toEqual([
+      { event: firstEvent, provenance: "selector" },
+    ]);
+
+    store.storeGenericItem(secondEvent);
+
+    expect(registry.resolveHookTargets(hook)).toEqual([
+      { event: firstEvent, provenance: "selector" },
+      { event: secondEvent, provenance: "selector" },
+    ]);
+  });
+
+  it("returns defensive copies from cached hook target resolutions", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const event = defineEvent({
+      id: "registry-hook-cache-copy-event",
+    });
+    const hook = defineHook({
+      id: "registry-hook-cache-copy-hook",
+      on: () => true,
+      run: async () => undefined,
+    });
+
+    store.storeGenericItem(event);
+    store.storeGenericItem(hook);
+
+    const firstResolution = registry.resolveHookTargets(hook);
+    firstResolution[0]!.provenance = "exact";
+    firstResolution.length = 0;
+
+    expect(registry.resolveHookTargets(hook)).toEqual([
+      { event, provenance: "selector" },
+    ]);
   });
 });

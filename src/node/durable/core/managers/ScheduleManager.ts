@@ -164,25 +164,8 @@ export class ScheduleManager {
     schedule: Schedule,
     options?: { lastRunAt?: Date },
   ): Promise<void> {
-    const now = new Date();
-
-    let nextRun: Date;
-    if (schedule.type === ScheduleType.Cron) {
-      nextRun = CronParser.getNextRun(schedule.pattern);
-    } else {
-      const intervalMs = Number(schedule.pattern);
-      nextRun = new Date(now.getTime() + intervalMs);
-    }
-
-    await this.store.createTimer({
-      id: `sched:${schedule.id}`,
-      scheduleId: schedule.id,
-      taskId: schedule.taskId,
-      input: schedule.input,
-      type: TimerType.Scheduled,
-      fireAt: nextRun,
-      status: TimerStatus.Pending,
-    });
+    const nextRun = this.computeNextRun(schedule);
+    await this.armScheduleTimer(schedule, nextRun);
 
     await this.store.updateSchedule(schedule.id, {
       lastRun: options?.lastRunAt,
@@ -198,13 +181,17 @@ export class ScheduleManager {
   async resume(id: string): Promise<void> {
     const schedule = await this.store.getSchedule(id);
     if (!schedule) return;
+    if (schedule.status === ScheduleStatus.Active) return;
 
     await this.store.updateSchedule(id, {
       status: ScheduleStatus.Active,
       updatedAt: new Date(),
     });
 
-    await this.reschedule(schedule);
+    await this.reschedule({
+      ...schedule,
+      status: ScheduleStatus.Active,
+    });
   }
 
   async get(id: string): Promise<Schedule | null> {
@@ -219,19 +206,107 @@ export class ScheduleManager {
     id: string,
     updates: { cron?: string; interval?: number; input?: unknown },
   ): Promise<void> {
-    const pattern =
-      updates.cron ??
-      (updates.interval !== undefined ? String(updates.interval) : undefined);
+    const existing = await this.store.getSchedule(id);
+    if (!existing) return;
+    const hasInputUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      "input",
+    );
+
+    const { type, pattern } = this.resolveUpdatedCadence(existing, updates);
+    const input = hasInputUpdate ? updates.input : existing.input;
+    const updatedAt = new Date();
+    const cadenceChanged =
+      type !== existing.type || pattern !== existing.pattern;
+    const updatedSchedule: Schedule = {
+      ...existing,
+      type,
+      pattern,
+      input,
+      updatedAt,
+    };
+
+    // Fail fast before persisting an invalid cadence update.
+    if (cadenceChanged) {
+      this.computeNextRun(updatedSchedule);
+    }
 
     await this.store.updateSchedule(id, {
+      type,
       pattern,
-      input: updates.input,
-      updatedAt: new Date(),
+      input,
+      updatedAt,
+    });
+
+    if (existing.status !== ScheduleStatus.Active) {
+      return;
+    }
+
+    if (cadenceChanged) {
+      await this.reschedule(updatedSchedule);
+      return;
+    }
+
+    if (existing.nextRun) {
+      await this.armScheduleTimer(updatedSchedule, existing.nextRun);
+    }
+  }
+
+  private computeNextRun(schedule: Schedule): Date {
+    if (schedule.type === ScheduleType.Cron) {
+      return CronParser.getNextRun(schedule.pattern);
+    }
+
+    const intervalMs = Number(schedule.pattern);
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+      durableScheduleConfigError.throw({
+        message: `Schedule '${schedule.id}' has invalid interval '${schedule.pattern}'`,
+      });
+    }
+    return new Date(Date.now() + intervalMs);
+  }
+
+  private async armScheduleTimer(
+    schedule: Schedule,
+    fireAt: Date,
+  ): Promise<void> {
+    await this.store.createTimer({
+      id: `sched:${schedule.id}`,
+      scheduleId: schedule.id,
+      taskId: schedule.taskId,
+      input: schedule.input,
+      type: TimerType.Scheduled,
+      fireAt,
+      status: TimerStatus.Pending,
     });
   }
 
   async remove(id: string): Promise<void> {
     await this.store.deleteSchedule(id);
+  }
+
+  private resolveUpdatedCadence(
+    existing: Schedule,
+    updates: { cron?: string; interval?: number },
+  ): Pick<Schedule, "type" | "pattern"> {
+    if (updates.cron !== undefined) {
+      return {
+        type: ScheduleType.Cron,
+        pattern: updates.cron,
+      };
+    }
+
+    if (updates.interval !== undefined) {
+      return {
+        type: ScheduleType.Interval,
+        pattern: String(updates.interval),
+      };
+    }
+
+    return {
+      type: existing.type,
+      pattern: existing.pattern,
+    };
   }
 
   private resolveTaskReference(

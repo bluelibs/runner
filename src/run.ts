@@ -1,96 +1,22 @@
 import { IResource, IResourceWithConfig } from "./defs";
 import { globalEvents } from "./globals/globalEvents";
-import { registerShutdownHook } from "./tools/processShutdownHooks";
 import { RunResult } from "./models/RunResult";
-import {
-  ResolvedRunOptions,
-  ResourceLifecycleMode,
-  RunOptions,
-} from "./types/runner";
+import { ResolvedRunOptions, RunOptions } from "./types/runner";
 import { getPlatform } from "./platform";
-import { runtimeSource } from "./types/runtimeSource";
 import {
-  disposeRunArtifacts,
-  runShutdownDisposalLifecycle,
-} from "./tools/shutdownDisposalLifecycle";
-import { BootstrapCoordinator } from "./tools/BootstrapCoordinator";
+  registerActiveRunResult,
+  unregisterActiveRunResult,
+} from "./runtime/activeRunResults";
+import { runtimeSource } from "./types/runtimeSource";
+import { assertExecutionContextSupport } from "./tools/assertExecutionContextSupport";
+import { assertIdentitySupport } from "./tools/assertIdentitySupport";
 import { createRuntimeServices } from "./tools/createRuntimeServices";
 import { extractResourceAndConfig } from "./tools/extractResourceAndConfig";
-import { detectRunnerMode } from "./tools/detectRunnerMode";
-import { resolveExecutionContextConfig } from "./tools/resolveExecutionContextConfig";
-import { contextError } from "./errors";
-
-function resolveRegisteredEvent<TInput>(
-  store: {
-    findIdByDefinition(reference: unknown): string;
-    findDefinitionById(id: string): unknown;
-  },
-  eventDefinition: { id: string },
-): TInput {
-  const canonicalId = store.findIdByDefinition(eventDefinition);
-  return store.findDefinitionById(canonicalId) as TInput;
-}
-
-const activeRunResults = new Set<RunResult<any>>();
-
-function normalizeRunOptions(options: RunOptions | undefined): Omit<
-  ResolvedRunOptions,
-  "onUnhandledError"
-> & {
-  onUnhandledErrorInput?: ResolvedRunOptions["onUnhandledError"];
-} {
-  const debug = options?.debug;
-  const errorBoundary = options?.errorBoundary ?? true;
-  const shutdownHooks = options?.shutdownHooks ?? true;
-  const dispose = Object.freeze({
-    totalBudgetMs: options?.dispose?.totalBudgetMs ?? 30_000,
-    drainingBudgetMs: options?.dispose?.drainingBudgetMs ?? 20_000,
-    cooldownWindowMs: options?.dispose?.cooldownWindowMs ?? 0,
-  });
-  const dryRun = options?.dryRun ?? false;
-  const lazy = options?.lazy ?? false;
-  const lifecycleMode =
-    options?.lifecycleMode === ResourceLifecycleMode.Parallel
-      ? ResourceLifecycleMode.Parallel
-      : ResourceLifecycleMode.Sequential;
-  const mode = detectRunnerMode(options?.mode);
-  const logs = {
-    printThreshold:
-      options?.logs?.printThreshold ??
-      (getPlatform().getEnv("NODE_ENV") === "test" ? null : "info"),
-    printStrategy: options?.logs?.printStrategy ?? "pretty",
-    bufferLogs: options?.logs?.bufferLogs ?? false,
-  };
-
-  return {
-    debug,
-    logs: Object.freeze(logs),
-    errorBoundary,
-    shutdownHooks,
-    dispose,
-    onUnhandledErrorInput: options?.onUnhandledError,
-    dryRun,
-    executionContext: resolveExecutionContextConfig(options?.executionContext),
-    lazy,
-    lifecycleMode,
-    mode,
-  };
-}
-
-function assertExecutionContextSupport(
-  executionContext: ResolvedRunOptions["executionContext"],
-): void {
-  if (!executionContext) {
-    return;
-  }
-
-  if (!getPlatform().hasAsyncLocalStorage()) {
-    contextError.throw({
-      details:
-        "Execution context requires AsyncLocalStorage and is not available in this environment.",
-    });
-  }
-}
+import { normalizeRunOptions } from "./tools/normalizeRunOptions";
+import {
+  createRunShutdownController,
+  type RunShutdownController,
+} from "./tools/runShutdownController";
 
 /**
  * This is the central function that kicks off your runner. You can run as many resources as you want in a single process, they will run in complete isolation.
@@ -122,6 +48,7 @@ export async function run<C, V extends Promise<any>>(
   await getPlatform().init();
   const normalizedOptions = normalizeRunOptions(options);
   assertExecutionContextSupport(normalizedOptions.executionContext);
+  assertIdentitySupport(normalizedOptions.identity);
 
   // --- Service creation ---
   const { resource, config } = extractResourceAndConfig(
@@ -146,78 +73,59 @@ export async function run<C, V extends Promise<any>>(
     ...publicRunOptions,
     onUnhandledError: services.onUnhandledError,
   });
-  let { unhookProcessSafetyNets } = services;
-
-  // --- Bootstrap coordination ---
-  const bootstrap = new BootstrapCoordinator();
-  let unhookShutdown: (() => void) | undefined;
-
-  const disposeAll = async () => {
-    await disposeRunArtifacts({
-      store,
-      takeUnhookProcessSafetyNets: () => {
-        const current = unhookProcessSafetyNets;
-        unhookProcessSafetyNets = undefined;
-        return current;
-      },
-      takeUnhookShutdown: () => {
-        const current = unhookShutdown;
-        unhookShutdown = undefined;
-        return current;
-      },
-      onBeforeStoreDispose: () => {
-        activeRunResults.delete(runtimeResult);
-      },
-    });
-  };
-
-  const runtimeLifecycleSource = runtimeSource.runtime("runtime.lifecycle");
   const runLogger = logger.with({ source: "run" });
-
-  const disposeWithShutdownLifecycle = async () =>
-    runShutdownDisposalLifecycle({
-      store,
-      eventManager,
-      runLogger,
-      runtimeLifecycleSource,
-      dispose: normalizedOptions.dispose,
-      disposeAll,
-    });
-
+  const runtimeLifecycleSource = runtimeSource.runtime("runtime.lifecycle");
+  let { unhookProcessSafetyNets } = services;
   const runtimeResult = new RunResult<any>(
     logger,
     store,
     eventManager,
     taskRunner,
     runOptions,
-    disposeWithShutdownLifecycle,
+    () => shutdownController.disposeWithShutdownLifecycle(),
+    () => shutdownController.requestForceDispose(),
+    () => shutdownController.isForceDisposeRequested(),
   );
-
-  if (normalizedOptions.shutdownHooks) {
-    unhookShutdown = registerShutdownHook(async () => {
-      if (!bootstrap.isCompleted) {
-        bootstrap.requestShutdown();
-        await bootstrap.completion;
-        if (bootstrap.succeeded) {
-          await runtimeResult.dispose();
-        }
-        return;
-      }
-
-      await runtimeResult.dispose();
-    });
-  }
+  const shutdownController: RunShutdownController = createRunShutdownController(
+    {
+      store,
+      eventManager,
+      logger,
+      runtime: runtimeResult,
+      dispose: normalizedOptions.dispose,
+      shutdownHooks: normalizedOptions.shutdownHooks,
+      signal: normalizedOptions.signal,
+      onUnhandledError: services.onUnhandledError,
+      takeUnhookProcessSafetyNets: () => {
+        const current = unhookProcessSafetyNets;
+        unhookProcessSafetyNets = undefined;
+        return current;
+      },
+      onBeforeDisposeAll: () => {
+        unregisterActiveRunResult(runtimeResult);
+      },
+    },
+  );
 
   // --- Bootstrap sequence ---
   try {
+    const throwIfShutdownRequested = (phase: string): void => {
+      shutdownController.bootstrap.throwIfShutdownRequested(phase);
+    };
+    const throwIfReadyHooksShutdownRequested = (): void => {
+      throwIfShutdownRequested("resource ready hooks");
+    };
+
+    shutdownController.assertNotAborted();
     store.initializeStore(resource, config, runtimeResult, {
       debug: normalizedOptions.debug,
       executionContext: normalizedOptions.executionContext,
+      identity: normalizedOptions.identity,
     });
-    bootstrap.throwIfShutdownRequested("store initialization");
+    throwIfShutdownRequested("store initialization");
 
     await store.processOverrides();
-    bootstrap.throwIfShutdownRequested("override processing");
+    throwIfShutdownRequested("override processing");
 
     store.validateDependencyGraph();
     store.validateEventEmissionGraph();
@@ -225,23 +133,24 @@ export async function run<C, V extends Promise<any>>(
     if (normalizedOptions.dryRun) {
       await runLogger.debug("Dry run mode. Skipping initialization...");
       runtimeResult.setValue(store.root.value);
+      shutdownController.bootstrap.markCompleted(true);
       return runtimeResult as RunResult<V extends Promise<infer U> ? U : V>;
     }
 
     await runLogger.debug("Events stored. Attaching listeners...");
     await processor.attachListeners();
-    bootstrap.throwIfShutdownRequested("listener attachment");
+    throwIfShutdownRequested("listener attachment");
 
     await runLogger.debug("Listeners attached. Computing dependencies...");
     await processor.computeAllDependencies();
-    bootstrap.throwIfShutdownRequested("dependency computation");
+    throwIfShutdownRequested("dependency computation");
 
     await runLogger.debug(
       "Dependencies computed. Proceeding with initialization...",
     );
 
     await processor.initializeRoot();
-    bootstrap.throwIfShutdownRequested("root initialization");
+    throwIfShutdownRequested("root initialization");
 
     const startupUnusedResourceIds = new Set<string>(
       Array.from(store.resources.values())
@@ -252,18 +161,29 @@ export async function run<C, V extends Promise<any>>(
     store.lock();
     eventManager.lock();
     await logger.lock();
-    await store.ready();
+    throwIfShutdownRequested("logger lock");
 
-    await eventManager.emit(
-      resolveRegisteredEvent<typeof globalEvents.ready>(
-        store,
-        globalEvents.ready,
-      ),
-      undefined,
-      runtimeLifecycleSource,
+    await store.ready({
+      shouldStop: throwIfReadyHooksShutdownRequested,
+    });
+    throwIfReadyHooksShutdownRequested();
+
+    await shutdownController.bootstrap.withPhaseSignal(
+      "ready event",
+      async (signal) =>
+        eventManager.emit(
+          store.resolveRegisteredDefinition(globalEvents.ready),
+          undefined,
+          {
+            source: runtimeLifecycleSource,
+            signal,
+          },
+        ),
     );
+    throwIfShutdownRequested("ready event");
 
     await runLogger.info("Runner online. Awaiting tasks and events.");
+    throwIfShutdownRequested("startup finalization");
 
     runtimeResult.setLazyOptions({
       lazyMode: normalizedOptions.lazy,
@@ -275,46 +195,20 @@ export async function run<C, V extends Promise<any>>(
     });
     runtimeResult.setValue(store.root.value);
 
-    activeRunResults.add(runtimeResult);
-    bootstrap.markCompleted(true);
+    registerActiveRunResult(runtimeResult);
+    shutdownController.bootstrap.markCompleted(true);
 
     return runtimeResult;
   } catch (err) {
-    if (bootstrap.wasShutdownRequested) {
-      await disposeWithShutdownLifecycle();
+    if (shutdownController.bootstrap.wasShutdownRequested) {
+      await shutdownController.disposeWithShutdownLifecycle();
     } else {
-      await disposeAll();
+      await shutdownController.disposeAll();
     }
     throw err;
   } finally {
-    if (!bootstrap.isCompleted) {
-      bootstrap.markCompleted(false);
+    if (!shutdownController.bootstrap.isCompleted) {
+      shutdownController.bootstrap.markCompleted(false);
     }
   }
-}
-
-export async function __disposeActiveRunResultsForTests(): Promise<void> {
-  await __disposeActiveRunResultsForTestsExcept();
-}
-
-export function __snapshotActiveRunResultsForTests(): ReadonlySet<
-  RunResult<any>
-> {
-  return new Set(activeRunResults);
-}
-
-export async function __disposeActiveRunResultsForTestsExcept(
-  keep: ReadonlySet<RunResult<any>> = new Set(),
-): Promise<void> {
-  await Promise.all(
-    Array.from(activeRunResults)
-      .filter((runtime) => !keep.has(runtime))
-      .map(async (runtime) => {
-        try {
-          await runtime.dispose();
-        } catch {
-          // Best-effort cleanup in tests; preserve original test failure surface.
-        }
-      }),
-  );
 }

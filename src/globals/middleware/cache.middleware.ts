@@ -1,13 +1,23 @@
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
-import { safeStringify } from "../../models/utils/safeStringify";
 import { Match } from "../../tools/check";
+import type { ValidationSchemaInput } from "../../types/utilities";
 import { loggerResource } from "../resources/logger.resource";
+import { identityContextResource } from "../resources/identityContext.resource";
+import { globalTags } from "../globalTags";
 import {
-  applyTenantScopeToKey,
-  tenantScopePattern,
-  type TenantScopedMiddlewareConfig,
-} from "./tenantScope.shared";
+  normalizeCacheKeyBuilderResult,
+  type CacheKeyBuilderResult,
+} from "./cache.key";
+import {
+  createMiddlewareKeyBuilderHelpers,
+  defaultTaskKeyBuilder,
+} from "./keyBuilder.shared";
+import {
+  applyIdentityScopeToKey,
+  identityScopePattern,
+  type IdentityScopedMiddlewareConfig,
+} from "./identityScope.shared";
 import {
   cacheResource,
   createCacheInstance,
@@ -20,50 +30,68 @@ export {
   createCacheInstance,
 } from "./cache.resource";
 export type {
+  CacheEntryMetadata,
   CacheFactoryOptions,
   CacheProvider,
   CacheProviderInput,
   CacheProviderResource,
   CacheResourceConfig,
   CacheResourceValue,
+  CacheRef,
   ICacheProvider,
 } from "./cache.resource";
+export type { CacheKeyBuilderResult } from "./cache.key";
 
 type CacheMiddlewareConfig = CacheFactoryOptions &
-  TenantScopedMiddlewareConfig & {
-    keyBuilder?: (taskId: string, input: unknown) => string;
+  IdentityScopedMiddlewareConfig & {
+    keyBuilder?: (
+      taskId: string,
+      input: any,
+      helpers?: ReturnType<typeof createMiddlewareKeyBuilderHelpers>,
+    ) => CacheKeyBuilderResult;
   };
 
-const cacheMiddlewareConfigPattern = Match.ObjectIncluding({
-  keyBuilder: Match.Optional(Function),
-  tenantScope: tenantScopePattern,
-  ttl: Match.Optional(Match.PositiveInteger),
-  max: Match.Optional(Match.PositiveInteger),
-  ttlAutopurge: Match.Optional(Boolean),
-  allowStale: Match.Optional(Boolean),
-  updateAgeOnGet: Match.Optional(Boolean),
-  updateAgeOnHas: Match.Optional(Boolean),
-  maxSize: Match.Optional(Match.PositiveInteger),
-  maxEntrySize: Match.Optional(Match.PositiveInteger),
-  ttlResolution: Match.Optional(Match.PositiveInteger),
-  ttlAutopurgeWarn: Match.Optional(Boolean),
-  noDeleteOnFetchRejection: Match.Optional(Boolean),
-  noDeleteOnStaleGet: Match.Optional(Boolean),
-  noDisposeOnSet: Match.Optional(Boolean),
-  fetchMethod: Match.Optional(Function),
-  sizeCalculation: Match.Optional(Function),
-  dispose: Match.Optional(Function),
-  disposeAfter: Match.Optional(Function),
-  noUpdateTTL: Match.Optional(Boolean),
-  noDeleteOnStaleFetchRejection: Match.Optional(Boolean),
-  allowStaleOnFetchAbort: Match.Optional(Boolean),
-  allowStaleOnFetchRejection: Match.Optional(Boolean),
-  ignoreFetchAbort: Match.Optional(Boolean),
-  forceRefresh: Match.Optional(Boolean),
-  noDeleteOnFetchAbort: Match.Optional(Boolean),
-  size: Match.Optional(Number),
-  stale: Match.Optional(Boolean),
-});
+type ResolvedCacheMiddlewareConfig = {
+  cacheOptions: CacheFactoryOptions;
+  keyBuilder: (
+    taskId: string,
+    input: any,
+    helpers?: ReturnType<typeof createMiddlewareKeyBuilderHelpers>,
+  ) => CacheKeyBuilderResult;
+  identityScope: IdentityScopedMiddlewareConfig["identityScope"];
+};
+
+const cacheMiddlewareConfigPattern: ValidationSchemaInput<CacheMiddlewareConfig> =
+  Match.ObjectIncluding({
+    keyBuilder: Match.Optional(Function),
+    identityScope: identityScopePattern,
+    ttl: Match.Optional(Match.PositiveInteger),
+    max: Match.Optional(Match.PositiveInteger),
+    ttlAutopurge: Match.Optional(Boolean),
+    allowStale: Match.Optional(Boolean),
+    updateAgeOnGet: Match.Optional(Boolean),
+    updateAgeOnHas: Match.Optional(Boolean),
+    maxSize: Match.Optional(Match.PositiveInteger),
+    maxEntrySize: Match.Optional(Match.PositiveInteger),
+    ttlResolution: Match.Optional(Match.PositiveInteger),
+    ttlAutopurgeWarn: Match.Optional(Boolean),
+    noDeleteOnFetchRejection: Match.Optional(Boolean),
+    noDeleteOnStaleGet: Match.Optional(Boolean),
+    noDisposeOnSet: Match.Optional(Boolean),
+    fetchMethod: Match.Optional(Function),
+    sizeCalculation: Match.Optional(Function),
+    dispose: Match.Optional(Function),
+    disposeAfter: Match.Optional(Function),
+    noUpdateTTL: Match.Optional(Boolean),
+    noDeleteOnStaleFetchRejection: Match.Optional(Boolean),
+    allowStaleOnFetchAbort: Match.Optional(Boolean),
+    allowStaleOnFetchRejection: Match.Optional(Boolean),
+    ignoreFetchAbort: Match.Optional(Boolean),
+    forceRefresh: Match.Optional(Boolean),
+    noDeleteOnFetchAbort: Match.Optional(Boolean),
+    size: Match.Optional(Number),
+    stale: Match.Optional(Boolean),
+  });
 
 /**
  * Journal keys exposed by the cache middleware.
@@ -74,46 +102,53 @@ export const journalKeys = {
   hit: journalHelper.createKey<boolean>("runner.middleware.task.cache.hit"),
 } as const;
 
-const defaultKeyBuilder = (taskId: string, input: unknown) =>
-  `${taskId}-${safeStringify(input)}`;
+export function resolveCacheMiddlewareConfig(
+  config: CacheMiddlewareConfig | undefined,
+  defaultOptions: CacheFactoryOptions,
+): ResolvedCacheMiddlewareConfig {
+  const mergedConfig: CacheMiddlewareConfig = {
+    keyBuilder: defaultTaskKeyBuilder,
+    ttl: 10 * 1000,
+    max: 100,
+    ttlAutopurge: true,
+    ...config,
+  };
+  const { keyBuilder, identityScope, ...cacheOptions } = mergedConfig;
 
-function toStableTaskId(taskId: string): string {
-  const taskMarker = ".tasks.";
-  const markerIndex = taskId.indexOf(taskMarker);
-
-  if (markerIndex === -1) {
-    return taskId;
-  }
-
-  return taskId.slice(markerIndex + taskMarker.length);
+  return {
+    keyBuilder: keyBuilder ?? defaultTaskKeyBuilder,
+    cacheOptions: {
+      ...defaultOptions,
+      ...cacheOptions,
+    },
+    identityScope,
+  };
 }
 
 export const cacheMiddleware = defineTaskMiddleware({
   id: "cache",
+  tags: [globalTags.identityScoped],
+  meta: {
+    title: "Task Cache",
+    description:
+      "Caches task results by computed key and optional identity scope, reusing task-local providers from resources.cache.",
+  },
   configSchema: cacheMiddlewareConfigPattern,
   dependencies: () => ({
     cache: cacheResource,
     logger: loggerResource.optional(),
+    identityContext: identityContextResource,
   }),
   async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
-    const { cache, logger } = deps;
+    const { cache, logger, identityContext } = deps;
+    const resolvedConfig = resolveCacheMiddlewareConfig(
+      config,
+      cache.defaultOptions,
+    );
 
-    config = {
-      keyBuilder: defaultKeyBuilder,
-      ttl: 10 * 1000,
-      max: 100,
-      ttlAutopurge: true,
-      ...config,
-    };
-
-    const taskId = toStableTaskId(task!.definition.id);
+    const taskId = task!.definition.id;
     let cacheHolderForTask = cache.map.get(taskId)!;
     if (!cacheHolderForTask) {
-      const { keyBuilder, ...lruOptions } = config;
-      const cacheOptions = {
-        ...cache.defaultOptions,
-        ...lruOptions,
-      };
       const pendingCreate = cache.pendingCreates.get(taskId);
 
       if (pendingCreate) {
@@ -121,7 +156,7 @@ export const cacheMiddleware = defineTaskMiddleware({
       } else {
         const createPromise = createCacheInstance({
           cache,
-          cacheOptions,
+          cacheOptions: resolvedConfig.cacheOptions,
           taskId,
         })
           .then((instance) => {
@@ -136,10 +171,22 @@ export const cacheMiddleware = defineTaskMiddleware({
       }
     }
 
-    const key = applyTenantScopeToKey(
-      config.keyBuilder!(taskId, task!.input),
-      config.tenantScope,
+    const cacheKey = normalizeCacheKeyBuilderResult(
+      resolvedConfig.keyBuilder(
+        taskId,
+        task!.input,
+        createMiddlewareKeyBuilderHelpers(taskId),
+      ),
     );
+    // Apply identity scope from the normalized config, not the raw attachment.
+    // The resolver owns defaulting ("auto") and keeps cache key + refs aligned
+    // with the exact policy used for the provider instance itself.
+    const key = applyIdentityScopeToKey(
+      cacheKey.cacheKey,
+      resolvedConfig.identityScope,
+      identityContext?.tryUse,
+    );
+    const refs = cacheKey.refs;
 
     const cachedValue = await cacheHolderForTask.get(key);
     const hasCachedEntry =
@@ -156,13 +203,13 @@ export const cacheMiddleware = defineTaskMiddleware({
     const result = await next(task!.input);
 
     try {
-      await cacheHolderForTask.set(key, result);
+      await cacheHolderForTask.set(key, result, { refs });
     } catch (error) {
       await logger?.error(
         "Cache middleware write failed; returning fresh result.",
         {
           taskId,
-          data: { key },
+          data: { key, refs },
           error: error instanceof Error ? error : new Error(String(error)),
         },
       );

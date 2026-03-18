@@ -1,8 +1,42 @@
 import { executionTrackerResource } from "../../../globals/resources/debug/executionTracker.resource";
-import { globalTags } from "../../../globals/globalTags";
 
 describe("runner.debug.executionTracker", () => {
-  it("short-circuits system resources in the resource interceptor", async () => {
+  it("short-circuits framework tasks in the task interceptor", async () => {
+    let taskInterceptor: any;
+
+    const deps = {
+      logger: {
+        info: jest.fn(async () => undefined),
+        error: jest.fn(async () => undefined),
+      },
+      debugConfig: "verbose" as const,
+      taskRunner: {
+        intercept: jest.fn((interceptor: unknown) => {
+          taskInterceptor = interceptor;
+        }),
+      },
+      middlewareManager: {
+        intercept: jest.fn(),
+      },
+    };
+
+    await (executionTrackerResource.init as any)(undefined, deps);
+
+    const result = await taskInterceptor(async () => "ok", {
+      task: {
+        definition: {
+          id: "system.tasks.bootstrap",
+        },
+        input: {},
+      },
+    });
+
+    expect(result).toBe("ok");
+    expect(deps.logger.info).not.toHaveBeenCalled();
+    expect(deps.logger.error).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits framework resources in the resource interceptor", async () => {
     let resourceInterceptor: any;
 
     const deps = {
@@ -26,8 +60,7 @@ describe("runner.debug.executionTracker", () => {
     const result = await resourceInterceptor(async () => "ok", {
       resource: {
         definition: {
-          id: "tests-debug-system-resource",
-          tags: [globalTags.system],
+          id: "runner.resources.debug.executionTracker",
         },
         config: {},
       },

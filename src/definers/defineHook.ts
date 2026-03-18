@@ -1,9 +1,9 @@
 import {
   DependencyMapType,
-  IEventDefinition,
   ITaskMeta,
   IHook,
   IHookDefinition,
+  OnType,
   symbolHook,
   symbolFilePath,
 } from "../defs";
@@ -19,8 +19,7 @@ import { assertDefinitionId } from "./assertDefinitionId";
  */
 export function defineHook<
   D extends DependencyMapType = any,
-  TOn extends "*" | IEventDefinition<any> | readonly IEventDefinition<any>[] =
-    any,
+  TOn extends OnType = any,
   TMeta extends ITaskMeta = any,
 >(hookDef: IHookDefinition<D, TOn, TMeta>): IHook<D, TOn, TMeta> {
   const filePath = getCallerFile();

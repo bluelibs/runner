@@ -39,16 +39,17 @@ export function taskMiddlewareBuilder<
   D extends DependencyMapType = {},
 >(id: string): TaskMiddlewareFluentBuilder<C, In, Out, D> {
   const filePath = getCallerFile();
-  const initial: TaskMwState<C, In, Out, D> = Object.freeze({
-    id,
-    filePath,
-    dependencies: {} as D,
-    configSchema: undefined,
-    run: undefined,
-    meta: {} as IMiddlewareMeta,
-    tags: [] as TaskMiddlewareTagType[],
-    throws: undefined,
-  });
+  const initial: TaskMwState<C, In, Out, D, TaskMiddlewareTagType[]> =
+    Object.freeze({
+      id,
+      filePath,
+      dependencies: {} as D,
+      configSchema: undefined,
+      run: undefined,
+      meta: {} as IMiddlewareMeta,
+      tags: [] as TaskMiddlewareTagType[],
+      throws: undefined,
+    });
 
   return makeTaskMiddlewareBuilder(initial);
 }
@@ -74,16 +75,17 @@ export function resourceMiddlewareBuilder<
   D extends DependencyMapType = {},
 >(id: string): ResourceMiddlewareFluentBuilder<C, In, Out, D> {
   const filePath = getCallerFile();
-  const initial: ResMwState<C, In, Out, D> = Object.freeze({
-    id,
-    filePath,
-    dependencies: {} as D,
-    configSchema: undefined,
-    run: undefined,
-    meta: {} as IMiddlewareMeta,
-    tags: [] as ResourceMiddlewareTagType[],
-    throws: undefined,
-  });
+  const initial: ResMwState<C, In, Out, D, ResourceMiddlewareTagType[]> =
+    Object.freeze({
+      id,
+      filePath,
+      dependencies: {} as D,
+      configSchema: undefined,
+      run: undefined,
+      meta: {} as IMiddlewareMeta,
+      tags: [] as ResourceMiddlewareTagType[],
+      throws: undefined,
+    });
 
   return makeResourceMiddlewareBuilder(initial);
 }

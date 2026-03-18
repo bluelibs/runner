@@ -2,6 +2,7 @@ import type {
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
 } from "../types/resourceMiddleware";
+import type { ResourceMiddlewareTagType } from "../types/tag";
 import type {
   DependencyMapType,
   InferValidationSchemaInput,
@@ -30,6 +31,7 @@ export function defineResourceMiddleware<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
 >(
   middlewareDef: MiddlewareDefWithInferredSchema<TSchema, TDependencies> &
     Pick<
@@ -37,7 +39,8 @@ export function defineResourceMiddleware<
         InferValidationSchemaInput<TSchema>,
         TEnforceInputContract,
         TEnforceOutputContract,
-        TDependencies
+        TDependencies,
+        TTags
       >,
       "run"
     >,
@@ -45,43 +48,50 @@ export function defineResourceMiddleware<
   InferValidationSchemaInput<TSchema>,
   TEnforceInputContract,
   TEnforceOutputContract,
-  TDependencies
+  TDependencies,
+  TTags
 >;
 export function defineResourceMiddleware<
   TConfig = any,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
 >(
   middlewareDef: IResourceMiddlewareDefinition<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
-    TDependencies
+    TDependencies,
+    TTags
   >,
 ): IResourceMiddleware<
   TConfig,
   TEnforceInputContract,
   TEnforceOutputContract,
-  TDependencies
+  TDependencies,
+  TTags
 >;
 export function defineResourceMiddleware<
   TConfig = any,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends ResourceMiddlewareTagType[] = ResourceMiddlewareTagType[],
 >(
   middlewareDef: IResourceMiddlewareDefinition<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
-    TDependencies
+    TDependencies,
+    TTags
   >,
 ): IResourceMiddleware<
   TConfig,
   TEnforceInputContract,
   TEnforceOutputContract,
-  TDependencies
+  TDependencies,
+  TTags
 > {
   return defineMiddlewareCore<TConfig, TDependencies>(
     resourceVariant,
@@ -91,6 +101,7 @@ export function defineResourceMiddleware<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
-    TDependencies
+    TDependencies,
+    TTags
   >;
 }

@@ -39,7 +39,7 @@ function createDeps(): Omit<AskRunnerDeps, "openAiClient"> {
   const aiDocsPrompt: AiDocsPrompt = {
     content: "Runner docs body",
     version: "v-test",
-    filePath: "/virtual/AI.md",
+    filePath: "/virtual/COMPACT_GUIDE.md",
   };
 
   return {

@@ -6,9 +6,19 @@ import type {
   ExecutionContextConfig,
   ExecutionContextOptions,
 } from "./executionContext";
+import type { IAsyncContext } from "./asyncContext";
 import { IResource, IResourceHealthReport } from "./resource";
 import { ITask } from "./task";
 import { TaskCallOptions } from "./utilities";
+
+/**
+ * Async context type accepted by `run(..., { identity })`.
+ *
+ * Apps usually pass a built `r.asyncContext(...).configSchema(...).build()`
+ * accessor whose value shape may include `tenantId`, `userId`, and `roles`,
+ * alongside any other app-owned identity fields.
+ */
+export type IdentityAsyncContext = IAsyncContext<any>;
 
 /**
  * Minimal runtime health-reporting contract.
@@ -45,6 +55,20 @@ export interface IRuntimeRecoveryOptions {
   /** Recovery predicate that must pass before Runner auto-resumes. */
   check: () => boolean | Promise<boolean>;
 }
+
+/**
+ * Optional controls for runtime disposal.
+ */
+export type RuntimeDisposeOptions = {
+  /**
+   * Skips any remaining graceful shutdown orchestration that has not started
+   * yet and jumps toward direct resource disposal. This can bypass
+   * `dispose.cooldownWindowMs`, `events.disposing`, drain wait, and
+   * `events.drained`, but it does not preempt work already in flight such as an
+   * active `cooldown()` call.
+   */
+  force?: boolean;
+};
 
 /**
  * Common interface for the Runner runtime instance.
@@ -110,7 +134,7 @@ export interface IRuntime<V = unknown> extends IHealthReporter {
   recoverWhen(options: IRuntimeRecoveryOptions): IRuntimeRecoveryHandle;
 
   /** Disposes the runtime and all resources. */
-  dispose(): Promise<void>;
+  dispose(options?: RuntimeDisposeOptions): Promise<void>;
 }
 
 /**
@@ -178,6 +202,13 @@ export type RunOptions = {
    */
   shutdownHooks?: boolean;
   /**
+   * External shutdown trigger for the runtime lifecycle.
+   * Aborting this signal cancels bootstrap before readiness (rolling back any
+   * initialized resources) or starts graceful disposal after the runtime is
+   * ready, without affecting ambient execution signals.
+   */
+  signal?: AbortSignal;
+  /**
    * Shutdown disposal configuration.
    */
   dispose?: DisposeOptions;
@@ -214,6 +245,16 @@ export type RunOptions = {
    * Enables built-in execution tracing and cycle detection for this runtime.
    */
   executionContext?: boolean | ExecutionContextOptions;
+  /**
+   * Overrides which async context Runner reads for identity-aware framework
+   * features such as identity-scoped cache, rate limits, and temporal
+   * policies.
+   *
+   * App code should continue using this context directly for `provide()`,
+   * `use()`, and `require()`. Runner also auto-registers the configured
+   * context inside the runtime so it can be used as a dependency.
+   */
+  identity?: IdentityAsyncContext;
 };
 
 /**
@@ -234,6 +275,8 @@ export type ResolvedRunOptions = {
   errorBoundary: boolean;
   /** Whether signal-based graceful shutdown hooks are installed. */
   shutdownHooks: boolean;
+  /** Optional external shutdown trigger captured for this runtime instance. */
+  signal?: AbortSignal;
   dispose: {
     /** Total shutdown budget in milliseconds. */
     totalBudgetMs: number;
@@ -248,6 +291,8 @@ export type ResolvedRunOptions = {
   dryRun: boolean;
   /** Normalized execution-context configuration for this runtime. */
   executionContext: ExecutionContextConfig | null;
+  /** Runtime-specific async context used for identity-aware framework behavior. */
+  identity: IdentityAsyncContext | null;
   /** Whether lazy resource startup is active. */
   lazy: boolean;
   /** Normalized lifecycle scheduling mode. */

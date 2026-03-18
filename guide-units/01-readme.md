@@ -100,7 +100,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
   - [Testing](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#testing)
   - [Observability](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#observability-strategy-logs-metrics-and-traces)
 - **API reference**: Browse the [TypeDoc documentation](https://bluelibs.github.io/runner/).
-- **Token-friendly overview**: Read [AI.md](./readmes/AI.md).
+- **Token-friendly overview**: Read [COMPACT_GUIDE.md](./readmes/COMPACT_GUIDE.md).
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
   - [Remote Lanes](./readmes/REMOTE_LANES.md)

@@ -35,6 +35,26 @@ Key rules that keep the middleware model predictable:
 - first listed middleware is the outermost wrapper
 - task middleware can attach only to tasks or `subtree.tasks.middleware`
 - resource middleware can attach only to resources or `subtree.resources.middleware`
+- middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment
+
+```mermaid
+flowchart LR
+    Request(["runTask()"])
+    MW_A["Middleware A\n(outermost, listed first)"]
+    MW_B["Middleware B\n(listed second)"]
+    Task["Task .run()"]
+
+    Request --> MW_A
+    MW_A -->|"next()"| MW_B
+    MW_B -->|"next()"| Task
+    Task -->|result| MW_B
+    MW_B -->|result| MW_A
+    MW_A -->|result| Request
+
+    style MW_A fill:#9C27B0,color:#fff
+    style MW_B fill:#7B1FA2,color:#fff
+    style Task fill:#4CAF50,color:#fff
+```
 
 ### Task and Resource Middleware
 
@@ -116,7 +136,7 @@ Rules:
 
 ### Middleware Type Contracts
 
-Middleware can enforce input and output contracts on the tasks that use it. This is useful for:
+Middleware can enforce input and output contracts on the tasks that use it, and middleware tags can also enforce middleware config contracts. This is useful for:
 
 - **Authentication**: ensure all tasks using auth-middleware have `userId` in input
 - **API standardization**: enforce consistent response shapes across task groups
@@ -150,23 +170,25 @@ const authMiddleware = r.middleware
 ```
 
 If you use multiple contract middleware, their contracts combine.
+If you tag middleware with a contract tag whose config includes extra fields, that contract also flows into the middleware's dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
 
 ### Built-In Middleware
 
 Runner ships with built-in middleware for common reliability, admission-control, caching, and context-enforcement concerns:
 
-| Middleware     | Config                                    | Notes                                                                     |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`   |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                               |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                     |
-| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key   |
-| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends       |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                                  |
-| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"      |
-| requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                |
-| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`  |
+| Middleware     | Config                                    | Notes                                                                                 |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; `keyBuilder` may return a string or `{ cacheKey, refs }` |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                                           |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                                 |
+| debounce       | `{ ms, keyBuilder?, maxKeys? }`           | waits for inactivity, then runs once with the latest input for that key               |
+| throttle       | `{ ms, keyBuilder?, maxKeys? }`           | runs immediately, then suppresses burst calls until the window ends                   |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                              |
+| identityChecker | `{ tenant?, user?, roles? }`             | blocks task execution unless the active identity satisfies the gate                   |
+| rateLimit      | `{ windowMs, max, keyBuilder?, maxKeys? }` | fixed-window admission limit per key, for cases like "50 per second"                  |
+| requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution             |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                            |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`              |
 
 Resource equivalents:
 
@@ -176,6 +198,7 @@ Resource equivalents:
 Recommended ordering:
 
 - fallback outermost
+- identityChecker near the outside when auth should fail before expensive work
 - timeout inside retry when you want per-attempt budgets
 - rate-limit for admission control such as "max 50 calls per second"
 - concurrency for in-flight control
@@ -206,6 +229,18 @@ interface CacheProviderInput {
 type CacheProviderFactory = (
   input: CacheProviderInput,
 ) => Promise<ICacheProvider>;
+
+interface ICacheProvider {
+  get(key: string): unknown | Promise<unknown>;
+  set(
+    key: string,
+    value: unknown,
+    metadata?: { refs?: readonly string[] },
+  ): unknown | Promise<unknown>;
+  clear(): void | Promise<void>;
+  invalidateRefs(refs: readonly string[]): number | Promise<number>;
+  has?(key: string): boolean | Promise<boolean>;
+}
 ```
 
 Notes:
@@ -218,6 +253,9 @@ Notes:
 - Node also ships with `resources.redisCacheProvider`, which supports `totalBudgetBytes` with Redis-backed storage.
 - Custom providers should enforce their own backend budget policy when `input.totalBudgetBytes` is provided.
 - `keyBuilder` is middleware-only and is not passed to the provider.
+- When `keyBuilder(...)` returns `{ cacheKey, refs }`, middleware passes those refs to `set(..., metadata)` for provider-side indexing.
+- Without `keyBuilder`, cache keys default to `taskId + serialized input` and fail fast when the input cannot be serialized.
+- `resources.cache.invalidateRefs(ref | ref[])` fans out across cache-enabled tasks and deletes matching entries.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
 #### Default Usage
@@ -231,8 +269,8 @@ const expensiveTask = r
     middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input: { userId: string }) =>
-        `${taskId}-${input.userId}`, // optional key builder
+      keyBuilder: (_taskId, input: { userId: string }) =>
+        `user:${input.userId}`, // optional when the default serialized-input key is too granular
     }),
   ])
   .run(async (input: { userId: string }) => {
@@ -255,6 +293,55 @@ const app = r
   ])
   .build();
 ```
+
+#### Ref-Based Invalidation
+
+Use semantic refs when multiple cached tasks should be refreshed after the same write.
+
+```typescript
+import { asyncContexts, middleware, r, resources } from "@bluelibs/runner";
+
+const CacheRefs = {
+  getTenantId() {
+    return asyncContexts.identity.use().tenantId;
+  },
+  user(id: string) {
+    return `tenant:${this.getTenantId()}:user:${id}` as const;
+  },
+};
+
+const getUser = r
+  .task<{ userId: string; includeTeams?: boolean }>("getUser")
+  .middleware([
+    middleware.task.cache.with({
+      ttl: 60_000,
+      keyBuilder: (_taskId, input) => ({
+        cacheKey: `user:${input.userId}:teams:${input.includeTeams ? "1" : "0"}`,
+        refs: [CacheRefs.user(input.userId)],
+      }),
+    }),
+  ])
+  .run(async (input) => {
+    return await doExpensiveCalculation(input.userId);
+  })
+  .build();
+
+const updateUser = r
+  .task<{ userId: string }>("updateUser")
+  .dependencies({ cache: resources.cache })
+  .run(async (input, { cache }) => {
+    await saveUser(input.userId);
+    await cache.invalidateRefs(CacheRefs.user(input.userId)); // or array of refs for multiple invalidations
+    return { ok: true };
+  })
+  .build();
+```
+
+Notes:
+
+- `keyBuilder(taskId, input, { canonicalKey })` may return either a plain string or `{ cacheKey, refs? }`.
+- Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`.
+- Refs do not follow `identityScope`. If you want tenant-aware invalidation, read the active identity inside your app helper, for example `CacheRefs.getTenantId()`, and build the ref string there so writes and invalidations always match.
 
 `totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
 
@@ -328,7 +415,11 @@ class RedisCache {
     return value ? JSON.parse(value) : undefined;
   }
 
-  async set(key: string, value: unknown): Promise<void> {
+  async set(
+    key: string,
+    value: unknown,
+    _metadata?: { refs?: readonly string[] },
+  ): Promise<void> {
     const payload = JSON.stringify(value);
     if (this.ttlMs && this.ttlMs > 0) {
       await this.client.setex(
@@ -339,6 +430,10 @@ class RedisCache {
       return;
     }
     await this.client.set(this.prefix + key, payload);
+  }
+
+  async invalidateRefs(_refs: readonly string[]): Promise<number> {
+    return 0;
   }
 
   async clear(): Promise<void> {
@@ -451,6 +546,19 @@ const resilientTask = r
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
 4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
 
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED
+    CLOSED --> OPEN : failures >= threshold
+    OPEN --> HALF_OPEN : resetTimeout elapsed
+    HALF_OPEN --> CLOSED : trial succeeds
+    HALF_OPEN --> OPEN : trial fails
+
+    CLOSED : Requests flow through\nFailure counter tracks errors
+    OPEN : All requests fail fast\nCircuitBreakerOpenError thrown
+    HALF_OPEN : One trial request allowed\nDecides next state
+```
+
 **Why would you need this?** For alerting, you want to know when the circuit opens to alert on-call engineers.
 
 **Journal Introspection**: Access the circuit breaker's state and failure count within your task when it runs:
@@ -481,13 +589,20 @@ const myTask = r
 
 Control the frequency of task execution over time. This is useful for event-driven tasks that might fire in bursts.
 
+By default, Runner buckets `debounce` and `throttle` by `taskId + serialized input`, so different payloads stay isolated unless you intentionally provide a broader `keyBuilder(...)`.
+
 ```typescript
 import { middleware, r } from "@bluelibs/runner";
 
 // Debounce: Run only after 500ms of inactivity
 const saveTask = r
-  .task("saveTask")
-  .middleware([middleware.task.debounce.with({ ms: 500 })])
+  .task<{ docId: string; content: string }>("saveTask")
+  .middleware([
+    middleware.task.debounce.with({
+      ms: 500,
+      keyBuilder: (_taskId, input) => `doc:${input.docId}`,
+    }),
+  ])
   .run(async (data) => {
     // Assuming db is available in the closure
     return await db.save(data);
@@ -496,8 +611,13 @@ const saveTask = r
 
 // Throttle: Run at most once every 1000ms
 const logTask = r
-  .task("logTask")
-  .middleware([middleware.task.throttle.with({ ms: 1000 })])
+  .task<{ channel: string; message: string }>("logTask")
+  .middleware([
+    middleware.task.throttle.with({
+      ms: 1000,
+      keyBuilder: (_taskId, input) => `channel:${input.channel}`,
+    }),
+  ])
   .run(async (msg) => {
     console.log(msg);
   })
@@ -578,6 +698,9 @@ const sensitiveTask = r
     middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
       max: 5, // Max 5 attempts per window
+      maxKeys: 1_000, // Optional hard cap for distinct live keys
+      keyBuilder: (_taskId, input: { email: string }) =>
+        input.email.toLowerCase(),
     }),
   ])
   .run(async (credentials) => {
@@ -590,8 +713,8 @@ const sensitiveTask = r
 **Key features:**
 
 - **Fixed-window strategy**: Simple, predictable request counting.
-- **Isolation**: Limits are tracked per task definition.
-- **Error handling**: Throws `RateLimitError` when the limit is exceeded.
+- **Isolation**: Limits are tracked per serialized input by default.
+- **Error handling**: Throws the built-in typed Runner rate-limit error.
 
 **Why would you need this?** For monitoring, you want to see remaining quota to implement client-side throttling.
 
@@ -644,15 +767,15 @@ If you prefer the explicit middleware form, which is useful in documentation and
 ```typescript
 import { middleware, r } from "@bluelibs/runner";
 
-const TenantContext = r
+const IdentityContext = r
   .asyncContext<{ tenantId: string }>("tenantContext")
   .build();
 
 const listProjects = r
   .task("listProjects")
-  .middleware([middleware.task.requireContext.with({ context: TenantContext })])
+  .middleware([middleware.task.requireContext.with({ context: IdentityContext })])
   .run(async () => {
-    const { tenantId } = TenantContext.use();
+    const { tenantId } = IdentityContext.use();
     return await projectRepo.findByTenant(tenantId);
   })
   .build();
@@ -846,7 +969,10 @@ const getUser = r
   .middleware([
     middleware.task.cache.with({
       ttl: 60_000,
-      keyBuilder: (_taskId, input) => `user:${input.id}`,
+      keyBuilder: (_taskId, input) => ({
+        cacheKey: `user:${input.id}`,
+        refs: [`user:${input.id}`],
+      }),
     }),
   ])
   .run(async (input, { db }) => {
@@ -857,9 +983,9 @@ const getUser = r
 
 > **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
 
-> **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. If that key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
+> **Note:** `cache`, `rateLimit`, `debounce`, and `throttle` default to partitioning by `canonicalTaskKey + ":" + serialized input`, and they fail fast when the input cannot be serialized. Provide `keyBuilder(taskId, input, { canonicalKey })` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. `canonicalKey` strips the `.tasks.` namespace marker so custom keys can stay readable. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
-> **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant value is `acme`. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
+> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:<baseKey>`, and set `required: false` when identity should only refine the key when available. Omit `identityScope` for the shared cross-identity keyspace. If your app has users but no tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and then use tenant+user scoping normally. Cache refs stay raw and are invalidated exactly as returned by `keyBuilder`.
 
 ### Resilience Orchestration
 
@@ -868,6 +994,32 @@ In production, one resilience strategy is rarely enough. Runner allows you to co
 A task that calls a remote API might fail due to network blips (needs **Retry**), hang indefinitely (needs **Timeout**), slam the API during traffic spikes (needs **Rate Limit**), or keep failing if the API is down (needs **Circuit Breaker**).
 
 Combine them in the correct order. Like an onion, the outer layers handle broader concerns, while inner layers handle specific execution details.
+
+```mermaid
+flowchart TB
+    subgraph stack ["Recommended Middleware Stack"]
+        direction TB
+        F["fallback\n(Plan B if everything fails)"]
+        RL["rateLimit\n(reject if over quota)"]
+        CB["circuitBreaker\n(fail fast if service is down)"]
+        R["retry\n(retry transient failures)"]
+        T["timeout\n(per-attempt deadline)"]
+        Task["Task .run()"]
+
+        F --> RL
+        RL --> CB
+        CB --> R
+        R --> T
+        T --> Task
+    end
+
+    style F fill:#607D8B,color:#fff
+    style RL fill:#FF9800,color:#fff
+    style CB fill:#f44336,color:#fff
+    style R fill:#2196F3,color:#fff
+    style T fill:#9C27B0,color:#fff
+    style Task fill:#4CAF50,color:#fff
+```
 
 ```typescript
 import { r } from "@bluelibs/runner";

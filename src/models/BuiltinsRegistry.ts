@@ -2,6 +2,7 @@ import type { RegisterableItem } from "../defs";
 import { globalEventsArray } from "../globals/globalEvents";
 import { globalResources } from "../globals/globalResources";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
+import { identityCheckerTaskMiddleware } from "../globals/middleware/identityChecker.middleware";
 import {
   retryTaskMiddleware,
   retryResourceMiddleware,
@@ -17,13 +18,11 @@ import {
 import {
   debounceTaskMiddleware,
   throttleTaskMiddleware,
-  temporalResource,
 } from "../globals/middleware/temporal.middleware";
+import { temporalResource } from "../globals/middleware/temporal.resource";
 import { fallbackTaskMiddleware } from "../globals/middleware/fallback.middleware";
-import {
-  rateLimitTaskMiddleware,
-  rateLimitResource,
-} from "../globals/middleware/rateLimit.middleware";
+import { rateLimitTaskMiddleware } from "../globals/middleware/rateLimit.middleware";
+import { rateLimitResource } from "../globals/middleware/rateLimit.resource";
 import {
   circuitBreakerMiddleware,
   circuitBreakerResource,
@@ -36,6 +35,7 @@ import {
   durableExecutionError,
   matchError,
   middlewareCircuitBreakerOpenError,
+  middlewareKeyCapacityExceededError,
   middlewareRateLimitExceededError,
   middlewareTimeoutError,
 } from "../errors";
@@ -84,6 +84,7 @@ export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
       .filter(([key]) => key !== "system")
       .map(([, tag]) => tag),
     requireContextTaskMiddleware,
+    identityCheckerTaskMiddleware,
     retryTaskMiddleware,
     timeoutTaskMiddleware,
     concurrencyTaskMiddleware,
@@ -104,6 +105,7 @@ export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
     checkJsonSchemaUnsupportedPatternError,
     middlewareTimeoutError,
     middlewareCircuitBreakerOpenError,
+    middlewareKeyCapacityExceededError,
     middlewareRateLimitExceededError,
     durableExecutionError,
   ]);

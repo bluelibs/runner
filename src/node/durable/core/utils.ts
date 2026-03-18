@@ -1,7 +1,11 @@
 import { clearTimeout, setTimeout } from "node:timers";
 import * as crypto from "node:crypto";
 import { RunnerError } from "../../../definers/defineError";
-import { durableExecutionError, RunnerErrorId } from "../../../errors";
+import {
+  durableExecutionError,
+  genericError,
+  RunnerErrorId,
+} from "../../../errors";
 import { symbolDefinitionIdentity } from "../../../types/symbols";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -15,13 +19,37 @@ export function sleepMs(ms: number): Promise<void> {
   });
 }
 
+const timeoutExceededSymbol = Symbol("runner.timeoutExceeded");
+
+type TimeoutExceededError = Error & {
+  [timeoutExceededSymbol]: true;
+};
+
+function createTimeoutExceededError(message: string): TimeoutExceededError {
+  return Object.assign(genericError.new({ message }), {
+    [timeoutExceededSymbol]: true as const,
+  });
+}
+
+export function isTimeoutExceededError(
+  error: unknown,
+): error is TimeoutExceededError {
+  return (
+    error instanceof Error &&
+    (error as Partial<TimeoutExceededError>)[timeoutExceededSymbol] === true
+  );
+}
+
 export async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   message: string,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    const timer = setTimeout(
+      () => reject(createTimeoutExceededError(message)),
+      timeoutMs,
+    );
     timer.unref();
     void promise.then(
       (value) => {

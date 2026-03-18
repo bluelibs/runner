@@ -303,18 +303,14 @@ This project includes a Runner task middleware to enforce authorization based on
 - Usage: `middleware: [authorize.with({ roles: ["admin"] })]`
 - Example: `GET /users` requires an authenticated user and `role=admin`.
 
-Role detection prefers `fastifyContext.use().user?.role`; if not present, it falls back to the `x-user-role` header. Since the demo DB schema does not include roles, you can provide the role via header when testing.
+Role detection trusts only `fastifyContext.use().user?.role`, which must be
+enriched from server-side auth state. The demo user entity intentionally does
+not include roles, so `GET /users` stays forbidden by default even for an
+authenticated user until you add a trusted role source to the app.
 
-Example call (using Bearer token and header role):
-
-```bash
-TOKEN="<copy from login>"
-curl http://localhost:3000/users \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "x-user-role: admin"
-```
-
-Requests with a missing user return 401; with a non-allowed role return 403.
+Requests with a missing user return 401; authenticated requests without an
+allowed trusted role return 403. Client-supplied headers are ignored for role
+checks.
 
 API endpoints overview:
 
@@ -346,7 +342,7 @@ user = { id: entity.id, name: entity.name, email: entity.email, role: entity.rol
 - Query the dev GraphQL endpoint:
 
 ```bash
-ENDPOINT=http://localhost:1337/graphql npx runner-dev query 'query { tasks { id } }' --format pretty
+ENDPOINT=http://localhost:1337/graphql runner-dev query 'query { tasks { id } }' --format pretty
 ```
 
 - Print the GraphQL schema SDL:
@@ -399,7 +395,7 @@ import { env } from "#/general";
 
 ## Docs sync (optional)
 
-This project includes a helper to sync Runner docs into local `readmes/` for AI-friendly context injection.
+This project includes a helper to sync Runner docs into local `readmes/` for compact-doc context injection.
 
 ```bash
 npx ts-node scripts/sync-docs.ts
@@ -407,7 +403,7 @@ npx ts-node scripts/sync-docs.ts
 
 This refreshes:
 
-- `readmes/runner-AI.md`
+- `readmes/runner-COMPACT_GUIDE.md`
 - `readmes/runner-README.md`
 - `readmes/runner-dev-AI.md`
 

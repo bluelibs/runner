@@ -4,8 +4,10 @@ import {
   type CacheFactoryOptions,
   type CacheProvider,
   type CacheProviderInput,
+  type CacheRef,
   type ICacheProvider,
   type SharedCacheBudgetState,
+  isBuiltInCacheProvider,
 } from "./cache.shared";
 import { defineResource } from "../../definers/defineResource";
 import {
@@ -15,14 +17,26 @@ import {
 } from "../../defs";
 import { extractResourceAndConfig } from "../../tools/extractResourceAndConfig";
 import { Match } from "../../tools/check";
+import type { ValidationSchemaInput } from "../../types/utilities";
 import { validationError } from "../../errors";
-import { cacheMiddleware } from "./cache.middleware";
+import {
+  cacheMiddleware,
+  resolveCacheMiddlewareConfig,
+} from "./cache.middleware";
 import { isResource, isResourceWithConfig } from "../../define";
+import { storeResource } from "../resources/store.resource";
+import { loggerResource } from "../resources/logger.resource";
+import { normalizeCacheRefs } from "./cache.key";
+import type { Store } from "../../models/Store";
+import { MiddlewareResolver } from "../../models/middleware/MiddlewareResolver";
+import { getSubtreeMiddlewareDuplicateKey } from "../../tools/subtreeMiddleware";
 
 export type {
+  CacheEntryMetadata,
   CacheFactoryOptions,
   CacheProvider,
   CacheProviderInput,
+  CacheRef,
   ICacheProvider,
 } from "./cache.shared";
 
@@ -46,13 +60,29 @@ export interface CacheResourceConfig {
   totalBudgetBytes?: number;
 }
 
-export type CacheResourceValue = {
+/**
+ * Runtime value exposed by `resources.cache`.
+ */
+export interface CacheResourceValue {
+  /** Active task-scoped cache instances for the current runtime. */
   map: Map<string, ICacheProvider>;
+  /** In-flight provider creations keyed by stable task id. */
   pendingCreates: Map<string, Promise<ICacheProvider>>;
+  /** Factory used to create task-scoped cache providers. */
   cacheProvider: CacheProvider;
+  /** Optional shared budget enabled for built-in in-memory providers. */
   totalBudgetBytes?: number;
+  /** Shared in-memory budget bookkeeping for built-in providers. */
   sharedBudget?: SharedCacheBudgetState;
+  /** Default inherited cache options for task-scoped providers. */
   defaultOptions: CacheFactoryOptions;
+  /** Delete cache entries indexed by one or more semantic refs. */
+  invalidateRefs(refs: CacheRef | readonly CacheRef[]): Promise<number>;
+}
+
+type CacheInvalidationTarget = {
+  cacheOptions: CacheFactoryOptions;
+  taskId: string;
 };
 
 const cacheFactoryOptionsPattern = Match.Where(
@@ -70,24 +100,39 @@ const totalBudgetBytesPattern = Match.Where(
     typeof value === "number" && Number.isInteger(value) && value > 0,
 );
 
-const cacheResourceConfigPattern = Match.ObjectIncluding({
-  defaultOptions: Match.Optional(cacheFactoryOptionsPattern),
-  provider: Match.Optional(cacheProviderResourcePattern),
-  totalBudgetBytes: Match.Optional(totalBudgetBytesPattern),
-});
+const cacheResourceConfigPattern: ValidationSchemaInput<CacheResourceConfig> =
+  Match.ObjectIncluding({
+    defaultOptions: Match.Optional(cacheFactoryOptionsPattern),
+    provider: Match.Optional(cacheProviderResourcePattern),
+    totalBudgetBytes: Match.Optional(totalBudgetBytesPattern),
+  });
 
 export const cacheProviderResource: CacheProviderResourceDefinition =
   defineResource<void, Promise<CacheProvider>>({
     id: "cacheProvider",
+    meta: {
+      title: "Default Cache Provider",
+      description:
+        "Creates in-memory task-scoped cache providers when the cache resource is not configured with a custom provider.",
+    },
     init: async () => createDefaultCacheProvider(),
   });
 
 export const cacheResource = defineResource<
   CacheResourceConfig,
   Promise<CacheResourceValue>,
-  { cacheProvider: typeof cacheProviderResource }
+  {
+    cacheProvider: typeof cacheProviderResource;
+    logger: ReturnType<typeof loggerResource.optional>;
+    store: typeof storeResource;
+  }
 >({
   id: "cache",
+  meta: {
+    title: "Task Cache Registry",
+    description:
+      "Owns task-scoped cache instances, default cache options, and ref-based invalidation helpers for the built-in cache middleware.",
+  },
   configSchema: cacheResourceConfigPattern,
   // we cast it to :RegisterableItems[] because cacheMiddleware uses cacheResource
   register: (config): RegisterableItem[] => {
@@ -96,14 +141,23 @@ export const cacheResource = defineResource<
   dependencies: (config: CacheResourceConfig) => {
     if (config.provider) {
       const { resource } = extractResourceAndConfig(config.provider);
-      return { cacheProvider: resource };
+      return {
+        cacheProvider: resource,
+        logger: loggerResource.optional(),
+        store: storeResource,
+      };
     }
 
     return {
       cacheProvider: cacheProviderResource,
+      logger: loggerResource.optional(),
+      store: storeResource,
     };
   },
-  init: async (config: CacheResourceConfig, { cacheProvider }) => {
+  init: async (
+    config: CacheResourceConfig,
+    { cacheProvider, logger, store },
+  ) => {
     if (typeof cacheProvider !== "function") {
       validationError.throw({
         subject: "Cache provider",
@@ -116,20 +170,66 @@ export const cacheResource = defineResource<
     const sharedBudget = config?.totalBudgetBytes
       ? createSharedCacheBudgetState(config.totalBudgetBytes)
       : undefined;
+    const defaultOptions: CacheFactoryOptions = {
+      ttl: 10 * 1000,
+      max: 100,
+      ttlAutopurge: true,
+      ...(config?.defaultOptions ?? {}),
+    };
 
-    return {
+    const cacheValue: CacheResourceValue = {
       map: new Map<string, ICacheProvider>(),
       pendingCreates: new Map<string, Promise<ICacheProvider>>(),
       cacheProvider,
       totalBudgetBytes: config?.totalBudgetBytes,
       sharedBudget,
-      defaultOptions: {
-        ttl: 10 * 1000,
-        max: 100,
-        ttlAutopurge: true,
-        ...(config?.defaultOptions ?? {}),
+      defaultOptions,
+      invalidateRefs: async (refs) => {
+        const baseRefs = normalizeCacheRefs(refs);
+
+        if (baseRefs.length === 0) {
+          return 0;
+        }
+
+        const cacheTargets = getCacheEnabledTaskIds(store, defaultOptions);
+        let deletedCount = 0;
+
+        for (const target of cacheTargets) {
+          try {
+            const cacheInstance = await getCacheInstanceForInvalidation(
+              cacheValue,
+              target,
+            );
+
+            if (!cacheInstance) {
+              continue;
+            }
+
+            deletedCount += await cacheInstance.invalidateRefs(baseRefs);
+          } catch (error) {
+            // Ref invalidation is a best-effort fan-out across task-local
+            // caches. One broken provider must not stop other targets from
+            // cleaning up the same semantic ref set.
+            logger?.error(
+              "Cache ref invalidation failed for one cache target; continuing.",
+              {
+                source: "cache",
+                data: {
+                  refs: baseRefs,
+                  taskId: target.taskId,
+                },
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              },
+            );
+          }
+        }
+
+        return deletedCount;
       },
     };
+
+    return cacheValue;
   },
   dispose: async (cache) => {
     cache.pendingCreates?.clear();
@@ -161,4 +261,83 @@ export function createCacheInstance({
   };
 
   return cache.cacheProvider(input);
+}
+
+async function getCacheInstanceForInvalidation(
+  cache: CacheResourceValue,
+  target: CacheInvalidationTarget,
+) {
+  const existing = cache.map.get(target.taskId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const pendingCreate = cache.pendingCreates.get(target.taskId);
+  if (pendingCreate) {
+    // Concurrent invalidations can ask for the same transient provider before
+    // the first creation resolves. Reuse the in-flight promise so we do not
+    // create duplicate disposable cache instances for one task.
+    return pendingCreate;
+  }
+
+  if (isBuiltInCacheProvider(cache.cacheProvider)) {
+    return undefined;
+  }
+
+  // Custom providers may need to participate in invalidation even before the
+  // task ever ran. Store the transient instance in the same map as normal task
+  // caches so later invalidations and teardown can reuse it consistently.
+  const createPromise = Promise.resolve(
+    createCacheInstance({
+      cache,
+      cacheOptions: target.cacheOptions,
+      taskId: target.taskId,
+    }),
+  )
+    .then((instance) => {
+      cache.map.set(target.taskId, instance);
+      return instance;
+    })
+    .finally(() => {
+      cache.pendingCreates.delete(target.taskId);
+    });
+
+  cache.pendingCreates.set(target.taskId, createPromise);
+  return createPromise;
+}
+
+function getCacheEnabledTaskIds(
+  store: Store,
+  defaultOptions: CacheFactoryOptions,
+): CacheInvalidationTarget[] {
+  const taskTargets = new Map<string, CacheInvalidationTarget>();
+  const middlewareResolver = new MiddlewareResolver(store);
+
+  for (const { task } of store.tasks.values()) {
+    const cacheAttachment = middlewareResolver
+      .getApplicableTaskMiddlewares(task)
+      .find(
+        (middleware) =>
+          getSubtreeMiddlewareDuplicateKey(middleware.id) ===
+          cacheMiddleware.id,
+      );
+
+    if (!cacheAttachment) {
+      continue;
+    }
+
+    const taskId = task.id;
+    const resolvedConfig = resolveCacheMiddlewareConfig(
+      cacheAttachment.config,
+      defaultOptions,
+    );
+
+    taskTargets.set(taskId, {
+      cacheOptions: resolvedConfig.cacheOptions,
+      taskId,
+    });
+  }
+
+  return [...taskTargets.values()];
 }

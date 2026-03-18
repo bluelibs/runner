@@ -1,6 +1,6 @@
 import { genericError } from "../../../errors";
 import { eventLanesResource } from "../../event-lanes";
-import { r, run, tags } from "../../..";
+import { r, run } from "../../..";
 
 function readContextValue(
   context: { use(): { value: string } },
@@ -38,12 +38,12 @@ describe("event-lanes async-context policy in local-simulated mode", () => {
         value: string;
       }>("tests-event-lanes-local-simulated-ctx-blocked")
       .build();
-    const lane = r
-      .eventLane("tests-event-lanes-local-simulated-ctx-none")
-      .build();
     const event = r
       .event("tests-event-lanes-local-simulated-ctx-none-event")
-      .tags([tags.eventLane.with({ lane })])
+      .build();
+    const lane = r
+      .eventLane("tests-event-lanes-local-simulated-ctx-none")
+      .applyTo([event])
       .build();
     const seen = {
       allowed: "pending",
@@ -77,7 +77,7 @@ describe("event-lanes async-context policy in local-simulated mode", () => {
           profile: "worker",
           mode: "local-simulated",
           topology: {
-            profiles: { worker: { consume: [] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [],
           },
         }),
@@ -113,12 +113,11 @@ describe("event-lanes async-context policy in local-simulated mode", () => {
       .build();
     const lane = r
       .eventLane("tests-event-lanes-local-simulated-ctx-allowlisted")
-      .asyncContexts([allowedContext.id])
-      .build();
+      .asyncContexts([allowedContext.id]);
     const event = r
       .event("tests-event-lanes-local-simulated-ctx-allowlisted-event")
-      .tags([tags.eventLane.with({ lane })])
       .build();
+    const configuredLane = lane.applyTo([event]).build();
     const seen = {
       allowed: "pending",
       blocked: "pending",
@@ -151,7 +150,7 @@ describe("event-lanes async-context policy in local-simulated mode", () => {
           profile: "worker",
           mode: "local-simulated",
           topology: {
-            profiles: { worker: { consume: [] } },
+            profiles: { worker: { consume: [{ lane: configuredLane }] } },
             bindings: [],
           },
         }),

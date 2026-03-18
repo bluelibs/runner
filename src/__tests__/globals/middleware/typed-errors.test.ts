@@ -4,6 +4,7 @@ import {
   durableExecutionError,
   middlewareConcurrencyConflictError,
   middlewareCircuitBreakerOpenError,
+  middlewareKeyCapacityExceededError,
   middlewareRateLimitExceededError,
   middlewareTemporalDisposedError,
   middlewareTimeoutError,
@@ -85,14 +86,23 @@ describe("Typed Infrastructure Errors", () => {
     expect(rateLimitTaskMiddleware.throws).toContain(
       middlewareRateLimitExceededError.id,
     );
+    expect(rateLimitTaskMiddleware.throws).toContain(
+      middlewareKeyCapacityExceededError.id,
+    );
     expect(concurrencyTaskMiddleware.throws).toContain(
       middlewareConcurrencyConflictError.id,
     );
     expect(debounceTaskMiddleware.throws).toContain(
       middlewareTemporalDisposedError.id,
     );
+    expect(debounceTaskMiddleware.throws).toContain(
+      middlewareKeyCapacityExceededError.id,
+    );
     expect(throttleTaskMiddleware.throws).toContain(
       middlewareTemporalDisposedError.id,
+    );
+    expect(throttleTaskMiddleware.throws).toContain(
+      middlewareKeyCapacityExceededError.id,
     );
   });
 
@@ -117,6 +127,14 @@ describe("Typed Infrastructure Errors", () => {
     expect(rateLimit.httpCode).toBe(429);
     expect(rateLimit.message).toContain("rate limit helper");
     expect(rateLimit.remediation).toContain("Reduce request frequency");
+
+    const keyedCapacity = middlewareKeyCapacityExceededError.new({
+      middlewareId: "rateLimit",
+      maxKeys: 2,
+    });
+    expect(keyedCapacity.httpCode).toBe(429);
+    expect(keyedCapacity.message).toContain("maxKeys limit");
+    expect(keyedCapacity.remediation).toContain("lower-cardinality keys");
 
     const durable = durableExecutionError.new({
       message: "durable helper",

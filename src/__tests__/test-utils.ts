@@ -21,6 +21,7 @@ const testRunOptions: ResolvedRunOptions = {
   onUnhandledError: jest.fn(),
   dryRun: false,
   executionContext: null,
+  identity: null,
   lazy: false,
   lifecycleMode: ResourceLifecycleMode.Sequential,
   mode: RunnerMode.TEST,
@@ -59,6 +60,8 @@ export function createTestFixture() {
         taskRunner ?? new TaskRunner(store, eventManager, logger),
         testRunOptions,
         async () => store.dispose(),
+        () => {},
+        () => false,
       ),
   };
 }

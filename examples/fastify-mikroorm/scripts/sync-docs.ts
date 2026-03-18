@@ -5,8 +5,14 @@ async function copyDocs() {
   console.log("sync-docs: starting");
   const filesToCopy = [
     {
-      src: path.join("node_modules", "@bluelibs", "runner", "AI.md"),
-      dest: path.join("readmes", "runner-AI.md"),
+      src: path.join(
+        "node_modules",
+        "@bluelibs",
+        "runner",
+        "readmes",
+        "COMPACT_GUIDE.md",
+      ),
+      dest: path.join("readmes", "runner-COMPACT_GUIDE.md"),
     },
     {
       src: path.join("node_modules", "@bluelibs", "runner", "README.md"),

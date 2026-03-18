@@ -9,6 +9,7 @@ export enum RunnerErrorId {
   MiddlewareTimeout = "middleware-timeout",
   MiddlewareCircuitBreakerOpen = "middleware-circuitBreakerOpen",
   MiddlewareRateLimitExceeded = "middleware-rateLimitExceeded",
+  MiddlewareKeyCapacityExceeded = "middleware-keyCapacityExceeded",
   MiddlewareTemporalDisposed = "middleware-temporalDisposed",
   RpcLaneHttpClientPresetNotFound = "rpcLane-httpClientPresetNotFound",
   RpcLaneCommunicatorContract = "rpcLane-communicatorContract",

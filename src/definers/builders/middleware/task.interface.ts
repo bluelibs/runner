@@ -1,10 +1,11 @@
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
-  ResolveValidationSchemaInput,
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
   IMiddlewareMeta,
+  ResolvedTaskMiddlewareConfig,
+  ResolveValidationSchemaInput,
   TaskMiddlewareTagType,
   ValidationSchemaInput,
 } from "../../../defs";
@@ -15,18 +16,23 @@ export interface TaskMiddlewareFluentBuilderBeforeRun<
   In = void,
   Out = void,
   D extends DependencyMapType = {},
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 > {
   id: string;
   /** Adds middleware dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
-    deps: TNewDeps | ((config: C) => TNewDeps),
+    deps:
+      | TNewDeps
+      | ((config: ResolvedTaskMiddlewareConfig<C, TTags>) => TNewDeps),
     options?: { override?: false },
-  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D & TNewDeps>;
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D & TNewDeps, TTags>;
   /** Replaces previously declared middleware dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
-    deps: TNewDeps | ((config: C) => TNewDeps),
+    deps:
+      | TNewDeps
+      | ((config: ResolvedTaskMiddlewareConfig<C, TTags>) => TNewDeps),
     options: { override: true },
-  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps>;
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps, TTags>;
   /** Declares the middleware configuration schema. */
   configSchema<
     TNew = never,
@@ -38,7 +44,8 @@ export interface TaskMiddlewareFluentBuilderBeforeRun<
     ResolveValidationSchemaInput<TNew, TSchema>,
     In,
     Out,
-    D
+    D,
+    TTags
   >;
 
   /**
@@ -54,24 +61,38 @@ export interface TaskMiddlewareFluentBuilderBeforeRun<
     ResolveValidationSchemaInput<TNew, TSchema>,
     In,
     Out,
-    D
+    D,
+    TTags
   >;
 
   /** Sets the middleware implementation and advances the builder into its post-run phase. */
   run(
-    fn: ITaskMiddlewareDefinition<C, In, Out, D>["run"],
-  ): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
-  /** Adds or replaces middleware tags. */
-  tags<TNewTags extends TaskMiddlewareTagType[]>(
+    fn: ITaskMiddlewareDefinition<C, In, Out, D, TTags>["run"],
+  ): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags>;
+  /** Adds middleware tags, merging by default unless `override: true` is used. */
+  tags<const TNewTags extends TaskMiddlewareTagType[]>(
     t: EnsureTagsForTarget<"taskMiddlewares", TNewTags>,
-    options?: { override?: boolean },
-  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+    options?: { override?: false },
+  ): TaskMiddlewareFluentBuilderBeforeRun<
+    C,
+    In,
+    Out,
+    D,
+    [...TTags, ...TNewTags]
+  >;
+  /** Replaces previously declared middleware tags. */
+  tags<const TNewTags extends TaskMiddlewareTagType[]>(
+    t: EnsureTagsForTarget<"taskMiddlewares", TNewTags>,
+    options: { override: true },
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TNewTags>;
   /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
-  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TTags>;
   /** Declare which typed errors this middleware may throw (declarative only). */
-  throws(list: ThrowsList): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+  throws(
+    list: ThrowsList,
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TTags>;
 }
 
 export interface TaskMiddlewareFluentBuilderAfterRun<
@@ -79,16 +100,19 @@ export interface TaskMiddlewareFluentBuilderAfterRun<
   In = void,
   Out = void,
   D extends DependencyMapType = {},
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 > {
   id: string;
   /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
-  ): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  ): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags>;
   /** Declare which typed errors this middleware may throw (declarative only). */
-  throws(list: ThrowsList): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  throws(
+    list: ThrowsList,
+  ): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags>;
   /** Materializes the final middleware definition for registration or reuse. */
-  build(): ITaskMiddleware<C, In, Out, D>;
+  build(): ITaskMiddleware<C, In, Out, D, TTags>;
 }
 
 export type TaskMiddlewareFluentBuilder<
@@ -96,7 +120,8 @@ export type TaskMiddlewareFluentBuilder<
   In = void,
   Out = void,
   D extends DependencyMapType = {},
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
   THasRun extends boolean = false,
 > = THasRun extends true
-  ? TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D>
-  : TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+  ? TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags>
+  : TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TTags>;

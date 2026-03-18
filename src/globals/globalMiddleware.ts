@@ -8,6 +8,7 @@ import {
   journalKeys as circuitBreakerJournalKeys,
 } from "./middleware/circuitBreaker.middleware";
 import { requireContextTaskMiddleware } from "./middleware/requireContext.middleware";
+import { identityCheckerTaskMiddleware } from "./middleware/identityChecker.middleware";
 import {
   retryTaskMiddleware,
   retryResourceMiddleware,
@@ -54,8 +55,10 @@ const withJournalKeys = <TMiddleware extends object, TJournalKeys>(
 
 type GlobalMiddlewares = {
   requireContext: typeof requireContextTaskMiddleware;
+  identityChecker: typeof identityCheckerTaskMiddleware;
   task: {
     requireContext: typeof requireContextTaskMiddleware;
+    identityChecker: typeof identityCheckerTaskMiddleware;
     cache: MiddlewareWithJournalKeys<
       typeof cacheMiddleware,
       typeof cacheJournalKeys
@@ -98,8 +101,10 @@ type GlobalMiddlewares = {
  */
 export const globalMiddlewares: GlobalMiddlewares = {
   requireContext: requireContextTaskMiddleware,
+  identityChecker: identityCheckerTaskMiddleware,
   task: {
     requireContext: requireContextTaskMiddleware,
+    identityChecker: identityCheckerTaskMiddleware,
     cache: withJournalKeys(cacheMiddleware, cacheJournalKeys),
     concurrency: concurrencyTaskMiddleware,
     debounce: debounceTaskMiddleware,

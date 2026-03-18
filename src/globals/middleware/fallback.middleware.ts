@@ -52,6 +52,11 @@ export const journalKeys = {
  */
 export const fallbackTaskMiddleware = defineTaskMiddleware({
   id: "fallback",
+  meta: {
+    title: "Fallback",
+    description:
+      "Returns a fallback value, resolver result, or backup task result when the wrapped task fails.",
+  },
   configSchema: fallbackConfigPattern,
   dependencies: {
     taskRunner: globalResources.taskRunner,

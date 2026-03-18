@@ -1,6 +1,6 @@
 # Runner Remote Lanes HTTP Protocol Policy (v1.0)
 
-> **Status**: Draft spec derived from Runner implementation. This document formalizes the wire protocol used by HTTP RPC communicators (`rpcLane` presets and HTTP clients), enabling interoperability, debugging, and future extensions. It is not a normative standard but reflects the current behavior of RPC-lanes-owned HTTP exposure (`rpcLanesResource.with({ exposure: { http: ... } })`) and fetch-based clients like `createHttpClient`. For usage, see [REMOTE_LANES.md](REMOTE_LANES.md).
+> **Status**: Draft reference derived from Runner implementation. This document formalizes the wire protocol used by HTTP RPC communicators and clients, enabling interoperability, debugging, and future extensions. It is not a normative standard but reflects the current behavior of RPC-lanes-owned HTTP exposure (`rpcLanesResource.with({ exposure: { http: ... } })`) and clients such as `createHttpClient`, `createHttpSmartClient`, and `createHttpMixedClient`. For usage, see [REMOTE_LANES.md](REMOTE_LANES.md).
 
 > **Boundary**: This protocol is intended for inter-runner/service-to-service communication, not as a public web API contract for untrusted internet clients.
 
@@ -23,7 +23,7 @@
   - [Endpoints](#endpoints)
     - [Task Invocation (`POST /task/{taskId}`)](#task-invocation-post-tasktaskid)
     - [Event Emission (`POST /event/{eventId}`)](#event-emission-post-eventeventid)
-    - [Discovery (`GET|POST /discovery`)](#discovery-getpost-discovery)
+    - [Discovery (`GET /discovery`)](#discovery-get-discovery)
   - [Request Modes](#request-modes)
     - [JSON Mode](#json-mode)
     - [Multipart Mode](#multipart-mode)
@@ -58,11 +58,11 @@ The Runner remote lanes HTTP protocol enables remote invocation of tasks and RPC
 All endpoints are under a configurable base path (default: `/__runner`). Example: `http://localhost:7070/__runner/task/app.tasks.add`.
 
 - IDs (`taskId`/`eventId`): URL-encoded strings (e.g., `app.tasks.add%2Fsub` for `app.tasks.add/sub`).
-- No query params (body-only for payloads).
+- Query params are ignored by current handlers and are not part of the protocol contract.
 
 ### Protocol Envelope
 
-Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Responses use a standard envelope:
+Task requests wrap payloads as `{ input: <value> }`. Event requests use `{ payload?: <value>, returnPayload?: boolean }`. Responses use a standard envelope:
 
 ```json
 { "ok": true, "result": <output> }  // Success
@@ -70,7 +70,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 ```
 
 - `ok`: Boolean.
-- `result`: Task output (serialized; omitted for events).
+- `result`: Task output, or event result when `returnPayload` is requested.
 - `error`: Details on failure (HTTP status is provided by the HTTP response status code; `error.code` is a string).
 - `meta` (optional/reserved): Present in the shared `ProtocolEnvelope` shape but currently not emitted by the RPC lanes HTTP exposure runtime.
 
@@ -81,7 +81,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - All JSON bodies/responses are serialized with Runner's serializer to preserve types like `Date`, `RegExp`, and custom classes (via `addType`).
 - Files are **not** custom serializer types: use sentinels `{"$runnerFile": "File", "id": "<uuid>", "meta": {...}}` (see Multipart Mode).
 - Charset: UTF-8.
-- Custom Types: Client/server must sync explicit `addType({ id, is, serialize, deserialize, ... })` registrations via DI (`r.runner.serializer`).
+- Custom Types: Client/server must sync explicit `addType({ id, is, serialize, deserialize, ... })` registrations on the serializer resource (`resources.serializer`).
 
 ### Authentication
 
@@ -89,12 +89,12 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Lane JWT**: Remote Lanes may use binding-level JWT auth via `binding.auth` (default header `authorization: Bearer <jwt>` unless binding overrides header).
 - **Layering**: `x-runner-token` (or custom `auth.header`) is exposure-level auth; lane JWT is an independent lane authorization layer.
 - **Token**: `auth.token` supports a string or string[] (any match is accepted).
-- **Validators**: If tasks tagged with `r.runner.tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
+- **Validators**: If tasks tagged with `tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
 - **Anonymous access**: If no token and no validators exist, RPC lanes HTTP exposure fails closed by default with `500 AUTH_NOT_CONFIGURED`. Set `auth.allowAnonymous: true` to explicitly allow unauthenticated access.
-- **Dynamic headers**: Clients can override per-request via `onRequest({ headers })`.
+- **Dynamic headers**: Clients can override per-request headers via `options.headers` and mutate headers in `onRequest({ headers })`.
 - **Allow-Lists**: Server restricts to configured exposure allow-list sources (`rpcLanesResource` serve topology in `mode: "network"`). Unknown IDs → 403 Forbidden.
 - **Lane authorization**: For served RPC lanes with binding auth enabled, token verification is lane-specific and happens before task/event execution.
-- **Exposure disabled**: If no HTTP exposure allow-list source is active, task/event requests return 403 (fail-closed). Set `auth.allowAnonymous: true` to explicitly opt into open exposure.
+- **Served endpoints required**: RPC-lanes-owned HTTP exposure only starts when the active profile serves at least one RPC task or event. If nothing is served, startup skips HTTP exposure and logs `rpc-lanes.exposure.skipped`; `auth.allowAnonymous` does not force exposure to boot.
 - **Auth audit logs**: Failed authentication attempts are logged (`exposure.auth.failure`) with request metadata and correlation id.
 
 ### Header Reference
@@ -104,9 +104,9 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 | `x-runner-token`         | client -> server  | Yes (unless `auth.allowAnonymous: true`) | Authentication token. Header name can be overridden by `auth.header`.                                                                                                                                                                                                      |
 | `x-runner-request-id`    | client <-> server | Optional                                 | Correlation id. Server accepts valid incoming ids and otherwise generates one; response echoes final id.                                                                                                                                                                   |
 | `x-runner-context`       | client -> server  | Optional                                 | Serializer-encoded async-context map. Server restores only registered contexts and applies lane/exposure async-context policy (lane `asyncContexts` allowlist defaults to none; legacy `allowAsyncContext` bridge can temporarily allow all). Invalid entries are ignored. |
-| `content-type`           | client -> server  | Yes                                      | Request mode selector (`application/json`, `multipart/form-data`, `application/octet-stream`).                                                                                                                                                                             |
-| `x-content-type-options` | server -> client  | Always                                   | Security header set to `nosniff`.                                                                                                                                                                                                                                          |
-| `x-frame-options`        | server -> client  | Always                                   | Security header set to `DENY`.                                                                                                                                                                                                                                             |
+| `content-type`           | client -> server  | Recommended                              | Request mode selector (`application/json`, `multipart/form-data`, `application/octet-stream`). If omitted, the server falls back to the JSON path.                                                                                                                       |
+| `X-Content-Type-Options` | server -> client  | Always                                   | Security header set to `nosniff`.                                                                                                                                                                                                                                          |
+| `X-Frame-Options`        | server -> client  | Always                                   | Security header set to `DENY`.                                                                                                                                                                                                                                             |
 
 ### Error Handling
 
@@ -132,7 +132,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
   | 500 | STREAM_ERROR | Multipart stream error (sanitized). |
   | 500 | MISSING_FILE_PART | Expected file not in multipart. |
   | 500 | AUTH_NOT_CONFIGURED | No auth is configured and `allowAnonymous` is not enabled. |
-- **Logging**: Server logs errors via `r.runner.logger` (e.g., "exposure.task.error"), plus auth failures.
+- **Logging**: Server logs errors through the logger resource (`resources.logger`, for example `exposure.task.error`), plus auth failures.
 - **Correlation ID**: Requests carry/receive `x-runner-request-id` (generated when absent) for end-to-end tracing.
 - **Security headers**: RPC lanes HTTP exposure sets `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on responses.
 
@@ -168,11 +168,13 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
   - if `returnPayload: true`: 200 + `{ ok: true, result: <payload> }` (RPC-style event result; not supported when the event is marked `parallel`).
 - **No Context**: Events don't provide `useRpcLaneRequestContext()`.
 
-### Discovery (`GET|POST /discovery`)
+### Discovery (`GET /discovery`)
 
 - **Purpose**: Query server allow-list for validation/discovery.
 - **Auth**: Required.
 - **Body**: None.
+- **Methods**: `GET` only. Other non-`OPTIONS` methods return `405 METHOD_NOT_ALLOWED`.
+- **Disabled Mode**: If `http.disableDiscovery` is `true`, the endpoint returns `404 NOT_FOUND`.
 - **Response**: 200 + JSON:
   ```json
   {
@@ -190,12 +192,12 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 
 ## Request Modes
 
-Server routes by `Content-Type`.
+Server primarily routes by `Content-Type`. If the header is omitted, requests fall back to the JSON path.
 
 ### JSON Mode
 
 - **When**: No files/streams (default fallback).
-- **Content-Type**: `application/json; charset=utf-8`
+- **Content-Type**: Usually `application/json; charset=utf-8` (omitting `content-type` still falls back to this path).
 - **Body**: JSON `{ input: <any> }` (or bare `<input>`; the server treats non-object bodies as the input directly).
 - **Handling**: Server parses JSON (via Runner serializer), runs task with input, serializes result.
 - **Limits**: Default max body size is 2MB (`http.limits.json.maxSize`); over-limit returns 413/PAYLOAD_TOO_LARGE.
@@ -219,7 +221,7 @@ Server routes by `Content-Type`.
   - All expected files must arrive; unconnected → 500/MISSING_FILE_PART.
   - Single-use streams: `resolve()` consumes once.
 - **Limits**: Defaults are 20MB per file, 10 files, 100 fields, 1MB per field (`http.limits.multipart`); over-limit returns 413/PAYLOAD_TOO_LARGE.
-- **Client Prep**: Use `buildUniversalManifest` (clones input, collects sources).
+- **Client Prep**: Universal/fetch clients use `buildUniversalManifest`; the Node smart client builds the equivalent manifest through its Node upload path.
 - **Limitations**: Browser: Blobs/FormData. Node: Buffers/streams.
 
 ### Octet-Stream Mode
@@ -239,7 +241,7 @@ Server routes by `Content-Type`.
   - Content-Type: `application/octet-stream` (or custom via res).
   - Body: Piped stream (chunked encoding).
   - No envelope (direct bytes).
-- **Events**: Always `{ ok: true }`.
+- **Events**: JSON envelope. Default is `{ ok: true }`; `returnPayload: true` returns `{ ok: true, result: <payload> }`.
 - **Errors**: JSON envelope (even on streams, if not already written).
 
 ## Extensions
@@ -260,7 +262,7 @@ Server routes by `Content-Type`.
 
 - **Mechanism**: Snapshots registered async contexts created via `defineAsyncContext({ id })`.
 - **Transport**: A Serializer-encoded map sent in `x-runner-context` header (applies to JSON, multipart, and octet-stream).
-- **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Filtered for size/serializability.
+- **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Contexts that cannot be captured or parsed are skipped rather than failing the whole request.
 - **Security**: Server only restores known registered contexts; invalid headers/entries are ignored.
 - **Gate**: Set `allowAsyncContext: false` on the relevant server RPC-lane binding to disable server-side hydration of `x-runner-context` as a legacy bridge when no lane `asyncContexts` allowlist is configured.
 
@@ -318,11 +320,11 @@ Response: `{"ok": true}`
 
 ## References
 
-- [AI.md](./AI.md): High-level fluent API.
+- [COMPACT_GUIDE.md](./COMPACT_GUIDE.md): High-level fluent API.
 - [REMOTE_LANES.md](REMOTE_LANES.md): Usage, examples, troubleshooting.
-- Code: `src/node/rpc-lanes/rpcLanes.exposure.ts` and `src/node/exposure/` (server), `src/node/http/http-smart-client.model.ts` (clients).
+- Code: `src/node/rpc-lanes/rpcLanes.exposure.ts`, `src/node/exposure/` (server), [`src/http-client.ts`](../src/http-client.ts), [`src/node/http/http-smart-client.model.ts`](../src/node/http/http-smart-client.model.ts), and [`src/node/http/http-mixed-client.ts`](../src/node/http/http-mixed-client.ts) (clients).
 - Standards: HTTP/1.1 (RFC 7230), Multipart (RFC 7578), JSON.
 
 ---
 
-_Last Updated: February 2, 2026_
+_Last Updated: March 17, 2026_

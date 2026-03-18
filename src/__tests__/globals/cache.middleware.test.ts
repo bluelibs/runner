@@ -1,6 +1,7 @@
 import { defineResource, defineTask, defineTaskMiddleware } from "../../define";
 import { run } from "../../run";
 import {
+  CacheFactoryOptions,
   CacheProvider,
   cacheResource,
   cacheProviderResource,
@@ -139,6 +140,7 @@ describe("Caching System", () => {
               get: async (_key: string) => undefined,
               set: async (_key: string, _value: unknown) => undefined,
               clear: async () => undefined,
+              invalidateRefs: async () => 0,
             };
           },
       });
@@ -168,7 +170,7 @@ describe("Caching System", () => {
 
       expect(seenInputs).toEqual([
         {
-          taskId: "custom-budget-task",
+          taskId: "cache-budget-provider-app.tasks.custom-budget-task",
           totalBudgetBytes: 1_024,
         },
       ]);
@@ -215,6 +217,10 @@ describe("Caching System", () => {
 
         clear() {
           this.store.clear();
+        }
+
+        invalidateRefs() {
+          return 0;
         }
       }
 
@@ -280,6 +286,10 @@ describe("Caching System", () => {
 
         clear() {
           this.store.clear();
+        }
+
+        invalidateRefs() {
+          return 0;
         }
       }
 
@@ -369,6 +379,10 @@ describe("Caching System", () => {
         clear() {
           this.store.clear();
         }
+
+        invalidateRefs() {
+          return 0;
+        }
       }
 
       const cacheProviderOverride = r.override(
@@ -422,6 +436,10 @@ describe("Caching System", () => {
 
         clear() {
           this.store.clear();
+        }
+
+        invalidateRefs() {
+          return 0;
         }
       }
 
@@ -523,6 +541,228 @@ describe("Caching System", () => {
 
       await run(app);
     });
+
+    it("supports structured keyBuilder results with refs", async () => {
+      let callCount = 0;
+      const testTask = defineTask({
+        id: "structured-keybuilder-task",
+        middleware: [
+          cacheMiddleware.with({
+            keyBuilder: (_taskId: string, input: { userId: string }) => ({
+              cacheKey: `user:${input.userId}:profile`,
+              refs: [`user:${input.userId}`],
+            }),
+          }),
+        ],
+        run: async (input: { userId: string }) => {
+          callCount += 1;
+          return { userId: input.userId, version: callCount };
+        },
+      });
+
+      const app = defineResource({
+        id: "structured-keybuilder-app",
+        register: [cacheResource, testTask],
+        dependencies: { testTask, cache: cacheResource },
+        async init(_, { testTask, cache }) {
+          const first = await testTask({ userId: "u1" });
+          const second = await testTask({ userId: "u1" });
+          const deleted = await cache.invalidateRefs("user:u1");
+          const third = await testTask({ userId: "u1" });
+
+          expect(first).toEqual({ userId: "u1", version: 1 });
+          expect(second).toEqual(first);
+          expect(deleted).toBe(1);
+          expect(third).toEqual({ userId: "u1", version: 2 });
+        },
+      });
+
+      await run(app);
+    });
+
+    it("invalidates shared refs across multiple cached tasks and ignores plain-key tasks", async () => {
+      let fullCalls = 0;
+      let summaryCalls = 0;
+      let plainCalls = 0;
+
+      const fullTask = defineTask({
+        id: "cache-refs-full-task",
+        middleware: [
+          cacheMiddleware.with({
+            keyBuilder: (_taskId: string, input: { userId: string }) => ({
+              cacheKey: `user:${input.userId}:full`,
+              refs: [`user:${input.userId}`],
+            }),
+          }),
+        ],
+        run: async (input: { userId: string }) => {
+          fullCalls += 1;
+          return `full:${input.userId}:${fullCalls}`;
+        },
+      });
+
+      const summaryTask = defineTask({
+        id: "cache-refs-summary-task",
+        middleware: [
+          cacheMiddleware.with({
+            keyBuilder: (_taskId: string, input: { userId: string }) => ({
+              cacheKey: `user:${input.userId}:summary`,
+              refs: [`user:${input.userId}`],
+            }),
+          }),
+        ],
+        run: async (input: { userId: string }) => {
+          summaryCalls += 1;
+          return `summary:${input.userId}:${summaryCalls}`;
+        },
+      });
+
+      const plainTask = defineTask({
+        id: "cache-refs-plain-task",
+        middleware: [
+          cacheMiddleware.with({
+            keyBuilder: (_taskId: string, input: { userId: string }) =>
+              `plain:${input.userId}`,
+          }),
+        ],
+        run: async (input: { userId: string }) => {
+          plainCalls += 1;
+          return `plain:${input.userId}:${plainCalls}`;
+        },
+      });
+
+      const app = defineResource({
+        id: "cache-refs-shared-app",
+        register: [cacheResource, fullTask, summaryTask, plainTask],
+        dependencies: {
+          cache: cacheResource,
+          fullTask,
+          summaryTask,
+          plainTask,
+        },
+        async init(_, { cache, fullTask, summaryTask, plainTask }) {
+          await fullTask({ userId: "u1" });
+          await summaryTask({ userId: "u1" });
+          await plainTask({ userId: "u1" });
+
+          expect(await cache.invalidateRefs("user:u1")).toBe(2);
+
+          expect(await fullTask({ userId: "u1" })).toBe("full:u1:2");
+          expect(await summaryTask({ userId: "u1" })).toBe("summary:u1:2");
+          expect(await plainTask({ userId: "u1" })).toBe("plain:u1:1");
+        },
+      });
+
+      await run(app);
+    });
+
+    it("returns zero when invalidating no refs or built-in caches that were never created", async () => {
+      const cachedTask = defineTask({
+        id: "cache-refs-no-holder-task",
+        middleware: [
+          cacheMiddleware.with({
+            keyBuilder: (_taskId: string, input: { userId: string }) => ({
+              cacheKey: `user:${input.userId}`,
+              refs: [`user:${input.userId}`],
+            }),
+          }),
+        ],
+        run: async () => "never-called",
+      });
+      const plainTask = defineTask({
+        id: "cache-refs-no-holder-plain-task",
+        run: async () => "plain",
+      });
+
+      const app = defineResource({
+        id: "cache-refs-no-holder-app",
+        register: [cacheResource, cachedTask, plainTask],
+        dependencies: { cache: cacheResource },
+        async init(_, { cache }) {
+          expect(await cache.invalidateRefs([])).toBe(0);
+          expect(await cache.invalidateRefs("user:u1")).toBe(0);
+        },
+      });
+
+      await run(app);
+    });
+
+    it("creates transient custom cache providers for ref invalidation before first task run", async () => {
+      const invalidationCalls: Array<{
+        options: CacheFactoryOptions;
+        taskId: string;
+        refs: readonly string[];
+      }> = [];
+
+      const customProvider = defineResource({
+        id: "cache-refs-custom-provider",
+        init:
+          async (): Promise<CacheProvider> =>
+          async ({ options, taskId }) => ({
+            get: async () => undefined,
+            set: async () => undefined,
+            clear: async () => undefined,
+            invalidateRefs: async (refs) => {
+              invalidationCalls.push({ taskId, refs, options });
+              return 0;
+            },
+          }),
+      });
+
+      const cachedTask = defineTask({
+        id: "cache-refs-custom-provider-task",
+        middleware: [
+          cacheMiddleware.with({
+            max: 2,
+            ttl: 1234,
+            keyBuilder: (_taskId: string, input: { userId: string }) => ({
+              cacheKey: `user:${input.userId}`,
+              refs: [`user:${input.userId}`],
+            }),
+          }),
+        ],
+        run: async () => "never-called",
+      });
+      const plainTask = defineTask({
+        id: "cache-refs-custom-provider-plain-task",
+        run: async () => "plain",
+      });
+
+      const app = defineResource({
+        id: "cache-refs-custom-provider-app",
+        register: [
+          cacheResource.with({
+            defaultOptions: {
+              allowStale: true,
+              ttl: 99_999,
+            },
+            provider: customProvider,
+          }),
+          cachedTask,
+          plainTask,
+        ],
+        dependencies: { cache: cacheResource },
+        async init(_, { cache }) {
+          expect(await cache.invalidateRefs("user:u1")).toBe(0);
+          expect(invalidationCalls).toEqual([
+            {
+              options: {
+                allowStale: true,
+                max: 2,
+                ttl: 1234,
+                ttlAutopurge: true,
+              },
+              taskId:
+                "cache-refs-custom-provider-app.tasks.cache-refs-custom-provider-task",
+              refs: ["user:u1"],
+            },
+          ]);
+        },
+      });
+
+      await run(app);
+    });
+
     it("should fail-open when cache set throws an Error instance", async () => {
       class ErrorThrowingCache implements ICacheProvider {
         store = new Map<string, number>();
@@ -541,6 +781,10 @@ describe("Caching System", () => {
 
         clear() {
           this.store.clear();
+        }
+
+        invalidateRefs() {
+          return 0;
         }
       }
 
@@ -695,6 +939,10 @@ describe("Caching System", () => {
         clear() {
           this.store.clear();
         }
+
+        invalidateRefs() {
+          return 0;
+        }
       }
 
       const cacheProviderOverride = r.override(
@@ -781,6 +1029,10 @@ describe("Caching System", () => {
       async clear() {
         this.store.clear();
       }
+
+      async invalidateRefs() {
+        return 0;
+      }
     }
 
     const asyncCacheProvider = r.override(
@@ -838,13 +1090,18 @@ describe("Caching System", () => {
       await run(app);
     });
 
-    it("should cache circular and BigInt inputs with default keyBuilder", async () => {
+    it("should cache circular and BigInt inputs with an explicit keyBuilder", async () => {
       type CircularBigIntInput = { id: bigint; self?: unknown };
       const runSpy = jest.fn(async (_input: CircularBigIntInput) => "ok");
 
       const testTask = defineTask({
         id: "circular-bigint-task",
-        middleware: [cacheMiddleware],
+        middleware: [
+          cacheMiddleware.with({
+            keyBuilder: (_taskId, input: CircularBigIntInput) =>
+              `id:${input.id.toString()}`,
+          }),
+        ],
         run: async (input: CircularBigIntInput) => runSpy(input),
       });
 
@@ -945,8 +1202,17 @@ describe("Caching System", () => {
           const cacheInstance = getCacheEntryByTaskId(
             cache.map,
             "max-size-task",
-          ) as { size?: number } | undefined;
-          expect(cacheInstance?.size).toBe(2);
+          );
+
+          expect(await cacheInstance?.has?.("app.tasks.max-size-task:1")).toBe(
+            false,
+          );
+          expect(await cacheInstance?.has?.("app.tasks.max-size-task:2")).toBe(
+            true,
+          );
+          expect(await cacheInstance?.has?.("app.tasks.max-size-task:3")).toBe(
+            true,
+          );
         },
       });
 
@@ -1093,6 +1359,10 @@ describe("Caching System", () => {
         clear() {
           this.store.clear();
         }
+
+        invalidateRefs() {
+          return 0;
+        }
       }
 
       let factoryCalls = 0;
@@ -1189,6 +1459,10 @@ describe("Caching System", () => {
         async clear() {
           this.disposed = true;
           this.store.clear();
+        }
+
+        async invalidateRefs() {
+          return 0;
         }
       }
 

@@ -46,6 +46,11 @@ export const journalKeys = {
 
 export const retryTaskMiddleware = defineTaskMiddleware({
   id: "retry",
+  meta: {
+    title: "Retry",
+    description:
+      "Retries failed task executions with configurable attempt limits, delays, and stop conditions.",
+  },
   configSchema: retryConfigPattern,
   async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
     const input = task?.input;
@@ -98,6 +103,11 @@ export const retryTaskMiddleware = defineTaskMiddleware({
 
 export const retryResourceMiddleware = defineResourceMiddleware({
   id: "retry",
+  meta: {
+    title: "Retry",
+    description:
+      "Retries failed resource init executions with configurable attempt limits, delays, and stop conditions.",
+  },
   configSchema: retryConfigPattern,
   async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
     const input = resource?.config;

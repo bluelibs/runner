@@ -40,6 +40,10 @@ function createStore(options: {
       typeof reference === "string"
         ? reference
         : (reference as { id: string }).id,
+    findIdByDefinition: (reference: unknown) =>
+      typeof reference === "string"
+        ? reference
+        : (reference as { id: string }).id,
   } as unknown as Store;
 }
 
@@ -93,46 +97,40 @@ describe("EventLaneAssignments", () => {
     );
   });
 
-  it("skips tag-based event-lane routing when rpc applyTo explicitly targets the event", () => {
+  it("does not resolve deprecated eventLane tags as routes", () => {
     const eventLaneDefinition = eventLane("lane.tagged");
     const event = {
       id: "tests-event-lane-tag-skip-event",
       tags: [globalTags.eventLane.with({ lane: eventLaneDefinition })],
     };
-    const rpcFunctionLane = rpcLane(
-      "rpc.func",
-      (target) => target.id === event.id,
-    );
-    const rpcInvalidLane = rpcLane("rpc.invalid-shape", {
-      bad: true,
-    } as unknown as string[]);
-
-    const store = createStore({
-      events: [event],
-      rpcTopology: {
-        profiles: { client: { serve: [rpcFunctionLane, rpcInvalidLane] } },
-        bindings: [],
-      },
-    });
+    const store = createStore({ events: [event] });
 
     const routes = resolveEventLaneAssignments(store, []);
     expect(routes.has(event.id)).toBe(false);
   });
 
-  it("throws when event has both event-lane and rpc-lane tags without explicit applyTo ownership", () => {
-    const eventLaneDefinition = eventLane("lane.tagged");
-    const rpcLaneDefinition = rpcLane("rpc.tagged");
+  it("throws when eventLane applyTo targets an event already assigned to rpcLane applyTo", () => {
     const event = {
-      id: "tag-conflict-event",
-      tags: [
-        globalTags.eventLane.with({ lane: eventLaneDefinition }),
-        globalTags.rpcLane.with({ lane: rpcLaneDefinition }),
-      ],
+      id: "applyto-conflict-event",
     };
-    const store = createStore({ events: [event] });
+    const store = createStore({
+      events: [event],
+      rpcTopology: {
+        profiles: {
+          client: {
+            serve: [rpcLane("rpc.tagged", [event.id])],
+          },
+        },
+        bindings: [],
+      },
+    });
 
-    expect(() => resolveEventLaneAssignments(store, [])).toThrow(
-      'Event "tag-conflict-event" cannot be assigned to eventLane "lane.tagged" because it is already assigned to an rpcLane.',
+    expect(() =>
+      resolveEventLaneAssignments(store, [
+        eventLane("lane.tagged", [event.id]),
+      ]),
+    ).toThrow(
+      'Event "applyto-conflict-event" cannot be assigned to eventLane "lane.tagged" because it is already assigned to an rpcLane.',
     );
   });
 
@@ -160,36 +158,23 @@ describe("EventLaneAssignments", () => {
     expect(routes.get(event.id)?.lane.id).toBe("lane.same");
   });
 
-  it("collects rpc applyTo function targets selectively", () => {
-    const selected = { id: "tests-event-lane-rpc-select-selected" };
-    const ignored = { id: "tests-event-lane-rpc-select-ignored" };
-    const eventLaneDefinition = eventLane("lane.tagged");
-
+  it("resolves selective applyTo routes without considering deprecated tags", () => {
+    const selected = { id: "tests-event-lane-select-selected" };
+    const ignored = { id: "tests-event-lane-select-ignored" };
     const store = createStore({
       events: [
-        {
-          id: selected.id,
-          tags: [globalTags.eventLane.with({ lane: eventLaneDefinition })],
-        },
+        selected,
         {
           id: ignored.id,
-          tags: [globalTags.eventLane.with({ lane: eventLaneDefinition })],
+          tags: [globalTags.eventLane.with({ lane: eventLane("lane.legacy") })],
         },
       ],
-      rpcTopology: {
-        profiles: {
-          client: {
-            serve: [
-              rpcLane("rpc.selective", (target) => target.id === selected.id),
-            ],
-          },
-        },
-        bindings: [],
-      },
     });
 
-    const routes = resolveEventLaneAssignments(store, []);
-    expect(routes.has(selected.id)).toBe(false);
-    expect(routes.get(ignored.id)?.lane.id).toBe("lane.tagged");
+    const routes = resolveEventLaneAssignments(store, [
+      eventLane("lane.selective", (target) => target.id === selected.id),
+    ]);
+    expect(routes.get(selected.id)?.lane.id).toBe("lane.selective");
+    expect(routes.has(ignored.id)).toBe(false);
   });
 });

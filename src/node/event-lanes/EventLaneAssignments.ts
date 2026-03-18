@@ -6,7 +6,6 @@ import {
   eventLaneAssignmentConflictError,
   eventLaneAssignmentRpcLaneConflictError,
 } from "../../errors";
-import { globalTags } from "../../globals/globalTags";
 import type { Store } from "../../models/Store";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
 import {
@@ -63,34 +62,6 @@ export function resolveEventLaneAssignments(
         });
       },
     });
-  }
-
-  for (const eventEntry of store.events.values()) {
-    const laneConfig = globalTags.eventLane.extract(eventEntry.event.tags);
-    if (!laneConfig) {
-      continue;
-    }
-
-    const eventId = eventEntry.event.id;
-    if (laneByEventId.has(eventId)) {
-      // applyTo is authoritative; tags only apply when no applyTo matched.
-      continue;
-    }
-
-    // If another system explicitly applies this event, tag-based routing is ignored.
-    if (rpcLaneApplyToEventIds.has(eventId)) {
-      continue;
-    }
-
-    // Without explicit applyTo, IoC tags must not assign the same event to both systems.
-    if (globalTags.rpcLane.exists(eventEntry.event.tags)) {
-      eventLaneAssignmentRpcLaneConflictError.throw({
-        eventId,
-        eventLaneId: laneConfig.lane.id,
-      });
-    }
-
-    laneByEventId.set(eventId, laneConfig.lane);
   }
 
   return new Map(

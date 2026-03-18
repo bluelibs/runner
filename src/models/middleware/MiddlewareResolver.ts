@@ -15,13 +15,20 @@ import {
 } from "../../errors";
 import {
   getSubtreeMiddlewareDuplicateKey,
+  resolveNearestSubtreeMiddlewareIdentityScope,
   resolveApplicableSubtreeResourceMiddlewares,
-  resolveApplicableSubtreeTaskMiddlewares,
+  resolveApplicableSubtreeTaskMiddlewareEntries,
 } from "../../tools/subtreeMiddleware";
 import {
   extractRequestedId,
   resolveCanonicalIdFromStore,
 } from "../StoreLookup";
+import { globalTags } from "../../globals/globalTags";
+import {
+  identityScopesMatch,
+  type IdentityScopeConfig,
+} from "../../globals/middleware/identityScope.shared";
+import { mergeMiddlewareConfig } from "../../definers/middlewareConfig";
 
 /**
  * Resolves which middlewares should be applied to tasks and resources.
@@ -29,6 +36,10 @@ import {
  */
 export class MiddlewareResolver {
   private readonly taskMiddlewareCache = new Map<string, ITaskMiddleware[]>();
+  private readonly taskMiddlewareEntryCache = new Map<
+    string,
+    ReturnType<typeof resolveApplicableSubtreeTaskMiddlewareEntries>
+  >();
   private readonly resourceMiddlewareCache = new Map<
     string,
     IResourceMiddleware[]
@@ -84,14 +95,25 @@ export class MiddlewareResolver {
 
     const local = effectiveTask.middleware;
     const globalMiddlewares = this.getEverywhereTaskMiddlewares(effectiveTask);
+    const globalMiddlewareEntries =
+      this.getEverywhereTaskMiddlewareEntries(effectiveTask);
     const localIds = new Set(
       local.map((middleware) =>
         getSubtreeMiddlewareDuplicateKey(middleware.id),
       ),
     );
-    const conflictingGlobal = globalMiddlewares.find((middleware) =>
-      localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    const conflictingGlobalIndex = globalMiddlewares.findIndex(
+      (middleware, index) => {
+        const duplicateKey =
+          globalMiddlewareEntries[index]?.duplicateKey ??
+          getSubtreeMiddlewareDuplicateKey(middleware.id);
+        return localIds.has(duplicateKey);
+      },
     );
+    const conflictingGlobal =
+      conflictingGlobalIndex >= 0
+        ? globalMiddlewares[conflictingGlobalIndex]
+        : undefined;
 
     if (conflictingGlobal) {
       subtreeMiddlewareConflictError.throw({
@@ -100,15 +122,20 @@ export class MiddlewareResolver {
       });
     }
 
-    const globalFiltered = globalMiddlewares.filter(
-      (middleware) =>
-        !localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
-    );
+    const globalFiltered = globalMiddlewares.filter((middleware, index) => {
+      const duplicateKey =
+        globalMiddlewareEntries[index]?.duplicateKey ??
+        getSubtreeMiddlewareDuplicateKey(middleware.id);
+      return !localIds.has(duplicateKey);
+    });
 
     // Global middlewares run FIRST, then local ones.
     // This allows cross-cutting policies (like logging, tracing) to wrap
     // business-specific local middleware.
-    const result = [...globalFiltered, ...local];
+    const result = [
+      ...globalFiltered,
+      ...this.applyTaskIdentityScopePolicyToMiddlewares(effectiveTask, local),
+    ];
 
     if (this.store.isLocked) {
       this.taskMiddlewareCache.set(taskId, result);
@@ -234,17 +261,143 @@ export class MiddlewareResolver {
   public getEverywhereTaskMiddlewares(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
+    return this.getEverywhereTaskMiddlewareEntries(task).map(
+      (entry) => entry.middleware,
+    );
+  }
+
+  private getEverywhereTaskMiddlewareEntries(task: ITask<any, any, any>) {
     const taskId = this.resolveDefinitionId(task);
     const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
+    if (this.store.isLocked) {
+      const cached = this.taskMiddlewareEntryCache.get(taskId);
+      if (cached) {
+        return cached;
+      }
+    }
 
-    return resolveApplicableSubtreeTaskMiddlewares(
+    const resolved = this.applyTaskIdentityScopePolicy(
+      effectiveTask,
+      this.resolveEverywhereTaskMiddlewareEntries(effectiveTask),
+    );
+
+    if (this.store.isLocked) {
+      this.taskMiddlewareEntryCache.set(taskId, resolved);
+    }
+
+    return resolved;
+  }
+
+  private resolveEverywhereTaskMiddlewareEntries(task: ITask<any, any, any>) {
+    return resolveApplicableSubtreeTaskMiddlewareEntries(
       {
         getOwnerResourceId: (itemId) => this.store.getOwnerResourceId(itemId),
         getResource: (resourceId) =>
           this.store.resources.get(resourceId)?.resource,
       },
-      effectiveTask,
+      task,
     );
+  }
+
+  private applyTaskIdentityScopePolicy(
+    task: ITask<any, any, any>,
+    middlewares: ReturnType<
+      typeof resolveApplicableSubtreeTaskMiddlewareEntries
+    >,
+  ): ReturnType<typeof resolveApplicableSubtreeTaskMiddlewareEntries> {
+    const subtreeIdentityScope = resolveNearestSubtreeMiddlewareIdentityScope(
+      {
+        getOwnerResourceId: (itemId) => this.store.getOwnerResourceId(itemId),
+        getResource: (resourceId) =>
+          this.store.resources.get(resourceId)?.resource,
+      },
+      task,
+    );
+
+    if (!subtreeIdentityScope) {
+      return middlewares;
+    }
+
+    return middlewares.map((entry) => {
+      const scopedMiddleware = this.enforceTaskMiddlewareIdentityScope(
+        task.id,
+        entry.middleware,
+        subtreeIdentityScope,
+      );
+
+      if (scopedMiddleware === entry.middleware) {
+        return entry;
+      }
+
+      return {
+        ...entry,
+        middleware: scopedMiddleware,
+      };
+    });
+  }
+
+  private applyTaskIdentityScopePolicyToMiddlewares(
+    task: ITask<any, any, any>,
+    middlewares: ITaskMiddleware[],
+  ): ITaskMiddleware[] {
+    const subtreeIdentityScope = resolveNearestSubtreeMiddlewareIdentityScope(
+      {
+        getOwnerResourceId: (itemId: string) =>
+          this.store.getOwnerResourceId(itemId),
+        getResource: (resourceId: string) =>
+          this.store.resources.get(resourceId)?.resource,
+      },
+      task,
+    );
+
+    if (!subtreeIdentityScope) {
+      return middlewares;
+    }
+
+    return middlewares.map((middleware) =>
+      this.enforceTaskMiddlewareIdentityScope(
+        task.id,
+        middleware,
+        subtreeIdentityScope,
+      ),
+    );
+  }
+
+  private enforceTaskMiddlewareIdentityScope(
+    taskId: string,
+    middleware: ITaskMiddleware,
+    identityScope: IdentityScopeConfig,
+  ): ITaskMiddleware {
+    if (!globalTags.identityScoped.exists(middleware)) {
+      return middleware;
+    }
+
+    const existingIdentityScope = (
+      middleware.config as {
+        identityScope?: IdentityScopeConfig;
+      }
+    ).identityScope;
+
+    if (existingIdentityScope === undefined) {
+      const mergedConfig = mergeMiddlewareConfig(middleware.config, {
+        identityScope,
+      });
+      return middleware.with(mergedConfig as never);
+    }
+
+    if (!identityScopesMatch(existingIdentityScope, identityScope)) {
+      validationError.throw({
+        subject: "Subtree middleware.identityScope",
+        id: taskId,
+        originalError: `Task middleware "${middleware.id}" already declares identityScope ${JSON.stringify(
+          existingIdentityScope,
+        )}, but subtree middleware.identityScope requires ${JSON.stringify(
+          identityScope,
+        )}. These values must match exactly or the middleware must omit identityScope.`,
+      });
+    }
+
+    return middleware;
   }
 
   /**

@@ -12,10 +12,7 @@ import {
   symbolFilePath,
 } from "./utilities";
 import { RuntimeCallSource } from "./runtimeSource";
-import {
-  hasDefinitionIdentity,
-  isSameDefinition,
-} from "../tools/isSameDefinition";
+import { isSameDefinition } from "../tools/isSameDefinition";
 
 export type EventHandlerType<T = any> = (
   event: IEventEmission<T>,
@@ -109,15 +106,7 @@ export function isOneOf<TDefs extends readonly IEventDefinition<any>[]>(
   emission: IEventEmission<any>,
   defs: TDefs,
 ): emission is IEventEmission<CommonPayload<TDefs>> {
-  if (defs.some((definition) => isSameDefinition(definition, emission))) {
-    return true;
-  }
-
-  if (hasDefinitionIdentity(emission)) {
-    return false;
-  }
-
-  return defs.some((definition) => definition.id === emission.id);
+  return defs.some((definition) => isSameDefinition(definition, emission));
 }
 
 /**

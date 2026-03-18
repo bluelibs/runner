@@ -1,11 +1,10 @@
 import type {
   DependencyMapType,
-  EnsureTagsForTarget,
-  IEventDefinition,
   IHook,
   IHookDefinition,
   ITaskMeta,
   HookTagType,
+  EnsureTagsForTarget,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -28,11 +27,7 @@ import { clone, mergeArray, mergeDependencies } from "./utils";
  */
 export function makeHookBuilder<
   TDeps extends DependencyMapType,
-  TOn extends
-    | "*"
-    | IEventDefinition<any>
-    | readonly IEventDefinition<any>[]
-    | undefined,
+  TOn extends ValidOnTarget | undefined,
   TMeta extends ITaskMeta,
   THasRun extends boolean = false,
 >(
@@ -41,12 +36,7 @@ export function makeHookBuilder<
   const builder = {
     id: state.id,
 
-    on<
-      TNewOn extends
-        | "*"
-        | IEventDefinition<any>
-        | readonly IEventDefinition<any>[],
-    >(on: TNewOn) {
+    on<TNewOn extends ValidOnTarget>(on: TNewOn) {
       const next = clone<TDeps, TOn, TMeta, TDeps, TNewOn, TMeta>(state, {
         on: on as TNewOn,
       });

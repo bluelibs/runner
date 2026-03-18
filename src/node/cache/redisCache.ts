@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import type { SerializerLike } from "../../serializer";
 import {
   computeEntrySize,
+  type CacheEntryMetadata,
   type CacheFactoryOptions,
   type ICacheProvider,
 } from "../../globals/middleware/cache.shared";
+import { normalizeCacheRefs } from "../../globals/middleware/cache.key";
 
 export interface RedisCacheClient {
   del(...keys: string[]): Promise<unknown>;
@@ -39,6 +41,7 @@ export interface RedisCacheOptions {
 }
 
 export class RedisCache implements ICacheProvider {
+  private readonly entryRefsKey: string;
   private readonly entrySizesKey: string;
   private readonly globalBytesKey: string;
   private readonly globalLruKey: string;
@@ -49,6 +52,7 @@ export class RedisCache implements ICacheProvider {
 
   constructor(private readonly config: RedisCacheOptions) {
     this.taskToken = hashValue(config.taskId);
+    this.entryRefsKey = this.createKey("entry-refs");
     this.entrySizesKey = this.createKey("entry-sizes");
     this.globalBytesKey = this.createKey("bytes:global");
     this.globalLruKey = this.createKey("lru:global");
@@ -70,7 +74,11 @@ export class RedisCache implements ICacheProvider {
     return this.config.serializer.parse(payload);
   }
 
-  async set(key: string, value: unknown): Promise<void> {
+  async set(
+    key: string,
+    value: unknown,
+    metadata?: CacheEntryMetadata,
+  ): Promise<void> {
     const entryId = this.createEntryId(key);
     const entrySize = computeEntrySize(this.config.options, key, value);
 
@@ -81,7 +89,9 @@ export class RedisCache implements ICacheProvider {
       return;
     }
 
+    const refs = normalizeCacheRefs(metadata?.refs);
     const payload = this.config.serializer.stringify(value);
+    const previousRefs = await this.getStoredRefs(entryId);
     const previousSize = await this.getStoredSize(entryId);
 
     await this.writeEntryPayload(entryId, payload);
@@ -90,8 +100,10 @@ export class RedisCache implements ICacheProvider {
       entryId,
       String(entrySize),
     );
+    await this.writeStoredRefs(entryId, refs);
     await this.config.redis.sadd(this.taskMembersKey, entryId);
     await this.touch(entryId);
+    await this.replaceRefBindings(entryId, previousRefs, refs);
 
     const sizeDelta = entrySize - previousSize;
     if (sizeDelta !== 0) {
@@ -115,6 +127,26 @@ export class RedisCache implements ICacheProvider {
       this.taskLruKey,
       this.taskBytesKey,
     );
+  }
+
+  async invalidateRefs(refs: readonly string[]): Promise<number> {
+    const entryIds = new Set<string>();
+
+    for (const ref of normalizeCacheRefs(refs)) {
+      const members = await this.config.redis.smembers(
+        this.getRefMembersKey(ref),
+      );
+      for (const member of toStringArray(members)) {
+        entryIds.add(member);
+      }
+    }
+
+    let deletedCount = 0;
+    for (const entryId of entryIds) {
+      deletedCount += Number(await this.removeTrackedEntry(entryId));
+    }
+
+    return deletedCount;
   }
 
   async has(key: string): Promise<boolean> {
@@ -215,17 +247,62 @@ export class RedisCache implements ICacheProvider {
     );
   }
 
+  private async writeStoredRefs(entryId: string, refs: readonly string[]) {
+    await this.config.redis.hset(
+      this.entryRefsKey,
+      entryId,
+      JSON.stringify(refs),
+    );
+  }
+
+  private async getStoredRefs(entryId: string): Promise<readonly string[]> {
+    const raw = await this.config.redis.hget(this.entryRefsKey, entryId);
+
+    if (typeof raw !== "string") {
+      return [];
+    }
+
+    try {
+      return normalizeCacheRefs(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  }
+
   private async touch(entryId: string) {
     const order = Date.now();
     await this.config.redis.zadd(this.globalLruKey, order, entryId);
     await this.config.redis.zadd(this.taskLruKey, order, entryId);
   }
 
-  private async removeTrackedEntry(entryId: string) {
+  private async replaceRefBindings(
+    entryId: string,
+    previousRefs: readonly string[],
+    nextRefs: readonly string[],
+  ) {
+    const previousRefSet = new Set(previousRefs);
+    const nextRefSet = new Set(nextRefs);
+    const refsToRemove = previousRefs.filter((ref) => !nextRefSet.has(ref));
+    const refsToAdd = nextRefs.filter((ref) => !previousRefSet.has(ref));
+
+    for (const ref of refsToRemove) {
+      await this.config.redis.srem(this.getRefMembersKey(ref), entryId);
+    }
+
+    for (const ref of refsToAdd) {
+      await this.config.redis.sadd(this.getRefMembersKey(ref), entryId);
+    }
+  }
+
+  private async removeTrackedEntry(entryId: string): Promise<boolean> {
+    const refs = await this.getStoredRefs(entryId);
     const entrySize = await this.getStoredSize(entryId);
     const taskToken = getTaskToken(entryId);
+    const dataKey = this.getEntryDataKey(entryId);
+    const existed = toInteger(await this.config.redis.exists(dataKey)) > 0;
 
-    await this.config.redis.del(this.getEntryDataKey(entryId));
+    await this.config.redis.del(dataKey);
+    await this.config.redis.hdel(this.entryRefsKey, entryId);
     await this.config.redis.hdel(this.entrySizesKey, entryId);
     await this.config.redis.zrem(this.globalLruKey, entryId);
     await this.config.redis.zrem(
@@ -237,15 +314,25 @@ export class RedisCache implements ICacheProvider {
       entryId,
     );
 
-    if (entrySize === 0) {
-      return;
+    for (const ref of refs) {
+      // Shared-budget eviction can remove entries that belong to a different
+      // task cache than the current RedisCache instance. Use the evicted
+      // entry's task token so we unlink the correct ref membership set.
+      await this.config.redis.srem(
+        this.getRefMembersKeyForTask(ref, taskToken),
+        entryId,
+      );
     }
 
-    await this.adjustTrackedBytes(this.globalBytesKey, -entrySize);
-    await this.adjustTrackedBytes(
-      this.createKey(`task:${taskToken}:bytes`),
-      -entrySize,
-    );
+    if (entrySize !== 0) {
+      await this.adjustTrackedBytes(this.globalBytesKey, -entrySize);
+      await this.adjustTrackedBytes(
+        this.createKey(`task:${taskToken}:bytes`),
+        -entrySize,
+      );
+    }
+
+    return existed;
   }
 
   private async getStoredSize(entryId: string) {
@@ -283,6 +370,14 @@ export class RedisCache implements ICacheProvider {
 
   private getEntryDataKey(entryId: string) {
     return this.createKey(`entry:${entryId}`);
+  }
+
+  private getRefMembersKey(ref: string) {
+    return this.getRefMembersKeyForTask(ref, this.taskToken);
+  }
+
+  private getRefMembersKeyForTask(ref: string, taskToken: string) {
+    return this.createKey(`task:${taskToken}:ref:${hashValue(ref)}:members`);
   }
 
   private createKey(suffix: string) {

@@ -1,25 +1,38 @@
+import { isEventLane } from "../define";
 import { defineTag } from "../definers/defineTag";
 import type {
   IEventLaneDefinition,
   IResource,
   IRpcLaneDefinition,
 } from "../defs";
+import { Match } from "../tools/check";
 import { cronTag } from "./cron/cron.tag";
+import type { IdentityScopedMiddlewareConfig } from "./middleware/identityScope.shared";
 import { debugTag } from "./resources/debug/debug.tag";
 
-const internalTag = defineTag<{
+/** @deprecated Internal framework definitions no longer rely on this tag. */
+const deprecatedSystemTag = defineTag<{
   metadata?: Record<string, any>;
 }>({
   id: "internal",
   meta: {
-    title: "System Internal",
+    title: "System Internal (Deprecated)",
     description:
-      "Marks framework-owned internals and infrastructure definitions.",
+      "Deprecated: internal framework definitions now rely on reserved framework namespaces instead of this tag.",
   },
 });
 
+const eventLaneReferencePattern = Match.Where(
+  (value: unknown): value is IEventLaneDefinition => isEventLane(value),
+  "Expected Event Lane definition.",
+);
+
+const eventLaneHookConfigPattern = Match.ObjectStrict({
+  lane: eventLaneReferencePattern,
+});
+
 const globalTagsBase = {
-  system: internalTag,
+  system: deprecatedSystemTag,
   excludeFromGlobalHooks: defineTag<{
     metadata?: Record<string, any>;
   }>({
@@ -37,9 +50,21 @@ const globalTagsBase = {
     id: "eventLane",
     targets: ["events"] as const,
     meta: {
-      title: "Event Lane",
+      title: "Event Lane (Deprecated)",
       description:
-        "Routes tagged events to the configured Event Lane binding (reference-based).",
+        "Deprecated: use r.eventLane(...).applyTo(...) for Event Lane routing instead of tag-based assignment.",
+    },
+  }),
+  eventLaneHook: defineTag<{
+    lane: IEventLaneDefinition;
+  }>({
+    id: "eventLaneHook",
+    configSchema: eventLaneHookConfigPattern,
+    targets: ["hooks"] as const,
+    meta: {
+      title: "Event Lane Hook (Deprecated)",
+      description:
+        "Deprecated: configure relay hook policy in event-lane topology profiles via consume[].hooks.only.",
     },
   }),
   rpcLane: defineTag<{
@@ -82,6 +107,20 @@ const globalTagsBase = {
       title: "Fail When Unhealthy",
       description:
         "Blocks task execution when any selected resource currently reports unhealthy health status.",
+    },
+  }),
+  identityScoped: defineTag<
+    IdentityScopedMiddlewareConfig,
+    void,
+    void,
+    "taskMiddlewares"
+  >({
+    id: "identityScoped",
+    targets: ["taskMiddlewares"] as const,
+    meta: {
+      title: "Identity Scoped Middleware",
+      description:
+        "Marks task middleware that support optional identityScope config and can participate in subtree middleware.identityScope enforcement.",
     },
   }),
 };

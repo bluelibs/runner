@@ -75,11 +75,11 @@ The logger supports six levels:
 
 Use `run(app, { logs })` to control console output:
 
-| Option           | Meaning                                                                                  |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| `printThreshold` | Lowest printed level. Use `null` to disable console printing entirely.                   |
-| `printStrategy`  | `"pretty"`, `"plain"`, `"json"`, or `"json_pretty"`.                                     |
-| `bufferLogs`     | When `true`, buffer logs until startup completes, then flush them in order.              |
+| Option           | Meaning                                                                     |
+| ---------------- | --------------------------------------------------------------------------- |
+| `printThreshold` | Lowest printed level. Use `null` to disable console printing entirely.      |
+| `printStrategy`  | `"pretty"`, `"plain"`, `"json"`, or `"json_pretty"`.                        |
+| `bufferLogs`     | When `true`, buffer logs until startup completes, then flush them in order. |
 
 > **Note:** In `NODE_ENV=test`, Runner defaults `logs.printThreshold` to `null`. If you want test logs printed, set `logs.printThreshold` explicitly.
 
@@ -268,6 +268,38 @@ Runner does not include a tracer backend, but it does provide the execution meta
 ### Correlation via `executionContext`
 
 Enable execution context at runtime when you want correlation ids and inherited execution signals:
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Runner
+    participant TaskA as Task A
+    participant Event as Event
+    participant Hook as Hook
+    participant TaskB as Task B
+
+    Caller->>Runner: runTask(taskA)
+    activate Runner
+    Note over Runner: Assign correlationId: "abc-123"
+
+    Runner->>TaskA: run (correlationId: abc-123)
+    activate TaskA
+    TaskA->>Event: emit(orderPlaced)
+    activate Event
+    Note over Event: Inherits correlationId + signal
+    Event->>Hook: run (correlationId: abc-123)
+    activate Hook
+    Hook->>TaskB: runTask(sendEmail)
+    Note over TaskB: Same correlationId: abc-123
+    TaskB-->>Hook: done
+    deactivate Hook
+    Event-->>TaskA: done
+    deactivate Event
+    TaskA-->>Runner: done
+    deactivate TaskA
+    Runner-->>Caller: result
+    deactivate Runner
+```
 
 ```typescript
 import { run } from "@bluelibs/runner";

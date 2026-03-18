@@ -1,7 +1,6 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
-import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareCircuitBreakerOpenError, RunnerErrorId } from "../../errors";
 import { Match } from "../../tools/check";
@@ -77,7 +76,11 @@ export const journalKeys = {
 
 export const circuitBreakerResource = defineResource({
   id: "circuitBreaker",
-  tags: [globalTags.system],
+  meta: {
+    title: "Circuit Breaker State",
+    description:
+      "Stores per-task circuit status for the built-in circuit breaker middleware.",
+  },
   init: async () => {
     return {
       statusMap: new Map<string, CircuitBreakerStatus>(),
@@ -90,6 +93,11 @@ export const circuitBreakerResource = defineResource({
 
 export const circuitBreakerMiddleware = defineTaskMiddleware({
   id: "circuitBreaker",
+  meta: {
+    title: "Circuit Breaker",
+    description:
+      "Trips open after repeated task failures and probes recovery after a reset timeout.",
+  },
   throws: [middlewareCircuitBreakerOpenError],
   configSchema: circuitBreakerConfigPattern,
   dependencies: { state: circuitBreakerResource },

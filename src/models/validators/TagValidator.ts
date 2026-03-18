@@ -20,7 +20,7 @@ export function validateTagConstraints(ctx: ValidatorContext): void {
 
 function validateTagIdsAreUniquePerDefinition(ctx: ValidatorContext): void {
   ctx.forEachTaggableEntry(({ definitionType, definition }) => {
-    const tags = Array.isArray(definition.tags) ? definition.tags : [];
+    const { tags } = definition;
     const seenTagIds = new Set<string>();
     for (const tag of tags) {
       const tagId = ctx.resolveReferenceId(tag)!;
@@ -38,7 +38,7 @@ function validateTagIdsAreUniquePerDefinition(ctx: ValidatorContext): void {
 
 function validateAllTagsUsedAreRegistered(ctx: ValidatorContext): void {
   ctx.forEachTaggableEntry(({ definition }) => {
-    const tags = Array.isArray(definition.tags) ? definition.tags : [];
+    const { tags } = definition;
     for (const tag of tags) {
       const tagId = ctx.resolveReferenceId(tag)!;
       if (!ctx.registry.tags.has(tagId)) {
@@ -55,9 +55,7 @@ function validateNoSelfTagDependencies(ctx: ValidatorContext): void {
     }
 
     const ownTagIds = new Set(
-      (Array.isArray(entry.tags) ? entry.tags : []).map(
-        (tag) => ctx.resolveReferenceId(tag)!,
-      ),
+      entry.tags.map((tag) => ctx.resolveReferenceId(tag)!),
     );
 
     for (const dependency of Object.values(

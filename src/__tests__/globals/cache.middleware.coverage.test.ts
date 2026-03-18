@@ -1,9 +1,81 @@
 import {
   cacheMiddleware,
   journalKeys,
+  resolveCacheMiddlewareConfig,
 } from "../../globals/middleware/cache.middleware";
+import { createMiddlewareKeyBuilderHelpers } from "../../globals/middleware/keyBuilder.shared";
+import { Serializer } from "../../serializer";
 
 describe("cache middleware coverage", () => {
+  it("falls back to the default key builder when config explicitly sets keyBuilder to undefined", () => {
+    const resolved = resolveCacheMiddlewareConfig(
+      {
+        keyBuilder: undefined,
+        ttl: 123,
+      },
+      {
+        allowStale: true,
+      },
+    );
+
+    expect(resolved.cacheOptions).toEqual({
+      allowStale: true,
+      max: 100,
+      ttl: 123,
+      ttlAutopurge: true,
+    });
+    expect(resolved.keyBuilder("task", { ok: true })).toBe('task:{"ok":true}');
+  });
+
+  it("exposes the storage identity helper to key builders", () => {
+    const resolved = resolveCacheMiddlewareConfig(
+      {
+        keyBuilder: (_taskId, _input, helpers) => {
+          expect(helpers).toEqual({
+            storageTaskId: "app.tasks.lookup",
+          });
+          return helpers!.storageTaskId;
+        },
+      },
+      {},
+    );
+
+    expect(
+      resolved.keyBuilder(
+        "app.tasks.lookup",
+        { ok: true },
+        createMiddlewareKeyBuilderHelpers("app.tasks.lookup"),
+      ),
+    ).toBe("app.tasks.lookup");
+  });
+
+  it("fails fast when the default key builder cannot serialize input", () => {
+    const resolved = resolveCacheMiddlewareConfig(undefined, {});
+
+    expect(() =>
+      resolved.keyBuilder("task", {
+        fn: () => true,
+      }),
+    ).toThrow(/serializable input/i);
+  });
+
+  it("surfaces non-Error serialization failures from the default key builder", () => {
+    const resolved = resolveCacheMiddlewareConfig(undefined, {});
+    const stringifySpy = jest
+      .spyOn(Serializer.prototype, "stringify")
+      .mockImplementation(() => {
+        throw "plain-string-failure";
+      });
+
+    try {
+      expect(() => resolved.keyBuilder("task", { ok: true })).toThrow(
+        /plain-string-failure/,
+      );
+    } finally {
+      stringifySpy.mockRestore();
+    }
+  });
+
   it("keeps raw task ids unchanged when no canonical task marker is present", async () => {
     const get = jest.fn(async () => undefined);
     const set = jest.fn(async () => undefined);
@@ -35,8 +107,14 @@ describe("cache middleware coverage", () => {
 
     expect(result).toBe("fresh-value");
     expect(next).toHaveBeenCalledWith({ ok: true });
-    expect(get).toHaveBeenCalledWith(`${rawTaskId}-{"ok":true}`);
-    expect(set).toHaveBeenCalledWith(`${rawTaskId}-{"ok":true}`, "fresh-value");
+    expect(get).toHaveBeenCalledWith(`${rawTaskId}:{"ok":true}`);
+    expect(set).toHaveBeenCalledWith(
+      `${rawTaskId}:{"ok":true}`,
+      "fresh-value",
+      {
+        refs: [],
+      },
+    );
     expect(journal.set).toHaveBeenCalledWith(journalKeys.hit, false, {
       override: true,
     });

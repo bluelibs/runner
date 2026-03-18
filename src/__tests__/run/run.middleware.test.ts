@@ -334,6 +334,22 @@ describe("Configurable Middleware (.with)", () => {
     await run(app);
   });
 
+  it("should extract task middleware config from matching entries", () => {
+    const validate = defineTaskMiddleware<{ schema: string }>({
+      id: "validate-extract",
+      run: async ({ next }) => next(),
+    });
+    const configured = validate.with({ schema: "user" });
+    const sibling = defineTaskMiddleware<{ schema: string }>({
+      id: "validate-extract",
+      run: async ({ next }) => next(),
+    });
+
+    expect(validate.extract(configured)).toEqual({ schema: "user" });
+    expect(validate.extract(validate)).toBeUndefined();
+    expect(validate.extract(sibling)).toBeUndefined();
+  });
+
   it("should work in an integration scenario with global and per-task middleware", async () => {
     const calls: string[] = [];
     const logMw = defineTaskMiddleware({
@@ -555,6 +571,22 @@ describe("Configurable Middleware (.with)", () => {
     await expect(run(app)).rejects.toThrow(
       /conflicts with a resource-local middleware using the same id/i,
     );
+  });
+
+  it("should extract resource middleware config from matching entries", () => {
+    const middleware = defineResourceMiddleware<{ flag: string }>({
+      id: "resource-middleware-extract",
+      run: async ({ next }) => next(),
+    });
+    const configured = middleware.with({ flag: "x" });
+    const sibling = defineResourceMiddleware<{ flag: string }>({
+      id: "resource-middleware-extract",
+      run: async ({ next }) => next(),
+    });
+
+    expect(middleware.extract(configured)).toEqual({ flag: "x" });
+    expect(middleware.extract(middleware)).toBeUndefined();
+    expect(middleware.extract(sibling)).toBeUndefined();
   });
 });
 

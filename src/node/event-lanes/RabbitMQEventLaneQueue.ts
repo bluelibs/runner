@@ -8,6 +8,7 @@ import {
   RabbitMQTransport,
   type RabbitMQTransportReconnectConfig,
 } from "../queue/rabbitmq/RabbitMQTransport";
+import type { ConsumeMessage } from "../queue/rabbitmq/RabbitMQTransport.types";
 import {
   EventLaneMessage,
   EventLaneMessageHandler,
@@ -76,14 +77,16 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
         "RabbitMQEventLaneQueue failed to parse incoming message; nacking without requeue.",
       handlerFailureLogMessage:
         "RabbitMQEventLaneQueue handler threw; leaving ack/nack to consumer.",
-      decode: (content) => this.decode(content),
-      resolveMessageId: (message) => message.id,
+      decode: (rawMessage) => this.decode(rawMessage),
+      resolveMessageId: (eventLaneMessage) => eventLaneMessage.id,
       throwNotInitialized: () => eventLaneQueueNotInitializedError.throw(),
     });
   }
 
-  private decode(content: Buffer): EventLaneMessage | null {
-    const parsed = JSON.parse(content.toString()) as Partial<EventLaneMessage>;
+  private decode(rawMessage: ConsumeMessage): EventLaneMessage | null {
+    const parsed = JSON.parse(
+      rawMessage.content.toString(),
+    ) as Partial<EventLaneMessage>;
     if (!parsed || typeof parsed.id !== "string") {
       return null;
     }
@@ -120,7 +123,10 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
 
     const parsedAttempts =
       typeof parsed.attempts === "number" ? parsed.attempts : 0;
-    const nextAttempts = parsedAttempts + 1;
+    const headerAttempts = this.getDeliveryAttemptsFromHeaders(rawMessage);
+    const currentAttempts = this.messagesById.get(parsed.id)?.attempts;
+    const nextAttempts =
+      Math.max(currentAttempts ?? 0, parsedAttempts, headerAttempts ?? 0) + 1;
     const maxAttempts =
       typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : 1;
 
@@ -137,6 +143,16 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
     this.messagesById.set(message.id, message);
 
     return message;
+  }
+
+  private getDeliveryAttemptsFromHeaders(
+    message: ConsumeMessage,
+  ): number | undefined {
+    const deliveryCount = message.properties?.headers?.["x-delivery-count"];
+    if (typeof deliveryCount === "number" && Number.isFinite(deliveryCount)) {
+      return deliveryCount;
+    }
+    return undefined;
   }
 
   async init(): Promise<void> {

@@ -28,6 +28,7 @@ Once `run(app)` resolves, the returned runtime is your operator-facing handle. T
 - `runtime.getHealth(...)` to evaluate resource health probes
 - `runtime.pause()`, `runtime.resume()`, and `runtime.recoverWhen(...)` to control admissions
 - `runtime.dispose()` to stop the runtime cleanly
+- `runtime.dispose({ force: true })` to skip graceful shutdown orchestration and jump directly to resource `dispose()`
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -64,6 +65,22 @@ const userService = r
 This example assumes the `mongodb` package is installed and `DATABASE_URL` is set.
 
 **What you just learned**: Resources define `init` for creation and `dispose` for cleanup. Dependencies are declared explicitly, and the builder pattern produces a frozen definition.
+
+```mermaid
+stateDiagram-v2
+    [*] --> init : run(app)
+    init --> ready : dependencies satisfied
+    ready --> Runtime : events.ready emitted
+    Runtime --> cooldown : dispose() or signal
+    cooldown --> dispose : drain complete
+    dispose --> [*]
+
+    init : Create the resource value\nDependencies are available here
+    ready : Start ingress (HTTP, consumers)\nStartup wiring is complete
+    Runtime : Serving\nTasks, events, hooks active
+    cooldown : Stop accepting new work\nIn‑flight work continues
+    dispose : Final teardown\nReverse dependency order
+```
 
 When you want operator-facing health data, keep the probe small and explicit:
 
@@ -212,6 +229,8 @@ Do not use `cooldown()` as a general teardown phase for support resources such a
 
 Resources can be configured with type-safe options.
 
+- resource definitions expose `.extract(entry)` to read config from a matching `resource.with(...)` entry
+
 ```typescript
 import { r } from "@bluelibs/runner";
 
@@ -300,6 +319,25 @@ const runtime = await run(app, {
 ```
 
 This speeds up boot times when multiple resources (like DBs or queues) don't depend on each other.
+
+```mermaid
+gantt
+    title Parallel Initialization Waves (lifecycleMode: "parallel")
+    dateFormat X
+    axisFormat %s
+
+    section Wave 1
+    Database         :w1a, 0, 3
+    Cache            :w1b, 0, 2
+
+    section Wave 2
+    UserService (needs DB)  :w2a, 3, 5
+
+    section Wave 3
+    App (needs all)         :w3a, 5, 6
+```
+
+Independent resources in the same wave initialize concurrently. Each wave waits for the previous wave to complete before starting.
 
 ### Circular Type Dependencies (TypeScript)
 
@@ -482,6 +520,7 @@ Keep the two APIs distinct:
 - `.subtree((config) => ({ ... }))` and `.subtree((config) => [{ ... }, { ... }])` let subtree policy depend on the owning resource config
 - `subtree.validate` can be one function or an array of functions
 - typed validator branches are also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`
+- `subtree.middleware.identityScope` can enforce a required identityScope policy for identity-aware task middleware tagged with `tags.identityScoped`
 - if subtree middleware and local middleware resolve to the same middleware id on one target, Runner fails fast
 
 Use the generic validator with exported type guards when you need type-specific checks:
@@ -565,6 +604,8 @@ Validation rules:
 - validators receive compiled definitions, not raw builder state
 - generic and typed validators both run when they match the same definition
 - use exported guards such as `isTask(...)`, `isResource(...)`, `isEvent(...)`, `isHook(...)`, `isTag(...)`, `isTaskMiddleware(...)`, and `isResourceMiddleware(...)`
+- definitions still expose `.id`, but policy checks that need one exact definition should prefer `isSameDefinition(...)` over comparing ids directly
+- when a subtree task validator checks whether `task.middleware` contains a specific middleware definition, compare each entry with `isSameDefinition(middlewareEntry, someMiddleware)` instead of `middlewareEntry.id === someMiddleware.id`
 - return `SubtreeViolation[]` for expected policy failures
 - do not throw for normal validation failures
 

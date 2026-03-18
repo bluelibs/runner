@@ -13,12 +13,45 @@ import {
   symbolMiddlewareConfigured,
   symbolTaskMiddleware,
 } from "./symbols";
-import { IContractable } from "./contracts";
+import {
+  EnsureConfigSatisfiesContracts,
+  HasConfigContracts,
+  IContractable,
+  InferConfigOrViolationFromContracts,
+} from "./contracts";
 import type { NormalizedThrowsList, ThrowsList } from "./error";
 
 export type { DependencyMapType, DependencyValuesType } from "./utilities";
 export type { TagType, TaskMiddlewareTagType } from "./tag";
 export type { IMiddlewareMeta } from "./meta";
+
+type IsUnspecifiedMiddlewareConfig<T> = [T] extends [void]
+  ? true
+  : [T] extends [undefined]
+    ? true
+    : false;
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+type ResolveMiddlewareConfigContract<
+  TConfig,
+  TTags extends TaskMiddlewareTagType[],
+> =
+  HasConfigContracts<TTags> extends true
+    ? IsAny<TConfig> extends true
+      ? InferConfigOrViolationFromContracts<TTags>
+      : IsUnspecifiedMiddlewareConfig<TConfig> extends true
+        ? InferConfigOrViolationFromContracts<TTags>
+        : EnsureConfigSatisfiesContracts<TTags, TConfig>
+    : TConfig;
+
+/**
+ * Effective middleware config after applying any config-contract tags.
+ */
+export type ResolvedTaskMiddlewareConfig<
+  TConfig,
+  TTags extends TaskMiddlewareTagType[],
+> = ResolveMiddlewareConfigContract<TConfig, TTags>;
 
 /**
  * Declarative task-middleware definition contract.
@@ -28,16 +61,21 @@ export interface ITaskMiddlewareDefinition<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 > {
   /** Stable middleware identifier. */
   id: string;
   /** Static or lazy dependency map. */
-  dependencies?: TDependencies | ((config: TConfig) => TDependencies);
+  dependencies?:
+    | TDependencies
+    | ((config: ResolvedTaskMiddlewareConfig<TConfig, TTags>) => TDependencies);
   /**
    * Optional validation schema for runtime config validation.
    * When provided, middleware config will be validated when .with() is called.
    */
-  configSchema?: ValidationSchemaInput<TConfig>;
+  configSchema?: ValidationSchemaInput<
+    ResolvedTaskMiddlewareConfig<TConfig, TTags>
+  >;
   /**
    * The middleware body, called with task execution input.
    */
@@ -47,12 +85,12 @@ export interface ITaskMiddlewareDefinition<
       TEnforceOutputContract extends void ? any : TEnforceOutputContract
     >,
     dependencies: DependencyValuesType<TDependencies>,
-    config: TConfig,
+    config: ResolvedTaskMiddlewareConfig<TConfig, TTags>,
   ) => Promise<any>;
   /** Optional metadata used by docs and tooling. */
   meta?: IMiddlewareMeta;
   /** Tags applied to the middleware definition. */
-  tags?: TaskMiddlewareTagType[];
+  tags?: TTags;
   /**
    * Declares which typed errors are part of this middleware's contract.
    * Declarative only — does not imply DI or enforcement.
@@ -68,6 +106,7 @@ export interface ITaskMiddleware<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 >
   extends
     Omit<
@@ -75,34 +114,48 @@ export interface ITaskMiddleware<
         TConfig,
         TEnforceInputContract,
         TEnforceOutputContract,
-        TDependencies
+        TDependencies,
+        TTags
       >,
       "throws"
     >,
-    IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
+    IContractable<
+      ResolvedTaskMiddlewareConfig<TConfig, TTags>,
+      TEnforceInputContract,
+      TEnforceOutputContract
+    > {
   [symbolTaskMiddleware]: true;
   [symbolFilePath]: string;
   id: string;
   path?: string;
   /** Normalized dependency declaration. */
-  dependencies: TDependencies | ((config: TConfig) => TDependencies);
+  dependencies:
+    | TDependencies
+    | ((config: ResolvedTaskMiddlewareConfig<TConfig, TTags>) => TDependencies);
   /** Normalized list of error ids declared via `throws`. */
   throws?: NormalizedThrowsList;
   /** Current configuration object (empty by default). */
-  config: TConfig;
+  config: ResolvedTaskMiddlewareConfig<TConfig, TTags>;
   /** Normalized validation schema for middleware config. */
-  configSchema?: IValidationSchema<TConfig>;
+  configSchema?: IValidationSchema<
+    ResolvedTaskMiddlewareConfig<TConfig, TTags>
+  >;
   /** Configure the middleware and return a marked, configured instance. */
   with: (
-    config: TConfig,
+    config: ResolvedTaskMiddlewareConfig<TConfig, TTags>,
   ) => ITaskMiddlewareConfigured<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
-    TDependencies
+    TDependencies,
+    TTags
   >;
+  /** Extract the configured payload from a matching middleware entry. */
+  extract: (
+    target: ITaskMiddleware<any, any, any, any, any>,
+  ) => ResolvedTaskMiddlewareConfig<TConfig, TTags> | undefined;
   /** Normalized tags attached to the middleware. */
-  tags: TaskMiddlewareTagType[];
+  tags: TTags;
 }
 
 /**
@@ -113,14 +166,16 @@ export interface ITaskMiddlewareConfigured<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
+  TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 > extends ITaskMiddleware<
   TConfig,
   TEnforceInputContract,
   TEnforceOutputContract,
-  TDependencies
+  TDependencies,
+  TTags
 > {
   [symbolMiddlewareConfigured]: true;
-  config: TConfig;
+  config: ResolvedTaskMiddlewareConfig<TConfig, TTags>;
 }
 
 /**

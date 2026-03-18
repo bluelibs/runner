@@ -1,9 +1,4 @@
-import type {
-  InferValidationSchemaInput,
-  TagTarget,
-  TagType,
-  ValidationSchemaInput,
-} from "../defs";
+import type { TagTarget, TagType, ValidationSchemaInput } from "../defs";
 import type { DependencyMapType } from "../types/utilities";
 import type { ThrowsList } from "../types/error";
 import {
@@ -14,6 +9,7 @@ import {
 import { validationError } from "../errors";
 import { isMatchError } from "../tools/check/errors";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { isSameDefinition } from "../tools/isSameDefinition";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
@@ -37,21 +33,18 @@ export type MiddlewareVariant = {
  * the core definer accesses directly; additional fields survive
  * via the object spread.
  */
-interface MiddlewareDefCore<TConfig, TDeps extends DependencyMapType> {
+interface MiddlewareDefCore<TDeps extends DependencyMapType> {
   id: string;
-  configSchema?: ValidationSchemaInput<TConfig>;
+  configSchema?: ValidationSchemaInput<any>;
   tags?: TagType[];
-  dependencies?: TDeps | ((config: TConfig) => TDeps);
+  dependencies?: TDeps | ((config: any) => TDeps);
   throws?: ThrowsList;
 }
 
 export type MiddlewareDefWithInferredSchema<
   TSchema extends ValidationSchemaInput<any>,
   TDeps extends DependencyMapType,
-> = Omit<
-  MiddlewareDefCore<InferValidationSchemaInput<TSchema>, TDeps>,
-  "configSchema"
-> & {
+> = Omit<MiddlewareDefCore<TDeps>, "configSchema"> & {
   configSchema: TSchema;
 };
 
@@ -63,7 +56,7 @@ export type MiddlewareDefWithInferredSchema<
 export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
   variant: MiddlewareVariant,
   filePath: string,
-  middlewareDef: MiddlewareDefCore<TConfig, TDeps>,
+  middlewareDef: MiddlewareDefCore<TDeps>,
 ): Record<string | symbol, unknown> {
   assertDefinitionId(variant.label, middlewareDef.id);
 
@@ -84,6 +77,7 @@ export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
     [variant.typeSymbol]: true,
     config: {} as TConfig,
     ...middlewareDef,
+    tags: middlewareDef.tags ?? [],
     configSchema,
     dependencies: middlewareDef.dependencies || ({} as TDeps),
     throws: normalizeThrows(
@@ -145,6 +139,15 @@ export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
         ] = configuredFrom;
 
         return freezeIfLineageLocked(current, configured);
+      },
+      extract: function (target: Obj) {
+        if (!isSameDefinition(target, this)) {
+          return undefined;
+        }
+
+        return target[symbolMiddlewareConfigured] === true
+          ? (target.config as TConfig)
+          : undefined;
       },
     };
   };

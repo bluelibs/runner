@@ -28,10 +28,11 @@ export function makeTaskMiddlewareBuilder<
   In,
   Out,
   D extends DependencyMapType,
+  TTags extends TaskMiddlewareTagType[],
   THasRun extends boolean = false,
 >(
-  state: TaskMwState<C, In, Out, D>,
-): TaskMiddlewareFluentBuilder<C, In, Out, D, THasRun> {
+  state: TaskMwState<C, In, Out, D, TTags>,
+): TaskMiddlewareFluentBuilder<C, In, Out, D, TTags, THasRun> {
   const builder = {
     id: state.id,
 
@@ -46,7 +47,18 @@ export function makeTaskMiddlewareBuilder<
         override,
       );
 
-      const next = cloneTask<C, In, Out, D, C, In, Out, D & TNewDeps>(state, {
+      const next = cloneTask<
+        C,
+        In,
+        Out,
+        D,
+        TTags,
+        C,
+        In,
+        Out,
+        D & TNewDeps,
+        TTags
+      >(state, {
         dependencies: nextDependencies as D & TNewDeps,
       });
 
@@ -56,18 +68,22 @@ export function makeTaskMiddlewareBuilder<
           In,
           Out,
           D & TNewDeps,
+          TTags,
           C,
           In,
           Out,
-          TNewDeps
+          TNewDeps,
+          TTags
         >(next, {
           dependencies: nextDependencies as TNewDeps,
         });
-        return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps, false>(
+        return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps, TTags, false>(
           overridden,
         );
       }
-      return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps, false>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps, TTags, false>(
+        next,
+      );
     },
 
     configSchema<
@@ -81,10 +97,12 @@ export function makeTaskMiddlewareBuilder<
         In,
         Out,
         D,
+        TTags,
         ResolveValidationSchemaInput<TNew, TSchema>,
         In,
         Out,
-        D
+        D,
+        TTags
       >(state, {
         configSchema: schema,
       });
@@ -93,6 +111,7 @@ export function makeTaskMiddlewareBuilder<
         In,
         Out,
         D,
+        TTags,
         false
       >(next);
     },
@@ -106,14 +125,14 @@ export function makeTaskMiddlewareBuilder<
       return builder.configSchema(schema);
     },
 
-    run(fn: ITaskMiddlewareDefinition<C, In, Out, D>["run"]) {
+    run(fn: ITaskMiddlewareDefinition<C, In, Out, D, TTags>["run"]) {
       const next = cloneTask(state, { run: fn as typeof state.run });
-      return makeTaskMiddlewareBuilder<C, In, Out, D, true>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D, TTags, true>(next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
       const next = cloneTask(state, { meta: m as IMiddlewareMeta });
-      return makeTaskMiddlewareBuilder<C, In, Out, D, THasRun>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D, TTags, THasRun>(next);
     },
 
     tags<TNewTags extends TaskMiddlewareTagType[]>(
@@ -121,15 +140,48 @@ export function makeTaskMiddlewareBuilder<
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
-      const next = cloneTask(state, {
-        tags: mergeArray(state.tags, t, override) as TaskMiddlewareTagType[],
+      if (override) {
+        const nextTags = mergeArray(state.tags, t, true) as TNewTags;
+        const next = cloneTask<C, In, Out, D, TTags, C, In, Out, D, TNewTags>(
+          state,
+          {
+            tags: nextTags,
+          },
+        );
+        return makeTaskMiddlewareBuilder<C, In, Out, D, TNewTags, false>(next);
+      }
+
+      const nextTags = mergeArray(state.tags, t, false) as [
+        ...TTags,
+        ...TNewTags,
+      ];
+      const next = cloneTask<
+        C,
+        In,
+        Out,
+        D,
+        TTags,
+        C,
+        In,
+        Out,
+        D,
+        [...TTags, ...TNewTags]
+      >(state, {
+        tags: nextTags,
       });
-      return makeTaskMiddlewareBuilder<C, In, Out, D, false>(next);
+      return makeTaskMiddlewareBuilder<
+        C,
+        In,
+        Out,
+        D,
+        [...TTags, ...TNewTags],
+        false
+      >(next);
     },
 
     throws(list: ThrowsList) {
       const next = cloneTask(state, { throws: list });
-      return makeTaskMiddlewareBuilder<C, In, Out, D, THasRun>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D, TTags, THasRun>(next);
     },
 
     build() {
@@ -144,7 +196,7 @@ export function makeTaskMiddlewareBuilder<
       }
 
       const middleware = defineTaskMiddleware({
-        ...(state as ITaskMiddlewareDefinition<C, In, Out, D>),
+        ...(state as ITaskMiddlewareDefinition<C, In, Out, D, TTags>),
       });
       return deepFreeze({
         ...middleware,
@@ -153,7 +205,7 @@ export function makeTaskMiddlewareBuilder<
     },
   };
 
-  return builder as TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D> &
-    TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D> &
-    TaskMiddlewareFluentBuilder<C, In, Out, D, THasRun>;
+  return builder as TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TTags> &
+    TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags> &
+    TaskMiddlewareFluentBuilder<C, In, Out, D, TTags, THasRun>;
 }

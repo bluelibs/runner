@@ -222,6 +222,32 @@ import { RunnerMode } from "../../../types/runner";
     run: async () => {},
   });
 
+  const extractedTaskMwConfig = mwWithConfig.extract(
+    mwWithConfig.with({ ttl: 123 }),
+  );
+  extractedTaskMwConfig?.ttl;
+  // @ts-expect-error extracted task middleware config remains strict
+  extractedTaskMwConfig?.missing;
+
+  const extractedResourceMwConfig = mwrWithConfig.extract(
+    mwrWithConfig.with({ ttl: 456 }),
+  );
+  extractedResourceMwConfig?.ttl;
+  // @ts-expect-error extracted resource middleware config remains strict
+  extractedResourceMwConfig?.missing;
+
+  const configuredResource = defineResource<{ port: number }>({
+    id: "typed-resource-extract",
+    init: async (config) => config.port,
+  });
+
+  const extractedResourceConfig = configuredResource.extract(
+    configuredResource.with({ port: 3000 }),
+  );
+  extractedResourceConfig?.port;
+  // @ts-expect-error extracted resource config remains strict
+  extractedResourceConfig?.missing;
+
   defineTask({
     id: "task",
     middleware: [mw],

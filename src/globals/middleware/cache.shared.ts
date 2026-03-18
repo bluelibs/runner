@@ -1,14 +1,34 @@
 import { LRUCache } from "lru-cache";
+import { normalizeCacheRefs, type CacheEntryMetadata } from "./cache.key";
 import { safeStringify } from "../../models/utils/safeStringify";
 
+export type { CacheEntryMetadata, CacheRef } from "./cache.key";
+
+/**
+ * Low-level cache instance contract used by task cache middleware.
+ */
 export interface ICacheProvider {
-  set(key: string, value: unknown): unknown | Promise<unknown>;
   get(key: string): unknown | Promise<unknown>;
+  set(
+    key: string,
+    value: unknown,
+    metadata?: CacheEntryMetadata,
+  ): unknown | Promise<unknown>;
   clear(): void | Promise<void>;
+  /**
+   * Invalidates refs after the caller has already normalized and tenant-scoped
+   * them via normalizeCacheRefs() and applyIdentityScopeToKey().
+   */
+  invalidateRefs(refs: readonly string[]): number | Promise<number>;
   has?(key: string): boolean | Promise<boolean>;
 }
 
 export type CacheStoredValue = NonNullable<unknown>;
+type CacheStoredEnvelope = {
+  value: CacheStoredValue;
+  refs: readonly string[];
+};
+
 export type CacheFactoryOptions = Partial<
   LRUCache.Options<string, CacheStoredValue, unknown>
 >;
@@ -51,7 +71,12 @@ export type SharedCacheBudgetState = {
   totalBytesUsed: number;
   touchOrder: number;
   entries: Map<string, BudgetEntry>;
-  localCaches: Map<string, LRUCache<string, CacheStoredValue, unknown>>;
+  localCaches: Map<string, LRUCache<string, CacheStoredEnvelope, unknown>>;
+};
+
+type CacheRefIndexState = {
+  refsByKey: Map<string, readonly string[]>;
+  keysByRef: Map<string, Set<string>>;
 };
 
 const builtInCacheProviderSymbol = Symbol("runner.builtInCacheProvider");
@@ -62,19 +87,12 @@ export function createDefaultCacheProvider(): CacheProvider {
       options,
       sharedBudget,
       taskId,
-    }: CacheProviderInput): Promise<ICacheProvider> => {
-      if (sharedBudget) {
-        return createBudgetedCacheInstance({
-          taskId,
-          options,
-          sharedBudget,
-        });
-      }
-
-      return new LRUCache<string, CacheStoredValue, unknown>(
-        options as LRUCache.Options<string, CacheStoredValue, unknown>,
-      );
-    },
+    }: CacheProviderInput): Promise<ICacheProvider> =>
+      createRefIndexedCacheInstance({
+        taskId,
+        options,
+        sharedBudget,
+      }),
     {
       [builtInCacheProviderSymbol]: true as const,
     },
@@ -99,7 +117,10 @@ export function createSharedCacheBudgetState(
     totalBytesUsed: 0,
     touchOrder: 0,
     entries: new Map<string, BudgetEntry>(),
-    localCaches: new Map<string, LRUCache<string, CacheStoredValue, unknown>>(),
+    localCaches: new Map<
+      string,
+      LRUCache<string, CacheStoredEnvelope, unknown>
+    >(),
   };
 }
 
@@ -112,42 +133,92 @@ export function createBudgetedCacheInstance({
   options: CacheFactoryOptions;
   sharedBudget: SharedCacheBudgetState;
 }): ICacheProvider {
-  const localCache = createLocalCache(taskId, options, sharedBudget);
-  sharedBudget.localCaches.set(taskId, localCache);
+  return createRefIndexedCacheInstance({
+    taskId,
+    options,
+    sharedBudget,
+  });
+}
+
+function createRefIndexedCacheInstance({
+  taskId,
+  options,
+  sharedBudget,
+}: {
+  taskId: string;
+  options: CacheFactoryOptions;
+  sharedBudget?: SharedCacheBudgetState;
+}): ICacheProvider {
+  const refIndex = createCacheRefIndexState();
+  const localCache = createLocalCache(taskId, options, refIndex, sharedBudget);
+
+  sharedBudget?.localCaches.set(taskId, localCache);
 
   return {
     get(key: string) {
-      const value = localCache.get(key);
+      const entry = localCache.get(key);
 
-      if (value !== undefined || localCache.has(key)) {
-        touchBudgetEntry(sharedBudget, taskId, key);
+      if (entry !== undefined || localCache.has(key)) {
+        sharedBudget && touchBudgetEntry(sharedBudget, taskId, key);
       }
 
-      return value;
+      return entry?.value;
     },
-    set(key: string, value: unknown) {
-      localCache.set(key, value as CacheStoredValue);
+    set(key: string, value: unknown, metadata?: CacheEntryMetadata) {
+      const entry: CacheStoredEnvelope = {
+        value: value as CacheStoredValue,
+        refs: normalizeCacheRefs(metadata?.refs),
+      };
+      const previousRefs = refIndex.refsByKey.get(key);
+
+      if (previousRefs) {
+        unlinkCacheRefs(refIndex, key, previousRefs);
+      }
+
+      localCache.set(key, entry);
 
       if (!localCache.has(key)) {
         return;
       }
 
-      upsertBudgetEntry(
-        sharedBudget,
-        taskId,
-        key,
-        computeEntrySize(options, key, value),
-      );
-      enforceTotalBudget(sharedBudget);
+      linkCacheRefs(refIndex, key, entry.refs);
+
+      if (sharedBudget) {
+        upsertBudgetEntry(
+          sharedBudget,
+          taskId,
+          key,
+          computeEntrySize(options, key, value),
+        );
+        enforceTotalBudget(sharedBudget);
+      }
     },
     clear() {
       localCache.clear();
-      removeBudgetEntriesForTask(sharedBudget, taskId);
+      refIndex.refsByKey.clear();
+      refIndex.keysByRef.clear();
+      sharedBudget && removeBudgetEntriesForTask(sharedBudget, taskId);
+    },
+    invalidateRefs(refs: readonly string[]) {
+      const keys = new Set<string>();
+
+      for (const ref of refs) {
+        for (const key of refIndex.keysByRef.get(ref) ?? []) {
+          keys.add(key);
+        }
+      }
+
+      let deletedCount = 0;
+      for (const key of keys) {
+        deletedCount += Number(localCache.delete(key));
+      }
+
+      return deletedCount;
     },
     has(key: string) {
       const present = localCache.has(key);
 
-      if (present) {
+      if (present && sharedBudget) {
         touchBudgetEntry(sharedBudget, taskId, key);
       }
 
@@ -159,20 +230,85 @@ export function createBudgetedCacheInstance({
 function createLocalCache(
   taskId: string,
   options: CacheFactoryOptions,
-  sharedBudget: SharedCacheBudgetState,
+  refIndex: CacheRefIndexState,
+  sharedBudget?: SharedCacheBudgetState,
 ) {
   const { disposeAfter, sizeCalculation, ...rest } = options;
   const localSizeCalculation =
-    rest.maxSize || rest.maxEntrySize ? sizeCalculation : undefined;
+    rest.maxSize || rest.maxEntrySize
+      ? sizeCalculation
+        ? (entry: CacheStoredEnvelope, key: string) =>
+            sizeCalculation(entry.value, key)
+        : undefined
+      : undefined;
 
-  return new LRUCache<string, CacheStoredValue, unknown>({
-    ...(rest as LRUCache.Options<string, CacheStoredValue, unknown>),
+  const localCacheOptions = {
+    ...rest,
     sizeCalculation: localSizeCalculation,
-    disposeAfter: (value, key, reason) => {
-      removeBudgetEntry(sharedBudget, taskId, key);
-      disposeAfter?.(value, key, reason);
+    disposeAfter: (entry, key, reason) => {
+      unlinkCacheRefs(refIndex, key, entry.refs);
+      sharedBudget && removeBudgetEntry(sharedBudget, taskId, key);
+      disposeAfter?.(entry.value, key, reason);
     },
-  });
+  } as LRUCache.Options<string, CacheStoredEnvelope, unknown>;
+
+  return new LRUCache<string, CacheStoredEnvelope, unknown>(localCacheOptions);
+}
+
+function createCacheRefIndexState(): CacheRefIndexState {
+  return {
+    refsByKey: new Map<string, readonly string[]>(),
+    keysByRef: new Map<string, Set<string>>(),
+  };
+}
+
+function linkCacheRefs(
+  refIndex: CacheRefIndexState,
+  key: string,
+  refs: readonly string[],
+) {
+  refIndex.refsByKey.set(key, refs);
+
+  for (const ref of refs) {
+    const keys = refIndex.keysByRef.get(ref) ?? new Set<string>();
+    keys.add(key);
+    refIndex.keysByRef.set(ref, keys);
+  }
+}
+
+function unlinkCacheRefs(
+  refIndex: CacheRefIndexState,
+  key: string,
+  refs: readonly string[],
+) {
+  const currentRefs = refIndex.refsByKey.get(key);
+
+  if (areCacheRefsEqual(currentRefs, refs)) {
+    refIndex.refsByKey.delete(key);
+  }
+
+  for (const ref of refs) {
+    const keys = refIndex.keysByRef.get(ref);
+    if (!keys) {
+      continue;
+    }
+
+    keys.delete(key);
+    if (keys.size === 0) {
+      refIndex.keysByRef.delete(ref);
+    }
+  }
+}
+
+function areCacheRefsEqual(
+  left: readonly string[] | undefined,
+  right: readonly string[],
+) {
+  if (!left || left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((ref, index) => ref === right[index]);
 }
 
 function enforceTotalBudget(sharedBudget: SharedCacheBudgetState) {
@@ -327,10 +463,13 @@ function getUtf8ByteLength(value: string) {
 }
 
 export const cacheSharedInternals = {
+  createCacheRefIndexState,
   computeEntrySize,
   enforceTotalBudget,
+  linkCacheRefs,
   removeBudgetEntry,
   removeBudgetEntriesForTask,
   touchBudgetEntry,
+  unlinkCacheRefs,
   upsertBudgetEntry,
 };

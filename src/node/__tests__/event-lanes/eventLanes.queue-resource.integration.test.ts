@@ -1,5 +1,5 @@
 import { genericError } from "../../../errors";
-import { r, run, tags } from "../../..";
+import { r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -89,7 +89,7 @@ describe("event-lanes: queue resource bindings", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane: lane }] } },
             bindings: [{ lane, queue: {} as unknown as IEventLaneQueue }],
           },
         }),
@@ -111,7 +111,7 @@ describe("event-lanes: queue resource bindings", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane: lane }] } },
             bindings: [{ lane, queue: null as unknown as IEventLaneQueue }],
           },
         }),
@@ -139,7 +139,7 @@ describe("event-lanes: queue resource bindings", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane: lane }] } },
             bindings: [{ lane, queue: invalidQueueResource }],
           },
         }),
@@ -152,10 +152,12 @@ describe("event-lanes: queue resource bindings", () => {
   });
 
   it("resolves queue resource references from container dependencies", async () => {
-    const lane = r.eventLane("tests-event-lanes-queue-resource-lane").build();
     const event = r
       .event<{ id: string }>("tests-event-lanes-queue-resource-event")
-      .tags([tags.eventLane.with({ lane })])
+      .build();
+    const lane = r
+      .eventLane("tests-event-lanes-queue-resource-lane")
+      .applyTo([event])
       .build();
 
     let hookCalls = 0;
@@ -193,7 +195,7 @@ describe("event-lanes: queue resource bindings", () => {
         eventLanesResource.with({
           profile: "worker",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue: queueResource }],
           },
         }),

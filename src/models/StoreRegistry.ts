@@ -33,9 +33,14 @@ import { StoreRegistryDefinitionPreparer } from "./store-registry/StoreRegistryD
 import { StoreRegistryTagIndex } from "./store-registry/StoreRegistryTagIndex";
 import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
+import { RegisterableKind } from "./store-registry/registerableKind";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
 import type { RunnerMode } from "../types/runner";
+import {
+  resolveHookTargets,
+  type HookTargetResolutionEntry,
+} from "./hook/resolveHookTargets";
 
 /**
  * Any object reference used as a definition identity key.
@@ -115,6 +120,10 @@ export class StoreRegistry {
   >();
   private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
   private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
+  private readonly hookTargetResolutionCache = new Map<
+    string,
+    ReadonlyArray<HookTargetResolutionEntry>
+  >();
 
   // Kept on the registry for backward compatibility in tests/tools.
   public readonly tagIndex: Map<string, TagIndexBucket>;
@@ -207,11 +216,13 @@ export class StoreRegistry {
     this.recordCanonicalSourceId(reference, canonicalId);
   }
 
-  resolveDefinitionId(reference: unknown): string | undefined {
-    if (typeof reference === "string") {
-      return this.resolveUniqueSourceIdAlias(reference) ?? reference;
-    }
-
+  /**
+   * Resolves only aliases that were learned from an actual registered
+   * definition reference. This intentionally ignores raw source-id fallback so
+   * callers can distinguish "this exact object is registered" from
+   * "something with the same public id exists".
+   */
+  resolveRegisteredReferenceId(reference: unknown): string | undefined {
     if (!isObjectReference(reference)) {
       return undefined;
     }
@@ -238,10 +249,27 @@ export class StoreRegistry {
     }
 
     if (isResourceWithConfig(reference)) {
-      const byResource = this.definitionAliases.get(reference.resource);
-      if (byResource) {
-        return byResource;
-      }
+      return this.definitionAliases.get(reference.resource);
+    }
+
+    return undefined;
+  }
+
+  resolveDefinitionId(reference: unknown): string | undefined {
+    if (typeof reference === "string") {
+      return this.resolveUniqueSourceIdAlias(reference) ?? reference;
+    }
+
+    const registeredReferenceId = this.resolveRegisteredReferenceId(reference);
+    if (registeredReferenceId) {
+      return registeredReferenceId;
+    }
+
+    if (!isObjectReference(reference)) {
+      return undefined;
+    }
+
+    if (isResourceWithConfig(reference)) {
       return reference.resource.id;
     }
 
@@ -347,22 +375,47 @@ export class StoreRegistry {
   }
 
   storeGenericItem<_C>(item: RegisterableItem) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeGenericItem<_C>(item);
   }
 
   storeError<_C>(item: IErrorHelper<any>) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeError<_C>(item);
   }
 
   storeAsyncContext<_C>(item: IAsyncContext<any>) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeAsyncContext<_C>(item);
   }
 
+  storeOwnedAsyncContext(
+    ownerResourceId: string,
+    item: IAsyncContext<any>,
+  ): IAsyncContext<any> {
+    this.clearHookTargetResolutionCache();
+    const compiled = this.writer.compileOwnedDefinition(
+      ownerResourceId,
+      false,
+      item,
+      RegisterableKind.AsyncContext,
+    ) as IAsyncContext<any>;
+
+    this.visibilityTracker.recordOwnership(ownerResourceId, compiled);
+    this.registerDefinitionAlias(item, compiled.id);
+    this.registerDefinitionAlias(compiled, compiled.id);
+    this.writer.storeAsyncContext(compiled);
+
+    return compiled;
+  }
+
   storeTag(item: ITag<any, any, any>) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeTag(item);
   }
 
   storeHook<_C>(item: IHook<any, any>, overrideMode: StoringMode = "normal") {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeHook<_C>(item, overrideMode);
   }
 
@@ -370,6 +423,7 @@ export class StoreRegistry {
     item: ITaskMiddleware<any>,
     storingMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeTaskMiddleware<_C>(item, storingMode);
   }
 
@@ -377,10 +431,12 @@ export class StoreRegistry {
     item: IResourceMiddleware<any>,
     overrideMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeResourceMiddleware<_C>(item, overrideMode);
   }
 
   storeEvent<_C>(item: IEvent<void>) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeEvent<_C>(item);
   }
 
@@ -388,10 +444,12 @@ export class StoreRegistry {
     item: IResourceWithConfig<any, any, any>,
     storingMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeResourceWithConfig<_C>(item, storingMode);
   }
 
   computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
+    this.clearHookTargetResolutionCache();
     return this.writer.computeRegistrationDeeply(
       element,
       config,
@@ -403,6 +461,7 @@ export class StoreRegistry {
     item: IResource<any, any, any>,
     overrideMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeResource<_C>(item, overrideMode);
   }
 
@@ -410,6 +469,7 @@ export class StoreRegistry {
     item: ITask<any, any, {}>,
     storingMode: StoringMode = "normal",
   ) {
+    this.clearHookTargetResolutionCache();
     return this.writer.storeTask<_C>(item, storingMode);
   }
 
@@ -423,6 +483,60 @@ export class StoreRegistry {
    */
   buildEventEmissionGraph() {
     return buildEmissionGraph(this);
+  }
+
+  clearHookTargetResolutionCache(): void {
+    this.hookTargetResolutionCache.clear();
+  }
+
+  private cloneHookTargetResolutions(
+    entries: ReadonlyArray<HookTargetResolutionEntry>,
+  ): HookTargetResolutionEntry[] {
+    return entries.map((entry) => ({ ...entry }));
+  }
+
+  /**
+   * Resolves a hook's `on` declaration into concrete registered events using
+   * canonical ids plus current listening-visibility rules.
+   */
+  resolveHookTargets(
+    hook: Pick<IHook<any, any, any>, "id" | "on">,
+  ): HookTargetResolutionEntry[] {
+    if (!hook.on || hook.on === "*") {
+      return [];
+    }
+
+    const cached = this.hookTargetResolutionCache.get(hook.id);
+    if (cached) {
+      return this.cloneHookTargetResolutions(cached);
+    }
+
+    const resolvedTargets = resolveHookTargets({
+      context: {
+        resolveDefinitionId: (reference) => this.resolveDefinitionId(reference),
+        getEventById: (id) => this.events.get(id)?.event,
+        getRegisteredEvents: () =>
+          Array.from(this.events.values(), ({ event }) => event),
+        getResourceById: (id) => this.resources.get(id)?.resource,
+        isWithinResourceSubtree: (resourceId, itemId) =>
+          this.visibilityTracker.isWithinResourceSubtree(resourceId, itemId),
+        getAccessViolation: (targetId, consumerId, channel) =>
+          this.visibilityTracker.getAccessViolation(
+            targetId,
+            consumerId,
+            channel,
+          ),
+      },
+      hookId: hook.id,
+      on: hook.on,
+    });
+
+    const cachedTargets = Object.freeze(
+      resolvedTargets.map((entry) => Object.freeze({ ...entry })),
+    );
+
+    this.hookTargetResolutionCache.set(hook.id, cachedTargets);
+    return this.cloneHookTargetResolutions(cachedTargets);
   }
 
   getTagAccessor<TTag extends ITag<any, any, any>>(

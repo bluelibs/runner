@@ -97,7 +97,9 @@ Ownership rule:
 - an override only works if the target definition is actually registered in the harness graph
 - the override must be declared by the same owning resource or one of its ancestors
 
-When multiple overrides target the same definition in `test` mode, the outermost declaring resource wins.
+> **Note:** You do not need to pass `mode: "test"` explicitly when your test runner already sets `NODE_ENV=test`. Runner auto-detects `test` mode from the environment unless you override `mode` yourself.
+
+When multiple overrides target the same definition in resolved `test` mode, the outermost declaring resource wins.
 
 ### Full Integration Testing (Full Pipeline)
 
@@ -145,6 +147,10 @@ Important override rules:
 
 - `r.override(base, fn)` creates a replacement definition
 - `.overrides([...])` accepts override definitions only
+- duplicate override targets are allowed only in resolved `test` mode, whether that came from `mode: "test"` or auto-detected `NODE_ENV=test`
+- in `test` mode, ancestor/descendant conflicts resolve to the outermost declaring resource
+- in `test` mode, same-resource duplicates resolve to the last declaration
+- unrelated duplicate override sources still fail fast, even in `test` mode
 - duplicate override targets fail fast outside `test` mode
 - do not place both base and override in `.register([...])`
 

@@ -71,19 +71,71 @@ export type { ResourceCooldownAdmissionTargets } from "./types/resource";
 export type { ITimerHandle, ITimers } from "./types/timers";
 
 /**
- * Minimal tenant identity contract used by Runner's built-in tenant async context.
+ * Minimal identity payload Runner understands for identity-aware framework
+ * behavior.
+ *
+ * `tenantId` and `userId` are both optional at the ambient context level so
+ * apps can establish identity gradually across request/auth boundaries.
+ * Middleware that opts into identity partitioning validates the fields it
+ * actually needs at use time.
  */
-export interface ITenant {
+export interface IIdentity {
   /**
-   * Stable non-empty tenant identifier used to partition tenant-aware state.
+   * Stable tenant identifier used to partition tenant-aware framework state
+   * when present.
    */
-  tenantId: string;
+  tenantId?: string;
+  /**
+   * Stable authenticated user identifier used by user-aware identity scopes
+   * when present.
+   */
+  userId?: string;
+  /**
+   * Optional roles attached to the active identity.
+   *
+   * Runner does not interpret these automatically unless a task identity gate
+   * or `middleware.task.identityChecker` explicitly requests them. If your app
+   * models inherited roles, expand the effective role set before binding the
+   * identity so the gate sees the right access surface.
+   */
+  roles?: readonly string[];
 }
 
 /**
- * Value carried by `asyncContexts.tenant`.
+ * Task-level identity gate requirement used by subtree policy and the built-in
+ * identity checker middleware.
  *
- * Augment this interface when your app needs extra tenant metadata to flow
- * through `tenant.provide()`, `tenant.use()`, and `tenant.tryUse()`.
+ * Mentioning an identity requirement implies tenant identity by default, so
+ * `{ user: true }` means tenant + user and `{ roles: ["ADMIN"] }` still
+ * requires tenant presence.
  */
-export interface TenantContextValue extends ITenant {}
+export interface IdentityRequirementConfig {
+  /**
+   * Tenant identity is required whenever an identity gate is present.
+   *
+   * The field is optional only for ergonomics; omitting it still behaves as
+   * `tenant: true`.
+   */
+  tenant?: true;
+  /**
+   * Require `userId` in addition to `tenantId`.
+   */
+  user?: boolean;
+  /**
+   * Require at least one matching role on the active identity.
+   *
+   * Runner evaluates this as a flat OR list. If your app has role
+   * inheritance, expand the effective roles before the identity reaches
+   * Runner.
+   */
+  roles?: readonly string[];
+}
+
+/**
+ * Value carried by `asyncContexts.identity`.
+ *
+ * This built-in context is the default runtime identity grouper. Apps can also
+ * define their own `r.asyncContext(...).configSchema(...)` accessor and pass it
+ * to `run(..., { identity })` when they want a custom runtime identity source.
+ */
+export interface IdentityContextValue extends IIdentity {}

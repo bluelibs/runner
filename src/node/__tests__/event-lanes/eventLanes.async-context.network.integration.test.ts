@@ -1,7 +1,7 @@
 import { genericError } from "../../../errors";
 import { MemoryEventLaneQueue } from "../../event-lanes/MemoryEventLaneQueue";
 import { eventLanesResource } from "../../event-lanes";
-import { r, run, tags } from "../../..";
+import { r, run } from "../../..";
 
 function readContextValue(
   context: { use(): { value: string } },
@@ -35,11 +35,11 @@ describe("event-lanes async-context policy in network mode", () => {
     const blockedContext = r
       .asyncContext<{ value: string }>("tests-event-lanes-network-ctx-blocked")
       .build();
-    const lane = r.eventLane("tests-event-lanes-network-ctx-none").build();
     const queue = new MemoryEventLaneQueue();
-    const event = r
-      .event("tests-event-lanes-network-ctx-none-event")
-      .tags([tags.eventLane.with({ lane })])
+    const event = r.event("tests-event-lanes-network-ctx-none-event").build();
+    const lane = r
+      .eventLane("tests-event-lanes-network-ctx-none")
+      .applyTo([event])
       .build();
     const seen = {
       allowed: "pending",
@@ -73,7 +73,7 @@ describe("event-lanes async-context policy in network mode", () => {
           profile: "worker",
           mode: "network",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue }],
           },
         }),
@@ -107,15 +107,15 @@ describe("event-lanes async-context policy in network mode", () => {
         value: string;
       }>("tests-event-lanes-network-ctx-allowlisted-blocked")
       .build();
-    const lane = r
-      .eventLane("tests-event-lanes-network-ctx-allowlisted")
-      .asyncContexts([allowedContext.id])
-      .build();
     const queue = new MemoryEventLaneQueue();
     const enqueueSpy = jest.spyOn(queue, "enqueue");
     const event = r
       .event("tests-event-lanes-network-ctx-allowlisted-event")
-      .tags([tags.eventLane.with({ lane })])
+      .build();
+    const lane = r
+      .eventLane("tests-event-lanes-network-ctx-allowlisted")
+      .asyncContexts([allowedContext.id])
+      .applyTo([event])
       .build();
     const seen = {
       allowed: "pending",
@@ -149,7 +149,7 @@ describe("event-lanes async-context policy in network mode", () => {
           profile: "worker",
           mode: "network",
           topology: {
-            profiles: { worker: { consume: [lane] } },
+            profiles: { worker: { consume: [{ lane }] } },
             bindings: [{ lane, queue }],
           },
         }),

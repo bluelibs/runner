@@ -1,10 +1,9 @@
 import type { StoreRegistry } from "../StoreRegistry";
 import type { IDependentNode } from "./findCircularDependencies";
-import type { IEvent } from "../../defs";
 import { isOptional, isEvent, isTag, isTagStartup } from "../../define";
 import {
   resolveApplicableSubtreeResourceMiddlewares,
-  resolveApplicableSubtreeTaskMiddlewares,
+  resolveApplicableSubtreeTaskMiddlewareEntries,
 } from "../../tools/subtreeMiddleware";
 
 const getDependencyId = (
@@ -233,15 +232,16 @@ export function buildDependencyGraph(
           Boolean(middlewareId),
         ),
     );
-    for (const middleware of resolveApplicableSubtreeTaskMiddlewares(
+    for (const entry of resolveApplicableSubtreeTaskMiddlewareEntries(
       subtreeLookup,
       t,
     )) {
+      const { middleware, duplicateKey, dependencyKey } = entry;
       const middlewareId = resolveDefinitionId(registry, middleware);
       if (!middlewareId) {
         continue;
       }
-      if (localMiddlewareIds.has(middlewareId)) {
+      if (localMiddlewareIds.has(duplicateKey)) {
         continue;
       }
 
@@ -249,8 +249,7 @@ export function buildDependencyGraph(
       if (!middlewareNode) {
         continue;
       }
-      node.dependencies[`__subtree.middleware.${middlewareId}`] =
-        middlewareNode;
+      node.dependencies[dependencyKey] = middlewareNode;
     }
   }
 
@@ -359,19 +358,11 @@ export function buildEventEmissionGraph(
 
   // For each hook, if it listens to concrete event(s) and depends on events, add edges listenedEvent -> depEvent
   for (const h of registry.hooks.values()) {
-    const listened: string[] = [];
     const on = h.hook.on;
     if (on === "*") continue; // avoid over-reporting for global hooks
-    if (Array.isArray(on)) {
-      listened.push(
-        ...(on as IEvent[])
-          .map((event) => resolveDefinitionId(registry, event))
-          .filter((eventId): eventId is string => Boolean(eventId)),
-      );
-    } else {
-      const listenedEventId = resolveDefinitionId(registry, on as IEvent)!;
-      listened.push(listenedEventId);
-    }
+    const listened = registry
+      .resolveHookTargets(h.hook)
+      .map((entry) => entry.event.id);
 
     // Collect event dependencies from the hook
     const depEvents: string[] = [];

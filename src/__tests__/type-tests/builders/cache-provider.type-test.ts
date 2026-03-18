@@ -13,6 +13,7 @@ import type {
         get: async (_key: string) => undefined,
         set: async (_key: string, _value: unknown) => undefined,
         clear: async () => undefined,
+        invalidateRefs: async (_refs: readonly string[]) => 0,
         has: async (_key: string) => true,
       });
     })
@@ -29,6 +30,7 @@ import type {
         get: async (_key: string) => undefined,
         set: async (_key: string, _value: unknown) => undefined,
         clear: async () => undefined,
+        invalidateRefs: async (_refs: readonly string[]) => 0,
         has: async (_key: string) => true,
       };
     };
@@ -64,6 +66,7 @@ import type {
       get: async (_key: string) => undefined,
       set: async (_key: string, _value: unknown) => undefined,
       clear: async () => undefined,
+      invalidateRefs: async (_refs: readonly string[]) => 0,
       has: async (_key: string) => "yes",
     }))
     .build();
@@ -79,6 +82,7 @@ import type {
       get: async (_key: string) => options,
       set: async (_key: string, _value: unknown) => undefined,
       clear: async () => undefined,
+      invalidateRefs: async (_refs: readonly string[]) => 0,
     }))
     .build();
 

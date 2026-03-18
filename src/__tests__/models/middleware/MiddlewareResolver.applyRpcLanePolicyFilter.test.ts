@@ -1,5 +1,7 @@
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
 import { symbolRpcLanePolicy } from "../../../defs";
+import { defineTaskMiddleware } from "../../../definers/defineTaskMiddleware";
+import { globalTags } from "../../../globals/globalTags";
 
 const resolveDefinitionId = (reference: unknown): string | undefined => {
   if (typeof reference === "string") {
@@ -171,6 +173,94 @@ describe("MiddlewareResolver-applyRpcLanePolicyFilter", () => {
     } as any;
 
     expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([middleware]);
+  });
+
+  test("applies subtree middleware.identityScope to everywhere task middleware", () => {
+    const scopedMiddleware = defineTaskMiddleware<{
+      identityScope?: { tenant: true };
+    }>({
+      id: "tests-middleware-subtree-identity-scope",
+      tags: [globalTags.identityScoped],
+      run: async ({ next }: any) => next(),
+    });
+
+    const ownerResource = {
+      id: "tests-subtree-identity-scope-owner",
+      middleware: [],
+      subtree: {
+        tasks: {
+          middleware: [scopedMiddleware],
+        },
+        middleware: {
+          identityScope: { tenant: true },
+        },
+      },
+    };
+
+    const store: any = {
+      tasks: new Map(),
+      taskMiddlewares: new Map([
+        [scopedMiddleware.id, { middleware: scopedMiddleware }],
+      ]),
+      resourceMiddlewares: new Map(),
+      resources: new Map([[ownerResource.id, { resource: ownerResource }]]),
+      resolveDefinitionId,
+      getOwnerResourceId: () => ownerResource.id,
+    };
+
+    const resolver = new MiddlewareResolver(store);
+    const task = {
+      id: "tests-task-target-identity-scope",
+      middleware: [],
+    } as any;
+
+    expect(
+      resolver.getEverywhereTaskMiddlewares(task)[0]?.config.identityScope,
+    ).toEqual({ tenant: true });
+  });
+
+  test("leaves untagged subtree-added task middleware unchanged under subtree identityScope", () => {
+    const plainMiddleware = defineTaskMiddleware({
+      id: "tests-middleware-subtree-untagged-identity-scope",
+      run: async ({ next }: any) => next(),
+    });
+
+    const ownerResource = {
+      id: "tests-subtree-untagged-identity-scope-owner",
+      middleware: [],
+      subtree: {
+        tasks: {
+          middleware: [plainMiddleware],
+        },
+        middleware: {
+          identityScope: { tenant: true },
+        },
+      },
+    };
+
+    const store: any = {
+      tasks: new Map(),
+      taskMiddlewares: new Map([
+        [plainMiddleware.id, { middleware: plainMiddleware }],
+      ]),
+      resourceMiddlewares: new Map(),
+      resources: new Map([[ownerResource.id, { resource: ownerResource }]]),
+      resolveDefinitionId,
+      getOwnerResourceId: () => ownerResource.id,
+    };
+
+    const resolver = new MiddlewareResolver(store);
+    const task = {
+      id: "tests-task-target-untagged-identity-scope",
+      middleware: [],
+    } as any;
+
+    expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([
+      plainMiddleware,
+    ]);
+    expect(resolver.getEverywhereTaskMiddlewares(task)[0]).toBe(
+      plainMiddleware,
+    );
   });
 
   test("caches applicable task middlewares when store is locked", () => {

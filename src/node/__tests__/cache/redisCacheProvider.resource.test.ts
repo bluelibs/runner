@@ -187,8 +187,6 @@ function createFakeRedisClient() {
 }
 
 describe("redis cache provider resource", () => {
-  let persistentAppId = 0;
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -305,7 +303,7 @@ describe("redis cache provider resource", () => {
 
     const createApp = () =>
       r
-        .resource(`tests-redis-cache-persistent-app-${++persistentAppId}`)
+        .resource("tests-redis-cache-persistent-app")
         .register([
           resources.cache.with({
             provider: resources.redisCacheProvider.with({
@@ -331,6 +329,63 @@ describe("redis cache provider resource", () => {
     try {
       expect(secondRuntime.value).toBe("VALUE");
       expect(executionCount).toBe(1);
+    } finally {
+      await secondRuntime.dispose();
+    }
+  });
+
+  it("invalidates redis-backed refs across distinct runtime instances", async () => {
+    const redis = createFakeRedisClient();
+    let executionCount = 0;
+
+    const cachedTask = r
+      .task<{ userId: string }>("tests-redis-cache-refs-persistent")
+      .middleware([
+        middleware.task.cache.with({
+          keyBuilder: (_taskId, input) => ({
+            cacheKey: `user:${input.userId}:full`,
+            refs: [`user:${input.userId}`],
+          }),
+        }),
+      ])
+      .run(async (input) => {
+        executionCount += 1;
+        return `${input.userId}:${executionCount}`;
+      })
+      .build();
+
+    const createApp = () =>
+      r
+        .resource("tests-redis-cache-refs-app")
+        .register([
+          resources.cache.with({
+            provider: resources.redisCacheProvider.with({
+              prefix: "tests:redis-cache-refs-shared",
+              redis,
+            }),
+          }),
+          middleware.task.cache,
+          cachedTask,
+        ])
+        .init(async () => "ok")
+        .build();
+
+    const firstRuntime = await run(createApp());
+    await firstRuntime.runTask(cachedTask, { userId: "u1" });
+    await firstRuntime.dispose();
+
+    const secondRuntime = await run(createApp());
+
+    try {
+      const cache = secondRuntime.getResourceValue(resources.cache);
+      expect(await secondRuntime.runTask(cachedTask, { userId: "u1" })).toBe(
+        "u1:1",
+      );
+      expect(await cache.invalidateRefs("user:u1")).toBe(1);
+      expect(await secondRuntime.runTask(cachedTask, { userId: "u1" })).toBe(
+        "u1:2",
+      );
+      expect(executionCount).toBe(2);
     } finally {
       await secondRuntime.dispose();
     }

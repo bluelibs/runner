@@ -72,4 +72,47 @@ describe("runner.debug.middlewareInterceptorResource (unit)", () => {
     expect(interceptCalls.some((c) => c.kind === "task")).toBe(true);
     expect(interceptCalls.some((c) => c.kind === "resource")).toBe(true);
   });
+
+  it("skips framework-owned task and resource definitions", async () => {
+    const messages: string[] = [];
+
+    const logger = {
+      info: async (message: string) => {
+        messages.push(String(message));
+      },
+    } as any;
+
+    const middlewareManager = {
+      intercept: (kind: "task" | "resource", interceptor: any) => {
+        if (kind === "resource") {
+          return interceptor(async (_input: any) => undefined, {
+            resource: {
+              definition: { id: "runner.resources.temporal" },
+              config: {},
+            },
+            next: async () => undefined,
+          });
+        }
+
+        return interceptor(async (_input: any) => undefined, {
+          task: { definition: { id: "system.tasks.bootstrap" }, input: {} },
+          next: async () => undefined,
+        });
+      },
+    } as any;
+
+    await middlewareInterceptorResource.init?.(
+      undefined as any,
+      {
+        logger,
+        debugConfig: "verbose",
+        middlewareManager,
+      } as any,
+      undefined as any,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(messages).toEqual([]);
+  });
 });

@@ -53,6 +53,11 @@ export const journalKeys = {
 
 export const timeoutTaskMiddleware = defineTaskMiddleware({
   id: "timeout",
+  meta: {
+    title: "Timeout",
+    description:
+      "Aborts task execution when it exceeds the configured time budget.",
+  },
   throws: [middlewareTimeoutError],
   configSchema: timeoutConfigPattern,
   async run({ task, next, journal }, _deps, config: TimeoutMiddlewareConfig) {
@@ -113,6 +118,11 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
 
 export const timeoutResourceMiddleware = defineResourceMiddleware({
   id: "timeout",
+  meta: {
+    title: "Timeout",
+    description:
+      "Aborts resource init execution when it exceeds the configured time budget.",
+  },
   throws: [middlewareTimeoutError],
   configSchema: timeoutConfigPattern,
   async run({ resource, next }, _deps, config: TimeoutMiddlewareConfig) {

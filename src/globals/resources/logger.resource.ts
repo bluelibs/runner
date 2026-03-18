@@ -1,6 +1,5 @@
 import { defineResource } from "../../definers/defineResource";
 import type { Logger } from "../../models/Logger";
-import { globalTags } from "../globalTags";
 
 /**
  * The framework's structured logger.
@@ -54,10 +53,8 @@ import { globalTags } from "../globalTags";
 export const loggerResource = defineResource<void, Promise<Logger>>({
   id: "logger",
   meta: {
-    // We skip system tag for logger because it's part of the utility toolkit.
     title: "Logger",
     description:
       "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a runner.log event for each log.",
   },
-  tags: [globalTags.system],
 });

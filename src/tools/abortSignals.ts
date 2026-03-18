@@ -16,7 +16,10 @@ export interface AbortSignalLink {
  * Normalizes the platform-specific abort reason shape into a human-readable
  * message that can be surfaced through Runner's typed cancellation errors.
  */
-function toAbortReason(signal: AbortSignal, fallback: string): string {
+export function getAbortSignalReason(
+  signal: AbortSignal,
+  fallback: string,
+): string {
   const reason = signal.reason;
   if (typeof reason === "string" && reason.length > 0) {
     return reason;
@@ -41,7 +44,7 @@ export function createCancellationErrorFromSignal(
   fallbackReason = "Operation cancelled",
 ): Error {
   return cancellationError.new({
-    reason: toAbortReason(signal, fallbackReason),
+    reason: getAbortSignalReason(signal, fallbackReason),
   });
 }
 

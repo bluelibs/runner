@@ -5,7 +5,7 @@ import { runtimeSource } from "../../types/runtimeSource";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 
 describe("event helpers", () => {
-  it("isOneOf checks membership by id", () => {
+  it("returns false for identity-less emissions even when raw ids match", () => {
     const e1 = defineEvent<{ a: string }>({ id: "ev-a" });
     const e2 = defineEvent<{ b: number }>({ id: "ev-b" });
 
@@ -24,9 +24,15 @@ describe("event helpers", () => {
       tags: [],
     };
 
-    const emissionC: IEventEmission<{ c: boolean }> = {
-      id: "ev-c",
-      data: { c: true },
+    expect(isOneOf(emissionA, onAnyOf(e1, e2))).toBe(false);
+  });
+
+  it("matches emissions that retain Runner definition identity", () => {
+    const event = defineEvent<{ a: string }>({ id: "ev-a" });
+
+    const emission: IEventEmission<{ a: string }> = {
+      id: "ev-a",
+      data: { a: "x" },
       timestamp: new Date(),
       signal: new AbortController().signal,
       source: runtimeSource.runtime("test"),
@@ -37,10 +43,12 @@ describe("event helpers", () => {
         return false;
       },
       tags: [],
+      [symbolDefinitionIdentity]: ((
+        event as unknown as Record<symbol, unknown>
+      )[symbolDefinitionIdentity] ?? undefined) as object | undefined,
     };
 
-    expect(isOneOf(emissionA, onAnyOf(e1, e2))).toBe(true);
-    expect(isOneOf(emissionC, onAnyOf(e1, e2))).toBe(false);
+    expect(isOneOf(emission, onAnyOf(event))).toBe(true);
   });
 
   it("distinguishes sibling events that share a local id when emissions carry identity", () => {

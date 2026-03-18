@@ -191,6 +191,89 @@ describe("durable: RabbitMQQueue", () => {
     );
   });
 
+  it("uses x-delivery-count headers to preserve attempts across worker restarts", async () => {
+    await queue.init();
+    let consumer:
+      | ((
+          msg: {
+            content: Buffer;
+            properties?: { headers?: Record<string, unknown> };
+          } | null,
+        ) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+
+    const firstHandler = jest.fn(async () => {});
+    await queue.consume(firstHandler);
+    await consumer?.({
+      content: Buffer.from(
+        JSON.stringify({
+          id: "attempt-restart",
+          type: "execute",
+          payload: { a: 1 },
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: new Date().toISOString(),
+        }),
+      ),
+    });
+    expect(firstHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "attempt-restart",
+        attempts: 1,
+      }),
+    );
+
+    const restartedQueue = new RabbitMQQueue({
+      url: "amqp://localhost",
+      queue: {
+        name: "test",
+        quorum: true,
+        deadLetter: "dlq",
+        messageTtl: 1000,
+      },
+      logger: { error: loggerError },
+    });
+    await restartedQueue.init();
+
+    let restartedConsumer:
+      | ((
+          msg: {
+            content: Buffer;
+            properties?: { headers?: Record<string, unknown> };
+          } | null,
+        ) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      restartedConsumer = h;
+    });
+
+    const restartedHandler = jest.fn(async () => {});
+    await restartedQueue.consume(restartedHandler);
+    await restartedConsumer?.({
+      content: Buffer.from(
+        JSON.stringify({
+          id: "attempt-restart",
+          type: "execute",
+          payload: { a: 1 },
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: new Date().toISOString(),
+        }),
+      ),
+      properties: { headers: { "x-delivery-count": 1 } },
+    });
+
+    expect(restartedHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "attempt-restart",
+        attempts: 2,
+      }),
+    );
+  });
+
   it("nacks messages without a valid id and skips handler", async () => {
     await queue.init();
     let consumer:

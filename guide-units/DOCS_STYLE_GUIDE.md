@@ -144,7 +144,7 @@ Useful callouts:
 
 - Use at most one per major section.
 - Keep them relevant and brief.
-- Skip them in `AI.md`, quick references, troubleshooting, and API-style sections.
+- Skip them in `COMPACT_GUIDE.md`, quick references, troubleshooting, and API-style sections.
 - If the quote makes the section longer without making it clearer, cut it.
 
 ## Composition System
@@ -170,9 +170,9 @@ Supplementary doc rules:
 - supplementary docs should link back to the main README when that helps navigation
 - use full URLs only for external resources
 
-## AI.md
+## COMPACT_GUIDE.md
 
-[AI.md](../readmes/AI.md) is the token-efficient field guide.
+[COMPACT_GUIDE.md](../readmes/COMPACT_GUIDE.md) is the token-efficient field guide.
 
 - keep it concise
 - omit flavor text and runtime quotes
@@ -189,7 +189,7 @@ Before finishing a docs change:
 - partial examples clearly state assumptions
 - generated docs were rebuilt if composition inputs changed
 - links and anchors still make sense
-- `AI.md` was updated if the documentation contract changed
+- `COMPACT_GUIDE.md` was updated if the documentation contract changed
 - no generated file was edited manually
 
 ## Default Standard

@@ -51,4 +51,48 @@ import { RunnerMode } from "../../../types/runner";
       "invalid-policy-entry",
     ])
     .build();
+
+  r.resource("types-subtree-task-identity-scope")
+    .subtree({
+      middleware: {
+        identityScope: { tenant: true, user: true },
+      },
+    })
+    .build();
+
+  r.resource("types-subtree-task-identity-scope-invalid")
+    .subtree({
+      middleware: {
+        // @ts-expect-error subtree task identityScope requires tenant: true
+        identityScope: { user: true },
+      },
+    })
+    .build();
+
+  r.resource("types-subtree-task-identity-gate")
+    .subtree({
+      tasks: {
+        identity: { user: true, roles: ["ADMIN", "CUSTOMER"] },
+      },
+    })
+    .build();
+
+  r.resource("types-subtree-task-identity-gate-tenant-default")
+    .subtree({
+      tasks: {
+        identity: { roles: ["ADMIN"] },
+      },
+    })
+    .build();
+
+  r.resource("types-subtree-task-identity-gate-invalid")
+    .subtree({
+      tasks: {
+        identity: {
+          // @ts-expect-error subtree task identity roles must be string[]
+          roles: [1],
+        },
+      },
+    })
+    .build();
 }

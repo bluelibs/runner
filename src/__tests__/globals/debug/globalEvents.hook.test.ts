@@ -112,7 +112,7 @@ describe("runner.debug.globalEvent.hook", () => {
     expect(eventLog?.data).toBeUndefined();
   });
 
-  it("does not log events tagged as system", async () => {
+  it("keeps logging user events even when they use the deprecated system tag", async () => {
     const logs: Array<{ level: string; message: any }> = [];
 
     const collector = defineResource({
@@ -154,6 +154,6 @@ describe("runner.debug.globalEvent.hook", () => {
     const messages = logs.map((l) => String(l.message));
     expect(
       messages.some((m) => /Event .*tests-global-event-system emitted/.test(m)),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

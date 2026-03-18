@@ -1,8 +1,6 @@
 import type { IsolationChannel } from "../../defs";
-import { isolateViolationError, visibilityViolationError } from "../../errors";
 import type { StoreRegistry } from "../StoreRegistry";
 import { getAccessViolation } from "./accessEvaluator";
-import type { AccessViolation } from "./contracts";
 import type { VisibilityTrackerState } from "./state";
 import {
   collectDependencyEntries,
@@ -15,6 +13,7 @@ import {
   resolveReferenceIds,
   resolveTagReferenceIds,
 } from "./visibilityValidationReferences";
+import { throwAccessViolation } from "./throwAccessViolation";
 
 export function validateVisibility(
   state: VisibilityTrackerState,
@@ -50,20 +49,22 @@ function validateHookEventVisibility(
       continue;
     }
 
-    const events =
-      hook.on === "*"
-        ? Array.from(registry.events.values()).map((entry) => entry.event)
-        : Array.isArray(hook.on)
-          ? hook.on
-          : [hook.on];
+    if (hook.on === "*") {
+      const events = Array.from(registry.events.values()).map(
+        (entry) => entry.event,
+      );
 
-    validateReferenceIds(state, {
-      consumerId: hook.id,
-      consumerType: "Hook",
-      channel: "listening",
-      targetIds: resolveReferenceIds(registry, events),
-      targetType: "Event",
-    });
+      validateReferenceIds(state, {
+        consumerId: hook.id,
+        consumerType: "Hook",
+        channel: "listening",
+        targetIds: resolveReferenceIds(registry, events),
+        targetType: "Event",
+      });
+      continue;
+    }
+
+    registry.resolveHookTargets(hook);
   }
 }
 
@@ -122,41 +123,6 @@ function validateReferenceIds(
         typeof targetType === "function" ? targetType(targetId) : targetType,
       consumerId,
       consumerType,
-    });
-  }
-}
-
-function throwAccessViolation(data: {
-  violation: AccessViolation;
-  targetId: string;
-  targetType: string;
-  consumerId: string;
-  consumerType: string;
-}): void {
-  const { violation, targetId, targetType, consumerId, consumerType } = data;
-  const toDisplayId = (id: string): string => id;
-  const displayTargetId = toDisplayId(targetId);
-  const displayConsumerId = toDisplayId(consumerId);
-
-  if (violation.kind === "visibility") {
-    visibilityViolationError.throw({
-      targetId: displayTargetId,
-      targetType,
-      ownerResourceId: toDisplayId(violation.targetOwnerResourceId),
-      consumerId: displayConsumerId,
-      consumerType,
-      exportedIds: violation.exportedIds.map(toDisplayId),
-    });
-  } else {
-    isolateViolationError.throw({
-      targetId: displayTargetId,
-      targetType,
-      consumerId: displayConsumerId,
-      consumerType,
-      policyResourceId: toDisplayId(violation.policyResourceId),
-      matchedRuleType: violation.matchedRuleType,
-      matchedRuleId: toDisplayId(violation.matchedRuleId),
-      channel: violation.channel,
     });
   }
 }

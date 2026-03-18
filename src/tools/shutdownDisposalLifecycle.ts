@@ -1,4 +1,4 @@
-import { IEvent, IEventEmissionCallOptions } from "../defs";
+import { IEvent, IEventEmissionCallOptions, RegisterableItem } from "../defs";
 import { globalEvents } from "../globals/globalEvents";
 import { Logger } from "../models/Logger";
 import { RuntimeCallSource } from "../types/runtimeSource";
@@ -8,15 +8,17 @@ import {
   resolveShutdownDrainWarningDecision,
   ShutdownDrainWaitResult,
 } from "./shutdownDrainWarning";
+import { ForceDisposalController } from "./ForceDisposalController";
 
 type LifecycleStore = {
   beginCoolingDown(): void;
   beginDisposing(): void;
-  cooldown(): Promise<void>;
+  cooldown(options?: { shouldStop?: () => boolean }): Promise<void>;
   beginDrained(): void;
   waitForDrain(timeoutMs: number): Promise<boolean>;
-  findIdByDefinition(reference: unknown): string;
-  findDefinitionById(id: string): unknown;
+  resolveRegisteredDefinition<TDefinition extends RegisterableItem>(
+    definition: TDefinition,
+  ): TDefinition;
 };
 
 type LifecycleEventManager = {
@@ -37,6 +39,7 @@ export type ShutdownDisposalLifecycleInput = {
     drainingBudgetMs: number;
     cooldownWindowMs: number;
   };
+  forceDisposal: ForceDisposalController;
   disposeAll: () => Promise<void>;
 };
 
@@ -53,19 +56,49 @@ export async function runShutdownDisposalLifecycle(
   input: ShutdownDisposalLifecycleInput,
 ): Promise<void> {
   const disposalBudget = createDisposalBudget(input.dispose.totalBudgetMs);
+  if (input.forceDisposal.isRequested) {
+    await disposeImmediately(input);
+    return;
+  }
+
   input.store.beginCoolingDown();
 
-  await input.store.cooldown();
-  await waitForCooldownWindow(disposalBudget, input.dispose.cooldownWindowMs);
+  await input.store.cooldown({
+    shouldStop: () => input.forceDisposal.isRequested,
+  });
+  if (input.forceDisposal.isRequested) {
+    await disposeImmediately(input);
+    return;
+  }
+
+  await waitForCooldownWindow(
+    disposalBudget,
+    input.dispose.cooldownWindowMs,
+    input.forceDisposal,
+  );
+  if (input.forceDisposal.isRequested) {
+    await disposeImmediately(input);
+    return;
+  }
+
   // Freeze admissions only after all cooldown hooks had a chance to stop ingress
   // and register any shutdown-specific source allowances.
   input.store.beginDisposing();
+  if (input.forceDisposal.isRequested) {
+    await disposeImmediately(input);
+    return;
+  }
+
   await emitLifecycleEvent(
     input.store,
     input.eventManager,
     globalEvents.disposing,
     input.runtimeLifecycleSource,
   );
+  if (input.forceDisposal.isRequested) {
+    await disposeImmediately(input);
+    return;
+  }
 
   const effectiveDrainBudgetMs = disposalBudget.capByRemainingBudget(
     input.dispose.drainingBudgetMs,
@@ -74,6 +107,11 @@ export async function runShutdownDisposalLifecycle(
     input.store,
     effectiveDrainBudgetMs,
   );
+  if (input.forceDisposal.isRequested) {
+    await disposeImmediately(input);
+    return;
+  }
+
   const drainWarning = resolveShutdownDrainWarningDecision({
     requestedDrainBudgetMs: input.dispose.drainingBudgetMs,
     effectiveDrainBudgetMs,
@@ -106,6 +144,10 @@ export async function runShutdownDisposalLifecycle(
     globalEvents.drained,
     input.runtimeLifecycleSource,
   );
+  if (input.forceDisposal.isRequested) {
+    await disposeImmediately(input);
+    return;
+  }
 
   await input.disposeAll();
 }
@@ -117,6 +159,9 @@ export async function disposeRunArtifacts(
     input.onBeforeStoreDispose();
     await input.store.dispose();
   } finally {
+    // Safety nets and shutdown hooks must be released even if store disposal
+    // fails, otherwise a broken shutdown can leave process-level observers
+    // hanging around and interfering with later runs.
     input.takeUnhookProcessSafetyNets()?.();
     input.takeUnhookShutdown()?.();
   }
@@ -128,8 +173,9 @@ async function emitLifecycleEvent(
   event: (typeof globalEvents)[keyof typeof globalEvents],
   runtimeLifecycleSource: RuntimeCallSource,
 ): Promise<void> {
-  const canonicalId = store.findIdByDefinition(event);
-  const registeredEvent = store.findDefinitionById(canonicalId) as IEvent<void>;
+  const registeredEvent = store.resolveRegisteredDefinition(
+    event,
+  ) as IEvent<void>;
 
   await eventManager.emitLifecycle(registeredEvent, undefined, {
     source: runtimeLifecycleSource,
@@ -141,15 +187,28 @@ async function emitLifecycleEvent(
 async function waitForCooldownWindow(
   disposalBudget: ReturnType<typeof createDisposalBudget>,
   cooldownWindowMs: number,
+  forceDisposal: ForceDisposalController,
 ): Promise<void> {
   const effectiveCooldownWindowMs =
     disposalBudget.capByRemainingBudget(cooldownWindowMs);
-  if (effectiveCooldownWindowMs <= 0) {
+  if (effectiveCooldownWindowMs <= 0 || forceDisposal.isRequested) {
     return;
   }
 
   await new Promise<void>((resolve) => {
-    setTimeout(resolve, effectiveCooldownWindowMs);
+    let finished = false;
+    const finish = () => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+      clearTimeout(timeout);
+      resolve();
+    };
+    const timeout = setTimeout(finish, effectiveCooldownWindowMs);
+
+    void forceDisposal.whenRequested.then(finish);
   });
 }
 
@@ -165,4 +224,11 @@ async function waitForDrainWithinBudget(
     completed: true,
     drained: await waitForDisposeDrainBudget(store, effectiveDrainBudgetMs),
   };
+}
+
+async function disposeImmediately(
+  input: ShutdownDisposalLifecycleInput,
+): Promise<void> {
+  input.store.beginDisposing();
+  await input.disposeAll();
 }

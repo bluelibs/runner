@@ -201,4 +201,23 @@ describe("VisibilityTracker deny mode", () => {
       channel: "dependencies",
     });
   });
+
+  it("uses the dependencies channel by default in isAccessible", () => {
+    const owner = defineResource({ id: "tracker-default-access-owner" });
+    const blocked = defineTask({
+      id: "tracker-default-access-blocked",
+      run: async () => "blocked",
+    });
+    const consumer = defineTask({
+      id: "tracker-default-access-consumer",
+      run: async () => "consumer",
+    });
+
+    tracker.recordResource(owner.id);
+    tracker.recordOwnership(owner.id, blocked);
+    tracker.recordOwnership(owner.id, consumer);
+    tracker.recordIsolation(owner.id, { deny: [blocked] });
+
+    expect(tracker.isAccessible(blocked.id, consumer.id)).toBe(false);
+  });
 });

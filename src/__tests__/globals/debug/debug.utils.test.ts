@@ -1,13 +1,12 @@
-import { hasSystemTag } from "../../../globals/resources/debug/utils";
+import { isFrameworkDefinition } from "../../../globals/resources/debug/utils";
 import { getConfig } from "../../../globals/resources/debug/types";
 import { debug } from "../../../globals/debug";
 import { debugTag } from "../../../globals/resources/debug/debug.tag";
-import { globalTags } from "../../../globals/globalTags";
 import { defineResource } from "../../../define";
 import { run } from "../../../run";
 import { debugConfig } from "../../../globals/resources/debug/debugConfig.resource";
 import { safeStringify } from "../../../models/utils/safeStringify";
-import { ITaggable } from "../../../defs";
+import type { ITaggable } from "../../../defs";
 
 const { normal: levelNormal, verbose: levelVerbose } = debug.levels;
 
@@ -47,11 +46,10 @@ describe("debug utils and types", () => {
     expect(result).toContain('"arr": "[Array]"');
   });
 
-  it("hasSystemOrLifecycleTag detects system and lifecycle tags", () => {
-    const sys: ITaggable = { tags: [globalTags.system] };
-    const none: ITaggable = { tags: [] };
-    expect(hasSystemTag(sys)).toBe(true);
-    expect(hasSystemTag(none)).toBe(false);
+  it("isFrameworkDefinition detects reserved framework namespaces", () => {
+    expect(isFrameworkDefinition({ id: "system.events.ready" })).toBe(true);
+    expect(isFrameworkDefinition({ id: "runner.resources.logger" })).toBe(true);
+    expect(isFrameworkDefinition({ id: "app.tasks.userTask" })).toBe(false);
   });
 
   it("getConfig resolves normal, verbose and overrides via taggable", () => {

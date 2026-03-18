@@ -270,6 +270,134 @@ Lightweight mode is for propagation, not runtime loop detection.
 
 ---
 
+## Async Context For Business State
+
+Use `r.asyncContext(...)` when you need request-local business state such as tenant identity, auth claims, locale, or request ids.
+
+Unlike `asyncContexts.execution`, this is your application contract. You define the value shape, decide whether it is required, and optionally define how it crosses transport boundaries. Inside one async execution tree, the active value also stays visible to nested `run()` work, so a tenant or request context can flow into a nested runtime when you intentionally compose things that way.
+
+### Smallest Useful Pattern
+
+```typescript
+import { Match, r, run } from "@bluelibs/runner";
+
+const requestContext = r
+  .asyncContext("requestContext")
+  .schema({
+    requestId: Match.NonEmptyString,
+    tenantId: Match.NonEmptyString,
+    locale: Match.Optional(String),
+  })
+  .build();
+
+const listProjects = r
+  .task("listProjects")
+  .dependencies({ requestContext })
+  .middleware([requestContext.require()])
+  .run(async (_input, { requestContext }) => {
+    const request = requestContext.use();
+
+    return {
+      tenantId: request.tenantId,
+      requestId: request.requestId,
+      locale: request.locale ?? "en",
+    };
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([requestContext, listProjects])
+  .build();
+
+const runtime = await run(app);
+
+await requestContext.provide(
+  {
+    requestId: "req_123",
+    tenantId: "acme",
+    locale: "en",
+  },
+  () => runtime.runTask(listProjects),
+);
+```
+
+Why this pattern works:
+
+- `provide(value, fn)` binds the value to the current async execution tree before `fn` runs.
+- nested `run()` calls created inside that same async execution tree inherit the active value too, which is rare but useful for tenant-aware orchestration.
+- `.schema(...)` validates the value when you call `provide(...)`, so bad ingress data fails fast.
+- registering the context makes it injectable through `.dependencies({ requestContext })`.
+- `requestContext.require()` is a shorthand for `middleware.task.requireContext.with({ context: requestContext })`.
+
+### Access Patterns
+
+Pick the accessor that matches how strict the call site should be:
+
+- `use()`: read the value and throw immediately when it is missing.
+- `tryUse()`: read the value when present, otherwise return `undefined`.
+- `has()`: check whether the context is active.
+- `require()`: turn missing context into middleware-level failure before task logic starts.
+- `optional()`: inject the context as an optional dependency in apps where registration is conditional.
+
+```typescript
+const maybeAudit = r
+  .task("maybeAudit")
+  .dependencies({ requestContext: requestContext.optional() })
+  .run(async (_input, { requestContext }) => {
+    return requestContext?.tryUse()?.requestId;
+  })
+  .build();
+```
+
+Use `use()` or `require()` when continuing without context would be a correctness bug. Use `tryUse()` or `has()` in shared helpers, optional integrations, or platform-neutral code paths.
+
+### Transport and Serialization
+
+By default, async contexts use Runner's serializer. That is enough for in-process flows and many transport cases.
+
+Add custom `serialize(...)` and `parse(...)` only when you need a specific wire format for HTTP or remote-lane boundaries:
+
+```typescript
+import { Match, Serializer, createHttpClient, r } from "@bluelibs/runner";
+
+const requestContextShape = Match.Object({
+  requestId: Match.NonEmptyString,
+  tenantId: Match.NonEmptyString,
+});
+
+const requestContext = r
+  .asyncContext("requestContext")
+  .schema(requestContextShape)
+  .serialize((value) => JSON.stringify(value))
+  .parse((raw) => requestContextShape.parse(JSON.parse(raw)))
+  .build();
+
+const client = createHttpClient({
+  baseUrl: "https://api.example.com",
+  serializer: new Serializer(),
+  contexts: [requestContext],
+});
+
+await requestContext.provide(
+  { requestId: "req_42", tenantId: "acme" },
+  () => client.task("listProjects"),
+);
+```
+
+Transport rules:
+
+- define `.schema(...)` before custom `.serialize(...)` or `.parse(...)` so the builder can keep the resolved value type aligned.
+- `createHttpClient({ contexts: [...] })` snapshots only the contexts you list.
+- remote lanes hydrate only registered contexts that are also allowlisted with `eventLane.asyncContexts([...])` or `rpcLane.asyncContexts([...])`.
+- custom serialization is about transport compatibility, not normal in-process access.
+
+> **Platform Note:** User-defined async contexts require `AsyncLocalStorage`. They work on the Node build and on compatible Bun/Deno universal runtimes that expose async-local storage. In browsers and other runtimes without it, `use()`, `tryUse()`, and `provide()` are not available for user-defined `r.asyncContext(...)` contracts.
+
+For Runner's identity-aware security behavior, prefer the pattern in [`04c-security`](./04c-security.md): use the built-in `asyncContexts.identity` when `{ tenantId }` is enough, or pass your own registered `r.asyncContext(...).configSchema(...)` to `run(..., { identity })` when you need a richer contract.
+
+---
+
 ## Cron Scheduling
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.

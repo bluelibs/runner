@@ -58,7 +58,7 @@ import { resources, tags } from "@bluelibs/runner/node";
 const durable = resources.memoryWorkflow.fork("app-durable");
 
 const onboarding = r
-  .task("app.workflows.onboarding")
+  .task("onboarding")
   .dependencies({ durable })
   .tags([
     tags.durableWorkflow.with({
@@ -96,7 +96,7 @@ import { resources, tags } from "@bluelibs/runner/node";
 const durable = resources.memoryWorkflow.fork("app-durable");
 
 const approveOrder = r
-  .task("app.workflows.approveOrder")
+  .task("approve-order")
   .dependencies({ durable })
   .tags([tags.durableWorkflow.with({ category: "orders" })])
   .run(async (input: { orderId: string }, { durable }) => {
@@ -107,7 +107,7 @@ const approveOrder = r
   .build();
 
 const api = r
-  .resource("app.api")
+  .resource("api")
   .register([resources.durable, durable.with({ worker: false }), approveOrder])
   .dependencies({ durable, approveOrder })
   .init(async (_cfg, { durable, approveOrder }) => {

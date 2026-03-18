@@ -376,4 +376,61 @@ describe("RedisCache", () => {
     await (nanCache as any).adjustTrackedBytes("tests:redis:nan:bytes", 1);
     await (cache as any).clear();
   });
+
+  it("invalidates ref-indexed entries and deduplicates overlapping refs", async () => {
+    const redis = new FakeRedis();
+    const firstCache = new RedisCache({
+      options: {},
+      prefix: "tests:redis:refs",
+      redis,
+      serializer,
+      taskId: "tests-redis-refs-first",
+    });
+    const secondCache = new RedisCache({
+      options: {},
+      prefix: "tests:redis:refs",
+      redis,
+      serializer,
+      taskId: "tests-redis-refs-second",
+    });
+
+    await firstCache.set("user-full", "A", { refs: ["user:1", "org:1"] });
+    await secondCache.set("user-summary", "B", { refs: ["user:1"] });
+
+    await expect(firstCache.invalidateRefs(["user:1", "org:1"])).resolves.toBe(
+      1,
+    );
+    await expect(secondCache.invalidateRefs(["user:1"])).resolves.toBe(1);
+    await expect(firstCache.has("user-full")).resolves.toBe(false);
+    await expect(secondCache.has("user-summary")).resolves.toBe(false);
+  });
+
+  it("handles missing or malformed stored refs and cleans removed bindings", async () => {
+    const redis = new FakeRedis();
+    const cache = new RedisCache({
+      options: {},
+      prefix: "tests:redis:ref-bookkeeping",
+      redis,
+      serializer,
+      taskId: "tests-redis-ref-bookkeeping",
+    });
+
+    await expect((cache as any).getStoredRefs("missing")).resolves.toEqual([]);
+
+    const malformedEntryId = "malformed-entry";
+    await redis.hset((cache as any).entryRefsKey, malformedEntryId, "not-json");
+    await expect(
+      (cache as any).getStoredRefs(malformedEntryId),
+    ).resolves.toEqual([]);
+
+    await cache.set("user-full", "A", { refs: ["user:1"] });
+    await (cache as any).replaceRefBindings(
+      (cache as any).createEntryId("user-full"),
+      ["user:1"],
+      [],
+    );
+    await expect(
+      redis.smembers((cache as any).getRefMembersKey("user:1")),
+    ).resolves.toEqual([]);
+  });
 });

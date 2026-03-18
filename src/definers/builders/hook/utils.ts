@@ -1,27 +1,16 @@
-import type {
-  DependencyMapType,
-  IEventDefinition,
-  ITaskMeta,
-} from "../../../defs";
+import type { DependencyMapType, ITaskMeta } from "../../../defs";
 import type { BuilderState } from "./types";
+import type { ValidOnTarget } from "./fluent-builder.interface";
 
 /**
  * Clones and patches the builder state immutably.
  */
 export function clone<
   TDeps extends DependencyMapType,
-  TOn extends
-    | "*"
-    | IEventDefinition<any>
-    | readonly IEventDefinition<any>[]
-    | undefined,
+  TOn extends ValidOnTarget | undefined,
   TMeta extends ITaskMeta,
   TNextDeps extends DependencyMapType = TDeps,
-  TNextOn extends
-    | "*"
-    | IEventDefinition<any>
-    | readonly IEventDefinition<any>[]
-    | undefined = TOn,
+  TNextOn extends ValidOnTarget | undefined = TOn,
   TNextMeta extends ITaskMeta = TMeta,
 >(
   s: BuilderState<TDeps, TOn, TMeta>,

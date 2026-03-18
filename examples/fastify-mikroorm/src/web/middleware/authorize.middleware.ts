@@ -13,14 +13,14 @@ export type AuthorizeConfig = {
  * - Optionally enforces that the user has one of the allowed roles
  *
  * Role detection strategy:
- * - Prefer `fastifyContext.use().user?.role`
- * - Fallback to request header `x-user-role`
+ * - Only trust `fastifyContext.use().user?.role`
+ * - Never trust request headers for authorization decisions
  */
 export const authorize = r.middleware
   .task("authorize")
   .configSchema<AuthorizeConfig>({ parse: (x: unknown) => x as AuthorizeConfig })
   .run(async ({ task, next }, _deps, config) => {
-    const { user, request } = fastifyContext.use();
+    const { user } = fastifyContext.use();
 
     const required = config?.required ?? true;
     if (required && !user) {
@@ -28,8 +28,7 @@ export const authorize = r.middleware
     }
 
     if (config?.roles && config.roles.length > 0) {
-      const hdr = request?.headers?.["x-user-role"] as string | undefined;
-      const role = (user as any)?.role || hdr;
+      const role = (user as { role?: string } | null | undefined)?.role;
       if (!role || !config.roles.includes(role)) {
         throw new HTTPError(403, "Forbidden");
       }

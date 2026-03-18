@@ -182,4 +182,26 @@ describe("LifecycleAdmissionController", () => {
     releaseTask?.();
     await pendingTask;
   });
+
+  it("cancels active drain waiters when shutdown is force-escalated", async () => {
+    const controller = new LifecycleAdmissionController();
+    let releaseTask: (() => void) | undefined;
+
+    const pendingTask = controller.trackTaskExecution(
+      runtimeSource.task("task-force-cancel"),
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseTask = resolve;
+        }),
+    );
+
+    const waitForDrainPromise = controller.waitForDrain(1_000);
+
+    controller.cancelDrainWaiters();
+
+    await expect(waitForDrainPromise).resolves.toBe(false);
+
+    releaseTask?.();
+    await pendingTask;
+  });
 });

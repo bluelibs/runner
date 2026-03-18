@@ -293,7 +293,7 @@ Key rules:
 - Register interceptors during resource `init` before the runtime locks.
 - `taskRunner.intercept(...)` runs outermost around the task middleware pipeline.
 - `deps.someTask.intercept(...)` runs inside task middleware and only for that task.
-- When `when(...)` must target one concrete definition, prefer `isSameDefinition(taskDefinition, someTask)` over comparing public ids directly.
+- When `when(...)` must target one concrete definition, prefer `isSameDefinition(taskDefinition, someTask)` over comparing public ids directly, including configured wrappers such as `resource.with(...)` and middleware `.with(...)`.
 
 ### Task Interceptors
 

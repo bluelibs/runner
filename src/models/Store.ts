@@ -2,6 +2,7 @@ import {
   IEvent,
   IEventEmissionCallOptions,
   IResource,
+  IsolationChannel,
   ITag,
   RegisterableItem,
   TagDependencyAccessor,
@@ -33,6 +34,7 @@ import {
 import type { RuntimeCallSource } from "../types/runtimeSource";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
+import { asyncContexts } from "../asyncContexts";
 import { OnUnhandledError } from "./UnhandledError";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { RunnerMode } from "../types/runner";
@@ -54,6 +56,9 @@ import { Match, check } from "../tools/check/engine";
 import { StoreLookup, resolveRequestedIdFromStore } from "./StoreLookup";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import { resolveExecutionContextConfig } from "../tools/resolveExecutionContextConfig";
+import type { AccessViolation } from "./VisibilityTracker";
+import type { IdentityAsyncContext } from "../types/runner";
+import { HealthReporter } from "./HealthReporter";
 
 // Re-export types for backward compatibility
 export type {
@@ -81,6 +86,7 @@ export class Store {
   private hasRunCooldown = false;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
   private readonly executionContextStore: ExecutionContextStore;
+  private readonly healthReporter: HealthReporter;
 
   #isLocked = false;
   #isInitialized = false;
@@ -103,6 +109,7 @@ export class Store {
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this);
+    this.healthReporter = new HealthReporter(this);
 
     this.mode = detectRunnerMode(mode);
   }
@@ -160,6 +167,10 @@ export class Store {
     return this.executionContextStore;
   }
 
+  public getHealthReporter(): HealthReporter {
+    return this.healthReporter;
+  }
+
   /**
    * Checks whether a registered item is visible to a consumer id under the
    * current exports visibility model.
@@ -167,8 +178,29 @@ export class Store {
   public isItemVisibleToConsumer(
     targetId: string,
     consumerId: string,
+    channel: IsolationChannel = "dependencies",
   ): boolean {
-    return this.registry.visibilityTracker.isAccessible(targetId, consumerId);
+    return this.registry.visibilityTracker.isAccessible(
+      targetId,
+      consumerId,
+      channel,
+    );
+  }
+
+  /**
+   * Returns the concrete visibility/isolation violation for a target-consumer
+   * pair when one exists.
+   */
+  public getAccessViolation(
+    targetId: string,
+    consumerId: string,
+    channel: IsolationChannel = "dependencies",
+  ): AccessViolation | null {
+    return this.registry.visibilityTracker.getAccessViolation(
+      targetId,
+      consumerId,
+      channel,
+    );
   }
 
   /**
@@ -180,6 +212,12 @@ export class Store {
       this.lookup.extractRequestedId(itemId) ??
       itemId;
     return this.registry.visibilityTracker.getOwnerResourceId(resolvedItemId);
+  }
+
+  public resolveHookTargets(
+    hook: Parameters<StoreRegistry["resolveHookTargets"]>[0],
+  ) {
+    return this.registry.resolveHookTargets(hook);
   }
 
   public findIdByDefinition(definition: unknown): string {
@@ -207,6 +245,27 @@ export class Store {
     }
 
     return definition as RegisterableItem;
+  }
+
+  /**
+   * Resolves a definition reference to the concrete registered definition owned
+   * by this store.
+   */
+  public resolveRegisteredDefinition<TDefinition extends RegisterableItem>(
+    definition: TDefinition,
+  ): TDefinition {
+    const canonicalId = this.findIdByDefinition(definition);
+    const resolvedDefinition = this.lookup.tryDefinitionById(canonicalId);
+    if (resolvedDefinition === null) {
+      runtimeElementNotFoundError.throw({
+        type: "Definition",
+        elementId: canonicalId,
+      });
+
+      return undefined as never;
+    }
+
+    return resolvedDefinition as TDefinition;
   }
 
   public hasDefinition(definition: unknown): boolean {
@@ -246,6 +305,13 @@ export class Store {
     rootId: string,
   ): { accessible: boolean; exportedIds: string[] } {
     return this.registry.visibilityTracker.getRootAccessInfo(targetId, rootId);
+  }
+
+  /**
+   * Returns whether the resource explicitly declared an exports boundary.
+   */
+  public hasExportsDeclaration(resourceId: string): boolean {
+    return this.registry.visibilityTracker.hasExportsDeclaration(resourceId);
   }
 
   get isLocked() {
@@ -301,6 +367,10 @@ export class Store {
 
   public async waitForDrain(drainingBudgetMs: number): Promise<boolean> {
     return this.lifecycleAdmissionController.waitForDrain(drainingBudgetMs);
+  }
+
+  public cancelDrainWaiters(): void {
+    this.lifecycleAdmissionController.cancelDrainWaiters();
   }
 
   public markDisposed() {
@@ -379,22 +449,6 @@ export class Store {
   }
 
   private createEventManagerFacade(): EventManager {
-    const resolveRegisteredEvent = <TInput>(
-      eventDefinition: IEvent<TInput>,
-    ): IEvent<TInput> => {
-      const eventId = this.findIdByDefinition(eventDefinition);
-      const storeEvent = this.events.get(eventId);
-      if (!storeEvent) {
-        runtimeElementNotFoundError.throw({
-          type: "Event",
-          elementId: eventId,
-        });
-
-        return undefined as never;
-      }
-
-      return storeEvent.event as IEvent<TInput>;
-    };
     const resolveRuntimeSource = (
       source: RuntimeCallSource,
     ): RuntimeCallSource => ({
@@ -419,7 +473,7 @@ export class Store {
               }
             : { source: resolveRuntimeSource(request) };
         return manager.emit(
-          resolveRegisteredEvent(eventDefinition),
+          this.resolveRegisteredDefinition(eventDefinition),
           data,
           options,
         );
@@ -437,7 +491,7 @@ export class Store {
               }
             : { source: resolveRuntimeSource(request) };
         return manager.emitLifecycle(
-          resolveRegisteredEvent(eventDefinition),
+          this.resolveRegisteredDefinition(eventDefinition),
           data,
           options,
         );
@@ -455,7 +509,7 @@ export class Store {
               }
             : { source: resolveRuntimeSource(request) };
         return manager.emitWithResult(
-          resolveRegisteredEvent(eventDefinition),
+          this.resolveRegisteredDefinition(eventDefinition),
           data,
           options,
         );
@@ -467,8 +521,8 @@ export class Store {
       ) =>
         manager.addListener(
           Array.isArray(event)
-            ? event.map((entry) => resolveRegisteredEvent(entry))
-            : resolveRegisteredEvent(event),
+            ? event.map((entry) => this.resolveRegisteredDefinition(entry))
+            : this.resolveRegisteredDefinition(event),
           handler as any,
           options as any,
         )) as EventManager["addListener"],
@@ -476,7 +530,7 @@ export class Store {
       removeListenerById: manager.removeListenerById.bind(manager),
       hasListeners: (<TInput>(eventDefinition: IEvent<TInput>) =>
         manager.hasListeners(
-          resolveRegisteredEvent(eventDefinition),
+          this.resolveRegisteredDefinition(eventDefinition),
         )) as EventManager["hasListeners"],
       intercept: manager.intercept.bind(manager),
       interceptHook: manager.interceptHook.bind(manager),
@@ -534,6 +588,7 @@ export class Store {
     options?: {
       debug?: DebugFriendlyConfig;
       executionContext?: RunResult<unknown>["runOptions"]["executionContext"];
+      identity?: IdentityAsyncContext | null;
     },
   ) {
     if (this.#isInitialized) {
@@ -544,12 +599,15 @@ export class Store {
       rootItem: root.with(config as any),
       debug: options?.debug,
       executionContext: options?.executionContext ?? null,
+      identity: options?.identity ?? null,
     });
 
     this.registry.computeRegistrationDeeply(frameworkRoot);
+    this.ensureRuntimeIdentityContextRegistered(options?.identity ?? null);
     this.bindFrameworkResourceValues(runtimeResult);
     const rootEntry = this.resolveRootEntry(root);
     this.root = rootEntry;
+    this.registry.clearHookTargetResolutionCache();
     this.validator.runSanityChecks();
 
     const overrideTraversalVisited = new Set<string>();
@@ -561,6 +619,17 @@ export class Store {
     }
 
     this.#isInitialized = true;
+  }
+
+  private ensureRuntimeIdentityContextRegistered(
+    identity: IdentityAsyncContext | null,
+  ): void {
+    const activeIdentity = identity ?? asyncContexts.identity;
+    if (this.registry.resolveRegisteredReferenceId(activeIdentity)) {
+      return;
+    }
+
+    this.registry.storeOwnedAsyncContext("runner", activeIdentity);
   }
 
   public async dispose() {
@@ -627,10 +696,16 @@ export class Store {
     return computeReadyWaves(this.resources, this.initWaves);
   }
 
-  /** @internal Executes startup-ready hooks for initialized resources. */
-  public async ready() {
+  /**
+   * @internal Executes startup-ready hooks for initialized resources.
+   *
+   * `shouldStop()` is a cooperative guard used by bootstrap so later ready
+   * waves do not keep running after shutdown was requested mid-startup.
+   */
+  public async ready(options?: { shouldStop?: () => void }) {
     for (const wave of this.getResourcesInReadyWaves()) {
-      await this.readyWave(wave);
+      options?.shouldStop?.();
+      await this.readyWave(wave, options);
     }
   }
 
@@ -646,7 +721,7 @@ export class Store {
     await this.runReadyResource(resource);
   }
 
-  public async cooldown() {
+  public async cooldown(options?: { shouldStop?: () => boolean }) {
     if (this.hasRunCooldown) {
       return;
     }
@@ -654,7 +729,11 @@ export class Store {
     this.hasRunCooldown = true;
 
     for (const wave of this.getResourcesInDisposeWaves()) {
-      const waveErrors = await this.cooldownWave(wave);
+      if (options?.shouldStop?.()) {
+        return;
+      }
+
+      const waveErrors = await this.cooldownWave(wave, options);
       await this.logCooldownErrors(waveErrors);
     }
   }
@@ -712,24 +791,49 @@ export class Store {
     return errors;
   }
 
-  private async cooldownWave(wave: DisposeWave): Promise<Error[]> {
-    return this.executeWave(wave, (r) => this.cooldownResource(r));
+  private async cooldownWave(
+    wave: DisposeWave,
+    options?: { shouldStop?: () => boolean },
+  ): Promise<Error[]> {
+    return this.executeWave(wave, async (resource) => {
+      if (options?.shouldStop?.()) {
+        return;
+      }
+
+      await this.cooldownResource(resource);
+    });
   }
 
-  private async readyWave(wave: DisposeWave): Promise<void> {
+  private async readyWave(
+    wave: DisposeWave,
+    options?: { shouldStop?: () => void },
+  ): Promise<void> {
     if (wave.parallel) {
+      const runningReadyPromises: Promise<void>[] = [];
       try {
-        await Promise.all(
-          wave.resources.map((resource) => this.runReadyResource(resource)),
-        );
+        for (const resource of wave.resources) {
+          options?.shouldStop?.();
+          runningReadyPromises.push(this.runReadyResource(resource));
+        }
+      } catch (error) {
+        if (runningReadyPromises.length > 0) {
+          await Promise.allSettled(runningReadyPromises);
+        }
+        throw this.normalizeError(error);
+      }
+
+      try {
+        await Promise.all(runningReadyPromises);
       } catch (error) {
         throw this.normalizeError(error);
       }
+
       return;
     }
 
     for (const resource of wave.resources) {
       try {
+        options?.shouldStop?.();
         await this.runReadyResource(resource);
       } catch (error) {
         throw this.normalizeError(error);
@@ -875,6 +979,7 @@ export class Store {
    */
   public processOverrides() {
     this.overrideManager.processOverrides();
+    this.registry.clearHookTargetResolutionCache();
     this.validator.runSanityChecks();
   }
 

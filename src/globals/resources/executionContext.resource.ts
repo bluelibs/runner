@@ -1,5 +1,4 @@
 import { defineResource } from "../../definers/defineResource";
-import { globalTags } from "../globalTags";
 import type { ExecutionContextOptions } from "../../types/executionContext";
 import { Match } from "../../tools/check";
 import type { ExecutionContextStore } from "../../models/ExecutionContextStore";
@@ -36,5 +35,4 @@ export const executionContextResource = defineResource<
     description:
       "Opt-in execution tracing store that powers correlation ids, causal-chain snapshots, and runtime cycle detection.",
   },
-  tags: [globalTags.system],
 });

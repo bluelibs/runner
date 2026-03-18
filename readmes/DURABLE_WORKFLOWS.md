@@ -27,7 +27,7 @@
 ## Start Here
 
 - If you want the short version: `readmes/DURABLE_WORKFLOWS_AI.md`
-- If you're new to Runner concepts (tasks/resources/events/middleware): `readmes/AI.md`
+- If you're new to Runner concepts (tasks/resources/events/middleware): `readmes/COMPACT_GUIDE.md`
 - Platform note (why this is Node-only): `readmes/MULTI_PLATFORM.md`
 
 ## Quickstart
@@ -48,10 +48,10 @@ The concrete durable backend:
 ### 1) Define a durable task (steps + sleep + signal)
 
 ```ts
-import { event, r, run } from "@bluelibs/runner";
-import { resources } from "@bluelibs/runner/node";
+import { r, run } from "@bluelibs/runner";
+import { resources, tags } from "@bluelibs/runner/node";
 
-const Approved = event<{ approvedBy: string }>({ id: "app.signals.approved" });
+const Approved = r.event<{ approvedBy: string }>("approved").build();
 
 const durable = resources.memoryWorkflow.fork("app-durable");
 
@@ -60,8 +60,9 @@ const durableRegistration = durable.with({
 });
 
 const approveOrder = r
-  .task("app.tasks.approveOrder")
+  .task("approve-order")
   .dependencies({ durable })
+  .tags([tags.durableWorkflow.with({ category: "orders" })])
   .run(async (input: { orderId: string }, { durable }) => {
     const durableContext = durable.use();
 
@@ -109,7 +110,7 @@ import { resources, tags } from "@bluelibs/runner/node";
 const durable = resources.memoryWorkflow.fork("app-durable");
 
 const onboarding = r
-  .task("app.workflows.onboarding")
+  .task("onboarding")
   .dependencies({ durable })
   .tags([
     tags.durableWorkflow.with({
@@ -155,7 +156,7 @@ import { resources, tags } from "@bluelibs/runner/node";
 const durable = resources.memoryWorkflow.fork("app-durable");
 
 const approveOrder = r
-  .task("app.workflows.approveOrder")
+  .task("approve-order")
   .dependencies({ durable })
   .tags([tags.durableWorkflow.with({ category: "orders" })])
   .run(async (input: { orderId: string }, { durable }) => {
@@ -166,7 +167,7 @@ const approveOrder = r
   .build();
 
 const api = r
-  .resource("app.api")
+  .resource("api")
   .register([resources.durable, durable.with({ worker: false }), approveOrder])
   .dependencies({ durable, approveOrder })
   .init(async (_cfg, { durable, approveOrder }) => {
@@ -682,23 +683,20 @@ Durable workflows are **normal Runner tasks** that inject a **durable backend re
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { MemoryStore, resources } from "@bluelibs/runner/node";
-
-// 1. Create store
-const store = new MemoryStore();
+import { resources } from "@bluelibs/runner/node";
 
 // 2. Create durable resource definition
 const durable = resources.memoryWorkflow.fork("app-durable");
 
 // 3. Register durable resource with config
 const durableRegistration = durable.with({
-  store,
+  worker: true,
   polling: { enabled: true, interval: 1000 }, // Timer polling interval
 });
 
 // 3. Define a task that uses durable context
 const processOrder = r
-  .task("app.tasks.processOrder")
+  .task("process-order")
   .inputSchema({ orderId: String, customerId: String })
   .dependencies({ durable })
   .run(async (input, { durable }) => {
@@ -945,15 +943,15 @@ Return shapes:
 ### Example: `waitUntilPaid()`
 
 ```typescript
-import { event, r } from "@bluelibs/runner";
-import { MemoryStore, resources } from "@bluelibs/runner/node";
+import { r } from "@bluelibs/runner";
+import { resources } from "@bluelibs/runner/node";
 
-const Paid = event<{ paidAt: number }>({ id: "app.signals.paid" });
+const Paid = r.event<{ paidAt: number }>("paid").build();
 const durable = resources.memoryWorkflow.fork("app-durable");
-const durableRegistration = durable.with({ store: new MemoryStore() });
+const durableRegistration = durable.with({ worker: true });
 
 export const processOrder = r
-  .task("app.tasks.processOrder")
+  .task("process-order")
   .dependencies({ durable })
   .run(async (input: { orderId: string }, { durable }) => {
     const durableContext = durable.use();
@@ -1020,7 +1018,7 @@ Instead of a complex saga orchestrator, users implement compensation explicitly:
 
 ```typescript
 const processOrderWithRollback = r
-  .task("app.tasks.processOrder")
+  .task("process-order")
   .dependencies({ durable })
   .run(async (input, { durable }) => {
     const durableContext = durable.use();
@@ -1080,7 +1078,7 @@ const result = await durableContext.switch<TValue, TResult>(
 
 ```typescript
 const fulfillOrder = r
-  .task("app.tasks.fulfillOrder")
+  .task("fulfill-order")
   .dependencies({ durable })
   .run(async (input: { orderId: string; tier: string }, { durable }) => {
     const durableContext = durable.use();
@@ -1185,9 +1183,9 @@ const shape2 = await runtime
 console.log(shape.nodes);
 // [
 //   { kind: "step", stepId: "validate", hasCompensation: false },
-//   { kind: "waitForSignal", signalId: "app.signals.approved", ... },
+//   { kind: "waitForSignal", signalId: "approved", ... },
 //   { kind: "step", stepId: "ship", hasCompensation: false },
-//   { kind: "emit", eventId: "app.events.shipped", stepId: "notify" },
+//   { kind: "emit", eventId: "shipped", stepId: "notify" },
 // ]
 ```
 
@@ -1257,7 +1255,7 @@ Define tasks that run on a schedule using cron expressions:
 ```typescript
 // Define a scheduled task
 const dailyCleanup = r
-  .task("app.tasks.dailyCleanup")
+  .task("daily-cleanup")
   .dependencies({ durable, db })
   .run(async (input, { durable, db }) => {
     const durableContext = durable.use();
@@ -1915,16 +1913,15 @@ The durable module integrates seamlessly with Runner's resource pattern:
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { MemoryStore, resources } from "@bluelibs/runner/node";
+import { resources } from "@bluelibs/runner/node";
 
 const durable = resources.memoryWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
-  store: new MemoryStore(),
   worker: true, // single-process: also consumes the queue if configured
 });
 
 const processOrder = r
-  .task("app.tasks.processOrder")
+  .task("process-order")
   .dependencies({ durable })
   .run(async (input, { durable }) => {
     const durableContext = durable.use();
@@ -1933,7 +1930,7 @@ const processOrder = r
   .build();
 
 const recoverDurable = r
-  .resource("app-durable.recover")
+  .resource("durable-recover")
   .dependencies({ durable })
   .init(async (_cfg, { durable }) => {
     await durable.recover();
@@ -1954,28 +1951,52 @@ await run(app);
 
 ### Resource Factory Pattern
 
-Runner resources are definitions built at bootstrap time. If you want to pick a store based on environment/config, do it when you create the resource:
+Runner resources are definitions built at bootstrap time. Pick the durable resource family up front; don't pass a custom store into `memoryWorkflow`:
 
 ```typescript
-const store = process.env.REDIS_URL
-  ? new RedisStore({ redis: process.env.REDIS_URL })
-  : new MemoryStore();
-
-const durable = resources.memoryWorkflow.fork("app-durable");
-const durableRegistration = durable.with({ store });
+const durableRegistration = process.env.REDIS_URL
+  ? resources.redisWorkflow.fork("app-durable").with({
+      redis: { url: process.env.REDIS_URL! },
+      worker: true,
+    })
+  : resources.memoryWorkflow.fork("app-durable").with({
+      worker: true,
+    });
 ```
 
 ### Integration with HTTP Exposure
 
-Expose durable task execution over HTTP using Runner's remote lanes pattern:
+Expose a starter task or HTTP route that calls `durable.start(...)`. Do not expose the durable workflow task itself through `client.task(...)`, because remote task execution runs outside the durable execution context:
 
 ```typescript
-import { createHttpClient } from "@bluelibs/runner";
-import { rpcLanesResource } from "@bluelibs/runner/node";
+import { createHttpClient, r } from "@bluelibs/runner";
+import { resources, rpcLanesResource } from "@bluelibs/runner/node";
+
+const durable = resources.memoryWorkflow.fork("app-durable");
+const durableRegistration = durable.with({ worker: true });
+
+const processOrder = r
+  .task("process-order")
+  .dependencies({ durable })
+  .run(async (input, { durable }) => {
+    const durableContext = durable.use();
+    await durableContext.step("process", async () => input.orderId);
+    return { ok: true };
+  })
+  .build();
+
+const startProcessOrderWorkflow = r
+  .task("start-process-order-workflow")
+  .dependencies({ durable })
+  .run(async (input: { orderId: string }, { durable }) => {
+    const executionId = await durable.start(processOrder, input);
+    return { executionId };
+  })
+  .build();
 
 const durableLane = r
   .rpcLane("durable-lane")
-  .applyTo([processOrder])
+  .applyTo([startProcessOrderWorkflow])
   .build();
 
 const topology = r.rpcLane.topology({
@@ -1986,8 +2007,10 @@ const topology = r.rpcLane.topology({
 const app = r
   .resource("app")
   .register([
-    durable,
+    resources.durable,
+    durableRegistration,
     processOrder,
+    startProcessOrderWorkflow,
     rpcLanesResource.with({
       profile: "worker",
       mode: "network",
@@ -1999,16 +2022,16 @@ const app = r
   ])
   .build();
 
-// Remote clients can now call durable tasks via HTTP
+// Remote clients start the workflow via the starter task
 const client = createHttpClient({ baseUrl: "http://worker:7070/__runner" });
-await client.task("app.tasks.processOrder", { orderId: "123" });
+await client.task("start-process-order-workflow", { orderId: "123" });
 ```
 
 ## Recovery on Startup
 
 ```typescript
 const recoverDurable = r
-  .resource("app-durable.recover")
+  .resource("durable-recover")
   .dependencies({ durable })
   .init(async (_cfg, { durable }) => {
     await durable.recover();
@@ -2017,7 +2040,7 @@ const recoverDurable = r
 
 const app = r
   .resource("app")
-  .register([durable, processOrder, recoverDurable])
+  .register([resources.durable, durableRegistration, processOrder, recoverDurable])
   .build();
 ```
 
@@ -2037,13 +2060,13 @@ backends while keeping the `run()` semantics you use in production.
 
 ```ts
 import { r, run } from "@bluelibs/runner";
-import { createDurableTestSetup, waitUntil } from "@bluelibs/runner/node";
+import { createDurableTestSetup, resources, waitUntil } from "@bluelibs/runner/node";
 
 const { durable, durableRegistration, store } = createDurableTestSetup();
-const Paid = r.event<{ paidAt: number }>("app.signals.paid").build();
+const Paid = r.event<{ paidAt: number }>("paid").build();
 
 const task = r
-  .task("spec.durable.waitForSignal")
+  .task("spec-durable-wait-for-signal")
   .dependencies({ durable, Paid })
   .run(async (_input: undefined, { durable, Paid }) => {
     const durableContext = durable.use();
@@ -2053,7 +2076,7 @@ const task = r
   .build();
 
 const app = r
-  .resource("spec.app")
+  .resource("spec-app")
   .register([resources.durable, durableRegistration, Paid, task])
   .build();
 const runtime = await run(app);

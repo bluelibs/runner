@@ -1,6 +1,6 @@
 {
   "name": "@bluelibs/runner",
-  "version": "6.2.0",
+  "version": "6.3.0",
   "description": "BlueLibs Runner",
   "sideEffects": false,
   "main": "dist/universal/index.cjs",
@@ -185,7 +185,7 @@
     "index.d.ts",
     "node",
     "README.md",
-    "readmes/AI.md",
+    "readmes/COMPACT_GUIDE.md",
     "LICENSE.md"
   ],
   "license": "MIT",
@@ -199,8 +199,17 @@
     "ioredis": "^5.7.0"
   },
   "overrides": {
-    "minimatch": "^10.2.1",
     "test-exclude": "^7.0.1"
+  },
+  "npmSkills": {
+    "publish": {
+      "source": ".agents/skills",
+      "export": [
+        "core",
+        "durable-workflows",
+        "remote-lanes"
+      ]
+    }
   },
   "prettier": {
     "trailingComma": "all",

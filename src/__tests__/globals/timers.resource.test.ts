@@ -9,7 +9,7 @@ describe("runner.timers", () => {
     jest.useRealTimers();
   });
 
-  it("is available during init and is not system-tagged", async () => {
+  it("is available during init and has no deprecated system tag", async () => {
     jest.useFakeTimers();
 
     const snapshot: { fired?: boolean } = {};

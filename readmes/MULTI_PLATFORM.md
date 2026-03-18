@@ -148,7 +148,8 @@ That same capability gates Runner's async-context features:
 - `asyncContexts.execution` is fully available only on runtimes that expose `AsyncLocalStorage`
 - when `run(..., { executionContext: ... })` is enabled on a runtime without `AsyncLocalStorage`, Runner fails fast with a typed context error
 - direct `asyncContexts.execution.provide()` / `record()` calls fail fast with a typed context error when no async-local storage exists
-- `asyncContexts.tenant` degrades more gently: `tryUse()` returns `undefined`, `has()` returns `false`, and `provide()` still executes the callback without propagation
+- `asyncContexts.identity` degrades more gently: `tryUse()` returns `undefined`, `has()` returns `false`, and `provide()` still executes the callback without propagation
+- when `run(..., { identity: customIdentityContext })` is enabled on a runtime without `AsyncLocalStorage`, Runner fails fast with a typed identity-context error
 
 ### BrowserPlatformAdapter
 

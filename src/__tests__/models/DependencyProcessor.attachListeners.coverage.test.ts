@@ -146,4 +146,38 @@ describe("DependencyProcessor attachListeners coverage", () => {
     expect(addListenerSpy).not.toHaveBeenCalled();
     expect(addGlobalListenerSpy).not.toHaveBeenCalled();
   });
+
+  it("skips selector hooks when resolution produces no visible events", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const event = defineEvent({
+      id: "dp-attach-selector-empty-event",
+    });
+    const hook = defineHook({
+      id: "dp-attach-selector-empty-hook",
+      on: () => false,
+      async run() {},
+    });
+
+    store.storeGenericItem(event);
+    store.storeGenericItem(hook);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      ResourceLifecycleMode.Sequential,
+    );
+    const addListenerSpy = jest.spyOn(eventManager, "addListener");
+    const addGlobalListenerSpy = jest.spyOn(eventManager, "addGlobalListener");
+
+    processor.attachListeners();
+
+    expect(addListenerSpy).not.toHaveBeenCalled();
+    expect(addGlobalListenerSpy).not.toHaveBeenCalled();
+  });
 });

@@ -2,6 +2,7 @@ import type { EventManager } from "../../models/EventManager";
 import type { Logger } from "../../models/Logger";
 import type { Store } from "../../models/Store";
 import type { Serializer } from "../../serializer";
+import { transactionalEventLaneConflictError } from "../../errors";
 import type { EventLaneMessage, EventLanesResourceConfig } from "./types";
 import { resolveRemoteLanesMode } from "../remote-lanes/mode";
 import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
@@ -56,6 +57,10 @@ export class EventLanesController {
       this.dependencies.store,
       topologyLanes,
     );
+    validateTransactionalEventLaneAssignments(
+      this.dependencies.store,
+      eventRouteByEventId,
+    );
 
     if (mode === "network") {
       const resolved = resolveEventLaneBindings(this.config, this.dependencies);
@@ -66,6 +71,7 @@ export class EventLanesController {
           resolved.bindings,
           resolved.managedQueues,
           eventRouteByEventId,
+          this.dependencies.store,
         ),
       );
       validateAssignedEventRoutesHaveBindings(this.context);
@@ -79,7 +85,13 @@ export class EventLanesController {
     } else {
       Object.assign(
         this.context,
-        buildEventLanesContext(this.config, [], new Set(), eventRouteByEventId),
+        buildEventLanesContext(
+          this.config,
+          [],
+          new Set(),
+          eventRouteByEventId,
+          this.dependencies.store,
+        ),
       );
     }
 
@@ -187,5 +199,22 @@ export class EventLanesController {
 
   private async delay(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+}
+
+function validateTransactionalEventLaneAssignments(
+  store: Store,
+  eventRouteByEventId: Map<string, { lane: { id: string } }>,
+): void {
+  for (const [eventId, route] of eventRouteByEventId) {
+    const eventEntry = store.events.get(eventId);
+    if (!eventEntry?.event.transactional) {
+      continue;
+    }
+
+    transactionalEventLaneConflictError.throw({
+      eventId,
+      laneId: route.lane.id,
+    });
   }
 }

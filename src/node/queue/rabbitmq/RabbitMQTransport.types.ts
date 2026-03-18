@@ -1,6 +1,11 @@
 import type { Logger } from "../../../models/Logger";
 
-export type ConsumeMessage = { content: Buffer };
+export type ConsumeMessage = {
+  content: Buffer;
+  properties?: {
+    headers?: Record<string, unknown>;
+  };
+};
 
 export type Channel = {
   assertQueue: (
@@ -66,7 +71,7 @@ export interface RabbitMQTransportConfig<TMessage> {
   logger?: Pick<Logger, "error">;
   parseFailureLogMessage: string;
   handlerFailureLogMessage: string;
-  decode: (content: Buffer) => TMessage | null;
+  decode: (message: ConsumeMessage) => TMessage | null;
   resolveMessageId: (message: TMessage) => string | undefined;
   throwNotInitialized: () => never;
 }

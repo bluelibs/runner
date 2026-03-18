@@ -22,6 +22,7 @@ export type {
   IsolationChannel,
 } from "../tools/scope";
 import {
+  symbolDefinitionIdentity,
   symbolFilePath,
   symbolForkedFrom,
   symbolResourceIsolateDeclarations,
@@ -38,7 +39,7 @@ import {
   InferInputOrViolationFromContracts,
 } from "./contracts";
 import type {
-  NormalizedResourceSubtreePolicy,
+  DisplayResourceSubtreePolicy,
   ResourceSubtreePolicyDeclaration,
   ResourceSubtreePolicyInput,
 } from "./subtree";
@@ -56,6 +57,7 @@ export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
 export type { ResourceTagType, TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
 export type {
+  DisplayResourceSubtreePolicy,
   ResourceSubtreePolicy,
   ResourceSubtreePolicyDeclaration,
   ResourceSubtreePolicyInput,
@@ -413,7 +415,9 @@ export interface IResourceDefinition<
   /**
    * Declares subtree policies for tasks/resources registered under this resource.
    */
-  subtree?: ResourceSubtreePolicyInput<TConfig>;
+  subtree?:
+    | ResourceSubtreePolicyInput<TConfig>
+    | DisplayResourceSubtreePolicy<TConfig>;
   /** @internal Ordered subtree declarations preserved across builder composition. */
   [symbolResourceSubtreeDeclarations]?: ReadonlyArray<
     ResourceSubtreePolicyDeclaration<TConfig>
@@ -476,7 +480,7 @@ export interface IResource<
     TTags,
     TMiddleware
   >,
-  "throws"
+  "throws" | "subtree"
 > {
   /** Normalized validation schema for resource config. */
   configSchema?: IValidationSchema<TConfig>;
@@ -502,6 +506,12 @@ export interface IResource<
     TTags,
     TMiddleware
   >;
+  /** Extract the configured payload from a matching resource entry. */
+  extract(
+    target:
+      | IResource<any, any, any, any, any, any, any>
+      | IResourceWithConfig<any, any, any, any, any, any, any>,
+  ): TConfig | undefined;
   register:
     | Array<RegisterableItem>
     | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
@@ -511,6 +521,8 @@ export interface IResource<
     | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);
   /** Normalized middleware attachments applied to the resource lifecycle. */
   middleware: TMiddleware;
+  /** Stable lineage identity shared across configured wrappers and projections. */
+  [symbolDefinitionIdentity]?: object;
   [symbolFilePath]: string;
   [symbolResource]: true;
   /** @internal Tracks whether the resource explicitly declared `.register(...)`. */
@@ -528,7 +540,7 @@ export interface IResource<
    */
   subtree?:
     | ResourceSubtreePolicyInput<TConfig>
-    | NormalizedResourceSubtreePolicy;
+    | DisplayResourceSubtreePolicy<TConfig>;
   /** @internal Ordered subtree declarations preserved across builder composition. */
   [symbolResourceSubtreeDeclarations]?: ReadonlyArray<
     ResourceSubtreePolicyDeclaration<TConfig>
@@ -581,6 +593,8 @@ export interface IResourceWithConfig<
   TMiddleware extends IResourceMiddleware<any, any, any, any>[] =
     IResourceMiddleware[],
 > {
+  /** Stable lineage identity shared with the underlying resource definition. */
+  [symbolDefinitionIdentity]?: object;
   [symbolResourceWithConfig]: true;
   /** The id of the underlying resource. */
   id: string;

@@ -8,6 +8,8 @@ import type { RunnerMode } from "./runner";
 import type { IResourceMiddleware } from "./resourceMiddleware";
 import type { ITaskMiddleware } from "./taskMiddleware";
 import type { TaskMiddlewareAttachmentType } from "./taskMiddleware";
+import type { IdentityScopeConfig } from "../globals/middleware/identityScope.shared";
+import type { IdentityRequirementConfig } from "../public-types";
 
 export type SubtreeViolationCode = string;
 
@@ -81,7 +83,12 @@ export type SubtreeResourceMiddlewareEntry =
 
 export type ResourceSubtreeTaskPolicy = {
   middleware?: SubtreeTaskMiddlewareEntry[];
+  identity?: IdentityRequirementConfig;
   validate?: SubtreeTaskValidator | SubtreeTaskValidator[];
+};
+
+export type ResourceSubtreeMiddlewarePolicy = {
+  identityScope?: IdentityScopeConfig;
 };
 
 export type ResourceSubtreeResourcePolicy = {
@@ -113,6 +120,7 @@ export type ResourceSubtreeResourceMiddlewarePolicy = {
 
 export type ResourceSubtreePolicy = {
   tasks?: ResourceSubtreeTaskPolicy;
+  middleware?: ResourceSubtreeMiddlewarePolicy;
   resources?: ResourceSubtreeResourcePolicy;
   hooks?: ResourceSubtreeHookPolicy;
   events?: ResourceSubtreeEventPolicy;
@@ -124,7 +132,12 @@ export type ResourceSubtreePolicy = {
 
 export type NormalizedResourceSubtreeTaskPolicy = {
   middleware: SubtreeTaskMiddlewareEntry[];
+  identity?: IdentityRequirementConfig[];
   validate?: SubtreeTaskValidator[];
+};
+
+export type NormalizedResourceSubtreeMiddlewarePolicy = {
+  identityScope?: IdentityScopeConfig;
 };
 
 export type NormalizedResourceSubtreeResourcePolicy = {
@@ -154,6 +167,7 @@ export type NormalizedResourceSubtreeResourceMiddlewarePolicy = {
 
 export type NormalizedResourceSubtreePolicy = {
   tasks?: NormalizedResourceSubtreeTaskPolicy;
+  middleware?: NormalizedResourceSubtreeMiddlewarePolicy;
   resources?: NormalizedResourceSubtreeResourcePolicy;
   hooks?: NormalizedResourceSubtreeHookPolicy;
   events?: NormalizedResourceSubtreeEventPolicy;
@@ -181,6 +195,10 @@ export type ResourceSubtreePolicyResolver<TConfig = unknown> = (
 export type ResourceSubtreePolicyInput<TConfig = unknown> =
   | ResourceSubtreePolicyList
   | ResourceSubtreePolicyResolver<TConfig>;
+
+export type DisplayResourceSubtreePolicy<TConfig = unknown> =
+  | NormalizedResourceSubtreePolicy
+  | ((config: TConfig, mode?: RunnerMode) => NormalizedResourceSubtreePolicy);
 
 export type ResourceSubtreePolicyDeclaration<TConfig = unknown> = {
   policy: ResourceSubtreePolicyInput<TConfig>;

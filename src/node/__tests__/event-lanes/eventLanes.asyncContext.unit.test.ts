@@ -24,6 +24,8 @@ function createContext(): EventLanesResourceContext {
     coolingDown: false,
     disposed: false,
     activeBindingsByQueue: new Map(),
+    consumedLaneIds: new Set(),
+    hookAllowlistByLaneId: new Map(),
     bindingsByLaneId: new Map(),
     eventRouteByEventId: new Map(),
     queues: new Set(),

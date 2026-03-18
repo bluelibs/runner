@@ -28,12 +28,7 @@ import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import type { ExecutionFrame } from "../types/executionContext";
 import { globalTags } from "../globals/globalTags";
-import { HealthReporter } from "./HealthReporter";
 import { raceWithAbortSignal } from "../tools/abortSignals";
-import {
-  resolveRequestedIdFromStore,
-  toCanonicalDefinitionFromStore,
-} from "./StoreLookup";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -46,30 +41,31 @@ const defaultTaskSource: RuntimeCallSource = {
 };
 
 /**
- * Executes tasks through the middleware pipeline with lifecycle-aware caching.
+ * Coordinates task execution for the runtime.
  *
- * Tasks are callable during both init() (pre-lock) and runtime (post-lock).
- * During init(), resources legitimately call tasks — seeding data, validating
- * state, running migrations, etc. However, other resources may still register
- * interceptors via taskRunner.intercept() during their own init() phase,
- * meaning the middleware stack is mutable. Caching a composed runner at this
- * point would silently freeze a partial chain — a task called before and after
- * an interceptor registration would behave differently, which is a correctness
- * bug. So pre-lock calls always recompose from scratch to pick up the latest
- * interceptors.
- *
- * After store.lock(), no new interceptors can be added (checkLock() throws),
- * making the composition stable. At that point we lazily cache the composed
- * runner per task id — one Map lookup per subsequent call. Pre-computing all
- * runners eagerly at lock-time would be wasteful: not all tasks are called, and
- * lazy resources may never materialize. The first post-lock call per task pays
- * a microsecond-level composition cost; every call after that is a Map.get().
+ * The task runner owns task admission checks, middleware composition,
+ * execution-context tracking, abort-signal propagation, and health-policy
+ * enforcement. It also adapts to the runtime lifecycle: before `store.lock()`,
+ * tasks are recomposed on every call because resources may still register
+ * interceptors during `init()`. After the store is locked, the interceptor
+ * graph becomes stable, so composed runners are cached per task id for fast
+ * repeated execution.
  */
 export class TaskRunner {
   // Memoization store for composed middleware runners — only populated after
   // store.lock() when the middleware stack is frozen and composition is stable.
   protected readonly runnerStore = new Map<string | symbol, CachedTaskRunner>();
 
+  /**
+   * Creates a task runner bound to the shared runtime state.
+   *
+   * @param store The central runtime registry used to resolve tasks, resources,
+   * and lifecycle state.
+   * @param eventManager The event manager associated with the current runtime.
+   * @param logger The runtime logger instance available to task execution.
+   * @param executionContextStore The execution-context store used to propagate
+   * nested task frames and abort signals.
+   */
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
@@ -87,18 +83,19 @@ export class TaskRunner {
 
   private readonly middlewareManager: MiddlewareManager;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
-  private readonly healthReporter = new HealthReporter(this.store, {
-    ensureAvailable: () => undefined,
-    isSleepingResource: (resourceId) =>
-      this.store.resources.get(resourceId)!.isInitialized !== true,
-  });
 
   /**
-   * Begins the execution of a task. These are registered tasks and all sanity checks have been performed at this stage to ensure consistency of the object.
-   * This function can throw only if any of the event listeners or run function throws
-   * @param task the task to be run
-   * @param input the input to be passed to the task
-   * @param options optional call options including journal for forwarding
+   * Executes a registered task through the runtime pipeline.
+   *
+   * This applies lifecycle admission checks, resolves the effective abort
+   * signal, enforces task health policies, runs middleware, and records the
+   * execution frame for nested task tracing.
+   *
+   * @param task The registered task definition to execute.
+   * @param input The input payload passed to the task.
+   * @param options Optional call metadata such as source and abort signal.
+   * @returns The task result, or `undefined` if the task resolves without a
+   * value.
    */
   public async run<
     TInput,
@@ -173,12 +170,16 @@ export class TaskRunner {
   }
 
   /**
-   * Registers a global task execution interceptor.
-   * Interceptors are evaluated outermost around task middleware.
+   * Registers a global interceptor around task execution.
    *
-   * Must be called during init() (pre-lock). After store.lock(), the middleware
-   * stack is frozen and calling intercept() would create inconsistency between
-   * already-cached runners and newly-composed ones.
+   * Interceptors wrap the composed task middleware chain from the outside and
+   * may optionally be limited to matching task definitions via `options.when`.
+   * This must be called before `store.lock()`, while the runtime is still
+   * building its middleware graph.
+   *
+   * @param interceptor The interceptor to apply around matching task runs.
+   * @param options Optional filtering rules for when the interceptor should
+   * execute.
    */
   public intercept(
     interceptor: TaskRunnerInterceptor,
@@ -195,7 +196,7 @@ export class TaskRunner {
       if (options?.when) {
         const taskDefinition = input.task.definition;
         const canonicalTaskDefinition =
-          this.toCanonicalDefinition(taskDefinition);
+          this.store.resolveRegisteredDefinition(taskDefinition);
         if (!options.when(canonicalTaskDefinition as typeof taskDefinition)) {
           return next(input);
         }
@@ -208,9 +209,10 @@ export class TaskRunner {
   }
 
   /**
-   * Creates the function with the chain of middleware.
-   * @param task
-   * @returns
+   * Composes the executable middleware pipeline for a task definition.
+   *
+   * @param task The task whose middleware chain should be composed.
+   * @returns The composed runner function for the task.
    */
   protected createRunnerWithMiddleware<
     TInput,
@@ -220,6 +222,13 @@ export class TaskRunner {
     return this.middlewareManager.composeTaskRunner(task);
   }
 
+  /**
+   * Enforces the task-level fail-when-unhealthy policy once runtime execution
+   * has started.
+   *
+   * @param task The task about to execute.
+   * @returns A promise when an asynchronous health check is required.
+   */
   private assertTaskHealthPolicy(
     task: ITask<any, any, any>,
   ): Promise<void> | void {
@@ -235,6 +244,14 @@ export class TaskRunner {
     return this.assertMonitoredResourcesHealthy(task, monitoredResources);
   }
 
+  /**
+   * Ensures that all resources monitored by the task's health policy are both
+   * reportable and currently healthy.
+   *
+   * @param task The task whose monitored resources are being validated.
+   * @param monitoredResources The resources declared in the task's
+   * `failWhenUnhealthy` tag.
+   */
   private async assertMonitoredResourcesHealthy(
     task: ITask<any, any, any>,
     monitoredResources: ReadonlyArray<
@@ -242,7 +259,7 @@ export class TaskRunner {
     >,
   ): Promise<void> {
     const resourceIds = monitoredResources.map((resource) =>
-      this.resolveResourceId(resource),
+      this.store.findIdByDefinition(resource),
     );
     const nonReportableResourceIds = resourceIds.filter((resourceId) => {
       const resourceEntry = this.store.resources.get(resourceId);
@@ -256,7 +273,10 @@ export class TaskRunner {
       });
     }
 
-    const report = await this.healthReporter.getHealth(resourceIds);
+    const report = await this.store.getHealthReporter().getHealth(resourceIds, {
+      isSleepingResource: (resourceId) =>
+        this.store.resources.get(resourceId)!.isInitialized !== true,
+    });
     const unhealthyResourceIds = report.report
       .filter((entry) => entry.status === "unhealthy")
       .map((entry) => entry.id);
@@ -267,19 +287,5 @@ export class TaskRunner {
         resourceIds: unhealthyResourceIds,
       });
     }
-  }
-
-  private resolveResourceId(
-    resource: string | IResource<any, any, any, any, any>,
-  ): string {
-    return (
-      resolveRequestedIdFromStore(this.store, resource) ?? String(resource)
-    );
-  }
-
-  private toCanonicalDefinition<TDefinition extends { id: string }>(
-    definition: TDefinition,
-  ): TDefinition {
-    return toCanonicalDefinitionFromStore(this.store, definition);
   }
 }

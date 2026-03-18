@@ -114,6 +114,20 @@ export const middlewareRateLimitExceededError = error<
   )
   .build();
 
+export const middlewareKeyCapacityExceededError = error<
+  { middlewareId: string; maxKeys: number } & DefaultErrorType
+>(RunnerErrorId.MiddlewareKeyCapacityExceeded)
+  .format(
+    ({ middlewareId, maxKeys }) =>
+      `Middleware "${middlewareId}" reached the configured maxKeys limit of ${maxKeys}.`,
+  )
+  .httpCode(429)
+  .remediation(
+    ({ middlewareId }) =>
+      `Reuse lower-cardinality keys for middleware "${middlewareId}", or raise maxKeys if the higher distinct-key count is expected and safe.`,
+  )
+  .build();
+
 export const middlewareTemporalDisposedError = error<
   { message: string } & DefaultErrorType
 >(RunnerErrorId.MiddlewareTemporalDisposed)

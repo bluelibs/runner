@@ -33,7 +33,9 @@ function collectTopologyLanes<TLane extends { id: string }, TProfile>(
 export function collectEventTopologyLanes(
   topology: IEventLaneTopology,
 ): IEventLaneDefinition[] {
-  return collectTopologyLanes(topology, (p) => p.consume);
+  return collectTopologyLanes(topology, (p) =>
+    p.consume.map((entry) => entry.lane),
+  );
 }
 
 export function collectRpcTopologyLanes(

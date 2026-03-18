@@ -9,7 +9,7 @@
 !include: 03-runtime-lifecycle.md
 !include: 04-features.md
 !include: 04b-serialization-validation.md
-!include: 04c-multi-tenant.md
+!include: 04c-security.md
 !include: 05-observability.md
 !include: 06-meta-and-internals.md
 !include: 08-testing.md
