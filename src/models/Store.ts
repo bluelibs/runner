@@ -58,6 +58,7 @@ import { ExecutionContextStore } from "./ExecutionContextStore";
 import { resolveExecutionContextConfig } from "../tools/resolveExecutionContextConfig";
 import type { AccessViolation } from "./VisibilityTracker";
 import type { IdentityAsyncContext } from "../types/runner";
+import { HealthReporter } from "./HealthReporter";
 
 // Re-export types for backward compatibility
 export type {
@@ -85,6 +86,7 @@ export class Store {
   private hasRunCooldown = false;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
   private readonly executionContextStore: ExecutionContextStore;
+  private readonly healthReporter: HealthReporter;
 
   #isLocked = false;
   #isInitialized = false;
@@ -107,6 +109,7 @@ export class Store {
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this);
+    this.healthReporter = new HealthReporter(this);
 
     this.mode = detectRunnerMode(mode);
   }
@@ -162,6 +165,10 @@ export class Store {
    */
   public getExecutionContextStore(): ExecutionContextStore {
     return this.executionContextStore;
+  }
+
+  public getHealthReporter(): HealthReporter {
+    return this.healthReporter;
   }
 
   /**
@@ -618,7 +625,7 @@ export class Store {
     identity: IdentityAsyncContext | null,
   ): void {
     const activeIdentity = identity ?? asyncContexts.identity;
-    if (this.lookup.tryCanonicalId(activeIdentity)) {
+    if (this.registry.resolveRegisteredReferenceId(activeIdentity)) {
       return;
     }
 

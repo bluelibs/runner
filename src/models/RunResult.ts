@@ -26,7 +26,6 @@ import {
   shutdownLockdownError,
 } from "../errors";
 import { runtimeSource } from "../types/runtimeSource";
-import { HealthReporter } from "./HealthReporter";
 import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import {
   IRuntimeRecoveryHandle,
@@ -115,7 +114,6 @@ export class RunResult<V> implements IRuntime<V> {
    * When enabled, unused resources are not initialized until accessed.
    */
   private lazyOptions: RunResultLazyOptions = {};
-  private readonly healthReporter: HealthReporter;
   private readonly recoveryController: RuntimeRecoveryController;
 
   /**
@@ -170,20 +168,6 @@ export class RunResult<V> implements IRuntime<V> {
      */
     private readonly isForceDisposeRequested: () => boolean,
   ) {
-    this.healthReporter = new HealthReporter(this.store, {
-      ensureAvailable: () => {
-        this.ensureRuntimeIsActive();
-        if (this.#isBootstrapping) {
-          runtimeHealthDuringBootstrapError.throw();
-        }
-      },
-      assertResourceAccess: (resourceId) =>
-        this.assertRuntimeAccess(resourceId, "Resource"),
-      isResourceAccessible: (resourceId) =>
-        this.isRuntimeAccessible(resourceId),
-      isSleepingResource: (resourceId) =>
-        this.store.resources.get(resourceId)!.isInitialized !== true,
-    });
     this.recoveryController = new RuntimeRecoveryController({
       getRuntimeState: () => this.getRuntimeState(),
       getTimers: () => this.getTimersResourceValue(),
@@ -599,7 +583,21 @@ export class RunResult<V> implements IRuntime<V> {
    */
   public getHealth = async (
     resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
-  ) => this.healthReporter.getHealth(resourceDefs);
+  ) =>
+    this.store.getHealthReporter().getHealth(resourceDefs, {
+      ensureAvailable: () => {
+        this.ensureRuntimeIsActive();
+        if (this.#isBootstrapping) {
+          runtimeHealthDuringBootstrapError.throw();
+        }
+      },
+      assertResourceAccess: (resourceId) =>
+        this.assertRuntimeAccess(resourceId, "Resource"),
+      isResourceAccessible: (resourceId) =>
+        this.isRuntimeAccessible(resourceId),
+      isSleepingResource: (resourceId) =>
+        this.store.resources.get(resourceId)!.isInitialized !== true,
+    });
 
   public pause = (_reason?: string): void => {
     this.ensureRuntimeIsActive();

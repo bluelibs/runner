@@ -260,7 +260,7 @@ describe("subtree policy normalization", () => {
     expect(merged.middleware).toEqual({});
   });
 
-  it("replaces middleware.identityScope when the incoming branch provides one", () => {
+  it("accepts additive middleware.identityScope declarations that match after normalization", () => {
     const merged = mergeResourceSubtreePolicy(
       {
         middleware: {
@@ -269,12 +269,29 @@ describe("subtree policy normalization", () => {
       },
       {
         middleware: {
-          identityScope: userScope,
+          identityScope: { tenant: true, required: true },
         },
       },
     );
 
-    expect(merged.middleware?.identityScope).toEqual(userScope);
+    expect(merged.middleware?.identityScope).toEqual(tenantScope);
+  });
+
+  it("rejects additive middleware.identityScope declarations that do not match", () => {
+    expect(() =>
+      mergeResourceSubtreePolicy(
+        {
+          middleware: {
+            identityScope: tenantScope,
+          },
+        },
+        {
+          middleware: {
+            identityScope: userScope,
+          },
+        },
+      ),
+    ).toThrow(/middleware\.identityScope/i);
   });
 
   it("rejects invalid middleware.identityScope values", () => {
@@ -434,6 +451,21 @@ describe("subtree policy normalization", () => {
     );
 
     expect(merged.middleware).toEqual({});
+  });
+
+  it("fills an existing empty middleware branch when an additive merge provides identityScope", () => {
+    const merged = mergeResourceSubtreePolicy(
+      {
+        middleware: {},
+      },
+      {
+        middleware: {
+          identityScope: tenantScope,
+        },
+      },
+    );
+
+    expect(merged.middleware?.identityScope).toEqual(tenantScope);
   });
 
   it("preserves an existing empty middleware branch when other subtree branches are merged", () => {

@@ -216,11 +216,13 @@ export class StoreRegistry {
     this.recordCanonicalSourceId(reference, canonicalId);
   }
 
-  resolveDefinitionId(reference: unknown): string | undefined {
-    if (typeof reference === "string") {
-      return this.resolveUniqueSourceIdAlias(reference) ?? reference;
-    }
-
+  /**
+   * Resolves only aliases that were learned from an actual registered
+   * definition reference. This intentionally ignores raw source-id fallback so
+   * callers can distinguish "this exact object is registered" from
+   * "something with the same public id exists".
+   */
+  resolveRegisteredReferenceId(reference: unknown): string | undefined {
     if (!isObjectReference(reference)) {
       return undefined;
     }
@@ -247,9 +249,28 @@ export class StoreRegistry {
     }
 
     if (isResourceWithConfig(reference)) {
-      return (
-        this.definitionAliases.get(reference.resource) ?? reference.resource.id
-      );
+      return this.definitionAliases.get(reference.resource);
+    }
+
+    return undefined;
+  }
+
+  resolveDefinitionId(reference: unknown): string | undefined {
+    if (typeof reference === "string") {
+      return this.resolveUniqueSourceIdAlias(reference) ?? reference;
+    }
+
+    const registeredReferenceId = this.resolveRegisteredReferenceId(reference);
+    if (registeredReferenceId) {
+      return registeredReferenceId;
+    }
+
+    if (!isObjectReference(reference)) {
+      return undefined;
+    }
+
+    if (isResourceWithConfig(reference)) {
+      return reference.resource.id;
     }
 
     const sourceId = getReferenceSourceId(reference);

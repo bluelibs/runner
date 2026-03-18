@@ -142,4 +142,31 @@ describe("identity-sensitive features require AsyncLocalStorage", () => {
 
     await expect(run(app)).rejects.toThrow(/identityChecker/i);
   });
+
+  it("fails fast at boot when subtree task middleware explicitly configures identityScope", async () => {
+    setPlatform(new PlatformAdapter("browser"));
+
+    const task = defineTask({
+      id: "identity-als-support-subtree-scoped-middleware-task",
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "identity-als-support-subtree-scoped-middleware-app",
+      subtree: {
+        tasks: {
+          middleware: [
+            middleware.task.rateLimit.with({
+              windowMs: 5_000,
+              max: 1,
+              identityScope: tenantScope,
+            }),
+          ],
+        },
+      },
+      register: [task],
+      init: async () => "ok",
+    });
+
+    await expect(run(app)).rejects.toThrow(/identityScope/i);
+  });
 });

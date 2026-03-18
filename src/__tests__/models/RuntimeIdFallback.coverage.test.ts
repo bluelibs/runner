@@ -5,14 +5,9 @@ import { createTestFixture } from "../test-utils";
 
 describe("runtime id fallback coverage", () => {
   it("falls back to String(reference) in HealthReporter id resolution", () => {
-    const reporter = new HealthReporter(
-      {
-        resolveDefinitionId: () => undefined,
-      } as any,
-      {
-        ensureAvailable: () => undefined,
-      },
-    );
+    const reporter = new HealthReporter({
+      resolveDefinitionId: () => undefined,
+    } as any);
 
     expect((reporter as any).resolveDefinitionId({ bad: true })).toBe(
       "[object Object]",

@@ -6,7 +6,10 @@ import type {
   SubtreeTaskValidator,
 } from "../types/subtree";
 import type { IdentityRequirementConfig } from "../public-types";
+import { validationError } from "../errors";
 import { cloneIdentityRequirementConfig } from "../globals/middleware/identityRequirement.shared";
+import type { IdentityScopeConfig } from "../globals/middleware/identityScope.shared";
+import { identityScopesMatch } from "../globals/middleware/identityScope.contract";
 import {
   cloneNormalizedSubtreePolicy,
   cloneSubtreeConditionalMiddlewareEntry,
@@ -210,19 +213,19 @@ function mergeSubtreeValidateBranch<TValidator>(
   };
 }
 
-function mergeSubtreeMiddlewarePolicyBranch<TIdentityScope>(
+function mergeSubtreeMiddlewarePolicyBranch(
   existing:
     | {
-        identityScope?: TIdentityScope;
+        identityScope?: IdentityScopeConfig;
       }
     | undefined,
   incoming: {
-    identityScope?: TIdentityScope;
+    identityScope?: IdentityScopeConfig;
   },
   override: boolean,
 ):
   | {
-      identityScope?: TIdentityScope;
+      identityScope?: IdentityScopeConfig;
     }
   | undefined {
   if (!existing) {
@@ -243,12 +246,33 @@ function mergeSubtreeMiddlewarePolicyBranch<TIdentityScope>(
     };
   }
 
-  return {
-    ...("identityScope" in incoming
-      ? { identityScope: incoming.identityScope }
-      : "identityScope" in existing
+  if (!("identityScope" in incoming)) {
+    return {
+      ...("identityScope" in existing
         ? { identityScope: existing.identityScope }
         : {}),
+    };
+  }
+
+  if (!("identityScope" in existing)) {
+    return {
+      identityScope: incoming.identityScope,
+    };
+  }
+
+  // Additive subtree policies should not silently change the effective
+  // middleware partitioning model for the same owner resource.
+  if (!identityScopesMatch(existing.identityScope, incoming.identityScope)) {
+    validationError.throw({
+      subject: "Subtree policy",
+      id: "middleware.identityScope",
+      originalError:
+        "Additive subtree middleware.identityScope declarations must match exactly after normalization, or the later declaration must opt into override mode.",
+    });
+  }
+
+  return {
+    identityScope: existing.identityScope,
   };
 }
 

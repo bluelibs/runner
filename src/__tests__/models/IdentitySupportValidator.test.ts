@@ -1,4 +1,5 @@
 import { identityFeatureRequiresAsyncLocalStorageError } from "../../errors";
+import { globalTags } from "../../globals/globalTags";
 import { PlatformAdapter, resetPlatform, setPlatform } from "../../platform";
 import { validateIdentityAsyncContextSupport } from "../../models/validators";
 import type { ValidatorContext } from "../../models/validators";
@@ -137,5 +138,56 @@ describe("IdentitySupportValidator", () => {
     } as unknown as ValidatorContext;
 
     expect(() => validateIdentityAsyncContextSupport(ctx)).not.toThrow();
+  });
+
+  it("rejects subtree task middleware with explicit identityScope on unsupported platforms", () => {
+    setPlatform(new PlatformAdapter("browser"));
+
+    const ctx = {
+      registry: {
+        tasks: new Map(),
+        resources: new Map([
+          [
+            "resource-a",
+            {
+              resource: {
+                id: "resource-a",
+                subtree: {
+                  tasks: {
+                    middleware: [
+                      {
+                        id: "custom.middleware.task.rateLimit",
+                        config: {
+                          identityScope: { tenant: true },
+                        },
+                        tags: [globalTags.identityScoped],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        ]),
+      },
+      resolveReferenceId: (reference: unknown) =>
+        typeof reference === "object" &&
+        reference !== null &&
+        "id" in reference &&
+        typeof reference.id === "string"
+          ? reference.id
+          : null,
+      findIdByDefinition: (reference: unknown) =>
+        typeof reference === "object" &&
+        reference !== null &&
+        "id" in reference &&
+        typeof reference.id === "string"
+          ? reference.id
+          : String(reference),
+    } as unknown as ValidatorContext;
+
+    expect(() => validateIdentityAsyncContextSupport(ctx)).toThrow(
+      /identityScope on task middleware/i,
+    );
   });
 });

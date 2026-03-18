@@ -1,4 +1,4 @@
-import { asyncContexts, middleware, r, run } from "../..";
+import { asyncContexts, middleware, r, resources, run } from "../..";
 import {
   identityInvalidContextError,
   identityRunOptionRequiresAsyncLocalStorageError,
@@ -106,6 +106,44 @@ describe("run(..., { identity })", () => {
 
     const runtime = await run(app, { identity });
     expect(seenIdentityId).toBe(identity.id);
+    await runtime.dispose();
+  });
+
+  it("auto-registers a configured identity context even when it reuses the built-in identity id", async () => {
+    const identity = r
+      .asyncContext<{ tenantId: string; accountId: string }>("identity")
+      .configSchema({
+        tenantId: String,
+        accountId: String,
+      })
+      .build();
+    let injectedIdentity: typeof identity | undefined;
+    const probe = r
+      .resource("identity-run-option-colliding-probe")
+      .dependencies({ identity })
+      .init(async (_config, deps) => {
+        injectedIdentity = deps.identity;
+        return "ok";
+      })
+      .build();
+    const app = r
+      .resource("identity-run-option-colliding-app")
+      .register([probe])
+      .build();
+
+    const runtime = await run(app, { identity });
+    const store = runtime.getResourceValue(resources.store);
+    const registeredId = store.findIdByDefinition(identity);
+    const registeredIdentity = store.asyncContexts.get(registeredId);
+
+    expect(injectedIdentity).toBe(identity);
+    expect(registeredId).toBe("runner.asyncContexts.identity");
+    expect(registeredIdentity).toBeDefined();
+    expect(registeredIdentity).not.toBe(asyncContexts.identity);
+    expect(() =>
+      registeredIdentity?.provide({ tenantId: "acme" } as never, () => "ok"),
+    ).toThrow();
+
     await runtime.dispose();
   });
 

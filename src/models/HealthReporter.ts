@@ -11,18 +11,15 @@ import type { Store } from "./Store";
 import type { IHealthReporter } from "../types/runner";
 import { extractRequestedId, resolveCanonicalIdFromStore } from "./StoreLookup";
 
-type HealthReporterOptions = {
-  ensureAvailable: () => void;
+export type HealthReporterAccessPolicy = {
+  ensureAvailable?: () => void;
   assertResourceAccess?: (resourceId: string) => void;
   isResourceAccessible?: (resourceId: string) => boolean;
   isSleepingResource?: (resourceId: string) => boolean;
 };
 
 export class HealthReporter implements IHealthReporter {
-  constructor(
-    private readonly store: Store,
-    private readonly options: HealthReporterOptions,
-  ) {}
+  constructor(private readonly store: Store) {}
 
   private resolveDefinitionId(reference: unknown): string {
     return (
@@ -34,12 +31,18 @@ export class HealthReporter implements IHealthReporter {
 
   public getHealth = async (
     resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
+    accessPolicy: HealthReporterAccessPolicy = {},
   ): Promise<IResourceHealthReport> => {
-    this.options.ensureAvailable();
+    accessPolicy.ensureAvailable?.();
 
-    const resourceIds = this.resolveHealthResourceIds(resourceDefs);
+    const resourceIds = this.resolveHealthResourceIds(
+      resourceDefs,
+      accessPolicy,
+    );
     const report = await Promise.all(
-      resourceIds.map((resourceId) => this.evaluateResourceHealth(resourceId)),
+      resourceIds.map((resourceId) =>
+        this.evaluateResourceHealth(resourceId, accessPolicy),
+      ),
     );
 
     const totals = {
@@ -86,15 +89,18 @@ export class HealthReporter implements IHealthReporter {
   }
 
   private resolveHealthResourceIds(
-    resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
+    resourceDefs:
+      | Array<string | IResource<any, any, any, any, any>>
+      | undefined,
+    accessPolicy: HealthReporterAccessPolicy,
   ): string[] {
     if (!resourceDefs || resourceDefs.length === 0) {
       return Array.from(this.store.resources.values())
         .filter((entry) => entry.resource.health)
         .filter(
           (entry) =>
-            this.options.isResourceAccessible?.(entry.resource.id) !== false &&
-            this.options.isSleepingResource?.(entry.resource.id) !== true,
+            accessPolicy.isResourceAccessible?.(entry.resource.id) !== false &&
+            accessPolicy.isSleepingResource?.(entry.resource.id) !== true,
         )
         .map((entry) => entry.resource.id);
     }
@@ -111,7 +117,7 @@ export class HealthReporter implements IHealthReporter {
         });
       }
 
-      this.options.assertResourceAccess?.(resourceId);
+      accessPolicy.assertResourceAccess?.(resourceId);
       if (seen.has(resourceId)) {
         continue;
       }
@@ -120,7 +126,7 @@ export class HealthReporter implements IHealthReporter {
       const entry = this.store.resources.get(resourceId)!;
       if (
         entry.resource.health &&
-        this.options.isSleepingResource?.(resourceId) !== true
+        accessPolicy.isSleepingResource?.(resourceId) !== true
       ) {
         resourceIds.push(resourceId);
       }
@@ -131,11 +137,14 @@ export class HealthReporter implements IHealthReporter {
 
   private async evaluateResourceHealth(
     resourceId: string,
+    accessPolicy: HealthReporterAccessPolicy,
   ): Promise<IResourceHealthReportEntry> {
     const entry = this.store.resources.get(resourceId)!;
     const baseEntry = {
       id: resourceId,
-      initialized: entry.isInitialized === true,
+      initialized:
+        accessPolicy.isSleepingResource?.(resourceId) !== true &&
+        entry.isInitialized === true,
     };
 
     try {

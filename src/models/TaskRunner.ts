@@ -28,7 +28,6 @@ import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import type { ExecutionFrame } from "../types/executionContext";
 import { globalTags } from "../globals/globalTags";
-import { HealthReporter } from "./HealthReporter";
 import { raceWithAbortSignal } from "../tools/abortSignals";
 import { identityContextResource } from "../globals/resources/identityContext.resource";
 import type { IdentityContextResourceValue } from "../globals/resources/identityContext.resource";
@@ -88,11 +87,6 @@ export class TaskRunner {
 
   private readonly middlewareManager: MiddlewareManager;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
-  private readonly healthReporter = new HealthReporter(this.store, {
-    ensureAvailable: () => undefined,
-    isSleepingResource: (resourceId) =>
-      this.store.resources.get(resourceId)!.isInitialized !== true,
-  });
 
   /**
    * Executes a registered task through the runtime pipeline.
@@ -317,7 +311,10 @@ export class TaskRunner {
       });
     }
 
-    const report = await this.healthReporter.getHealth(resourceIds);
+    const report = await this.store.getHealthReporter().getHealth(resourceIds, {
+      isSleepingResource: (resourceId) =>
+        this.store.resources.get(resourceId)!.isInitialized !== true,
+    });
     const unhealthyResourceIds = report.report
       .filter((entry) => entry.status === "unhealthy")
       .map((entry) => entry.id);

@@ -67,8 +67,16 @@ export function createSyntheticFrameworkRoot({
 }: FrameworkRootInput): IResource<void, Promise<void>> {
   const runnerRegister = [...RUNNER_FRAMEWORK_ITEMS];
   const identityContext = identity ?? asyncContexts.identity;
+  const shouldRegisterBuiltInIdentity =
+    identityContext === asyncContexts.identity ||
+    identityContext.id !== asyncContexts.identity.id;
 
-  runnerRegister.push(asyncContexts.identity);
+  // When the configured runtime identity context reuses the built-in public
+  // id, reserve the runner-owned identity slot for that configured context so
+  // it can still be auto-registered into the runtime graph.
+  if (shouldRegisterBuiltInIdentity) {
+    runnerRegister.push(asyncContexts.identity);
+  }
 
   runnerRegister.push(
     identityContextResource.with({
