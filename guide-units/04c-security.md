@@ -159,6 +159,7 @@ Task identity gates are the "allow or block execution" part of the story.
 - `subtree({ tasks: { identity: {} } })` means every task in that subtree requires tenant identity.
 - Mentioning `tasks.identity` implies `tenant: true`, so `{ user: true }` means tenant + user and `{ roles: ["ADMIN"] }` still requires tenant.
 - `roles` use OR semantics inside one gate: at least one configured role must match.
+- Runner treats roles literally. If your app has inherited roles such as `ADMIN -> MANAGER -> USER`, expand the effective roles in your auth layer before binding identity, then gate on the lowest role the task actually needs.
 - Nested resources add gates additively, so all owner-resource layers must pass.
 - `middleware.task.identityChecker.with({ ... })` uses the same gate contract for one explicit middleware layer.
 - Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `tasks.identity`, `middleware.task.identityChecker`, explicit middleware `identityScope`, and `subtree.middleware.identityScope`.

@@ -94,7 +94,9 @@ export interface IIdentity {
    * Optional roles attached to the active identity.
    *
    * Runner does not interpret these automatically unless a task identity gate
-   * or `middleware.task.identityChecker` explicitly requests them.
+   * or `middleware.task.identityChecker` explicitly requests them. If your app
+   * models inherited roles, expand the effective role set before binding the
+   * identity so the gate sees the right access surface.
    */
   roles?: readonly string[];
 }
@@ -121,6 +123,10 @@ export interface IdentityRequirementConfig {
   user?: boolean;
   /**
    * Require at least one matching role on the active identity.
+   *
+   * Runner evaluates this as a flat OR list. If your app has role
+   * inheritance, expand the effective roles before the identity reaches
+   * Runner.
    */
   roles?: readonly string[];
 }

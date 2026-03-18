@@ -969,6 +969,7 @@ Task identity gates are separate from middleware partitioning:
 - `subtree({ tasks: { identity: {} } })` means every task in that subtree requires tenant identity.
 - `subtree({ tasks: { identity: { user: true } } })` means tenant + user.
 - `subtree({ tasks: { identity: { roles: ["ADMIN", "SUPPORT"] } } })` still implies tenant identity and requires at least one listed role.
+- Runner treats `roles` literally. If your app has inherited roles like `ADMIN -> MANAGER -> USER`, expand the effective roles before `identity.provide(...)` or `run(..., { identity })`, then gate on the lowest role the task needs.
 - Nested `tasks.identity` policies are additive across owner resources, so every layer must pass.
 - `middleware.task.identityChecker.with(...)` uses the same contract for one explicit task or subtree-added middleware layer.
 
