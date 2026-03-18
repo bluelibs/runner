@@ -1,6 +1,6 @@
 {
   "name": "@bluelibs/runner",
-  "version": "6.3.0",
+  "version": "6.3.1",
   "description": "BlueLibs Runner",
   "sideEffects": false,
   "main": "dist/universal/index.cjs",
@@ -178,16 +178,6 @@
   "typescript": {
     "definition": "dist/types/index.d.ts"
   },
-  "files": [
-    "dist",
-    "node.js",
-    "node.d.ts",
-    "index.d.ts",
-    "node",
-    "README.md",
-    "readmes/COMPACT_GUIDE.md",
-    "LICENSE.md"
-  ],
   "license": "MIT",
   "dependencies": {
     "cron-parser": "^5.4.0",
