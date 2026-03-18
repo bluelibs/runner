@@ -19,15 +19,16 @@
 - All imports should be put on top, unless an optimization or something specific, default to top imports as preference instead of inline.
 - Do not ask the user if you should do something that is likely the user would want to do
 - The tests are in mirror-like structure under ./src/**tests**/ folder.
-- Always think isolation. Each container (r.run()) should be completely isolated from any other parallel r.run(), meaning we have to design for things within the container.
+- Apply clean-as-you-go-by principle, where low-effort hanging fruit while working on a feature, should be taken care as extra bonus, this should only apply to high confidence changes only, and should not be the main focus.
 
 ## Project Specifics
 
+- Always think isolation. Each container (r.run()) should be completely isolated from any other parallel r.run(), meaning we have to design for things within the container.
 - You are working inside runner framework source code. This library has 100% code coverage.
 - Node specific code (Async Context, Durable Workflows, Remote Lanes, etc) goes under ./src/node/ folder. It is exported only for node.
-- This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
+- This package is multi-platform (readmes/MULTI_PLATFORM.md) be sure to take this into account when implementing changes
 - When User asking questions like "did you check the tests?" if it would've been obvious to run the tests do it pro-actively instead of just saying no.
-- The compact guide is inside the runner's skill in .agents/skills. Changes/updates should be also included in the COMPACT_GUIDE.md (in references) as minimal as possible.
+- The compact guide is in COMPACT_GUIDE.md. Changes/updates should be also included as minimally as possible.
 - Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds, if working only on docs, don't run it)
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
