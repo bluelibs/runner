@@ -3,7 +3,7 @@ import type { IDependentNode } from "./findCircularDependencies";
 import { isOptional, isEvent, isTag, isTagStartup } from "../../define";
 import {
   resolveApplicableSubtreeResourceMiddlewares,
-  resolveApplicableSubtreeTaskMiddlewares,
+  resolveApplicableSubtreeTaskMiddlewareEntries,
 } from "../../tools/subtreeMiddleware";
 
 const getDependencyId = (
@@ -232,15 +232,16 @@ export function buildDependencyGraph(
           Boolean(middlewareId),
         ),
     );
-    for (const middleware of resolveApplicableSubtreeTaskMiddlewares(
+    for (const entry of resolveApplicableSubtreeTaskMiddlewareEntries(
       subtreeLookup,
       t,
     )) {
+      const { middleware, duplicateKey, dependencyKey } = entry;
       const middlewareId = resolveDefinitionId(registry, middleware);
       if (!middlewareId) {
         continue;
       }
-      if (localMiddlewareIds.has(middlewareId)) {
+      if (localMiddlewareIds.has(duplicateKey)) {
         continue;
       }
 
@@ -248,8 +249,7 @@ export function buildDependencyGraph(
       if (!middlewareNode) {
         continue;
       }
-      node.dependencies[`__subtree.middleware.${middlewareId}`] =
-        middlewareNode;
+      node.dependencies[dependencyKey] = middlewareNode;
     }
   }
 

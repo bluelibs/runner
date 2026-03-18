@@ -55,7 +55,7 @@ export const identityContextResource = defineResource<
   meta: {
     title: "Identity Context Reader",
     description:
-      "Exposes the configured runtime identity async context as a small resource dependency for identity-aware framework middleware.",
+      "Internal runner-owned adapter that exposes the active runtime identity async context to identity-aware framework middleware.",
   },
   configSchema: identityContextConfigPattern,
   init: async (config, _dependencies, _context) => ({

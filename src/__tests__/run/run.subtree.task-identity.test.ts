@@ -11,6 +11,7 @@ import {
   identityContextRequiredError,
   identityInvalidContextError,
 } from "../../errors";
+import { ResourceLifecycleMode } from "../../types/runner";
 
 function identityValue(
   tenantId: string,
@@ -280,6 +281,86 @@ describe("run subtree task identity policy", () => {
           roles: ["ADMIN"],
         },
         () => runtime.runTask(task),
+      ),
+    ).resolves.toBe("ok");
+
+    await runtime.dispose();
+  });
+
+  it("keeps subtree task identity gates eager in lazy parallel runtimes", async () => {
+    const task = defineTask({
+      id: "subtree-task-identity-lazy-parallel-task",
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "subtree-task-identity-lazy-parallel-app",
+      subtree: {
+        tasks: {
+          identity: { user: true },
+        },
+      },
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app, {
+      lazy: true,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
+      shutdownHooks: false,
+    });
+
+    await expect(runtime.runTask(task)).rejects.toThrow(
+      /Identity context is required/i,
+    );
+    await expect(
+      asyncContexts.identity.provide(identityValue("acme", "u1"), () =>
+        runtime.runTask(task),
+      ),
+    ).resolves.toBe("ok");
+
+    await runtime.dispose();
+  });
+
+  it("uses the configured runtime identity context for lazy parallel subtree task gates", async () => {
+    const identity = r
+      .asyncContext<{ tenantId: string; userId: string }>(
+        "subtree-task-identity-lazy-parallel-custom-context",
+      )
+      .configSchema({
+        tenantId: String,
+        userId: String,
+      })
+      .build();
+    const task = defineTask({
+      id: "subtree-task-identity-lazy-parallel-custom-task",
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "subtree-task-identity-lazy-parallel-custom-app",
+      subtree: {
+        tasks: {
+          identity: { user: true },
+        },
+      },
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app, {
+      identity,
+      lazy: true,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
+      shutdownHooks: false,
+    });
+
+    await expect(
+      asyncContexts.identity.provide(identityValue("acme", "u1"), () =>
+        runtime.runTask(task),
+      ),
+    ).rejects.toThrow(/Identity context is required/i);
+    await expect(
+      identity.provide({ tenantId: "acme", userId: "u1" }, () =>
+        runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
 

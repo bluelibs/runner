@@ -71,9 +71,8 @@ export function createSyntheticFrameworkRoot({
     identityContext === asyncContexts.identity ||
     identityContext.id !== asyncContexts.identity.id;
 
-  // When the configured runtime identity context reuses the built-in public
-  // id, reserve the runner-owned identity slot for that configured context so
-  // it can still be auto-registered into the runtime graph.
+  // Keep the public built-in identity context available in the runner
+  // namespace unless the selected runtime identity already occupies that slot.
   if (shouldRegisterBuiltInIdentity) {
     runnerRegister.push(asyncContexts.identity);
   }

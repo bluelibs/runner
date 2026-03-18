@@ -6,8 +6,8 @@ In Runner, "identity" means the async-context payload used to partition framewor
 
 The story usually looks like this:
 
-- If you do nothing, Runner uses the built-in `asyncContexts.identity`.
-- If your app needs extra runtime-validated fields such as `userId`, define your own async context, register it, and pass it to `run(app, { identity })`.
+- If you do nothing, Runner uses the built-in `asyncContexts.identity` as the active runtime identity context.
+- If your app needs extra runtime-validated fields such as `userId`, define your own async context, register it, and pass it to `run(app, { identity })` so Runner switches its internal identity-aware middleware to that context for this runtime.
 - If your SaaS has users but no real tenant model, you can still use the built-in identity-aware middleware by providing a constant tenant such as `tenantId: "app"` at ingress and treating it as your single shared tenant namespace.
 
 From there, the pattern is straightforward: ingress binds identity, tasks and helpers read it, middleware can partition internal state with it, and task identity gates can block execution when the active identity is missing or not authorized.
@@ -100,7 +100,7 @@ Why this pattern matters:
 - `.configSchema(...)` validates your richer ingress contract before `provide(...)` binds it
 
 If that custom identity context is already registered in the app graph, your app can also depend on it directly in the usual way.
-If it is not registered, `run(app, { identity })` still auto-registers it for runtime dependency usage.
+If it is not registered, `run(app, { identity })` still auto-registers it under the runner namespace for runtime dependency usage.
 Transport features remain stricter: HTTP clients, exposure, and remote lanes can only serialize or hydrate contexts that are registered and explicitly forwarded.
 
 ### Access Patterns
@@ -158,6 +158,7 @@ Task identity gates are the "allow or block execution" part of the story.
 
 - `subtree({ tasks: { identity: {} } })` means every task in that subtree requires tenant identity.
 - Mentioning `tasks.identity` implies `tenant: true`, so `{ user: true }` means tenant + user and `{ roles: ["ADMIN"] }` still requires tenant.
+- `subtree({ tasks: { identity: ... } })` is declarative sugar for runner-owned `identityChecker` middleware attached to matching tasks.
 - `roles` use OR semantics inside one gate: at least one configured role must match.
 - Runner treats roles literally. If your app has inherited roles such as `ADMIN -> MANAGER -> USER`, expand the effective roles in your auth layer before binding identity, then gate on the lowest role the task actually needs.
 - Nested resources add gates additively, so all owner-resource layers must pass.
@@ -165,11 +166,47 @@ Task identity gates are the "allow or block execution" part of the story.
 - Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `tasks.identity`, `middleware.task.identityChecker`, explicit middleware `identityScope`, and `subtree.middleware.identityScope`.
 
 ```typescript
+import { asyncContexts, r, run } from "@bluelibs/runner";
+
+const approveRefund = r.task("approveRefund").run(async () => "ok").build();
+
+const supportArea = r
+  .resource("supportArea")
+  .subtree({
+    tasks: {
+      identity: { roles: ["SUPPORT"] },
+    },
+  })
+  .register([approveRefund])
+  .build();
+
+const app = r
+  .resource("app")
+  .subtree({
+    tasks: {
+      identity: { user: true, roles: ["ADMIN"] },
+    },
+  })
+  .register([supportArea])
+  .build();
+
+const runtime = await run(app);
+
+await asyncContexts.identity.provide(
+  { tenantId: "acme", userId: "u1", roles: ["ADMIN", "SUPPORT"] },
+  () => runtime.runTask(approveRefund),
+);
+```
+
+`approveRefund` inherits both subtree gates, so the call above passes only because the active identity satisfies tenant + user and both role layers: `ADMIN` from `app` and `SUPPORT` from `supportArea`.
+
+```typescript
 import { middleware } from "@bluelibs/runner";
 
 middleware.task.identityChecker.with({
+  tenant: true, // by default
   user: true,
-  roles: ["ADMIN", "SUPPORT"],
+  roles: ["ADMIN", "SUPPORT"], // has ADMIN or SUPPORT role
 });
 ```
 

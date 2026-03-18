@@ -9,8 +9,8 @@ import type {
 import { isResourceMiddleware, isTaskMiddleware } from "../definers/tools";
 import { getStoredSubtreePolicy } from "../definers/subtreePolicy";
 import { validationError } from "../errors";
+import { identityCheckerTaskMiddleware } from "../globals/middleware/identityChecker.middleware";
 import type { IdentityScopeConfig } from "../globals/middleware/identityScope.shared";
-import type { IdentityRequirementConfig } from "../public-types";
 
 type SubtreeLookup = {
   getOwnerResourceId: (itemId: string) => string | undefined;
@@ -25,6 +25,12 @@ type MiddlewareWithId = {
 
 const taskMiddlewareScopeMarker = ".middleware.task.";
 const resourceMiddlewareScopeMarker = ".middleware.resource.";
+
+export type ResolvedSubtreeTaskMiddlewareEntry = {
+  middleware: ITaskMiddleware<any, any, any, any>;
+  duplicateKey: string;
+  dependencyKey: string;
+};
 
 export function getSubtreeMiddlewareDuplicateKey(id: string): string {
   const taskScopeIndex = id.lastIndexOf(taskMiddlewareScopeMarker);
@@ -310,21 +316,61 @@ function resolveApplicableSubtreeMiddlewares<
     .map((entry) => entry.middleware);
 }
 
-export function resolveApplicableSubtreeTaskMiddlewares(
+export function resolveApplicableSubtreeTaskMiddlewareEntries(
   lookup: SubtreeLookup,
   task: ITask<any, any, any, any, any, any>,
-): ITaskMiddleware[] {
+): ResolvedSubtreeTaskMiddlewareEntry[] {
   const chain = getTargetOwnerResourceChain(lookup, {
     targetId: task.id,
     isResourceTarget: false,
   });
 
-  return resolveApplicableSubtreeMiddlewares(
-    lookup,
-    chain,
-    task,
-    (resource) => getStoredSubtreePolicy(resource)?.tasks?.middleware,
-    resolveTaskSubtreeMiddlewareEntry,
+  const identityGateEntries: ResolvedSubtreeTaskMiddlewareEntry[] = [];
+  let identityGateOrder = 0;
+
+  for (const ownerResourceId of [...chain].reverse()) {
+    const ownerResource = lookup.getResource(ownerResourceId);
+    const identityRequirements = ownerResource
+      ? getStoredSubtreePolicy(ownerResource)?.tasks?.identity
+      : undefined;
+
+    if (!identityRequirements?.length) {
+      continue;
+    }
+
+    for (const identityRequirement of identityRequirements) {
+      const duplicateKey = `__subtree.identity.${ownerResourceId}.${identityGateOrder}`;
+      identityGateEntries.push({
+        middleware: identityCheckerTaskMiddleware.with(identityRequirement),
+        duplicateKey,
+        dependencyKey: duplicateKey,
+      });
+      identityGateOrder += 1;
+    }
+  }
+
+  return [
+    ...identityGateEntries,
+    ...resolveApplicableSubtreeMiddlewares(
+      lookup,
+      chain,
+      task,
+      (resource) => getStoredSubtreePolicy(resource)?.tasks?.middleware,
+      resolveTaskSubtreeMiddlewareEntry,
+    ).map((middleware) => ({
+      middleware,
+      duplicateKey: getSubtreeMiddlewareDuplicateKey(middleware.id),
+      dependencyKey: `__subtree.middleware.${middleware.id}`,
+    })),
+  ];
+}
+
+export function resolveApplicableSubtreeTaskMiddlewares(
+  lookup: SubtreeLookup,
+  task: ITask<any, any, any, any, any, any>,
+): ITaskMiddleware[] {
+  return resolveApplicableSubtreeTaskMiddlewareEntries(lookup, task).map(
+    (entry) => entry.middleware,
   );
 }
 
@@ -349,32 +395,6 @@ export function resolveNearestSubtreeMiddlewareIdentityScope(
   }
 
   return undefined;
-}
-
-export function resolveTaskIdentityRequirements(
-  lookup: SubtreeLookup,
-  task: ITask<any, any, any, any, any, any>,
-): IdentityRequirementConfig[] {
-  const chain = getTargetOwnerResourceChain(lookup, {
-    targetId: task.id,
-    isResourceTarget: false,
-  });
-  const requirements: IdentityRequirementConfig[] = [];
-
-  for (const ownerResourceId of [...chain].reverse()) {
-    const ownerResource = lookup.getResource(ownerResourceId);
-    const identityRequirements = ownerResource
-      ? getStoredSubtreePolicy(ownerResource)?.tasks?.identity
-      : undefined;
-
-    if (!identityRequirements?.length) {
-      continue;
-    }
-
-    requirements.push(...identityRequirements);
-  }
-
-  return requirements;
 }
 
 export function resolveApplicableSubtreeResourceMiddlewares(

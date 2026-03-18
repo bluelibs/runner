@@ -910,8 +910,8 @@ Key rules:
 Runner gives you the right hooks to propagate identity, partition framework-managed state, and enforce task-level access rules consistently.
 Authentication itself is still decided by your app, not by Runner.
 Runner's official same-runtime security pattern uses a shared identity async context.
-If you do nothing, Runner reads the built-in `asyncContexts.identity`.
-When your app needs extra runtime-validated fields such as `userId`, define your own async context, register it, and pass it to `run(..., { identity })`.
+If you do nothing, Runner uses the built-in `asyncContexts.identity` as the active runtime identity context.
+When your app needs extra runtime-validated fields such as `userId`, define your own async context, register it, and pass it to `run(..., { identity })` so Runner switches its internal identity-aware middleware to that context for this runtime.
 
 - `identity.use()` returns `{ tenantId: string }` and throws when missing.
 - `identity.tryUse()` returns the identity value or `undefined`.
@@ -942,7 +942,7 @@ await identity.provide({ tenantId: "acme", userId: "u1" }, () =>
 );
 ```
 
-- If your custom identity context is already registered in the app graph, your app can also depend on it directly. If it is not, `run(..., { identity })` auto-registers it for runtime dependency usage.
+- If your custom identity context is already registered in the app graph, your app can also depend on it directly. If it is not, `run(..., { identity })` auto-registers it under the runner namespace for runtime dependency usage.
 - Because identity lives in async context, nested `run()` calls inside the same async execution tree inherit it too.
 - Remote lanes and HTTP transport still require the context to be explicitly forwarded and allowlisted.
 - If your SaaS only has users and no real tenant model, provide a constant tenant such as `tenantId: "app"` at ingress when you want to use identity-aware middleware scopes.
@@ -969,6 +969,7 @@ Task identity gates are separate from middleware partitioning:
 - `subtree({ tasks: { identity: {} } })` means every task in that subtree requires tenant identity.
 - `subtree({ tasks: { identity: { user: true } } })` means tenant + user.
 - `subtree({ tasks: { identity: { roles: ["ADMIN", "SUPPORT"] } } })` still implies tenant identity and requires at least one listed role.
+- `subtree({ tasks: { identity: ... } })` is declarative sugar for runner-owned `identityChecker` middleware added to matching tasks.
 - Runner treats `roles` literally. If your app has inherited roles like `ADMIN -> MANAGER -> USER`, expand the effective roles before `identity.provide(...)` or `run(..., { identity })`, then gate on the lowest role the task needs.
 - Nested `tasks.identity` policies are additive across owner resources, so every layer must pass.
 - `middleware.task.identityChecker.with(...)` uses the same contract for one explicit task or subtree-added middleware layer.

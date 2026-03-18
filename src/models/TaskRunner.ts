@@ -29,10 +29,6 @@ import { ExecutionContextStore } from "./ExecutionContextStore";
 import type { ExecutionFrame } from "../types/executionContext";
 import { globalTags } from "../globals/globalTags";
 import { raceWithAbortSignal } from "../tools/abortSignals";
-import { identityContextResource } from "../globals/resources/identityContext.resource";
-import type { IdentityContextResourceValue } from "../globals/resources/identityContext.resource";
-import { assertIdentityRequirement } from "../globals/middleware/identityRequirement.shared";
-import { resolveTaskIdentityRequirements } from "../tools/subtreeMiddleware";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -142,7 +138,6 @@ export class TaskRunner {
     }
 
     const executeTask = async () => {
-      this.assertTaskIdentityPolicy(task);
       const healthPolicyCheck = this.assertTaskHealthPolicy(task);
       if (healthPolicyCheck) {
         await healthPolicyCheck;
@@ -247,39 +242,6 @@ export class TaskRunner {
     }
 
     return this.assertMonitoredResourcesHealthy(task, monitoredResources);
-  }
-
-  private assertTaskIdentityPolicy(task: ITask<any, any, any>): void {
-    const identityRequirements = resolveTaskIdentityRequirements(
-      {
-        getOwnerResourceId: (itemId) => this.store.getOwnerResourceId(itemId),
-        getResource: (resourceId) =>
-          this.store.resources.get(resourceId)?.resource,
-      },
-      task,
-    );
-
-    if (identityRequirements.length === 0) {
-      return;
-    }
-
-    const readIdentity = this.getRuntimeIdentityReader();
-
-    for (const identityRequirement of identityRequirements) {
-      assertIdentityRequirement(identityRequirement, readIdentity);
-    }
-  }
-
-  private getRuntimeIdentityReader(): (() => unknown) | undefined {
-    const identityContextId = this.store.findIdByDefinition(
-      identityContextResource,
-    );
-    const resourceEntry = this.store.resources.get(identityContextId);
-    const value = resourceEntry?.value as
-      | IdentityContextResourceValue
-      | undefined;
-
-    return value?.tryUse;
   }
 
   /**
