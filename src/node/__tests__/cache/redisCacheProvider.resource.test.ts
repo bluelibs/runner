@@ -187,8 +187,6 @@ function createFakeRedisClient() {
 }
 
 describe("redis cache provider resource", () => {
-  let persistentAppId = 0;
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -305,7 +303,7 @@ describe("redis cache provider resource", () => {
 
     const createApp = () =>
       r
-        .resource(`tests-redis-cache-persistent-app-${++persistentAppId}`)
+        .resource("tests-redis-cache-persistent-app")
         .register([
           resources.cache.with({
             provider: resources.redisCacheProvider.with({
@@ -356,9 +354,9 @@ describe("redis cache provider resource", () => {
       })
       .build();
 
-    const createApp = (id: number) =>
+    const createApp = () =>
       r
-        .resource(`tests-redis-cache-refs-app-${id}`)
+        .resource("tests-redis-cache-refs-app")
         .register([
           resources.cache.with({
             provider: resources.redisCacheProvider.with({
@@ -372,11 +370,11 @@ describe("redis cache provider resource", () => {
         .init(async () => "ok")
         .build();
 
-    const firstRuntime = await run(createApp(++persistentAppId));
+    const firstRuntime = await run(createApp());
     await firstRuntime.runTask(cachedTask, { userId: "u1" });
     await firstRuntime.dispose();
 
-    const secondRuntime = await run(createApp(++persistentAppId));
+    const secondRuntime = await run(createApp());
 
     try {
       const cache = secondRuntime.getResourceValue(resources.cache);

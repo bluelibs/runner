@@ -1,3 +1,4 @@
+import { r } from "../../../";
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
@@ -7,6 +8,45 @@ import {
 } from "../../../globals/middleware/temporal.middleware";
 
 describe("default keyed middleware behavior", () => {
+  it("keeps full task lineage in default keys across sibling resources", async () => {
+    const billingSync = defineTask({
+      id: "sync",
+      middleware: [rateLimitTaskMiddleware.with({ windowMs: 1_000, max: 1 })],
+      run: async (input: string) => `billing:${input}`,
+    });
+    const crmSync = defineTask({
+      id: "sync",
+      middleware: [rateLimitTaskMiddleware.with({ windowMs: 1_000, max: 1 })],
+      run: async (input: string) => `crm:${input}`,
+    });
+    const app = defineResource({
+      id: "app",
+      register: [
+        r.resource("billing").register([billingSync]).build(),
+        r.resource("crm").register([crmSync]).build(),
+      ],
+    });
+
+    const runtime = await run(app);
+
+    try {
+      await expect(
+        runtime.runTask("app.billing.tasks.sync", "same"),
+      ).resolves.toBe("billing:same");
+      await expect(runtime.runTask("app.crm.tasks.sync", "same")).resolves.toBe(
+        "crm:same",
+      );
+      await expect(
+        runtime.runTask("app.billing.tasks.sync", "same"),
+      ).rejects.toThrow(/rate limit exceeded/i);
+      await expect(
+        runtime.runTask("app.crm.tasks.sync", "same"),
+      ).rejects.toThrow(/rate limit exceeded/i);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("isolates rate limits per serialized input by default", async () => {
     const task = defineTask({
       id: "rateLimit-default-input-aware",

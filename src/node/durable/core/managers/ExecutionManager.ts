@@ -20,7 +20,12 @@ import type { AuditLogger } from "./AuditLogger";
 import type { WaitManager } from "./WaitManager";
 import { DurableContext } from "../DurableContext";
 import { SuspensionSignal } from "../interfaces/context";
-import { createExecutionId, sleepMs, withTimeout } from "../utils";
+import {
+  createExecutionId,
+  isTimeoutExceededError,
+  sleepMs,
+  withTimeout,
+} from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { NoopEventBus } from "../../bus/NoopEventBus";
 
@@ -588,9 +593,7 @@ export class ExecutionManager {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       };
-      const timedOut =
-        error instanceof Error &&
-        error.message === `Execution ${execution.id} timed out`;
+      const timedOut = isTimeoutExceededError(error);
 
       if (timedOut || execution.attempt >= execution.maxAttempts) {
         await failExecution(timedOut ? "timed_out" : "failed", errorInfo);

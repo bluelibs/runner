@@ -170,7 +170,7 @@ describe("Caching System", () => {
 
       expect(seenInputs).toEqual([
         {
-          taskId: "custom-budget-task",
+          taskId: "cache-budget-provider-app.tasks.custom-budget-task",
           totalBudgetBytes: 1_024,
         },
       ]);
@@ -752,7 +752,8 @@ describe("Caching System", () => {
                 ttl: 1234,
                 ttlAutopurge: true,
               },
-              taskId: "cache-refs-custom-provider-task",
+              taskId:
+                "cache-refs-custom-provider-app.tasks.cache-refs-custom-provider-task",
               refs: ["user:u1"],
             },
           ]);
@@ -1203,9 +1204,15 @@ describe("Caching System", () => {
             "max-size-task",
           );
 
-          expect(await cacheInstance?.has?.("max-size-task:1")).toBe(false);
-          expect(await cacheInstance?.has?.("max-size-task:2")).toBe(true);
-          expect(await cacheInstance?.has?.("max-size-task:3")).toBe(true);
+          expect(await cacheInstance?.has?.("app.tasks.max-size-task:1")).toBe(
+            false,
+          );
+          expect(await cacheInstance?.has?.("app.tasks.max-size-task:2")).toBe(
+            true,
+          );
+          expect(await cacheInstance?.has?.("app.tasks.max-size-task:3")).toBe(
+            true,
+          );
         },
       });
 

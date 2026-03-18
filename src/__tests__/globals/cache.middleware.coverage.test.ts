@@ -27,7 +27,7 @@ describe("cache middleware coverage", () => {
     expect(resolved.keyBuilder("task", { ok: true })).toBe('task:{"ok":true}');
   });
 
-  it("exposes the canonical task key helper to key builders", () => {
+  it("exposes the full canonical task key helper to key builders", () => {
     const resolved = resolveCacheMiddlewareConfig(
       {
         keyBuilder: (_taskId, _input, helpers) => helpers!.canonicalKey,
@@ -41,7 +41,7 @@ describe("cache middleware coverage", () => {
         { ok: true },
         createMiddlewareKeyBuilderHelpers("app.tasks.lookup"),
       ),
-    ).toBe("lookup");
+    ).toBe("app.tasks.lookup");
   });
 
   it("fails fast when the default key builder cannot serialize input", () => {

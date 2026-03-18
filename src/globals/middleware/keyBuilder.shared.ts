@@ -8,9 +8,9 @@ export interface MiddlewareKeyBuilderHelpers {
   /**
    * Canonical task key without the serialized-input suffix.
    *
-   * This strips the `.tasks.` namespace marker when present so applications can
-   * compose stable human-readable keys without re-implementing Runner's task-id
-   * normalization rules.
+   * This preserves the full canonical task lineage so keyed middleware does not
+   * accidentally share state across sibling resources that reuse the same local
+   * task id.
    */
   canonicalKey: string;
 }
@@ -25,17 +25,10 @@ export type MiddlewareKeyBuilder = (
 ) => string;
 
 const middlewareKeySerializer = new Serializer();
-const TASK_MARKER = ".tasks.";
 const KEY_SEPARATOR = ":";
 
 export function toCanonicalTaskKey(taskId: string): string {
-  const markerIndex = taskId.indexOf(TASK_MARKER);
-
-  if (markerIndex === -1) {
-    return taskId;
-  }
-
-  return taskId.slice(markerIndex + TASK_MARKER.length);
+  return taskId;
 }
 
 export function createMiddlewareKeyBuilderHelpers(

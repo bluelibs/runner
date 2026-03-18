@@ -65,15 +65,21 @@ describe("cache resource invalidateRefs", () => {
         await cache.invalidateRefs("user:u1");
 
         expect(createCount).toBe(1);
-        expect(cache.map.has("cache-invalidation-transient-task")).toBe(true);
+        expect(
+          cache.map.has(
+            "cache-invalidation-transient-app.tasks.cache-invalidation-transient-task",
+          ),
+        ).toBe(true);
         expect(invalidationCalls).toEqual([
           {
             refs: ["user:u1"],
-            taskId: "cache-invalidation-transient-task",
+            taskId:
+              "cache-invalidation-transient-app.tasks.cache-invalidation-transient-task",
           },
           {
             refs: ["user:u1"],
-            taskId: "cache-invalidation-transient-task",
+            taskId:
+              "cache-invalidation-transient-app.tasks.cache-invalidation-transient-task",
           },
         ]);
       },
@@ -159,7 +165,10 @@ describe("cache resource invalidateRefs", () => {
             clear: async () => undefined,
             invalidateRefs: async (refs) => {
               invalidationCalls.push({ refs, taskId });
-              if (taskId === "cache-invalidation-error-task") {
+              if (
+                taskId ===
+                "cache-invalidation-error-app.tasks.cache-invalidation-error-task"
+              ) {
                 throw "boom";
               }
 
@@ -212,19 +221,25 @@ describe("cache resource invalidateRefs", () => {
         expect(invalidationCalls).toEqual([
           {
             refs: ["user:u1"],
-            taskId: "cache-invalidation-error-task",
+            taskId:
+              "cache-invalidation-error-app.tasks.cache-invalidation-error-task",
           },
           {
             refs: ["user:u1"],
-            taskId: "cache-invalidation-healthy-task",
+            taskId:
+              "cache-invalidation-error-app.tasks.cache-invalidation-healthy-task",
           },
         ]);
-        expect(createdOptions.get("cache-invalidation-error-task")?.ttl).toBe(
-          111,
-        );
-        expect(createdOptions.get("cache-invalidation-healthy-task")?.ttl).toBe(
-          222,
-        );
+        expect(
+          createdOptions.get(
+            "cache-invalidation-error-app.tasks.cache-invalidation-error-task",
+          )?.ttl,
+        ).toBe(111);
+        expect(
+          createdOptions.get(
+            "cache-invalidation-error-app.tasks.cache-invalidation-healthy-task",
+          )?.ttl,
+        ).toBe(222);
       },
     });
 
@@ -305,7 +320,8 @@ describe("cache resource invalidateRefs", () => {
     expect(invalidationCalls).toEqual([
       {
         refs: ["user:u1"],
-        taskId: "cache-invalidation-inherited-task",
+        taskId:
+          "cache-invalidation-inherited-app.cache-invalidation-inherited-owner.tasks.cache-invalidation-inherited-task",
       },
     ]);
   });
@@ -320,7 +336,10 @@ describe("cache resource invalidateRefs", () => {
           set: async () => undefined,
           clear: async () => undefined,
           invalidateRefs: async () => {
-            if (taskId === "cache-invalidation-error-instance-task") {
+            if (
+              taskId ===
+              "cache-invalidation-error-instance-app.tasks.cache-invalidation-error-instance-task"
+            ) {
               throw genericError.new({ message: "error instance" });
             }
 
