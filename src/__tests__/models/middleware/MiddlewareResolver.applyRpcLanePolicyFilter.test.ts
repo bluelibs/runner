@@ -219,6 +219,50 @@ describe("MiddlewareResolver-applyRpcLanePolicyFilter", () => {
     ).toEqual({ tenant: true });
   });
 
+  test("leaves untagged subtree-added task middleware unchanged under subtree identityScope", () => {
+    const plainMiddleware = defineTaskMiddleware({
+      id: "tests-middleware-subtree-untagged-identity-scope",
+      run: async ({ next }: any) => next(),
+    });
+
+    const ownerResource = {
+      id: "tests-subtree-untagged-identity-scope-owner",
+      middleware: [],
+      subtree: {
+        tasks: {
+          middleware: [plainMiddleware],
+        },
+        middleware: {
+          identityScope: { tenant: true },
+        },
+      },
+    };
+
+    const store: any = {
+      tasks: new Map(),
+      taskMiddlewares: new Map([
+        [plainMiddleware.id, { middleware: plainMiddleware }],
+      ]),
+      resourceMiddlewares: new Map(),
+      resources: new Map([[ownerResource.id, { resource: ownerResource }]]),
+      resolveDefinitionId,
+      getOwnerResourceId: () => ownerResource.id,
+    };
+
+    const resolver = new MiddlewareResolver(store);
+    const task = {
+      id: "tests-task-target-untagged-identity-scope",
+      middleware: [],
+    } as any;
+
+    expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([
+      plainMiddleware,
+    ]);
+    expect(resolver.getEverywhereTaskMiddlewares(task)[0]).toBe(
+      plainMiddleware,
+    );
+  });
+
   test("caches applicable task middlewares when store is locked", () => {
     const local = { id: "mw-local" } as any;
     const global = { id: "mw-global" } as any;
