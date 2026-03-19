@@ -14,9 +14,24 @@ export type NormalizedRunOptions = Omit<
   onUnhandledErrorInput?: ResolvedRunOptions["onUnhandledError"];
 };
 
+function normalizePrintThreshold(
+  printThreshold: ResolvedRunOptions["logs"]["printThreshold"] | undefined,
+): ResolvedRunOptions["logs"]["printThreshold"] {
+  if (printThreshold !== undefined) {
+    return printThreshold;
+  }
+
+  if (getPlatform().getEnv("NODE_ENV") === "test") {
+    return null;
+  }
+
+  return "info";
+}
+
 export function normalizeRunOptions(
   options: RunOptions | undefined,
 ): NormalizedRunOptions {
+  const printThreshold = normalizePrintThreshold(options?.logs?.printThreshold);
   const debug = options?.debug;
   const errorBoundary = options?.errorBoundary ?? true;
   const shutdownHooks = options?.shutdownHooks ?? true;
@@ -33,9 +48,7 @@ export function normalizeRunOptions(
       : ResourceLifecycleMode.Sequential;
   const mode = detectRunnerMode(options?.mode);
   const logs = {
-    printThreshold:
-      options?.logs?.printThreshold ??
-      (getPlatform().getEnv("NODE_ENV") === "test" ? null : "info"),
+    printThreshold,
     printStrategy: options?.logs?.printStrategy ?? "pretty",
     bufferLogs: options?.logs?.bufferLogs ?? false,
   };
