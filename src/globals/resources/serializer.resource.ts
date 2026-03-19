@@ -1,9 +1,14 @@
 import { defineResource } from "../../definers/defineResource";
 import { Serializer } from "../../serializer";
+import type { SerializerOptions } from "../../serializer";
 import { Match } from "../../tools/check";
 
-const serializerResourceConfigPattern = Match.ObjectIncluding({
-  pretty: Match.Optional(Boolean),
+export type SerializerResourceConfig = SerializerOptions;
+
+export const serializerResourceConfigSchema = Match.ObjectIncluding({
+  prettyx: Match.Optional(Boolean),
+  types: Match.Optional(Match.ArrayOf(Object)),
+  schemas: Match.Optional(Match.ArrayOf(Function)),
   maxDepth: Match.Optional(Number),
   allowedTypes: Match.Optional(Match.ArrayOf(String)),
   symbolPolicy: Match.Optional(
@@ -13,16 +18,12 @@ const serializerResourceConfigPattern = Match.ObjectIncluding({
   allowUnsafeRegExp: Match.Optional(Boolean),
 });
 
-export type SerializerResourceConfig = Match.infer<
-  typeof serializerResourceConfigPattern
->;
-
 export const serializerResource = defineResource<
   SerializerResourceConfig,
   Promise<Serializer>
 >({
   id: "serializer",
-  configSchema: serializerResourceConfigPattern,
+  configSchema: serializerResourceConfigSchema,
   init: async (config) => new Serializer(config),
   meta: {
     title: "Serializer",

@@ -1,4 +1,5 @@
 import { resources, Serializer } from "../../public";
+import { Match } from "../../decorators/legacy";
 import { RunnerError } from "../../definers/defineError";
 
 describe("global serializer resource config", () => {
@@ -49,5 +50,49 @@ describe("global serializer resource config", () => {
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     });
     expect(() => serializer.parse(blockedPayload)).toThrow(RunnerError);
+  });
+
+  it("builds serializer instances from resource config with types and schemas", async () => {
+    class UserDto {
+      public id!: string;
+    }
+
+    class Box {
+      constructor(public readonly value: string) {}
+    }
+
+    Match.Schema()(UserDto);
+    Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+    const parsedConfig = resources.serializer.configSchema?.parse({
+      schemas: [UserDto],
+      types: [
+        {
+          id: "tests.serializer.Box",
+          is: (value: unknown): value is Box => value instanceof Box,
+          serialize: (value: Box) => ({ value: value.value }),
+          deserialize: (value: { value: string }) => new Box(value.value),
+          strategy: "value" as const,
+        },
+      ],
+    });
+    const serializer = await resources.serializer.init!(
+      parsedConfig!,
+      {},
+      undefined,
+    );
+    const payload = serializer.stringify({
+      user: Object.assign(new UserDto(), { id: "u1" }),
+      box: new Box("fragile"),
+    });
+    const deserialized = serializer.parse<{
+      user: UserDto;
+      box: Box;
+    }>(payload);
+
+    expect(deserialized.user).toBeInstanceOf(UserDto);
+    expect(deserialized.user).toEqual({ id: "u1" });
+    expect(deserialized.box).toBeInstanceOf(Box);
+    expect(deserialized.box).toEqual({ value: "fragile" });
   });
 });
