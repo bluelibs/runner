@@ -1,0 +1,90 @@
+---
+id: runner.security.identity-layering
+title: Security Identity Layering
+surface: builder
+platform: universal
+when:
+  - identityChecker middleware
+  - identityScope on middleware
+  - subtree task identity policy
+---
+
+Use when you want one example that shows the three separate identity layers in Runner:
+
+- explicit task authorization with `identityChecker`
+- middleware state partitioning with `identityScope`
+- subtree-wide task admission policy with `tasks.identity`
+
+```ts
+import { asyncContexts, middleware, r, run } from "@bluelibs/runner";
+
+const searchInvoices = r
+  .task<{ query: string }>("searchInvoices")
+  .middleware([
+    middleware.task.identityChecker.with({
+      user: true,
+      roles: ["BILLING_ADMIN", "SUPPORT"],
+    }),
+    middleware.task.rateLimit.with({
+      windowMs: 60_000,
+      max: 20,
+      identityScope: { tenant: true, user: true },
+    }),
+  ])
+  .run(async (input) => {
+    return {
+      ok: true as const,
+      query: input.query,
+      items: [],
+    };
+  })
+  .build();
+
+const billingArea = r
+  .resource("billingArea")
+  .subtree({
+    tasks: {
+      identity: { roles: ["BILLING_ADMIN"] },
+    },
+    middleware: {
+      identityScope: { tenant: true, user: true },
+    },
+  })
+  .register([searchInvoices])
+  .build();
+
+const app = r
+  .resource("app")
+  .subtree({
+    tasks: {
+      identity: { user: true },
+    },
+  })
+  .register([billingArea])
+  .build();
+
+const runtime = await run(app);
+
+try {
+  await asyncContexts.identity.provide(
+    {
+      tenantId: "acme",
+      userId: "u1",
+      roles: ["BILLING_ADMIN", "SUPPORT"],
+    },
+    () =>
+      runtime.runTask(searchInvoices, {
+        query: "overdue",
+      }),
+  );
+} finally {
+  await runtime.dispose();
+}
+```
+
+Notes:
+- `middleware.task.identityChecker.with(...)` is an explicit authorization gate on one task.
+- `identityScope` partitions middleware-managed state such as rate-limit buckets; it does not authorize execution by itself.
+- `subtree({ tasks: { identity: ... } })` adds owner-resource task gates, and nested task identity gates are additive.
+- `subtree({ middleware: { identityScope: ... } })` fills or enforces the same identity partitioning policy for task middleware tagged with `tags.identityScoped`.
+- Identity-sensitive config requires `AsyncLocalStorage` support.

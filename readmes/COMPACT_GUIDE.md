@@ -714,7 +714,6 @@ Other common patterns:
 - Non-leaf resources cannot be forked.
 - `.fork()` returns a built resource. Do not call `.build()` again.
 - Compose a distinct parent resource when you need a structural variant of a non-leaf resource.
-- Durable support is registered via `resources.durable`, while concrete durable backends use normal forks such as `resources.memoryWorkflow.fork("app-durable")`.
 
 Overrides:
 
@@ -996,26 +995,6 @@ Platform note:
 
 Always respect the signal in tasks that may be cancelled.
 
-## Remote Lanes (Node)
-
-Event lanes are async fire-and-forget routing for events across Runner instances.
-RPC lanes are synchronous cross-runner task or event calls.
-
-Supported modes:
-
-- `network`
-- `transparent`
-- `local-simulated`
-
-Async-context propagation over RPC lanes and event lanes is lane-allowlisted by default.
-
-`rpcLanesResource` uses `resources.serializer` by default, but you can override it with `rpcLanesResource.with({ serializer: mySerializerResource, ... })`. If that serializer needs custom options, configure it at registration time first, then still pass the bare resource definition here. Fork `resources.serializer` when you want a boundary-specific serializer contract with the built-in serializer config shape.
-
-See:
-
-- [REMOTE_LANES_AI.md](./REMOTE_LANES_AI.md)
-- [REMOTE_LANES.md](./REMOTE_LANES.md)
-
 ## Observability
 
 - `resources.logger` is the built-in structured logger.
@@ -1052,3 +1031,15 @@ Prefer feature-driven folders and naming by Runner item type:
 - `*.resource-middleware.ts`
 - `*.tag.ts`
 - `*.error.ts`
+
+## Durable Workflows
+
+Durable Workflows are normal Runner tasks with replay-safe checkpoints for long flows (approvals, payouts, onboarding). Use `DurableContext` primitives like `step(id, fn)`, `sleep(ms)`, and `waitForSignal(...)` so progress is persisted and can resume after restarts.
+
+The store is the durable source of truth; queue/pubsub handles wake-ups and worker handoff. This gives at-least-once delivery plus effectively-once step execution.
+
+## Remote Lanes
+
+Remote Lanes scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response. Runtime resource configuration defines profiles and topology, while task/event definitions stay unchanged.
+
+Only lane-assigned work is rerouted, so non-lane flows keep local semantics. This keeps transport out of business logic and lets serializer, auth, and exposure policy stay in lane infrastructure configuration.

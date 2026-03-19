@@ -1,0 +1,86 @@
+---
+id: runner.event-hook.transactional
+title: Event Hook Transactional
+surface: builder
+platform: universal
+when:
+  - transactional event
+  - rollback-capable hooks
+  - reversible event side effects
+---
+
+Use when hooks must be reversible and Runner should roll back earlier side effects if a later hook fails.
+
+```ts
+import { Match, errors, r, run } from "@bluelibs/runner";
+
+const inventoryStore = r
+  .resource("inventoryStore")
+  .init(async () => new Map<string, number>([["sku-1", 10]]))
+  .build();
+
+const orderPlaced = r
+  .event("orderPlaced")
+  .payloadSchema({
+    orderId: Match.NonEmptyString,
+    sku: Match.NonEmptyString,
+    quantity: Match.Integer,
+  })
+  .transactional()
+  .build();
+
+const placeOrder = r
+  .task<{ orderId: string; sku: string; quantity: number }>("placeOrder")
+  .dependencies({ orderPlaced })
+  .run(async (input, { orderPlaced }) => {
+    await orderPlaced({
+      orderId: input.orderId,
+      sku: input.sku,
+      quantity: input.quantity,
+    });
+
+    return { accepted: true as const };
+  })
+  .build();
+
+const reserveInventory = r
+  .hook("reserveInventory")
+  .dependencies({ inventoryStore })
+  .on(orderPlaced)
+  .run(async (event, { inventoryStore }) => {
+    const current = inventoryStore.get(event.data.sku) ?? 0;
+
+    if (current < event.data.quantity) {
+      throw errors.genericError.new({ message: "Not enough stock" });
+    }
+
+    inventoryStore.set(event.data.sku, current - event.data.quantity);
+
+    return async () => {
+      inventoryStore.set(event.data.sku, current);
+    };
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([inventoryStore, orderPlaced, placeOrder, reserveInventory])
+  .build();
+
+const runtime = await run(app);
+
+try {
+  await runtime.runTask(placeOrder, {
+    orderId: "order-1",
+    sku: "sku-1",
+    quantity: 2,
+  });
+} finally {
+  await runtime.dispose();
+}
+```
+
+Notes:
+- `.transactional()` belongs on the event, not the hook.
+- Every executed hook must return an async undo closure.
+- Do not combine this pattern with `.parallel(true)`.

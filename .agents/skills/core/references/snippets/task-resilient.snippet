@@ -1,0 +1,77 @@
+---
+id: runner.task.resilient
+title: Task Resilient
+surface: builder
+platform: universal
+when:
+  - resilient task
+  - retry plus timeout
+  - health-gated task
+---
+
+Use when you need a production-shaped task with validation, resilience middleware, metadata, and cooperative cancellation.
+
+```ts
+import { Match, errors, middleware, resources, r, tags } from "@bluelibs/runner";
+
+// Assume `paymentGateway` is a resource defined elsewhere and registered in the app.
+export const chargePayment = r
+  .task("chargePayment")
+  .inputSchema({
+    orderId: Match.NonEmptyString,
+    amountCents: Match.Integer,
+    currency: Match.OneOf("USD", "EUR", "GBP"),
+  })
+  .resultSchema({
+    chargeId: Match.NonEmptyString,
+    status: Match.OneOf("accepted"),
+  })
+  .dependencies({
+    paymentGateway,
+    logger: resources.logger,
+  })
+  .tags([tags.failWhenUnhealthy.with([paymentGateway])])
+  .middleware([
+    middleware.task.retry.with({
+      retries: 3,
+      delayStrategy: (attempt) => 250 * 2 ** attempt,
+      stopRetryIf: (error) => errors.genericError.is(error),
+    }),
+    middleware.task.timeout.with({ ttl: 10_000 }),
+  ])
+  .meta({
+    title: "Charge Payment",
+    description:
+      "Charges a payment with validation, health gating, retry, and per-attempt timeout protection.",
+  })
+  .throws([errors.genericError])
+  .run(async (input, { paymentGateway, logger }, context) => {
+    await logger.info(
+      `Charging order ${input.orderId} for ${input.amountCents} ${input.currency}`,
+    );
+
+    const result = await paymentGateway.charge({
+      orderId: input.orderId,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      signal: context.signal,
+    });
+
+    if (result.kind === "declined") {
+      throw errors.genericError.new({
+        message: `Payment declined for order ${input.orderId}`,
+      });
+    }
+
+    return {
+      chargeId: result.chargeId,
+      status: "accepted" as const,
+    };
+  })
+  .build();
+```
+
+Notes:
+- Keep `retry` outermost and `timeout` inside when you want per-attempt budgets.
+- Forward `context.signal` to downstream work.
+- Do not cram cache, auth, rate-limit, and circuit-breaker into the same starter snippet.

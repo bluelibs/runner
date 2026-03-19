@@ -1,0 +1,52 @@
+---
+id: runner.tag.contract
+title: Tag Contract
+surface: builder
+platform: universal
+when:
+  - tag with config schema
+  - tag with contracts
+  - scoped tag for tasks
+---
+
+Use when you need a typed discovery tag that also shapes attached task typing.
+
+```ts
+import { Match, r } from "@bluelibs/runner";
+
+// r.tag<Config, InputContract, OutputContract>
+const adminRoute = r
+  .tag<
+    { method: "GET" | "POST"; path: string },
+    { userId: string },
+    { ok: true }
+  >("adminRoute")
+  .for(["tasks"])
+  .configSchema({
+    method: Match.OneOf("GET", "POST"),
+    path: Match.NonEmptyString,
+  })
+  .build();
+
+const getAdminDashboard = r
+  .task("getAdminDashboard")
+  .tags([
+    adminRoute.with({
+      method: "GET",
+      path: "/admin/dashboard",
+    }),
+  ])
+  .run(async (input: { userId: string; includeStats?: boolean }) => {
+    return {
+      ok: true as const,
+      widgets: 3,
+    };
+  })
+  .build();
+```
+
+Notes:
+- `Config` shapes `.with(...)`.
+- `InputContract` constrains task input or resource config.
+- `OutputContract` constrains task output.
+- Contract tags shape typing; they do not add runtime behavior by themselves.

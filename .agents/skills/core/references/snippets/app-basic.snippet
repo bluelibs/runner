@@ -1,0 +1,42 @@
+---
+id: runner.app.basic
+title: Runner App Basic
+surface: builder
+platform: universal
+when:
+  - minimal Runner app shell
+  - starter app
+  - runTask plus dispose flow
+---
+
+Use when you need the smallest complete Runner app shape.
+
+```ts
+import { r, run } from "@bluelibs/runner";
+
+const greet = r
+  .task("greet")
+  .run(async (input: { name: string }) => {
+    return { message: `Hello, ${input.name}!` };
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([greet])
+  .build();
+
+const runtime = await run(app);
+
+try {
+  const result = await runtime.runTask(greet, { name: "Ada" });
+  console.log(result.message);
+} finally {
+  await runtime.dispose();
+}
+```
+
+Notes:
+- Use local ids such as `"greet"`, not canonical dotted ids.
+- Register definitions in `app` before running them.
+- Prefer `runtime.runTask(...)` here, not direct `.run(...)`.

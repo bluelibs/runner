@@ -1,0 +1,73 @@
+---
+id: runner.event-hook.pipeline
+title: Event Hook Pipeline
+surface: builder
+platform: universal
+when:
+  - event plus hook
+  - decoupled side effects
+  - emitting task
+---
+
+Use when a task should announce something happened and downstream side effects should stay decoupled.
+
+```ts
+import { Match, resources, r, run } from "@bluelibs/runner";
+
+const userStore = r
+  .resource("userStore")
+  .init(async () => new Map<string, { id: string; email: string }>())
+  .build();
+
+const userRegistered = r
+  .event("userRegistered")
+  .payloadSchema({ // or Match.compile() or a schema DTO
+    userId: Match.NonEmptyString,
+    email: Match.Email,
+  })
+  .build();
+
+const registerUser = r
+  .task<{ email: string }>("registerUser")
+  .dependencies({ userStore, userRegistered })
+  .run(async (input, { userStore, userRegistered }) => {
+    const user = { id: "user-1", email: input.email };
+
+    userStore.set(user.id, user);
+    await userRegistered({ userId: user.id, email: user.email });
+
+    return user;
+  })
+  .build();
+
+const sendWelcomeEmail = r
+  .hook("sendWelcomeEmail")
+  .dependencies({
+    logger: resources.logger,
+  })
+  .on(userRegistered)
+  .run(async (event, { logger }) => {
+    await logger.info(`Welcome ${event.data.email}`);
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([userStore, userRegistered, registerUser, sendWelcomeEmail])
+  .build();
+
+const runtime = await run(app);
+
+try {
+  await runtime.runTask(registerUser, {
+    email: "ada@example.com",
+  });
+} finally {
+  await runtime.dispose();
+}
+```
+
+Notes:
+- Prefer exact event refs in starter snippets, not wildcard hooks.
+- Use dependency-injected event emitters, not `eventManager.emit(...)`, for normal app code.
+- Hooks can depend on resources too; keep the side effect decoupled without giving up DI.

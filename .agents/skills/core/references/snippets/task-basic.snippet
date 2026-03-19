@@ -1,0 +1,68 @@
+---
+id: runner.task.basic
+title: Task Basic
+surface: builder
+platform: universal
+when:
+  - task with DI
+  - task with schemas
+  - canonical runtime-backed task example
+---
+
+Use when you need a normal business task with input validation, result validation, and one real dependency.
+
+```ts
+import { Match, resources, r, run } from "@bluelibs/runner";
+
+const userStore = r
+  .resource("userStore")
+  .init(async () => new Map<string, { id: string; email: string }>())
+  .build();
+
+const createUser = r
+  .task<{ email: string }>("createUser")
+  .inputSchema({
+    email: Match.Email,
+  })
+  .resultSchema({
+    id: Match.NonEmptyString,
+    email: Match.Email,
+  })
+  .dependencies({
+    userStore,
+    logger: resources.logger,
+  })
+  .run(async (input, { userStore, logger }) => {
+    const user = {
+      id: "user-1",
+      email: input.email,
+    };
+
+    userStore.set(user.id, user);
+    await logger.info(`Created user ${user.email}`);
+
+    return user;
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([userStore, createUser])
+  .build();
+
+const runtime = await run(app);
+
+try {
+  const user = await runtime.runTask(createUser, {
+    email: "ada@example.com",
+  });
+
+  void user;
+} finally {
+  await runtime.dispose();
+}
+```
+
+Notes:
+- This is the production/integration path. Use `.run(...)` only for isolated unit tests.
+- Prefer `Match`-based schemas for Runner-style examples.
