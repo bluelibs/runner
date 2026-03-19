@@ -24,7 +24,7 @@ const orderPlaced = r
   .payloadSchema({
     orderId: Match.NonEmptyString,
     sku: Match.NonEmptyString,
-    quantity: Match.Integer,
+    quantity: Match.Range({ min: 1, integer: true }),
   })
   .transactional()
   .build();
