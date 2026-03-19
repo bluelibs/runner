@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { BaseMemoryQueue } from "../queue/BaseMemoryQueue";
 import type {
   EventLaneEnqueueMessage,
   EventLaneMessage,
@@ -6,23 +6,14 @@ import type {
   IEventLaneQueue,
 } from "./types";
 
-export class MemoryEventLaneQueue implements IEventLaneQueue {
-  private queue: EventLaneMessage[] = [];
-  private messageHandler: EventLaneMessageHandler | null = null;
-  private readonly inFlight = new Map<string, EventLaneMessage>();
+export class MemoryEventLaneQueue
+  extends BaseMemoryQueue<EventLaneMessage>
+  implements IEventLaneQueue
+{
   private acceptingWork = true;
-  private isProcessing = false;
 
   async enqueue(message: EventLaneEnqueueMessage): Promise<string> {
-    const id = randomUUID();
-    this.queue.push({
-      ...message,
-      id,
-      createdAt: new Date(),
-      attempts: 0,
-    });
-    this.scheduleProcessing();
-    return id;
+    return this.enqueueMessage(message);
   }
 
   async consume(handler: EventLaneMessageHandler): Promise<void> {
@@ -60,52 +51,17 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
     this.inFlight.clear();
   }
 
-  private scheduleProcessing(): void {
-    setImmediate(() => void this.processNext());
+  protected override canStartProcessing(): boolean {
+    return this.acceptingWork && super.canStartProcessing();
   }
 
-  private async processNext(): Promise<void> {
-    if (!this.canStartProcessing()) {
-      return;
-    }
-
-    this.isProcessing = true;
-    try {
-      while (this.canContinueProcessing()) {
-        const raw = this.queue.shift()!;
-        const message = {
-          ...raw,
-          attempts: raw.attempts + 1,
-        };
-
-        this.inFlight.set(message.id, message);
-        try {
-          await this.messageHandler!(message);
-        } catch {
-          this.inFlight.delete(message.id);
-          // Retry ownership lives above the queue via explicit nack(true),
-          // so uncaught handler failures are not auto-requeued here.
-        }
-      }
-    } finally {
-      this.isProcessing = false;
-    }
+  protected override canContinueProcessing(): boolean {
+    return this.acceptingWork && super.canContinueProcessing();
   }
 
-  private canStartProcessing(): boolean {
-    return (
-      this.acceptingWork &&
-      !this.isProcessing &&
-      this.messageHandler !== null &&
-      this.queue.length > 0
-    );
-  }
-
-  private canContinueProcessing(): boolean {
-    return (
-      this.acceptingWork &&
-      this.messageHandler !== null &&
-      this.queue.length > 0
-    );
+  protected override shouldRequeueOnHandlerError(): boolean {
+    // Retry ownership lives above the queue via explicit nack(true),
+    // so uncaught handler failures are not auto-requeued here.
+    return false;
   }
 }

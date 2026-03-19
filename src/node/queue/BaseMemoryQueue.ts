@@ -8,14 +8,13 @@ export interface BaseQueueMessage {
   id: string;
   createdAt: Date;
   attempts: number;
-  maxAttempts: number;
 }
 
 /**
  * Shared in-memory queue infrastructure: enqueue ↔ ack/nack ↔ sequential
- * processing loop with retry policy. Both EventLane and Durable queues
- * delegate their core machinery here, adding only their domain-specific
- * behaviour (cooldown, prefetch, dispose, generics, etc.).
+ * processing loop with overridable delivery/requeue policy. Both EventLane and
+ * Durable queues delegate their core machinery here, adding only their
+ * domain-specific behaviour (cooldown, prefetch, dispose, generics, etc.).
  */
 export abstract class BaseMemoryQueue<TMsg extends BaseQueueMessage> {
   protected queue: TMsg[] = [];
@@ -49,15 +48,43 @@ export abstract class BaseMemoryQueue<TMsg extends BaseQueueMessage> {
   ): Promise<void> {
     const msg = this.inFlight.get(messageId);
     this.inFlight.delete(messageId);
-    if (msg && requeue && msg.attempts < msg.maxAttempts) {
-      this.queue.push(msg);
+    if (msg && requeue && this.shouldRequeue(msg)) {
+      this.requeueMessage(msg);
     }
     this.scheduleProcessing();
   }
 
-  /** Override to add extra preconditions (e.g. acceptingWork flag). */
-  protected canProcess(): boolean {
-    return !this.isProcessing && !!this.messageHandler && this.queue.length > 0;
+  /** Override to add extra preconditions before a processing loop starts. */
+  protected canStartProcessing(): boolean {
+    return !this.isProcessing && this.canContinueProcessing();
+  }
+
+  /** Override to stop an active loop (for example after cooldown). */
+  protected canContinueProcessing(): boolean {
+    return !!this.messageHandler && this.queue.length > 0;
+  }
+
+  protected toDeliveredMessage(message: TMsg): TMsg {
+    return {
+      ...message,
+      attempts: message.attempts + 1,
+    } as TMsg;
+  }
+
+  protected shouldDeliver(_message: TMsg): boolean {
+    return true;
+  }
+
+  protected shouldRequeue(_message: TMsg): boolean {
+    return true;
+  }
+
+  protected shouldRequeueOnHandlerError(message: TMsg): boolean {
+    return this.shouldRequeue(message);
+  }
+
+  protected requeueMessage(message: TMsg): void {
+    this.queue.push(message);
   }
 
   protected scheduleProcessing(): void {
@@ -65,15 +92,14 @@ export abstract class BaseMemoryQueue<TMsg extends BaseQueueMessage> {
   }
 
   protected async processNext(): Promise<void> {
-    if (!this.canProcess()) return;
+    if (!this.canStartProcessing()) return;
 
     this.isProcessing = true;
     try {
-      while (this.queue.length > 0) {
+      while (this.canContinueProcessing()) {
         const msg = this.queue.shift()!;
-        const next = { ...msg, attempts: msg.attempts + 1 } as TMsg;
-
-        if (next.attempts > next.maxAttempts) {
+        const next = this.toDeliveredMessage(msg);
+        if (!this.shouldDeliver(next)) {
           continue;
         }
 
@@ -81,10 +107,11 @@ export abstract class BaseMemoryQueue<TMsg extends BaseQueueMessage> {
         try {
           await this.messageHandler!(next);
         } catch {
-          // Fail-safe: if consumer throws before ack/nack, requeue and keep processing.
+          // Fail-safe: if consumer throws before ack/nack, the queue may opt
+          // into requeueing instead of dropping the in-flight message.
           this.inFlight.delete(next.id);
-          if (next.attempts < next.maxAttempts) {
-            this.queue.push(next);
+          if (this.shouldRequeueOnHandlerError(next)) {
+            this.requeueMessage(next);
           }
         }
       }
