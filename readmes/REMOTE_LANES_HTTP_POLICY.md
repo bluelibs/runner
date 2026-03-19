@@ -81,7 +81,9 @@ Task requests wrap payloads as `{ input: <value> }`. Event requests use `{ paylo
 - All JSON bodies/responses are serialized with Runner's serializer to preserve types like `Date`, `RegExp`, and custom classes (via `addType`).
 - Files are **not** custom serializer types: use sentinels `{"$runnerFile": "File", "id": "<uuid>", "meta": {...}}` (see Multipart Mode).
 - Charset: UTF-8.
-- Custom Types: Client/server must sync explicit `addType({ id, is, serialize, deserialize, ... })` registrations on the serializer resource (`resources.serializer`).
+- Custom Types: Client/server must sync explicit `addType({ id, is, serialize, deserialize, ... })` registrations on the serializer used by the transport boundary.
+- Server default: `rpcLanesResource` uses `resources.serializer` unless you override `rpcLanesResource.with({ serializer: customSerializerResource, ... })`.
+- Client default: Runner HTTP communicator helpers use the serializer injected into the communicator resource dependencies, falling back to a fresh `new Serializer()` only when none is provided.
 
 ### Authentication
 
@@ -92,7 +94,7 @@ Task requests wrap payloads as `{ input: <value> }`. Event requests use `{ paylo
 - **Validators**: If tasks tagged with `tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
 - **Anonymous access**: If no token and no validators exist, RPC lanes HTTP exposure fails closed by default with `500 AUTH_NOT_CONFIGURED`. Set `auth.allowAnonymous: true` to explicitly allow unauthenticated access.
 - **Dynamic headers**: Clients can override per-request headers via `options.headers` and mutate headers in `onRequest({ headers })`.
-- **Allow-Lists**: Server restricts to configured exposure allow-list sources (`rpcLanesResource` serve topology in `mode: "network"`). Unknown IDs → 403 Forbidden.
+- **Allow-Lists**: Server restricts to configured exposure allow-list sources (`rpcLanesResource` serve topology in `mode: "network"`). `auth.allowAnonymous` does not widen this allow-list. Unknown IDs → 403 Forbidden.
 - **Lane authorization**: For served RPC lanes with binding auth enabled, token verification is lane-specific and happens before task/event execution.
 - **Served endpoints required**: RPC-lanes-owned HTTP exposure only starts when the active profile serves at least one RPC task or event. If nothing is served, startup skips HTTP exposure and logs `rpc-lanes.exposure.skipped`; `auth.allowAnonymous` does not force exposure to boot.
 - **Auth audit logs**: Failed authentication attempts are logged (`exposure.auth.failure`) with request metadata and correlation id.

@@ -1,7 +1,7 @@
 import { createAllowListGuard } from "../../../exposure/allowList";
 import type { NodeExposurePolicySnapshot } from "../../../exposure/policy";
 
-describe("allowList guard (open exposure override)", () => {
+describe("allowList guard", () => {
   const emptyPolicy: NodeExposurePolicySnapshot = {
     enabled: false,
     taskIds: [],
@@ -12,17 +12,18 @@ describe("allowList guard (open exposure override)", () => {
     eventAsyncContextAllowList: {},
   };
 
-  it("returns null when open exposure is enabled without served rpc lanes", () => {
-    const guard = createAllowListGuard(emptyPolicy, true);
-    expect(guard.ensureTask("t")).toBeNull();
-    expect(guard.ensureEvent("e")).toBeNull();
-  });
-
-  it("returns 403 when open exposure is disabled without served rpc lanes", () => {
-    const guard = createAllowListGuard(emptyPolicy, false);
+  it("returns 403 when no allow-list source is active", () => {
+    const guard = createAllowListGuard(emptyPolicy);
     const taskResponse = guard.ensureTask("t");
     const eventResponse = guard.ensureEvent("e");
     expect(taskResponse?.status).toBe(403);
+    expect(taskResponse?.body).toEqual({
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Exposure not enabled",
+      },
+    });
     expect(eventResponse?.status).toBe(403);
   });
 
@@ -36,7 +37,7 @@ describe("allowList guard (open exposure override)", () => {
       taskAsyncContextAllowList: {},
       eventAsyncContextAllowList: {},
     };
-    const guard = createAllowListGuard(servedPolicy, false);
+    const guard = createAllowListGuard(servedPolicy);
     expect(guard.ensureTask("t")).toBeNull();
     expect(guard.ensureEvent("e")).toBeNull();
   });

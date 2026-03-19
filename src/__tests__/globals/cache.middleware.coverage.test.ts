@@ -3,7 +3,7 @@ import {
   journalKeys,
   resolveCacheMiddlewareConfig,
 } from "../../globals/middleware/cache.middleware";
-import { createMiddlewareKeyBuilderHelpers } from "../../globals/middleware/keyBuilder.shared";
+import { defaultStorageTaskKeyBuilder } from "../../globals/middleware/keyBuilder.shared";
 import { Serializer } from "../../serializer";
 
 describe("cache middleware coverage", () => {
@@ -27,26 +27,21 @@ describe("cache middleware coverage", () => {
     expect(resolved.keyBuilder("task", { ok: true })).toBe('task:{"ok":true}');
   });
 
-  it("exposes the storage identity helper to key builders", () => {
+  it("passes the runtime task id to custom key builders", () => {
     const resolved = resolveCacheMiddlewareConfig(
       {
-        keyBuilder: (_taskId, _input, helpers) => {
-          expect(helpers).toEqual({
-            storageTaskId: "app.tasks.lookup",
-          });
-          return helpers!.storageTaskId;
-        },
+        keyBuilder: (taskId) => taskId,
       },
       {},
     );
 
-    expect(
-      resolved.keyBuilder(
-        "app.tasks.lookup",
-        { ok: true },
-        createMiddlewareKeyBuilderHelpers("app.tasks.lookup"),
-      ),
-    ).toBe("app.tasks.lookup");
+    expect(resolved.keyBuilder("app.tasks.lookup", { ok: true })).toBe(
+      "app.tasks.lookup",
+    );
+  });
+
+  it("falls back to the raw task id when the storage helper is unavailable", () => {
+    expect(defaultStorageTaskKeyBuilder("task-id", undefined)).toBe("task-id");
   });
 
   it("fails fast when the default key builder cannot serialize input", () => {

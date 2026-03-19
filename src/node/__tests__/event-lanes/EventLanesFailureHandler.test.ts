@@ -57,6 +57,7 @@ describe("EventLanesFailureHandler", () => {
         lane: { id: "lane-a" },
         queue: {} as any,
         retryDelayMs: 0,
+        maxAttempts: 2,
       } as any,
       message: {
         ...baseMessage,
@@ -96,6 +97,7 @@ describe("EventLanesFailureHandler", () => {
         lane: { id: "lane-a" },
         queue: {} as any,
         retryDelayMs: 25,
+        maxAttempts: 2,
       } as any,
       message: {
         ...baseMessage,
@@ -109,5 +111,42 @@ describe("EventLanesFailureHandler", () => {
     expect(delay).toHaveBeenCalledWith(25);
     expect(queue.nack).toHaveBeenCalledWith("m1", true);
     expect(order).toEqual(["delay", "nack"]);
+  });
+
+  it("uses binding maxAttempts for retry decisions even when the message payload is higher", async () => {
+    const queue = {
+      nack: jest.fn(async () => undefined),
+    };
+    const logger = {
+      error: jest.fn(async () => undefined),
+    };
+
+    await handleEventLaneConsumerFailure({
+      queue,
+      binding: {
+        lane: { id: "lane-a" },
+        queue: {} as any,
+        maxAttempts: 1,
+      } as any,
+      message: {
+        ...baseMessage,
+        attempts: 1,
+        maxAttempts: 999,
+      },
+      error: new Error("should-not-retry"),
+      logger: logger as any,
+      delay: async () => undefined,
+    });
+
+    expect(queue.nack).toHaveBeenCalledWith("m1", false);
+    expect(logger.error).toHaveBeenCalledWith(
+      "Event lane consumer failed.",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          maxAttempts: 1,
+          messageMaxAttempts: 999,
+        }),
+      }),
+    );
   });
 });

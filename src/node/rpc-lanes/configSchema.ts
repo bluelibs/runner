@@ -1,4 +1,5 @@
 import type { IValidationSchema } from "../../defs";
+import { isResource } from "../../define";
 import { Match } from "../../tools/check";
 import type { RpcLanesResourceConfig } from "./types";
 import {
@@ -13,6 +14,10 @@ const laneReferenceShapePattern = Match.ObjectIncluding({
 const laneReferencePattern = laneReferenceShapePattern;
 
 const communicatorResourcePattern = Match.Any;
+const serializerResourcePattern = Match.Where(
+  (value: unknown): value is RpcLanesResourceConfig["serializer"] =>
+    isResource(value),
+);
 
 const rpcLaneProfilePattern = {
   serve: Match.ArrayOf(laneReferencePattern),
@@ -31,6 +36,7 @@ const rpcLanesResourceConfigPattern = Match.ObjectIncluding({
       }),
     ),
   }),
+  serializer: Match.Optional(serializerResourcePattern),
   mode: Match.Optional(remoteLanesModePattern),
   exposure: Match.Optional(
     Match.ObjectIncluding({

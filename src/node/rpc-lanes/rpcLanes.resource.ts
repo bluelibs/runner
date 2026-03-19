@@ -30,7 +30,7 @@ export const rpcLanesResource = defineResource<
     taskRunner: globalResources.taskRunner,
     eventManager: globalResources.eventManager,
     logger: globalResources.logger,
-    serializer: globalResources.serializer,
+    serializer: config.serializer ?? globalResources.serializer,
     ...collectRpcLaneCommunicatorResourceDependencies(config),
   }),
   async init(config, dependencies) {

@@ -50,10 +50,8 @@ export async function createNodeExposure(
   const httpConfig = cfg?.http;
   const basePath = resolveBasePath(httpConfig?.basePath);
   const router = createRouter(basePath);
-  // Keep a single explicit opt-in for unmanaged/open exposure when no allow-list source is active.
   const allowList = createAllowListGuard(
     options?.policy ?? EMPTY_NODE_EXPOSURE_POLICY,
-    httpConfig?.auth?.allowAnonymous === true,
   );
 
   // Discover auth validator tasks

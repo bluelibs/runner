@@ -109,7 +109,8 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - `profiles[profile].serve` selects lanes this runtime serves locally.
   - `bindings[]` maps `lane -> communicator resource` plus async-context policy and optional lane JWT material (`auth`).
 - Register `rpcLanesResource` (from `@bluelibs/runner/node`) with:
-  - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`) + optional `exposure.http`.
+  - `profile` + `topology` + optional `serializer` resource + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`) + optional `exposure.http`.
+  - `serializer` defaults to `resources.serializer`; override it when RPC lanes need different serializer registrations or stricter transport-specific policy.
 - Exposure `http.auth` and lane JWT auth are separate:
   - `exposure.http.auth` gates HTTP endpoint access.
   - `binding.auth` gates lane authorization for task/event execution.
@@ -117,10 +118,15 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - `init(r.rpcLane.httpClient({ client: "fetch" | "mixed" | "smart", ... }))`
   - `fetch` is universal (`createHttpClient`)
   - `mixed` / `smart` are Node presets.
+  - If you override the server-side RPC lanes serializer, inject a matching serializer into the communicator resource too so both ends agree on the wire format.
 - Routing behavior in `mode: "network"`:
   - Lane in `serve` -> task/event executes locally.
   - Lane not in `serve` -> task/event routes remotely via communicator.
   - Every assigned or served lane must have a communicator binding.
+- RPC-routed task middleware behavior:
+  - Caller-side task middleware is skipped by default unless lane policy explicitly allowlists it.
+  - `identityChecker` is always retained because it is an authorization boundary, not optional caller-side behavior.
+  - `subtree.tasks.identity` uses the same enforcement path because Runner synthesizes those gates as `identityChecker` middleware entries.
 - Mode overrides:
   - `transparent`: lane-assigned tasks/events execute locally (no lane transport).
   - `local-simulated`: lane-assigned tasks/events go through a local serializer roundtrip simulation and still enforce lane JWT when `binding.auth` is enabled.
@@ -134,6 +140,7 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - If `exposure.http` is configured but nothing is served, startup skips exposure and logs `rpc-lanes.exposure.skipped`.
   - `serve` lanes derive server allow-list automatically for lane-assigned tasks/events.
   - Auth remains fail-closed unless explicitly configured otherwise.
+  - `auth.allowAnonymous` is auth-only; it does not widen the exposure allow-list.
   - Lane JWT authorization is validated per served lane before task/event execution.
 - Runtime guard rails:
   - `applyTo` string ids are validated against container definitions and type (task/event).

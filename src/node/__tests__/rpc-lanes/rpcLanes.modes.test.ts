@@ -1,4 +1,5 @@
 import { defineEvent, defineResource, defineTask } from "../../../define";
+import type { SerializerLike } from "../../../serializer";
 import { run } from "../../../run";
 import { globalResources } from "../../../globals/globalResources";
 import { globalTags } from "../../../globals/globalTags";
@@ -76,6 +77,60 @@ describe("rpcLanesResource modes", () => {
       count: 99,
     });
     expect(payload.nested.count).toBe(1);
+    await runtime.dispose();
+  });
+
+  it("local-simulated mode uses a custom serializer resource override", async () => {
+    const lane = r
+      .rpcLane("tests-rpc-lanes-mode-simulated-custom-serializer-lane")
+      .build();
+    const task = defineTask<{ nested: { count: number } }>({
+      id: "tests-rpc-lanes-mode-simulated-custom-serializer-task",
+      tags: [globalTags.rpcLane.with({ lane })],
+      run: async (input) => ({ count: input.nested.count + 1 }),
+    });
+    const stringify = jest.fn((value: unknown) => JSON.stringify(value));
+    const parse = jest.fn((payload: string) => JSON.parse(payload) as unknown);
+    const serializer = defineResource({
+      id: "tests-rpc-lanes-mode-simulated-custom-serializer-resource",
+      init: async (): Promise<SerializerLike> => ({
+        stringify: (value) => stringify(value),
+        parse: <T = unknown>(payload: string) => {
+          parse(payload);
+          return JSON.parse(payload) as T;
+        },
+      }),
+    });
+
+    const topology = r.rpcLane.topology({
+      profiles: {
+        client: { serve: [] },
+      },
+      bindings: [],
+    });
+
+    const app = defineResource({
+      id: "tests-rpc-lanes-mode-simulated-custom-serializer-app",
+      register: [
+        task,
+        serializer,
+        rpcLanesResource.with({
+          profile: "client",
+          topology,
+          mode: "local-simulated",
+          serializer,
+        }),
+      ],
+    });
+
+    const runtime = await run(app);
+    await expect(
+      runtime.runTask(task as any, { nested: { count: 1 } }),
+    ).resolves.toEqual({
+      count: 2,
+    });
+    expect(stringify).toHaveBeenCalled();
+    expect(parse).toHaveBeenCalled();
     await runtime.dispose();
   });
 

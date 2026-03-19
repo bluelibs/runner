@@ -9,10 +9,7 @@ import {
   normalizeCacheKeyBuilderResult,
   type CacheKeyBuilderResult,
 } from "./cache.key";
-import {
-  createMiddlewareKeyBuilderHelpers,
-  defaultTaskKeyBuilder,
-} from "./keyBuilder.shared";
+import { defaultTaskKeyBuilder } from "./keyBuilder.shared";
 import {
   applyIdentityScopeToKey,
   identityScopePattern,
@@ -44,20 +41,12 @@ export type { CacheKeyBuilderResult } from "./cache.key";
 
 type CacheMiddlewareConfig = CacheFactoryOptions &
   IdentityScopedMiddlewareConfig & {
-    keyBuilder?: (
-      taskId: string,
-      input: any,
-      helpers?: ReturnType<typeof createMiddlewareKeyBuilderHelpers>,
-    ) => CacheKeyBuilderResult;
+    keyBuilder?: (taskId: string, input: any) => CacheKeyBuilderResult;
   };
 
 type ResolvedCacheMiddlewareConfig = {
   cacheOptions: CacheFactoryOptions;
-  keyBuilder: (
-    taskId: string,
-    input: any,
-    helpers?: ReturnType<typeof createMiddlewareKeyBuilderHelpers>,
-  ) => CacheKeyBuilderResult;
+  keyBuilder: (taskId: string, input: any) => CacheKeyBuilderResult;
   identityScope: IdentityScopedMiddlewareConfig["identityScope"];
 };
 
@@ -172,11 +161,7 @@ export const cacheMiddleware = defineTaskMiddleware({
     }
 
     const cacheKey = normalizeCacheKeyBuilderResult(
-      resolvedConfig.keyBuilder(
-        taskId,
-        task!.input,
-        createMiddlewareKeyBuilderHelpers(taskId),
-      ),
+      resolvedConfig.keyBuilder(taskId, task!.input),
     );
     // Apply identity scope from the normalized config, not the raw attachment.
     // The resolver owns defaulting ("auto") and keeps cache key + refs aligned

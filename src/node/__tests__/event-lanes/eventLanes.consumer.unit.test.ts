@@ -60,6 +60,7 @@ describe("eventLanes.consumer", () => {
             {
               lane: { id: "tests-event-lanes-consumer-lane" },
               retryDelayMs: 1,
+              maxAttempts: 2,
             },
           ],
         ]),

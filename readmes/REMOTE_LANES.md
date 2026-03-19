@@ -486,6 +486,64 @@ const app = r
 
 **What you just learned**: RPC lane definition, task tagging, communicator wiring, and profile-based serve routing — the full RPC Lane pattern.
 
+### Custom Serializer Resource
+
+`rpcLanesResource` uses `resources.serializer` by default. When an RPC boundary
+needs different serializer registrations or stricter deserialization policy, you
+can point the RPC lanes resource at a different serializer resource.
+
+Register the custom serializer resource in the app yourself, then pass it to
+`rpcLanesResource.with({ serializer: ... })`:
+
+```typescript
+import { Serializer, r } from "@bluelibs/runner";
+import { rpcLanesResource } from "@bluelibs/runner/node";
+
+const rpcSerializer = r
+  .resource("app.resources.rpcSerializer")
+  .init(async () => {
+    const serializer = new Serializer({
+      symbolPolicy: "well-known-only",
+    });
+
+    serializer.addType({
+      id: "Money",
+      is: (value): value is { amount: number; currency: string } =>
+        typeof value === "object" && value !== null && "amount" in value,
+      serialize: (value) => value,
+      deserialize: (value) => value,
+      strategy: "value",
+    });
+
+    return serializer;
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([
+    rpcSerializer,
+    rpcLanesResource.with({
+      profile: "api",
+      topology,
+      mode: "network",
+      serializer: rpcSerializer,
+    }),
+  ])
+  .build();
+```
+
+What this affects:
+
+- RPC lane HTTP exposure request/response serialization
+- `x-runner-context` header encoding/decoding for RPC lanes
+- `local-simulated` serializer roundtrip boundaries
+
+Keep the client and server in sync:
+
+- If your communicator resource also crosses HTTP using Runner serializer semantics, inject the same serializer there too.
+- A custom server-side serializer does not magically change an already-built communicator resource on the caller side.
+
 ### Routing Branches (`mode: "network"`)
 
 | Condition                             | Result                                 |
@@ -493,6 +551,8 @@ const app = r
 | lane is in active profile `serve`     | execute locally                        |
 | lane is not in active profile `serve` | execute remotely via lane communicator |
 | task/event is not lane-assigned       | use normal local Runner path           |
+
+> **Note:** RPC-routed tasks skip caller-side task middleware by default unless lane policy explicitly allowlists it. `identityChecker` is the built-in exception and is always retained, because identity gates are authorization boundaries. `subtree.tasks.identity` follows the same rule because Runner synthesizes subtree task identity gates as `identityChecker` middleware entries.
 
 > **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
 
@@ -739,11 +799,14 @@ Security defaults:
 - Run behind trusted network boundaries and infrastructure gateway controls (rate-limits, network policy)
 - Keep anonymous exposure disabled unless explicitly needed
 - Exposure HTTP bootstrap is `listen`-based; custom `http.Server` injection is not part of the contract
+- Override `rpcLanesResource.serializer` when this transport boundary needs a stricter or differently-registered serializer than the rest of the app
 
 There are two independent security layers:
 
 1. **Exposure HTTP auth** (`exposure.http.auth`) controls who can hit `POST /__runner/task/...` and `POST /__runner/event/...`.
 2. **Lane JWT auth** (`binding.auth`) controls lane-authorized produce/consume behavior.
+
+`auth.allowAnonymous` affects only the first layer. It allows unauthenticated access when no token or auth validators are configured, but it does not widen the exposure allow-list. Reachability still comes only from served RPC lanes.
 
 You usually want both.
 
@@ -878,6 +941,7 @@ eventLanesResource.with({
 - For `jwt_asymmetric`, the same runtime signs and verifies during simulation, so binding auth must provide both sides of material.
 - Event lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
 - RPC lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
+- RPC-routed task middleware still follows the same filter rules in `local-simulated`: caller-side middleware is skipped by default, but `identityChecker` and therefore `subtree.tasks.identity` remain enforced.
 
 ## Migration Notes (v6)
 
@@ -936,7 +1000,7 @@ When routing does not behave as expected, check in this order:
 | Topology           | `r.rpcLane.topology({ profiles, bindings })`                     |
 | Profile serve      | `profiles[profile].serve: lane[]`                                |
 | Binding            | `{ lane, communicator, auth?, allowAsyncContext? }`              |
-| Runtime resource   | `rpcLanesResource.with({ profile, topology, mode?, exposure? })` |
+| Runtime resource   | `rpcLanesResource.with({ profile, topology, serializer?, mode?, exposure? })` |
 
 ### Communicator Contract
 

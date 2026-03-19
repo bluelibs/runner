@@ -13,7 +13,6 @@ enum AllowListErrorMessage {
 
 export function createAllowListGuard(
   policy: NodeExposurePolicySnapshot,
-  allowOpen: boolean = false,
 ): AllowListGuard {
   const taskIds = new Set(policy.taskIds);
   const eventIds = new Set(policy.eventIds);
@@ -21,7 +20,6 @@ export function createAllowListGuard(
   return {
     ensureTask(id) {
       if (!policy.enabled) {
-        if (allowOpen) return null;
         return jsonErrorResponse(
           403,
           AllowListErrorMessage.ExposureNotEnabled,
@@ -39,7 +37,6 @@ export function createAllowListGuard(
     },
     ensureEvent(id) {
       if (!policy.enabled) {
-        if (allowOpen) return null;
         return jsonErrorResponse(
           403,
           AllowListErrorMessage.ExposureNotEnabled,

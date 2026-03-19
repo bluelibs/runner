@@ -2,6 +2,7 @@ import type {
   IRpcLaneCommunicator,
   IRpcLanesTopology,
   IRpcLaneTopologyProfile,
+  IResource,
 } from "../../defs";
 import type {
   NodeExposureHandlers,
@@ -9,6 +10,7 @@ import type {
 } from "../exposure/resourceTypes";
 import type { RemoteLanesMode } from "../remote-lanes/mode";
 import type { ExposureRequestContextValue } from "../exposure/requestContext";
+import type { SerializerLike } from "../../serializer";
 
 export type RpcLanesTopology = IRpcLanesTopology;
 
@@ -19,12 +21,29 @@ export type RpcLanesProfileId<TTopology extends RpcLanesTopology> = Extract<
   string
 >;
 
+type SerializerResourceDefinition = IResource<
+  any,
+  Promise<SerializerLike>,
+  any,
+  any,
+  any,
+  any,
+  any
+>;
+
+export type RpcLanesSerializerResource = SerializerResourceDefinition;
+
 export interface RpcLanesResourceConfig<
   TTopology extends RpcLanesTopology = RpcLanesTopology,
   TProfile extends RpcLanesProfileId<TTopology> = RpcLanesProfileId<TTopology>,
 > {
   profile: TProfile;
   topology: TTopology;
+  /**
+   * Optional serializer resource used for RPC payload boundaries and async
+   * context header transport. Defaults to `resources.serializer`.
+   */
+  serializer?: RpcLanesSerializerResource;
   mode?: RemoteLanesMode;
   exposure?: {
     http?: NodeExposureHttpConfig;

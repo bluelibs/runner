@@ -897,7 +897,8 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - `durableContext.waitForSignal(signal)` suspends an execution until `durable.signal(executionId, signal, payload)` is called.
   - `stepId` keeps the same return type (payload + timeout error), while `timeoutMs` switches to a `{ kind: "signal" | "timeout" }` outcome.
   - Signals are memoized as steps under `__signal:<signal.id>[:index]` (or `__signal:<id>[:index]` for string ids).
-  - Repeated waits use `__signal:<id>:<index>` and are resolved by the first available slot; payloads can be buffered for future waits.
+  - Runner may prebuffer the base slot `__signal:<id>` before the workflow reaches its first wait, so a signal that arrives slightly early is still consumed by the next `waitForSignal(...)`.
+  - Repeated waits use `__signal:<id>:<index>` and are resolved by the earliest recorded waiting slot. If no matching wait is currently recorded, later signals are ignored instead of creating new indexed slots.
   - **Determinism note:** like `emit`, the `:<index>` suffixes are derived from call order within the workflow; code changes can shift indexes on replay.
 
 - **Retries and timeouts**
@@ -2205,7 +2206,7 @@ const mirrorAudit = r
 - **Always put side effects inside `durableContext.step(...)`**: anything outside a step can run multiple times on retries/replays.
 - **Keep step ids stable**: renaming a step id (or changing control-flow so a different call order happens) can break replay determinism for existing executions.
 - **Call-order indexing is real**: `emit()` and repeated `waitForSignal()` allocate `:<index>` internally based on call order; refactors that add/remove calls can shift indexes.
-- **Signals are "deliver to current wait"**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it's not completed yet (this can buffer the first signal even if the workflow hasn't reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
+- **Signals are "deliver to current wait"**: `durableService.signal(executionId, ...)` can prebuffer only the base signal slot before the workflow reaches its first wait. After that, additional signals deliver only to already-recorded waiting slots; otherwise they are ignored.
 - **Don't hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
 - **Compensation failures are terminal**: if `durableContext.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
 - **Intervals can overlap**: interval schedules are currently measured from kickoff time, not completion time. If you need non-overlapping behavior, implement it via `durableContext.sleep()` inside the workflow.

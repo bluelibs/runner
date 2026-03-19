@@ -33,7 +33,7 @@ Rule: side effects belong inside `durableContext.step(...)`.
 
 For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres): `store.getExecution(executionId)` (or `new DurableOperator(store).getExecutionDetail(executionId)` when supported).
 
-Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes the payload.
+Signals can prebuffer only the base signal slot before a waiter exists; after that, later signals are ignored until a matching `waitForSignal(...)` has been recorded.
 
 `taskOrTaskId` can be:
 

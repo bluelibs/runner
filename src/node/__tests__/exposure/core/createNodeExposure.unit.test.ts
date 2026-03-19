@@ -54,4 +54,61 @@ describe("createNodeExposure", () => {
 
     await handlers.close();
   });
+
+  it("keeps allowAnonymous auth-only when no allow-list policy is active", async () => {
+    const serializer = new Serializer();
+    const handlers = await createNodeExposure(
+      {
+        http: {
+          basePath: "/__runner",
+          auth: { allowAnonymous: true },
+        },
+      },
+      {
+        store: {
+          tasks: new Map([
+            [
+              "app.tasks.echo",
+              {
+                task: {
+                  id: "app.tasks.echo",
+                },
+              },
+            ],
+          ]),
+          events: new Map(),
+          errors: new Map(),
+          asyncContexts: new Map(),
+          createRuntimeSource: createMockRuntimeSource,
+        } as any,
+        authValidators: { tasks: [] } as any,
+        taskRunner: { run: async () => "ok" } as any,
+        eventManager: {
+          emit: async () => undefined,
+          emitWithResult: async () => undefined,
+        } as any,
+        logger: { info: () => {}, warn: () => {}, error: () => {} } as any,
+        serializer,
+      } as any,
+    );
+
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/__runner/task/app.tasks.echo",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+
+    await handlers.handleTask(req, res);
+    expect(res._status).toBe(403);
+    const body = res._buf
+      ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+      : undefined;
+    expect(body?.error).toEqual({
+      code: "FORBIDDEN",
+      message: "Exposure not enabled",
+    });
+
+    await handlers.close();
+  });
 });

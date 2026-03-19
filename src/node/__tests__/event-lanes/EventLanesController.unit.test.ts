@@ -202,6 +202,7 @@ describe("EventLanesController unit coverage", () => {
               lane: { id: "lane-unit-retry" },
               queue,
               retryDelayMs: 1,
+              maxAttempts: 2,
             },
           ],
         ]),
