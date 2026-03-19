@@ -553,7 +553,6 @@ Keep the client and server in sync:
 | task/event is not lane-assigned       | use normal local Runner path           |
 
 > **Note:** RPC-routed tasks skip caller-side task middleware by default unless lane policy explicitly allowlists it. `identityChecker` is the built-in exception and is always retained, because identity gates are authorization boundaries. `subtree.tasks.identity` follows the same rule because Runner synthesizes subtree task identity gates as `identityChecker` middleware entries.
-
 > **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
 
 ### RPC Lane Network Lifecycle (Routing + Exposure + Lane Auth)

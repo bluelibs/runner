@@ -85,6 +85,8 @@ export class SignalHandler {
             step.stepId === baseStepId ||
             step.stepId.startsWith(`${baseStepId}:`)
           ) {
+            // Any persisted step for this signal id must be parseable so we fail
+            // fast on corruption before picking a waiter or buffering more state.
             const state = parseSignalState(step.result);
             if (!state) {
               return durableExecutionInvariantError.throw({
