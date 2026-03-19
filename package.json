@@ -197,7 +197,6 @@
   },
   "npmSkills": {
     "publish": {
-      "source": ".agents/skills",
       "export": [
         "core"
       ]
