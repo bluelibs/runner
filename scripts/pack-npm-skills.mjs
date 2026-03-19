@@ -14,25 +14,23 @@ const syncPairs = [
     sourcePath: path.join(projectRoot, "guide-units"),
     destinationPath: path.join(
       projectRoot,
-      ".agents",
       "skills",
       "core",
       "references",
       "guide-units",
     ),
-    symlinkTarget: "../../../../guide-units",
+    symlinkTarget: "../../../guide-units",
   },
   {
     sourcePath: path.join(projectRoot, "readmes"),
     destinationPath: path.join(
       projectRoot,
-      ".agents",
       "skills",
       "core",
       "references",
       "readmes",
     ),
-    symlinkTarget: "../../../../readmes",
+    symlinkTarget: "../../../readmes",
   },
 ];
 

@@ -1,6 +1,6 @@
 *
 !dist/**/*
 dist/**/__tests__/**/*
-!.agents/skills/**/*
+!skills/**/*
 !package.json
 !README.md
