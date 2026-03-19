@@ -94,6 +94,7 @@ Use `./references/readmes/` for task-specific references and alternate viewpoint
 Available docs include:
 
 - `COMPACT_GUIDE.md`
+- `ARCHITECTING_WITH_RUNNER.md`
 - `MULTI_PLATFORM.md`
 - `DURABLE_WORKFLOWS.md`
 - `DURABLE_WORKFLOWS_AI.md`
@@ -110,6 +111,10 @@ Available docs include:
 - `CRITICAL_THINKING.md`
 
 Read only the files that match the task.
+
+For application structure, architectural boundaries, folder organization, subtree and isolate policy, tag reuse, and long-term maintainability, also read:
+
+- `./references/readmes/ARCHITECTING_WITH_RUNNER.md`
 
 ## Snippets
 
