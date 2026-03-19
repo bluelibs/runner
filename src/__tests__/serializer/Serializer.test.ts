@@ -798,6 +798,57 @@ describe("Serializer", () => {
       expect(deserialized).toEqual({ id: "u1", name: "Ada" });
     });
 
+    it("should auto-serialize and auto-deserialize registered Match schema DTOs", () => {
+      class UserDto {
+        public id!: string;
+        public name!: string;
+      }
+
+      Match.Schema({ schemaId: "tests.serializer.UserDto" })(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "name");
+
+      serializer.addSchema(UserDto);
+
+      const user = Object.assign(new UserDto(), {
+        id: "u1",
+        name: "Ada",
+      });
+      const payload = serializer.stringify({ user });
+      const deserialized = serializer.parse<{ user: UserDto }>(payload);
+
+      expect(JSON.parse(payload)).toEqual({
+        user: {
+          __type: "tests.serializer.UserDto",
+          value: { id: "u1", name: "Ada" },
+        },
+      });
+      expect(deserialized.user).toBeInstanceOf(UserDto);
+      expect(deserialized.user).toEqual({ id: "u1", name: "Ada" });
+    });
+
+    it("should auto-register Match schema DTOs from Serializer({ schemas })", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      const configuredSerializer = new Serializer({
+        schemas: [UserDto],
+      });
+      const payload = configuredSerializer.serialize({
+        users: [Object.assign(new UserDto(), { id: "u1" })],
+      });
+      const deserialized = configuredSerializer.deserialize<{
+        users: UserDto[];
+      }>(payload);
+
+      expect(deserialized.users[0]).toBeInstanceOf(UserDto);
+      expect(deserialized.users[0]).toEqual({ id: "u1" });
+    });
+
     it("should deserialize arrays using Match.ArrayOf(Match.fromSchema(...))", () => {
       class UserDto {
         public id!: string;
@@ -931,6 +982,29 @@ describe("Serializer", () => {
       expect(deserialized.children[1].parent).toBe(deserialized);
       expect(deserialized.children[0].sibling).toBe(deserialized.children[1]);
       expect(deserialized.children[1].sibling).toBe(deserialized.children[0]);
+    });
+
+    it("should preserve circular references for registered Match schema DTO graphs", () => {
+      class NodeDto {
+        public id!: string;
+        public self!: NodeDto;
+      }
+
+      Match.Schema()(NodeDto);
+      Match.Field(Match.NonEmptyString)(NodeDto.prototype, "id");
+      Match.Field(Match.fromSchema(() => NodeDto))(NodeDto.prototype, "self");
+
+      serializer.addSchema(NodeDto);
+
+      const node = Object.assign(new NodeDto(), { id: "root" });
+      node.self = node;
+
+      const payload = serializer.serialize(node);
+      const deserialized = serializer.deserialize<NodeDto>(payload);
+
+      expect(deserialized).toBeInstanceOf(NodeDto);
+      expect(deserialized.self).toBe(deserialized);
+      expect(deserialized.id).toBe("root");
     });
 
     it("should validate nested recursive Product > Categories schemas", () => {
@@ -1194,6 +1268,119 @@ describe("Serializer", () => {
       ).toEqual({ id: "u1" });
 
       expect(deserializeCalls).toEqual(["u1", "u1"]);
+    });
+
+    it("should fail when addSchema receives a class without Match.Schema()", () => {
+      class PlainDto {
+        public id!: string;
+      }
+
+      expect(() => serializer.addSchema(PlainDto)).toThrow(
+        "must be decorated with Match.Schema()",
+      );
+    });
+
+    it("should use Anonymous in addSchema errors for unnamed classes", () => {
+      expect(() => serializer.addSchema(class {})).toThrow("Anonymous");
+    });
+
+    it("should ignore inherited enumerable keys when cloning schema payloads", () => {
+      class BaseDto {
+        public inherited!: string;
+      }
+
+      Object.defineProperty(BaseDto.prototype, "inherited", {
+        value: "skip-me",
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+
+      class UserDto extends BaseDto {
+        public id!: string;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      serializer.addSchema(UserDto);
+
+      const value = Object.assign(new UserDto(), { id: "u1" });
+      const payload = serializer.stringify(value);
+
+      expect(JSON.parse(payload)).toEqual({
+        __type: "UserDto",
+        value: { id: "u1" },
+      });
+    });
+
+    it("should tolerate non-object graph payloads for empty registered schema DTOs", () => {
+      class EmptyDto {}
+
+      Match.Schema()(EmptyDto);
+      serializer.addSchema(EmptyDto);
+
+      const result = serializer.deserialize<EmptyDto>(
+        JSON.stringify({
+          __graph: true,
+          version: 1,
+          root: { __ref: "obj_1" },
+          nodes: {
+            obj_1: {
+              kind: "type",
+              type: "EmptyDto",
+              value: 3,
+            },
+          },
+        }),
+      );
+
+      expect(result).toBeInstanceOf(EmptyDto);
+    });
+
+    it("should ignore inherited enumerable keys when seeding schema placeholders", () => {
+      class EmptyDto {}
+
+      Match.Schema()(EmptyDto);
+      serializer.addSchema(EmptyDto);
+
+      class Carrier {}
+
+      Object.defineProperty(Carrier.prototype, "inherited", {
+        value: "skip-me",
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+
+      serializer.addType({
+        id: "InheritedCarrier",
+        is: (_value: unknown): _value is Carrier => false,
+        serialize: () => null,
+        deserialize: () => Object.create(Carrier.prototype) as Carrier,
+        strategy: "value",
+      });
+
+      const result = serializer.deserialize<EmptyDto>(
+        JSON.stringify({
+          __graph: true,
+          version: 1,
+          root: { __ref: "obj_1" },
+          nodes: {
+            obj_1: {
+              kind: "type",
+              type: "EmptyDto",
+              value: {
+                __type: "InheritedCarrier",
+                value: null,
+              },
+            },
+          },
+        }),
+      );
+
+      expect(result).toBeInstanceOf(EmptyDto);
+      expect((result as Record<string, unknown>).inherited).toBeUndefined();
     });
   });
 

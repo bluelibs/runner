@@ -616,7 +616,9 @@ Important rules:
 - The built-in serializer round-trips common non-JSON shapes such as `Date` and `RegExp`.
 - Register custom types through `resources.serializer`.
 - For boundary-specific serializer behavior, either register a custom resource that returns `new Serializer({...})` or fork `resources.serializer` and register a configured fork.
-- `types: [...]` is the ergonomic built-in allow-list shortcut; `allowedTypes: [...]` keeps the raw serializer option for custom type ids too.
+- `allowedTypes: [...]` restricts deserialization to specific built-in or custom type ids.
+- `new Serializer({ types: [...] })` pre-registers explicit `addType({ ... })` definitions.
+- `serializer.addSchema(DtoClass)` and `new Serializer({ schemas: [DtoClass] })` register `@Match.Schema()` DTOs as serializer-aware types, so parse/deserialize can restore them without an explicit `{ schema }`.
 - Use `serializer.parse(payload, { schema })` when you want deserialization and validation in one step.
 - `@Serializer.Field({ from, deserialize, serialize })` composes with `@Match.Field(...)` on `@Match.Schema()` classes for explicit DTOs.
 - For legacy decorators, import `Serializer` from `@bluelibs/runner/decorators/legacy`.

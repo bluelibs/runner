@@ -21,4 +21,28 @@ describe("index exports: serializer", () => {
     expect(decoded.x).toBeInstanceOf(IndexExportSmoke);
     expect(decoded.x.v).toBe(7);
   });
+
+  it("allows constructor-time custom type registration via Serializer({ types })", () => {
+    class ConstructorTypeSmoke {
+      constructor(public v: number) {}
+    }
+
+    const serializer = new Serializer({
+      types: [
+        {
+          id: "ConstructorTypeSmoke",
+          is: (obj: unknown): obj is ConstructorTypeSmoke =>
+            obj instanceof ConstructorTypeSmoke,
+          serialize: (v: ConstructorTypeSmoke) => ({ v: v.v }),
+          deserialize: (j: { v: number }) => new ConstructorTypeSmoke(j.v),
+          strategy: "value",
+        },
+      ],
+    });
+
+    const encoded = serializer.stringify({ x: new ConstructorTypeSmoke(9) });
+    const decoded = serializer.parse(encoded) as { x: ConstructorTypeSmoke };
+    expect(decoded.x).toBeInstanceOf(ConstructorTypeSmoke);
+    expect(decoded.x.v).toBe(9);
+  });
 });

@@ -20,6 +20,10 @@ export interface TypeDefinition<TInstance = unknown, TSerialized = unknown> {
   strategy?: "value" | "ref";
 }
 
+export type SerializerSchemaClass<TInstance = unknown> = abstract new (
+  ...args: never[]
+) => TInstance;
+
 /** Reference to another object in the serialization */
 export interface ObjectReference {
   /** Reference to object ID */
@@ -113,6 +117,10 @@ export enum SymbolPolicyErrorMessage {
 export interface SerializerOptions {
   /** Whether to pretty-print JSON (for debugging) */
   pretty?: boolean;
+  /** Explicit custom serializer types to register at construction time */
+  types?: readonly TypeDefinition<any, any>[];
+  /** Match schema DTO classes to auto-register as serializer types */
+  schemas?: readonly SerializerSchemaClass[];
   /** Maximum recursion depth allowed during serialize/deserialize */
   maxDepth?: number;
   /** Restrict deserialization to this list of type IDs */
@@ -155,4 +163,5 @@ export interface SerializerLike {
   addType?<TInstance, TSerialized>(
     typeDef: TypeDefinition<TInstance, TSerialized>,
   ): void;
+  addSchema?<TInstance>(schemaClass: SerializerSchemaClass<TInstance>): void;
 }

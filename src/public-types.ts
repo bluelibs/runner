@@ -41,6 +41,7 @@ export type { TagFluentBuilder } from "./definers/builders/tag";
 export type {
   TypeDefinition,
   SerializerOptions,
+  SerializerSchemaClass,
   JsonPrimitive,
   ObjectReference,
   SerializedTypeRecord,

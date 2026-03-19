@@ -7,6 +7,7 @@ export type {
   ObjectReference,
   SerializedTypeRecord,
   SerializerOptions,
+  SerializerSchemaClass,
   TypeDefinition,
   SerializedNode,
   SerializedValue,

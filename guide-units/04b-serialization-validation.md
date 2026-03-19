@@ -103,9 +103,12 @@ to define a dedicated resource that returns `new Serializer({...})`.
 If you want to reuse the built-in serializer resource contract and config
 schema, fork `resources.serializer` and configure that fork with `.with({...})`.
 
-- Use `types: [...]` for the ergonomic built-in allow-list shortcut.
-- Use `allowedTypes: [...]` when you need the raw serializer option, including
-  custom type ids added through `addType(...)`.
+- Use `allowedTypes: [...]` when you want to restrict deserialization to
+  specific built-in or custom type ids.
+- Use `new Serializer({ types: [...] })` to pre-register explicit
+  `addType({ ... })` definitions.
+- Use `new Serializer({ schemas: [...] })` or `serializer.addSchema(DtoClass)`
+  to register `@Match.Schema()` DTO classes as serializer-aware types.
 
 ```typescript
 import { resources, r, Serializer } from "@bluelibs/runner";
@@ -131,7 +134,7 @@ const app = r
     rpcSerializer,
     rpcSerializerFork.with({
       symbolPolicy: "well-known-only",
-      types: ["Date", "Map"],
+      allowedTypes: ["Date", "Map"],
       maxDepth: 64,
     }),
     // pass either `rpcSerializer` or `rpcSerializerFork`
@@ -166,6 +169,25 @@ serializer.addType({
   serialize: (money) => ({ amount: money.amount, currency: money.currency }),
   deserialize: (json) => new Money(json.amount, json.currency),
   strategy: "value",
+});
+```
+
+You can also register explicit custom types at construction time:
+
+```typescript
+const serializer = new Serializer({
+  types: [
+    {
+      id: "Money",
+      is: (obj): obj is Money => obj instanceof Money,
+      serialize: (money) => ({
+        amount: money.amount,
+        currency: money.currency,
+      }),
+      deserialize: (json) => new Money(json.amount, json.currency),
+      strategy: "value",
+    },
+  ],
 });
 ```
 
@@ -217,6 +239,9 @@ Notes:
 - Functional schema style is always available: `schema: Match.fromSchema(UserDto)` and `schema: Match.ArrayOf(Match.fromSchema(UserDto))`.
 - `@Serializer.Field(...)` itself does not require `@Match.Schema()` to register metadata.
   It affects class-instance serialization in all cases, but schema-aware deserialize class shorthand (`schema: UserDto`) still needs `@Match.Schema()` for validation to pass.
+- Register the DTO with `serializer.addSchema(UserDto)` or
+  `new Serializer({ schemas: [UserDto] })` when you want the serializer to emit
+  a typed payload and restore the DTO without passing `{ schema }`.
 
 ```typescript
 import { Match, Serializer } from "@bluelibs/runner";
