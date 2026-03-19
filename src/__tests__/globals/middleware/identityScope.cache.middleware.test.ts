@@ -11,7 +11,7 @@ const tenantValue = (tenantId: string, userId?: string) => ({
 });
 
 describe("identityScope cache middleware support", () => {
-  it("keeps cache entries shared when identityScope is omitted", async () => {
+  it("isolates cache entries by tenant when identityScope is omitted", async () => {
     let callCount = 0;
     const task = defineTask({
       id: "identity-scope-shared-cache-task",
@@ -39,7 +39,7 @@ describe("identityScope cache middleware support", () => {
     );
 
     expect(acme).toBe("x-1");
-    expect(globex).toBe("x-1");
+    expect(globex).toBe("x-2");
     await runtime.dispose();
   });
 

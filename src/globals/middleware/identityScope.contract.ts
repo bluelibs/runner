@@ -4,8 +4,8 @@ import { Match } from "../../tools/check";
  * Controls whether identity-aware middleware partitions its internal state by
  * the active identity payload.
  *
- * Omit the option to keep the shared cross-identity keyspace.
- * Provide `{ tenant: true }` to require tenant partitioning.
+ * Omit the option to use default automatic tenant partitioning when identity exists.
+ * Provide `{ tenant: true }` to require tenant partitioning explicitly.
  * Add `user: true` for `<tenantId>:<userId>:...` partitioning.
  * Set `required: false` when identity should refine the key only when present.
  */
@@ -39,7 +39,7 @@ export interface IdentityScopedMiddlewareConfig {
   /**
    * Controls identity partitioning for middleware-managed state.
    *
-   * Omit this option to keep the shared cross-identity keyspace.
+   * Omit this option to use automatic tenant partitioning when identity exists.
    */
   identityScope?: IdentityScopeConfig;
 }
@@ -72,13 +72,18 @@ export const identityScopePattern = Match.Optional(
 );
 
 /**
- * Applies the runtime defaults for an explicit `identityScope` config.
+ * Applies the runtime defaults for `identityScope`, including the secure
+ * automatic tenant partitioning used when the option is omitted.
  */
 export function normalizeIdentityScopeConfig(
   identityScope: IdentityScopeConfig | undefined,
-): NormalizedIdentityScopeConfig | undefined {
+): NormalizedIdentityScopeConfig {
   if (identityScope === undefined) {
-    return undefined;
+    return {
+      required: false,
+      tenant: true,
+      user: false,
+    };
   }
 
   return {

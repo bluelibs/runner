@@ -123,15 +123,15 @@ export function getTelemetryTenantId(): string | undefined {
 
 ### Identity Scope
 
-Identity-aware middleware stays in the shared keyspace unless you set `identityScope`.
-That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` only prefix their internal keys with identity data when you opt in explicitly.
+Identity-aware middleware automatically uses the tenant keyspace when identity context exists, even when you omit `identityScope`.
+That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` prefix their internal keys with `<tenantId>:` by default whenever a tenant identity is active.
 
 This is the "partition state" part of the story. It affects middleware-managed buckets and keys, not whether a task is allowed to run.
 
 - Use `identity.provide({ tenantId }, fn)` at HTTP, RPC, queue, or job ingress.
 - Use `identity.require()` or `identity.use()` when running without an identity would be a correctness bug.
 - `identity.require()` does not validate optional fields such as `userId` or `roles` on the built-in identity context. Prefer `middleware.task.identityChecker` or `subtree({ tasks: { identity: ... } })` when access rules depend on the active user, or use a custom identity context when you want those fields required as part of the identity contract itself.
-- Omit `identityScope` for intentional cross-tenant sharing.
+- Omit `identityScope` to use the default tenant-aware behavior without requiring identity to exist.
 - Use `identityScope: { tenant: true }` when middleware correctness depends on `tenantId` being present and tenant-only partitioning is enough.
 - Use `identityScope: { tenant: true, user: true }` when middleware correctness depends on both `tenantId` and `userId`, and you want strict per-user isolation as `<tenantId>:<userId>:...`.
 - `required` defaults to `true` whenever `identityScope` is present. That means Runner throws `identityContextRequiredError` if the scoped identity fields are missing. Set `required: false` only when identity should refine the key when present instead of being mandatory.
@@ -144,7 +144,7 @@ This is the "partition state" part of the story. It affects middleware-managed b
 
 Quick choice guide:
 
-- Omit `identityScope` when cross-tenant sharing is explicitly intended.
+- Omit `identityScope` for the default automatic tenant scope that activates only when identity exists.
 - Use `{ tenant: true }` when the task must run inside a tenant and tenant-only isolation is enough.
 - Use `{ tenant: true, user: true }` when the task must run inside a tenant and each user needs a separate middleware bucket.
 - Add `required: false` when tenant or user data should only refine an existing key rather than being mandatory. Otherwise the default `required: true` behavior fails fast with `identityContextRequiredError`.

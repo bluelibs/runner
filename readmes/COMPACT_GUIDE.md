@@ -490,7 +490,7 @@ Operational notes:
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `rateLimit`, `debounce`, and `throttle` default to `storageTaskId + ":" + serialized input` partitioning and fail fast when the input cannot be serialized. `storageTaskId` preserves the full canonical task lineage, so sibling resources with the same local task id do not share middleware state by accident. Treat storage identity and readable names as separate contracts: use explicit app-defined key builders when you want broader grouping such as per user, tenant, or request context, and never rely on implicit lineage stripping in framework-managed state.
-- Omit `identityScope` for shared middleware state. Runner only prefixes internal middleware keys when you opt in.
+- Omit `identityScope` to use automatic tenant partitioning. Runner prefixes internal middleware keys with `<tenantId>:` whenever identity context exists.
 - When `identityScope` is present, `required` defaults to `true`. Use `{ tenant: true }` for `<tenantId>:` partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` only when identity should refine the key when present instead of being mandatory.
 - Missing required identity fields fail fast with `identityContextRequiredError`.
 - `middleware.identityChecker` is a task gate, not key partitioning. Mentioning it implies tenant identity by default, `user: true` adds `userId`, and `roles` require at least one matching role.
@@ -947,7 +947,7 @@ await identity.provide({ tenantId: "acme", userId: "u1" }, () =>
 - Remote lanes and HTTP transport still require the context to be explicitly forwarded and allowlisted.
 - If your SaaS only has users and no real tenant model, provide a constant tenant such as `tenantId: "app"` at ingress when you want to use identity-aware middleware scopes.
 
-Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` use the shared keyspace unless you set `identityScope`.
+Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` automatically use the tenant keyspace when identity context exists, even when you omit `identityScope`.
 
 `identityScope` is an object:
 
@@ -958,7 +958,7 @@ Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, 
 
 Fast rule of thumb:
 
-- omit `identityScope` for intentional cross-tenant sharing
+- omit `identityScope` to use the default tenant scope; cross-tenant sharing only happens when no identity context exists
 - use `{ tenant: true }` for strict tenant-only partitioning
 - use `{ tenant: true, user: true }` for strict tenant+user partitioning
 - add `required: false` when identity should be an optional refinement instead of a requirement

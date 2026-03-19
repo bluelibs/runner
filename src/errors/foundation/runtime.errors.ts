@@ -299,7 +299,7 @@ export const identityContextRequiredError = error<DefaultErrorType>(
       "Identity context is required but not available. Provide the runtime's active identity async context before running identity-sensitive work.",
   )
   .remediation(
-    "Wrap identity-sensitive work in your configured identity context's provide(...). If you rely on the built-in default, use asyncContexts.identity.provide(...). Omit identityScope only when cross-identity sharing is intentional.",
+    "Wrap identity-sensitive work in your configured identity context's provide(...). If you rely on the built-in default, use asyncContexts.identity.provide(...). Omit identityScope to use automatic tenant partitioning when identity exists, or set required: false when identity should remain optional.",
   )
   .build();
 
