@@ -10,6 +10,7 @@ import {
 } from "../queue/rabbitmq/RabbitMQTransport";
 import type { ConsumeMessage } from "../queue/rabbitmq/RabbitMQTransport.types";
 import {
+  EventLaneEnqueueMessage,
   EventLaneMessage,
   EventLaneMessageHandler,
   IEventLaneQueue,
@@ -127,9 +128,6 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
     const currentAttempts = this.messagesById.get(parsed.id)?.attempts;
     const nextAttempts =
       Math.max(currentAttempts ?? 0, parsedAttempts, headerAttempts ?? 0) + 1;
-    const maxAttempts =
-      typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : 1;
-
     const message = {
       ...parsed,
       source: parsed.source as EventLaneMessage["source"],
@@ -137,7 +135,6 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
         ? new Date(parsed.createdAt as unknown as string)
         : new Date(),
       attempts: nextAttempts,
-      maxAttempts,
     } as EventLaneMessage;
 
     this.messagesById.set(message.id, message);
@@ -159,9 +156,7 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
     await this.transport.init();
   }
 
-  async enqueue(
-    message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
-  ): Promise<string> {
+  async enqueue(message: EventLaneEnqueueMessage): Promise<string> {
     const id = randomUUID();
     const fullMessage: EventLaneMessage = {
       ...message,

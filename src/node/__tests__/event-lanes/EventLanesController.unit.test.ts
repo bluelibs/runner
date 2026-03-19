@@ -137,7 +137,6 @@ describe("EventLanesController unit coverage", () => {
         source: runtimeSource.runtime("tests.event-lanes.unit"),
         createdAt: new Date(),
         attempts: 1,
-        maxAttempts: 1,
       },
     );
 
@@ -229,7 +228,6 @@ describe("EventLanesController unit coverage", () => {
         source: runtimeSource.runtime("tests.event-lanes.unit.retry"),
         createdAt: new Date(),
         attempts: 1,
-        maxAttempts: 2,
       },
     );
 

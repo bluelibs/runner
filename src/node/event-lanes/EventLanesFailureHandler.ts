@@ -52,7 +52,6 @@ export async function handleEventLaneConsumerFailure({
       data: {
         attempts: message.attempts,
         maxAttempts: configuredMaxAttempts,
-        messageMaxAttempts: message.maxAttempts,
       },
     });
   }
@@ -98,7 +97,6 @@ async function tryRetry({
       data: {
         attempts: message.attempts,
         maxAttempts: configuredMaxAttempts,
-        messageMaxAttempts: message.maxAttempts,
         retryDelayMs,
       },
     },

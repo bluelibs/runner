@@ -80,7 +80,6 @@ describe("eventLanes.consumer", () => {
         source: runtimeSource.runtime("tests.event-lanes.consumer"),
         createdAt: new Date(),
         attempts: 1,
-        maxAttempts: 2,
       },
     });
 

@@ -10,7 +10,6 @@ describe("EventLanesFailureHandler", () => {
     source: runtimeSource.runtime("tests"),
     createdAt: new Date(),
     attempts: 1,
-    maxAttempts: 1,
   };
 
   it("normalizes primitive failures to Error and settles with nack(false)", async () => {
@@ -61,7 +60,6 @@ describe("EventLanesFailureHandler", () => {
       } as any,
       message: {
         ...baseMessage,
-        maxAttempts: 2,
       },
       error: failure,
       logger: logger as any,
@@ -101,7 +99,6 @@ describe("EventLanesFailureHandler", () => {
       } as any,
       message: {
         ...baseMessage,
-        maxAttempts: 2,
       },
       error: new Error("retry-with-delay"),
       logger: logger as any,
@@ -113,7 +110,7 @@ describe("EventLanesFailureHandler", () => {
     expect(order).toEqual(["delay", "nack"]);
   });
 
-  it("uses binding maxAttempts for retry decisions even when the message payload is higher", async () => {
+  it("uses binding maxAttempts for retry decisions", async () => {
     const queue = {
       nack: jest.fn(async () => undefined),
     };
@@ -131,7 +128,6 @@ describe("EventLanesFailureHandler", () => {
       message: {
         ...baseMessage,
         attempts: 1,
-        maxAttempts: 999,
       },
       error: new Error("should-not-retry"),
       logger: logger as any,
@@ -144,7 +140,6 @@ describe("EventLanesFailureHandler", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           maxAttempts: 1,
-          messageMaxAttempts: 999,
         }),
       }),
     );

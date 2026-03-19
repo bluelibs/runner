@@ -19,17 +19,23 @@ export interface EventLaneMessage {
   authToken?: string;
   createdAt: Date;
   attempts: number;
-  maxAttempts: number;
 }
 
 export type EventLaneMessageHandler = (
   message: EventLaneMessage,
 ) => Promise<void>;
 
+/**
+ * Serialized event-lane payload handed to the queue producer before Runner
+ * stamps transport metadata such as message id, creation time, and attempts.
+ */
+export type EventLaneEnqueueMessage = Omit<
+  EventLaneMessage,
+  "id" | "createdAt" | "attempts"
+>;
+
 export interface IEventLaneQueue {
-  enqueue(
-    message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
-  ): Promise<string>;
+  enqueue(message: EventLaneEnqueueMessage): Promise<string>;
   consume(handler: EventLaneMessageHandler): Promise<void>;
   cooldown?(): Promise<void>;
   ack(messageId: string): Promise<void>;

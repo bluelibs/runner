@@ -359,8 +359,7 @@ Wire payload (simplified):
   "payload": "{\"userId\":\"u1\",\"channel\":\"email\"}",
   "source": { "kind": "runtime", "id": "app" },
   "createdAt": "2026-02-28T12:00:00.000Z",
-  "attempts": 0,
-  "maxAttempts": 3
+  "attempts": 0
 }
 ```
 
@@ -368,7 +367,6 @@ Field intent:
 
 - `payload`: serialized event data string (not raw object)
 - `attempts`: transport-managed retry counter
-- `maxAttempts`: retry budget from lane binding
 - `laneId` + `eventId`: routing and relay target
 - `source`: provenance for diagnostics/behavior
 
@@ -376,8 +374,8 @@ Delivery lifecycle:
 
 1. Producer emits event -> Runner intercepts and enqueues envelope with `attempts: 0`.
 2. Consumer dequeues -> queue adapter increments to current delivery attempt (`attempts + 1`) before handler path.
-3. On failure with retries left -> message is requeued with updated `attempts`.
-4. On final failure (`attempts >= maxAttempts`) -> `nack(false)` and broker policy (for example DLQ) decides final settlement.
+3. On failure with retries left according to the lane binding `maxAttempts` -> message is requeued with updated `attempts`.
+4. On final failure (`attempts >= binding.maxAttempts`) -> `nack(false)` and broker policy (for example DLQ) decides final settlement.
 
 Important boundary:
 

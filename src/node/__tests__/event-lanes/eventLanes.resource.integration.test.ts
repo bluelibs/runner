@@ -43,7 +43,7 @@ class TestEventLaneQueue implements IEventLaneQueue {
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
     const message = this.inFlight.get(messageId);
     this.inFlight.delete(messageId);
-    if (requeue && message && message.attempts < message.maxAttempts) {
+    if (requeue && message) {
       this.enqueued.push(message);
     }
     setImmediate(() => void this.process());
@@ -67,10 +67,6 @@ class TestEventLaneQueue implements IEventLaneQueue {
         ...raw,
         attempts: raw.attempts + 1,
       };
-      if (message.attempts > message.maxAttempts) {
-        continue;
-      }
-
       this.inFlight.set(message.id, message);
       await handler(message);
     }
@@ -146,12 +142,12 @@ describe("event-lanes: eventLanesResource", () => {
     expect(queue.enqueued[0].eventId).toBe(
       runtime.store.findIdByDefinition(event),
     );
-    expect(queue.enqueued[0].maxAttempts).toBe(1);
+    expect(queue.enqueued[0]).not.toHaveProperty("maxAttempts");
 
     await runtime.dispose();
   });
 
-  it("uses binding maxAttempts on producer-enqueued messages", async () => {
+  it("does not encode binding maxAttempts into producer-enqueued messages", async () => {
     const queue = new TestEventLaneQueue();
     const event = r
       .event("tests-event-lanes-producer-max-attempts-event")
@@ -187,7 +183,7 @@ describe("event-lanes: eventLanesResource", () => {
     const runtime = await run(app);
     await runtime.runTask(emitTask);
     expect(queue.enqueued).toHaveLength(1);
-    expect(queue.enqueued[0].maxAttempts).toBe(3);
+    expect(queue.enqueued[0]).not.toHaveProperty("maxAttempts");
     await runtime.dispose();
   });
 

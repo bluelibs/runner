@@ -215,7 +215,6 @@ describe("event-lanes: additional coverage", () => {
       source: runtimeSource.runtime("tests.event-lanes.consumer-branches"),
       createdAt: new Date(),
       attempts: 1,
-      maxAttempts: 1,
     });
     expect(queue.nacks).toContainEqual({
       messageId: "inactive-lane",
@@ -230,7 +229,6 @@ describe("event-lanes: additional coverage", () => {
       source: runtimeSource.runtime("tests.event-lanes.consumer-branches"),
       createdAt: new Date(),
       attempts: 1,
-      maxAttempts: 1,
     });
     expect(queue.nacks).toContainEqual({
       messageId: "unknown-event",
@@ -247,7 +245,6 @@ describe("event-lanes: additional coverage", () => {
       source: runtimeSource.runtime("tests.event-lanes.consumer-branches"),
       createdAt: new Date(),
       attempts: 1,
-      maxAttempts: 1,
     });
     expect(queue.nacks).toContainEqual({
       messageId: "after-dispose",

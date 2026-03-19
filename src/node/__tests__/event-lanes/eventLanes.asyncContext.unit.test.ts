@@ -120,7 +120,6 @@ describe("eventLanes async context helpers", () => {
           source: runtimeSource.task("tests-event-lanes-relay-source"),
           createdAt: new Date(),
           attempts: 1,
-          maxAttempts: 1,
         };
       }),
     );

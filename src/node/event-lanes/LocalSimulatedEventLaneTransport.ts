@@ -75,7 +75,6 @@ export class LocalSimulatedEventLaneTransport {
         authToken,
         createdAt: new Date(),
         attempts: 1,
-        maxAttempts: 1,
       };
 
       await this.diagnostics.logEnqueue({

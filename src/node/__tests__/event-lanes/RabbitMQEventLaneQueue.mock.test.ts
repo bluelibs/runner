@@ -78,7 +78,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
       eventId: "event.a",
       payload: '{"x":1}',
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 3,
     });
     expect(channelMock.sendToQueue).toHaveBeenCalled();
   });
@@ -103,7 +102,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
           payload: '{"x":1}',
           source: { kind: "runtime", id: "tests" },
           attempts: 0,
-          maxAttempts: 3,
           createdAt: new Date().toISOString(),
         }),
       ),
@@ -141,7 +139,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
           payload: "{}",
           source: { kind: "runtime", id: "tests" },
           attempts: 2,
-          maxAttempts: 3,
           createdAt: new Date().toISOString(),
         }),
       ),
@@ -165,7 +162,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
         eventId: "event.a",
         payload: '{"x":1}',
         source: { kind: "runtime", id: "tests" },
-        maxAttempts: 1,
       }),
     ).rejects.toThrow("Event lane queue not initialized");
 
@@ -245,7 +241,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
           serializedAsyncContexts: 42,
           source: { kind: "runtime", id: "tests" },
           attempts: 0,
-          maxAttempts: 1,
           createdAt: new Date().toISOString(),
         }),
       ),
@@ -298,7 +293,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
           payload: "{}",
           source: { kind: "runtime", id: "tests" },
           attempts: 0,
-          maxAttempts: 1,
           createdAt: new Date().toISOString(),
         }),
       ),
@@ -405,7 +399,7 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
     );
   });
 
-  it("normalizes optional attempts/maxAttempts/createdAt fields", async () => {
+  it("normalizes optional attempts and createdAt fields", async () => {
     await queue.init();
     let consumer:
       | ((msg: { content: Buffer } | null) => Promise<void>)
@@ -433,7 +427,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
       expect.objectContaining({
         id: "msg-defaults",
         attempts: 1,
-        maxAttempts: 1,
         createdAt: expect.any(Date),
       }),
     );
@@ -447,11 +440,10 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
     const republishedPayload = JSON.parse(lastPublishCall[1].toString()) as {
       id: string;
       attempts: number;
-      maxAttempts: number;
     };
     expect(republishedPayload.id).toBe("msg-defaults");
     expect(republishedPayload.attempts).toBe(1);
-    expect(republishedPayload.maxAttempts).toBe(1);
+    expect(republishedPayload).not.toHaveProperty("maxAttempts");
   });
 
   it("uses x-delivery-count headers to preserve attempts across broker redeliveries", async () => {
@@ -479,7 +471,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
         payload: "{}",
         source: { kind: "runtime", id: "tests" },
         attempts: 0,
-        maxAttempts: 3,
         createdAt: new Date().toISOString(),
       }),
     );
@@ -553,7 +544,6 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
       eventId: "event.configured",
       payload: "{}",
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 1,
     });
 
     expect(channelMock.sendToQueue).toHaveBeenCalledWith(
