@@ -4740,6 +4740,59 @@ const serializer = new Serializer({
 });
 ```
 
+### Serializer Resources in Runner
+
+`resources.serializer` is the built-in default serializer resource.
+
+When one boundary needs a separate serializer contract, the simplest option is
+to define a dedicated resource that returns `new Serializer({...})`.
+
+If you want to reuse the built-in serializer resource contract and config
+schema, fork `resources.serializer` and configure that fork with `.with({...})`.
+
+- Use `types: [...]` for the ergonomic built-in allow-list shortcut.
+- Use `allowedTypes: [...]` when you need the raw serializer option, including
+  custom type ids added through `addType(...)`.
+
+```typescript
+import { resources, r, Serializer } from "@bluelibs/runner";
+
+const rpcSerializer = r
+  .resource("rpcSerializer")
+  .init(
+    async () =>
+      new Serializer({
+        symbolPolicy: "well-known-only",
+        allowedTypes: ["Date", "Map"],
+        maxDepth: 64,
+      }),
+  )
+  .build();
+
+const rpcSerializerFork =
+  resources.serializer.fork("app.resources.rpcSerializer");
+
+const app = r
+  .resource("app")
+  .register([
+    rpcSerializer,
+    rpcSerializerFork.with({
+      symbolPolicy: "well-known-only",
+      types: ["Date", "Map"],
+      maxDepth: 64,
+    }),
+    // pass either `rpcSerializer` or `rpcSerializerFork`
+    // to the boundary that should use it
+  ])
+  .build();
+```
+
+> **Note:** `.with(config)` is a registration-time entry. Register the
+> configured serializer resource you want the runtime to use, then pass the bare
+> resource definition to whichever boundary depends on it. `fork(...)` is the
+> easiest way to create a second serializer definition with the same built-in
+> config contract but a different identity.
+
 ### Custom Types
 
 ```typescript

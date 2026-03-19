@@ -1,5 +1,5 @@
 import { defineEvent, defineResource, defineTask } from "../../../define";
-import type { SerializerLike } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 import { run } from "../../../run";
 import { globalResources } from "../../../globals/globalResources";
 import { globalTags } from "../../../globals/globalTags";
@@ -91,15 +91,24 @@ describe("rpcLanesResource modes", () => {
     });
     const stringify = jest.fn((value: unknown) => JSON.stringify(value));
     const parse = jest.fn((payload: string) => JSON.parse(payload) as unknown);
-    const serializer = defineResource({
+    const serializer = defineResource<void, Promise<Serializer>>({
       id: "tests-rpc-lanes-mode-simulated-custom-serializer-resource",
-      init: async (): Promise<SerializerLike> => ({
-        stringify: (value) => stringify(value),
-        parse: <T = unknown>(payload: string) => {
+      init: async () => {
+        const instance = new Serializer();
+        const baseStringify = instance.stringify.bind(instance);
+        const baseParse = instance.parse.bind(instance);
+
+        instance.stringify = ((value: unknown) => {
+          stringify(value);
+          return baseStringify(value);
+        }) as Serializer["stringify"];
+        instance.parse = (<T = unknown>(payload: string) => {
           parse(payload);
-          return JSON.parse(payload) as T;
-        },
-      }),
+          return baseParse<T>(payload);
+        }) as Serializer["parse"];
+
+        return instance;
+      },
     });
 
     const topology = r.rpcLane.topology({
@@ -114,6 +123,68 @@ describe("rpcLanesResource modes", () => {
       register: [
         task,
         serializer,
+        rpcLanesResource.with({
+          profile: "client",
+          topology,
+          mode: "local-simulated",
+          serializer,
+        }),
+      ],
+    });
+
+    const runtime = await run(app);
+    await expect(
+      runtime.runTask(task as any, { nested: { count: 1 } }),
+    ).resolves.toEqual({
+      count: 2,
+    });
+    expect(stringify).toHaveBeenCalled();
+    expect(parse).toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
+  it("local-simulated mode accepts a configured custom serializer override", async () => {
+    const lane = r
+      .rpcLane("tests-rpc-lanes-mode-simulated-configured-serializer-lane")
+      .build();
+    const task = defineTask<{ nested: { count: number } }>({
+      id: "tests-rpc-lanes-mode-simulated-configured-serializer-task",
+      tags: [globalTags.rpcLane.with({ lane })],
+      run: async (input) => ({ count: input.nested.count + 1 }),
+    });
+    const stringify = jest.fn((value: unknown) => JSON.stringify(value));
+    const parse = jest.fn((payload: string) => JSON.parse(payload) as unknown);
+    const serializer = defineResource<{ indent: number }, Promise<Serializer>>({
+      id: "tests-rpc-lanes-mode-simulated-configured-serializer-resource",
+      init: async (config) => {
+        const instance = new Serializer();
+
+        instance.stringify = ((value: unknown) => {
+          stringify({ indent: config.indent, value });
+          return JSON.stringify(value, null, config.indent);
+        }) as Serializer["stringify"];
+        instance.parse = (<T = unknown>(payload: string) => {
+          parse(payload);
+          return JSON.parse(payload) as T;
+        }) as Serializer["parse"];
+
+        return instance;
+      },
+    });
+
+    const topology = r.rpcLane.topology({
+      profiles: {
+        client: { serve: [] },
+      },
+      bindings: [],
+    });
+    const configuredSerializer = serializer.with({ indent: 2 });
+
+    const app = defineResource({
+      id: "tests-rpc-lanes-mode-simulated-configured-serializer-app",
+      register: [
+        task,
+        configuredSerializer,
         rpcLanesResource.with({
           profile: "client",
           topology,

@@ -486,43 +486,46 @@ const app = r
 
 **What you just learned**: RPC lane definition, task tagging, communicator wiring, and profile-based serve routing — the full RPC Lane pattern.
 
-### Custom Serializer Resource
+### Serializer Override
 
 `rpcLanesResource` uses `resources.serializer` by default. When an RPC boundary
 needs different serializer registrations or stricter deserialization policy, you
-can point the RPC lanes resource at a different serializer resource.
+can fork the built-in serializer resource and point RPC lanes at that configured
+fork.
 
-Register the custom serializer resource in the app yourself, then pass it to
-`rpcLanesResource.with({ serializer: ... })`:
+Register the configured serializer entry in the app yourself, then pass that
+bare serializer resource definition to `rpcLanesResource.with({ serializer: ... })`.
+You can also skip the fork and define a dedicated serializer resource that
+returns `new Serializer({...})` directly.
 
 ```typescript
-import { Serializer, r } from "@bluelibs/runner";
+import { resources, r, Serializer } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";
 
-const rpcSerializer = r
-  .resource("app.resources.rpcSerializer")
-  .init(async () => {
-    const serializer = new Serializer({
-      symbolPolicy: "well-known-only",
-    });
-
-    serializer.addType({
-      id: "Money",
-      is: (value): value is { amount: number; currency: string } =>
-        typeof value === "object" && value !== null && "amount" in value,
-      serialize: (value) => value,
-      deserialize: (value) => value,
-      strategy: "value",
-    });
-
-    return serializer;
-  })
+const customRpcSerializer = r
+  .resource("customRpcSerializer")
+  .init(
+    async () =>
+      new Serializer({
+        symbolPolicy: "well-known-only",
+        allowedTypes: ["Date", "Map"],
+        maxDepth: 64,
+      }),
+  )
   .build();
+
+const rpcSerializer = resources.serializer.fork("app.resources.rpcSerializer");
+const rpcSerializerEntry = rpcSerializer.with({
+  symbolPolicy: "well-known-only",
+  types: ["Date", "Map"],
+  maxDepth: 64,
+});
 
 const app = r
   .resource("app")
   .register([
-    rpcSerializer,
+    customRpcSerializer,
+    rpcSerializerEntry,
     rpcLanesResource.with({
       profile: "api",
       topology,

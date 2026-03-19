@@ -63,6 +63,37 @@ describe("rpcLanes resource config schema", () => {
     );
   });
 
+  it("rejects serializer resources configured via .with(...)", () => {
+    const lane = { id: "lane-configured-serializer" };
+    const serializer = defineResource({
+      id: "tests-rpc-lanes-schema-configured-serializer",
+      init: async (config: { pretty: boolean }) => ({
+        stringify: (value: unknown) =>
+          JSON.stringify(value, null, config.pretty ? 2 : 0),
+        parse: JSON.parse,
+      }),
+    });
+    const config = {
+      profile: "client",
+      topology: {
+        profiles: {
+          client: { serve: [lane] },
+        },
+        bindings: [
+          {
+            lane,
+            communicator: { id: "communicator-resource" },
+          },
+        ],
+      },
+      serializer: serializer.with({ pretty: true }),
+    };
+
+    expectMatchFailure(() =>
+      rpcLanesResourceConfigSchema.parse(config as never),
+    );
+  });
+
   it("rejects invalid mode values", () => {
     const lane = { id: "lane-invalid-mode" };
 

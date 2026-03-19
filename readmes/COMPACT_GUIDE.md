@@ -615,6 +615,8 @@ Important rules:
 
 - The built-in serializer round-trips common non-JSON shapes such as `Date` and `RegExp`.
 - Register custom types through `resources.serializer`.
+- For boundary-specific serializer behavior, either register a custom resource that returns `new Serializer({...})` or fork `resources.serializer` and register a configured fork.
+- `types: [...]` is the ergonomic built-in allow-list shortcut; `allowedTypes: [...]` keeps the raw serializer option for custom type ids too.
 - Use `serializer.parse(payload, { schema })` when you want deserialization and validation in one step.
 - `@Serializer.Field({ from, deserialize, serialize })` composes with `@Match.Field(...)` on `@Match.Schema()` classes for explicit DTOs.
 - For legacy decorators, import `Serializer` from `@bluelibs/runner/decorators/legacy`.
@@ -1005,7 +1007,7 @@ Supported modes:
 
 Async-context propagation over RPC lanes and event lanes is lane-allowlisted by default.
 
-`rpcLanesResource` uses `resources.serializer` by default, but you can override it with `rpcLanesResource.with({ serializer: mySerializerResource, ... })` when the RPC boundary needs a custom serializer contract. Register that serializer resource explicitly, and keep client/server serializer registrations aligned.
+`rpcLanesResource` uses `resources.serializer` by default, but you can override it with `rpcLanesResource.with({ serializer: mySerializerResource, ... })`. If that serializer needs custom options, configure it at registration time first, then still pass the bare resource definition here. Fork `resources.serializer` when you want a boundary-specific serializer contract with the built-in serializer config shape.
 
 See:
 
