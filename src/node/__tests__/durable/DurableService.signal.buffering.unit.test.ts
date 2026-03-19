@@ -77,7 +77,7 @@ describe("durable: DurableService - signals buffering and audit", () => {
     expect(queue!.enqueued.length).toBe(0);
   });
 
-  it("signal ignores payloads when the base signal is already completed or timed out", async () => {
+  it("signal buffers into the next implicit slot when the base signal is already consumed", async () => {
     const { store, queue, service } = await signalSetup();
 
     await store.saveStepResult({
@@ -92,7 +92,12 @@ describe("durable: DurableService - signals buffering and audit", () => {
       state: "completed",
       payload: { paidAt: 1 },
     });
-    expect(await store.getStepResult("e1", "__signal:paid:1")).toBeNull();
+    expect(
+      (await store.getStepResult("e1", "__signal:paid:1"))?.result,
+    ).toEqual({
+      state: "completed",
+      payload: { paidAt: 2 },
+    });
 
     await store.saveStepResult({
       executionId: "e1",
@@ -104,7 +109,12 @@ describe("durable: DurableService - signals buffering and audit", () => {
     expect((await store.getStepResult("e1", "__signal:timed"))?.result).toEqual(
       { state: "timed_out" },
     );
-    expect(await store.getStepResult("e1", "__signal:timed:1")).toBeNull();
+    expect(
+      (await store.getStepResult("e1", "__signal:timed:1"))?.result,
+    ).toEqual({
+      state: "completed",
+      payload: { paidAt: 2 },
+    });
 
     expect(queue!.enqueued.length).toBe(0);
   });

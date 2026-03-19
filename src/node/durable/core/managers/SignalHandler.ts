@@ -178,14 +178,18 @@ export class SignalHandler {
       }
 
       if (!completedStepId) {
-        // Indexed waits are sequential for implicit signal slots. We keep
-        // scanning recorded slots to find legacy waiting states, but stop at the
-        // first gap so we never allocate new indexed slots when nobody is waiting.
+        // Indexed waits are sequential for implicit signal slots. When the base
+        // slot is already consumed, the next missing numeric slot is the next
+        // implicit buffer position for back-to-back signals that arrive before
+        // user code reaches the following wait.
         for (let index = 1; index < maxSignalSlotsToScan; index += 1) {
           const stepId = `${baseStepId}:${index}`;
           const existing = await this.store.getStepResult(executionId, stepId);
 
-          if (!existing) break;
+          if (!existing) {
+            completedStepId = stepId;
+            break;
+          }
 
           const state = parseSignalState(existing.result);
           if (!state) {
