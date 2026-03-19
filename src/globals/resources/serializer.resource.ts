@@ -6,7 +6,7 @@ import { Match } from "../../tools/check";
 export type SerializerResourceConfig = SerializerOptions;
 
 export const serializerResourceConfigSchema = Match.ObjectIncluding({
-  prettyx: Match.Optional(Boolean),
+  pretty: Match.Optional(Boolean),
   types: Match.Optional(Match.ArrayOf(Object)),
   schemas: Match.Optional(Match.ArrayOf(Function)),
   maxDepth: Match.Optional(Number),
