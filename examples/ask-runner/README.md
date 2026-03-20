@@ -6,7 +6,7 @@ It demonstrates:
 
 - a cached docs prompt resource
 - a dedicated OpenAI task
-- durable SQLite-backed budget and rate-limit state
+- bounded in-memory budget and rate-limit state
 - public `GET /?query=...` markdown responses
 - public `GET /stream?query=...` streaming markdown responses
 - public `GET /stream-html?query=...` browser page that live-renders streamed markdown as HTML
@@ -37,6 +37,7 @@ Important knobs:
 - `ASK_RUNNER_MAX_CONCURRENT_OPENAI_CALLS`: max simultaneous OpenAI calls
 - `ASK_RUNNER_MAX_OUTPUT_TOKENS`: conservative cap used for both OpenAI and preflight budget estimation
 - `ASK_RUNNER_TOKEN_CHARS_ESTIMATE`: chars-per-token estimate used for budget preflight
+- `ASK_RUNNER_TRUST_PROXY`: enables Express proxy-aware `req.ip`; leave disabled unless requests pass through a trusted proxy
 - `ASK_RUNNER_PRICE_INPUT_PER_1M`: uncached input token price
 - `ASK_RUNNER_PRICE_CACHED_INPUT_PER_1M`: cached input token price
 - `ASK_RUNNER_PRICE_OUTPUT_PER_1M`: output token price

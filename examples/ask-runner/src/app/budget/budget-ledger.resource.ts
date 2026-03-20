@@ -4,83 +4,38 @@ import { r } from "@bluelibs/runner";
 
 import { appConfig, type AskRunnerPricing } from "../config/app-config.resource";
 import {
+  appendBoundedAuditEntry,
+  ensureLedgerDayState,
+  incrementWindowCount,
+} from "./budget-ledger.storage";
+import {
+  createBudgetLedgerState,
+  defaultBudgetLedgerStorageLimits,
+  type BudgetLedger,
+  type BudgetLedgerState,
+  type BudgetLedgerStorageLimits,
+  type UsageLike,
+} from "./budget-ledger.types";
+import {
   dailyBudgetExceededError,
   rateLimitExceededError,
   unauthorizedAdminError,
 } from "../errors";
 
-export interface UsageLike {
-  input_tokens?: number;
-  output_tokens?: number;
-  input_tokens_details?: {
-    cached_tokens?: number;
-  } | null;
-  output_tokens_details?: Record<string, unknown> | null;
-}
-
-export interface BudgetSnapshot {
-  day: string;
-  spentUsd: number;
-  requestCount: number;
-  stopped: boolean;
-  stopReason: string | null;
-  remainingUsd: number;
-}
-
-interface DayState {
-  spentUsd: number;
-  requestCount: number;
-  stopped: boolean;
-  stopReason: string | null;
-}
-
-interface AuditEntry {
-  timestamp: string;
-  day: string;
-  ip: string;
-  queryHash: string;
-  model: string;
-  estimatedCostUsd: number;
-  actualCostUsd: number;
-  status: "ok" | "rejected";
-}
-
-interface BudgetLedgerState {
-  dayStateByDay: Map<string, DayState>;
-  minuteCountsByKey: Map<string, number>;
-  audit: AuditEntry[];
-}
-
-export interface BudgetLedger {
-  enforceIpLimit(input: {
-    day: string;
-    minuteBucket: string;
-    hourBucket: string;
-    ip: string;
-  }): void;
-  ensureDayCanSpend(input: { day: string; projectedCostUsd: number }): void;
-  recordUsage(input: {
-    day: string;
-    ip: string;
-    query: string;
-    model: string;
-    estimatedCostUsd: number;
-    usage: UsageLike | null;
-    status: "ok" | "rejected";
-  }): BudgetSnapshot;
-  stopForDay(day: string, reason: string): BudgetSnapshot;
-  resume(day: string): BudgetSnapshot;
-  getSnapshot(day: string): BudgetSnapshot;
-}
+export {
+  createBudgetLedgerState,
+  defaultBudgetLedgerStorageLimits,
+  type BudgetLedger,
+  type BudgetLedgerState,
+  type BudgetLedgerStorageLimits,
+  type BudgetSnapshot,
+  type UsageLike,
+} from "./budget-ledger.types";
 
 export const budgetLedger = r
   .resource("budgetLedger")
   .dependencies({ appConfig })
-  .context<BudgetLedgerState>(() => ({
-    dayStateByDay: new Map(),
-    minuteCountsByKey: new Map(),
-    audit: [],
-  }))
+  .context<BudgetLedgerState>(createBudgetLedgerState)
   .init(async (_config, { appConfig }, context): Promise<BudgetLedger> => {
     return createBudgetLedger(context, appConfig.dailyBudgetUsd, appConfig.pricing, {
       perMinute: appConfig.rateLimitPerMinute,
@@ -95,70 +50,41 @@ export function createBudgetLedger(
   dailyBudgetUsd: number,
   pricing: AskRunnerPricing,
   rateLimits: { perMinute: number; perHour: number; perDay: number },
+  storageLimits: BudgetLedgerStorageLimits = defaultBudgetLedgerStorageLimits,
 ): BudgetLedger {
-  const ensureDay = (day: string): DayState => {
-    const existing = state.dayStateByDay.get(day);
-    if (existing) return existing;
-
-    const created: DayState = {
-      spentUsd: 0,
-      requestCount: 0,
-      stopped: false,
-      stopReason: null,
-    };
-    state.dayStateByDay.set(day, created);
-    return created;
-  };
-
-  const readMinuteCount = (day: string, minuteBucket: string, ip: string): number => {
-    return state.minuteCountsByKey.get(rateKey(day, minuteBucket, ip)) ?? 0;
-  };
-
-  const incrementMinuteCount = (day: string, minuteBucket: string, ip: string): number => {
-    const key = rateKey(day, minuteBucket, ip);
-    const next = (state.minuteCountsByKey.get(key) ?? 0) + 1;
-    state.minuteCountsByKey.set(key, next);
-    return next;
-  };
-
-  const readHourCount = (day: string, hourBucket: string, ip: string): number => {
-    let total = 0;
-    for (const [key, count] of state.minuteCountsByKey.entries()) {
-      if (key.startsWith(`${day}:${hourBucket}:`) && key.endsWith(`:${ip}`)) {
-        total += count;
-      }
-    }
-    return total;
-  };
-
-  const readDayCount = (day: string, ip: string): number => {
-    let total = 0;
-    for (const [key, count] of state.minuteCountsByKey.entries()) {
-      if (key.startsWith(`${day}:`) && key.endsWith(`:${ip}`)) {
-        total += count;
-      }
-    }
-    return total;
-  };
-
   return {
     enforceIpLimit({ day, minuteBucket, hourBucket, ip }) {
-      ensureDay(day);
-      const minuteCount = incrementMinuteCount(day, minuteBucket, ip);
+      ensureLedgerDayState(state, day, storageLimits);
+      const minuteCount = incrementWindowCount(
+        state.minuteWindow,
+        minuteBucket,
+        ip,
+        storageLimits.maxTrackedMinuteIps,
+      );
       if (minuteCount > rateLimits.perMinute) {
         rateLimitExceededError.throw({
           message: "Rate limit exceeded for this minute.",
         });
       }
 
-      const hourCount = readHourCount(day, hourBucket, ip);
+      const hourCount = incrementWindowCount(
+        state.hourWindow,
+        hourBucket,
+        ip,
+        storageLimits.maxTrackedHourIps,
+      );
       if (hourCount > rateLimits.perHour) {
         rateLimitExceededError.throw({
           message: "Rate limit exceeded for this hour.",
         });
       }
 
-      const dayCount = readDayCount(day, ip);
+      const dayCount = incrementWindowCount(
+        state.dayWindow,
+        day,
+        ip,
+        storageLimits.maxTrackedDayIps,
+      );
       if (dayCount > rateLimits.perDay) {
         rateLimitExceededError.throw({
           message: "Rate limit exceeded for this day.",
@@ -167,7 +93,7 @@ export function createBudgetLedger(
     },
 
     ensureDayCanSpend({ day, projectedCostUsd }) {
-      const dayState = ensureDay(day);
+      const dayState = ensureLedgerDayState(state, day, storageLimits);
       if (dayState.stopped) {
         dailyBudgetExceededError.throw({
           message: dayState.stopReason ?? "Asking is stopped for today.",
@@ -181,7 +107,7 @@ export function createBudgetLedger(
     },
 
     recordUsage({ day, ip, query, model, estimatedCostUsd, usage, status }) {
-      const dayState = ensureDay(day);
+      const dayState = ensureLedgerDayState(state, day, storageLimits);
       const actualCostUsd = usage ? calculateUsageCost(usage, pricing) : 0;
       dayState.spentUsd = Number((dayState.spentUsd + actualCostUsd).toFixed(8));
       dayState.requestCount += 1;
@@ -189,7 +115,7 @@ export function createBudgetLedger(
         dayState.stopped = true;
         dayState.stopReason = "Daily budget reached.";
       }
-      state.audit.push({
+      appendBoundedAuditEntry(state, {
         timestamp: new Date().toISOString(),
         day,
         ip,
@@ -198,26 +124,26 @@ export function createBudgetLedger(
         estimatedCostUsd,
         actualCostUsd,
         status,
-      });
+      }, storageLimits);
       return this.getSnapshot(day);
     },
 
     stopForDay(day, reason) {
-      const dayState = ensureDay(day);
+      const dayState = ensureLedgerDayState(state, day, storageLimits);
       dayState.stopped = true;
       dayState.stopReason = reason;
       return this.getSnapshot(day);
     },
 
     resume(day) {
-      const dayState = ensureDay(day);
+      const dayState = ensureLedgerDayState(state, day, storageLimits);
       dayState.stopped = false;
       dayState.stopReason = null;
       return this.getSnapshot(day);
     },
 
     getSnapshot(day) {
-      const dayState = ensureDay(day);
+      const dayState = ensureLedgerDayState(state, day, storageLimits);
       return {
         day,
         spentUsd: dayState.spentUsd,
@@ -261,10 +187,6 @@ export function minuteBucket(date: Date): string {
 
 export function hourBucket(date: Date): string {
   return date.toISOString().slice(0, 13);
-}
-
-function rateKey(day: string, minuteBucket: string, ip: string): string {
-  return `${day}:${minuteBucket}:${ip}`;
 }
 
 function sha1(value: string): string {
