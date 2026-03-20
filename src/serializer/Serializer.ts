@@ -9,6 +9,7 @@ import type {
   TypeDefinition,
   SerializationContext,
   SerializerOptions,
+  SerializerSchemaClass,
   SerializedGraph,
   DeserializationContext,
   SerializerDeserializeOptions,
@@ -20,7 +21,10 @@ import { SymbolPolicy } from "./types";
 import { genericError } from "../errors";
 import { validationError } from "./errors";
 import { check, Match } from "../tools/check";
-import { hasClassSchemaMetadata } from "../tools/check/classSchema";
+import {
+  getClassSchemaDefinition,
+  hasClassSchemaMetadata,
+} from "../tools/check/classSchema";
 import { TypeRegistry } from "./type-registry";
 import {
   isGraphPayload,
@@ -123,6 +127,84 @@ function normalizeSchemaOption(schema: unknown): unknown {
   return Match.compile(schema as never);
 }
 
+function cloneSchemaPayload(value: object): Record<string, unknown> {
+  const source = remapObjectForSerialization(value);
+  const result: Record<string, unknown> = {};
+
+  for (const key in source) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) {
+      continue;
+    }
+
+    result[key] = source[key];
+  }
+
+  return result;
+}
+
+function seedSchemaPlaceholder(
+  placeholder: object,
+  source: unknown,
+): Record<string, unknown> | undefined {
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return undefined;
+  }
+
+  const record = source as Record<string, unknown>;
+
+  for (const key in record) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) {
+      continue;
+    }
+
+    (placeholder as Record<string, unknown>)[key] = record[key];
+  }
+
+  return record;
+}
+
+function toSchemaTypeDefinition<TInstance>(
+  schemaClass: SerializerSchemaClass<TInstance>,
+): TypeDefinition<TInstance, unknown> {
+  if (!hasClassSchemaMetadata(schemaClass)) {
+    validationError(
+      `Invalid schema registration: ${schemaClass.name || "Anonymous"} must be decorated with Match.Schema().`,
+    );
+  }
+
+  const schemaDefinition = getClassSchemaDefinition(schemaClass);
+  const placeholderStack: TInstance[] = [];
+
+  return {
+    id: schemaDefinition.schemaId,
+    is: (value: unknown): value is TInstance => value instanceof schemaClass,
+    serialize: (value: TInstance) => cloneSchemaPayload(value as object),
+    deserialize: (value: unknown) => {
+      const remapped = remapValueForSchemaDeserialize(
+        value,
+        schemaClass as SerializerClassConstructor,
+      );
+      const placeholder = placeholderStack.pop();
+
+      if (placeholder !== undefined && placeholder !== null) {
+        seedSchemaPlaceholder(placeholder as object, remapped);
+        return Match.fromSchema(
+          schemaClass as SerializerClassConstructor,
+        ).parse(placeholder) as TInstance;
+      }
+
+      return Match.fromSchema(schemaClass as SerializerClassConstructor).parse(
+        remapped,
+      ) as TInstance;
+    },
+    create: () => {
+      const placeholder = Object.create(schemaClass.prototype) as TInstance;
+      placeholderStack.push(placeholder);
+      return placeholder;
+    },
+  };
+}
+
 export class Serializer {
   public static Field(
     options: SerializerFieldOptions = {},
@@ -176,6 +258,14 @@ export class Serializer {
       typeRegistry: this.typeRegistry,
       mapObjectForSerialization: remapObjectForSerialization,
     };
+
+    for (const typeDef of options.types ?? []) {
+      this.addType(typeDef);
+    }
+
+    for (const schemaClass of options.schemas ?? []) {
+      this.addSchema(schemaClass);
+    }
   }
 
   /**
@@ -297,6 +387,15 @@ export class Serializer {
     typeDef: TypeDefinition<TInstance, TSerialized>,
   ): void {
     this.typeRegistry.addType(typeDef);
+  }
+
+  /**
+   * Register a Match schema DTO class as a serializer type.
+   */
+  public addSchema<TInstance>(
+    schemaClass: SerializerSchemaClass<TInstance>,
+  ): void {
+    this.addType(toSchemaTypeDefinition(schemaClass));
   }
 
   private jsonStringify(value: unknown): string {

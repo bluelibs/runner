@@ -200,6 +200,8 @@ export interface IDurableService {
 
   /**
    * Deliver a signal payload to a waiting workflow execution and resume it.
+   * If the first wait has not been recorded yet, the base signal slot may be
+   * prebuffered so the upcoming `waitForSignal()` can consume it on replay.
    */
   signal<TPayload>(
     executionId: string,

@@ -65,7 +65,6 @@ export function registerEventLaneProducerInterceptor(options: {
       }),
       source: emission.source,
       authToken,
-      maxAttempts: binding.maxAttempts ?? 1,
     });
     emission.stopPropagation();
     await diagnostics.logEnqueue({

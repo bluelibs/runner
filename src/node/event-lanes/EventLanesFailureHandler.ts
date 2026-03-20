@@ -26,11 +26,13 @@ export async function handleEventLaneConsumerFailure({
   delay,
 }: HandleEventLaneConsumerFailureInput): Promise<void> {
   const consumerError = toError(error);
+  const configuredMaxAttempts = binding.maxAttempts ?? 1;
 
   const retried = await tryRetry({
     queue,
     binding,
     message,
+    configuredMaxAttempts,
     error: consumerError,
     logger,
     delay,
@@ -49,7 +51,7 @@ export async function handleEventLaneConsumerFailure({
       error: consumerError,
       data: {
         attempts: message.attempts,
-        maxAttempts: message.maxAttempts,
+        maxAttempts: configuredMaxAttempts,
       },
     });
   }
@@ -59,6 +61,7 @@ type RetryInput = {
   queue: EventLaneConsumerQueue;
   binding: EventLanesResolvedBinding;
   message: EventLaneMessage;
+  configuredMaxAttempts: number;
   error: Error;
   logger: Logger;
   delay: DelayFn;
@@ -68,11 +71,12 @@ async function tryRetry({
   queue,
   binding,
   message,
+  configuredMaxAttempts,
   error,
   logger,
   delay,
 }: RetryInput): Promise<boolean> {
-  const shouldRetry = message.attempts < message.maxAttempts;
+  const shouldRetry = message.attempts < configuredMaxAttempts;
   if (!shouldRetry) {
     return false;
   }
@@ -92,7 +96,7 @@ async function tryRetry({
       error,
       data: {
         attempts: message.attempts,
-        maxAttempts: message.maxAttempts,
+        maxAttempts: configuredMaxAttempts,
         retryDelayMs,
       },
     },

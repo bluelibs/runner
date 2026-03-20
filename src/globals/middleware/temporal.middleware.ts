@@ -7,7 +7,6 @@ import {
 import { Match } from "../../tools/check";
 import type { ValidationSchemaInput } from "../../types/utilities";
 import {
-  createMiddlewareKeyBuilderHelpers,
   defaultTaskKeyBuilder,
   type MiddlewareKeyBuilder,
 } from "./keyBuilder.shared";
@@ -65,11 +64,7 @@ function buildTemporalMiddlewareKey(
   input: unknown,
   readIdentity?: () => unknown,
 ): string {
-  const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(
-    taskId,
-    input,
-    createMiddlewareKeyBuilderHelpers(taskId),
-  );
+  const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(taskId, input);
 
   if (typeof key !== "string") {
     validationError.throw({

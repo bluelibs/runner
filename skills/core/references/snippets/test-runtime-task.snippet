@@ -1,0 +1,80 @@
+---
+id: runner.test.runtime-task
+title: Runtime Task Test
+surface: builder
+platform: universal
+when:
+  - runtime-backed task test
+  - task integration test
+  - run(app) in tests
+---
+
+Use when you want a small integration-style test that exercises the real Runner runtime path.
+
+```ts
+import { Match, resources, r, run } from "@bluelibs/runner";
+
+describe("createUser task", () => {
+  it("creates a user through the runtime", async () => {
+    const userStore = r
+      .resource("userStore")
+      .init(async () => new Map<string, { id: string; email: string }>())
+      .build();
+
+    const createUser = r
+      .task<{ email: string }>("createUser")
+      .inputSchema({
+        email: Match.Email,
+      })
+      .resultSchema({
+        id: Match.NonEmptyString,
+        email: Match.Email,
+      })
+      .dependencies({
+        userStore,
+        logger: resources.logger,
+      })
+      .run(async (input, { userStore, logger }) => {
+        const user = {
+          id: "user-1",
+          email: input.email,
+        };
+
+        userStore.set(user.id, user);
+        await logger.info(`Created user ${user.email}`);
+
+        return user;
+      })
+      .build();
+
+    const app = r
+      .resource("app")
+      .register([userStore, createUser])
+      .build();
+
+    const runtime = await run(app, { shutdownHooks: false });
+
+    try {
+      await expect(
+        runtime.runTask(createUser, {
+          email: "ada@example.com",
+        }),
+      ).resolves.toEqual({
+        id: "user-1",
+        email: "ada@example.com",
+      });
+
+      expect(runtime.getResourceValue(userStore).get("user-1")).toEqual({
+        id: "user-1",
+        email: "ada@example.com",
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+});
+```
+
+Notes:
+- Prefer `run(app, { shutdownHooks: false })` in tests.
+- Use `try/finally` so `runtime.dispose()` always runs.

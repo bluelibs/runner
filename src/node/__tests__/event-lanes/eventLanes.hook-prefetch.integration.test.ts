@@ -46,7 +46,7 @@ class CoverageQueue implements IEventLaneQueue {
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
     const message = this.inFlight.get(messageId);
     this.inFlight.delete(messageId);
-    if (requeue && message && message.attempts < message.maxAttempts) {
+    if (requeue && message) {
       this.nackedRequeue += 1;
       this.enqueued.push(message);
     } else if (!requeue) {
@@ -75,9 +75,6 @@ class CoverageQueue implements IEventLaneQueue {
         ...raw,
         attempts: raw.attempts + 1,
       };
-      if (message.attempts > message.maxAttempts) {
-        continue;
-      }
       this.inFlight.set(message.id, message);
       await handler(message);
     }

@@ -66,7 +66,6 @@ async function waitUntil(
           eventId: "tests-event-lanes-integration.event",
           payload: '{"ok":true}',
           source: { kind: "runtime", id: "tests-event-lanes-integration" },
-          maxAttempts: 3,
         });
 
         await waitUntil(() => seenMessageIds.length === 2);

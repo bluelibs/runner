@@ -1,0 +1,119 @@
+---
+id: runner.resource.complex
+title: Resource Complex
+surface: builder
+platform: universal
+when:
+  - complex resource
+  - resource as ownership boundary
+  - full lifecycle resource
+---
+
+Use when you need a resource that owns child definitions, typed config, private lifecycle state, and a returned long-lived client.
+
+```ts
+import { Match, resources, r } from "@bluelibs/runner";
+
+type NotificationModuleConfig = {
+  endpoint: string;
+  apiKey: string;
+  enabled?: boolean;
+};
+
+const notificationDelivered = r
+  .event("notificationDelivered")
+  .payloadSchema({
+    userId: Match.NonEmptyString,
+    channel: Match.OneOf("email", "sms"),
+  })
+  .build();
+
+const deliverNotification = r
+  .task("deliverNotification")
+  .inputSchema({
+    userId: Match.NonEmptyString,
+    channel: Match.OneOf("email", "sms"),
+    message: Match.NonEmptyString,
+  })
+  .dependencies({
+    logger: resources.logger,
+    notificationDelivered,
+  })
+  .run(async (input, { logger, notificationDelivered }) => {
+    await logger.info("Delivering notification", {
+      userId: input.userId,
+      channel: input.channel,
+    });
+
+    await notificationDelivered({
+      userId: input.userId,
+      channel: input.channel,
+    });
+
+    return { ok: true as const };
+  })
+  .build();
+
+const notificationModule = r
+  .resource<NotificationModuleConfig>("notificationModule")
+  .register([notificationDelivered, deliverNotification])
+  .configSchema({
+    endpoint: Match.NonEmptyString,
+    apiKey: Match.NonEmptyString,
+    enabled: Match.Optional(Boolean),
+  })
+  .dependencies({
+    logger: resources.logger,
+    mode: resources.mode,
+  })
+  .context(() => ({
+    started: false,
+    draining: false,
+  }))
+  .meta({
+    title: "Notification Module",
+    description:
+      "Owns notification delivery definitions and the provider client lifecycle.",
+  })
+  .init(async (config, { logger, mode }, context) => {
+    const client = {
+      async ping() {
+        return config.enabled !== false;
+      },
+      async dispose() {},
+    };
+
+    await logger.info("Notification module initialized", {
+      endpoint: config.endpoint,
+      mode,
+    });
+
+    context.started = true;
+    return client;
+  })
+  .ready(async (_client, config, { logger }, context) => {
+    await logger.info("Notification module ready", {
+      endpoint: config.endpoint,
+      started: context.started,
+    });
+  })
+  .health(async (client) => ({
+    status: (await client.ping()) ? "healthy" : "unhealthy",
+    message: "notification provider connectivity",
+  }))
+  .cooldown(async (_client, _config, { logger }, context) => {
+    context.draining = true;
+    await logger.info("Notification module entering cooldown");
+  })
+  .dispose(async (client, _config, { logger }, context) => {
+    await client.dispose();
+    await logger.info("Notification module disposed", {
+      draining: context.draining,
+    });
+  })
+  .build();
+```
+
+Notes:
+- This teaches resources as both lifecycle-managed services and ownership boundaries.
+- Keep `subtree(...)`, `isolate(...)`, and `override(...)` in separate advanced snippets.

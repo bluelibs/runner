@@ -16,7 +16,7 @@ const tenantValue = (tenantId: string, userId?: string) => ({
 });
 
 describe("identityScope middleware support", () => {
-  it("keeps rate limits shared when identityScope is omitted", async () => {
+  it("isolates rate limits by tenant when identityScope is omitted", async () => {
     const task = defineTask({
       id: "identity-scope-shared-rate-limit-task",
       middleware: [rateLimitTaskMiddleware.with({ windowMs: 60_000, max: 1 })],
@@ -38,7 +38,7 @@ describe("identityScope middleware support", () => {
       asyncContexts.identity.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
-    ).rejects.toThrow(/rate limit exceeded/i);
+    ).resolves.toBe("ok");
     await runtime.dispose();
   });
 
@@ -196,23 +196,23 @@ describe("identityScope middleware support", () => {
     await runtime.dispose();
   });
 
-  it("shares concurrency by default and isolates it when tenant scope is enabled", async () => {
-    let sharedActiveTasks = 0;
-    let sharedMaxActiveTasks = 0;
+  it("isolates concurrency by tenant by default and when tenant scope is enabled", async () => {
+    let automaticActiveTasks = 0;
+    let automaticMaxActiveTasks = 0;
     let scopedActiveTasks = 0;
     let scopedMaxActiveTasks = 0;
 
-    const sharedTask = defineTask({
-      id: "identity-scope-shared-concurrency-task",
+    const automaticTask = defineTask({
+      id: "identity-scope-automatic-concurrency-task",
       middleware: [concurrencyTaskMiddleware.with({ limit: 1 })],
       run: async () => {
-        sharedActiveTasks += 1;
-        sharedMaxActiveTasks = Math.max(
-          sharedMaxActiveTasks,
-          sharedActiveTasks,
+        automaticActiveTasks += 1;
+        automaticMaxActiveTasks = Math.max(
+          automaticMaxActiveTasks,
+          automaticActiveTasks,
         );
         await sleep(10);
-        sharedActiveTasks -= 1;
+        automaticActiveTasks -= 1;
         return "ok";
       },
     });
@@ -237,17 +237,17 @@ describe("identityScope middleware support", () => {
     });
     const app = defineResource({
       id: "identity-scope-concurrency-app",
-      register: [sharedTask, scopedTask],
+      register: [automaticTask, scopedTask],
       init: async () => "ok",
     });
 
     const runtime = await run(app);
     await Promise.all([
       asyncContexts.identity.provide(tenantValue("acme"), () =>
-        runtime.runTask(sharedTask),
+        runtime.runTask(automaticTask),
       ),
       asyncContexts.identity.provide(tenantValue("globex"), () =>
-        runtime.runTask(sharedTask),
+        runtime.runTask(automaticTask),
       ),
     ]);
     await Promise.all([
@@ -259,7 +259,7 @@ describe("identityScope middleware support", () => {
       ),
     ]);
 
-    expect(sharedMaxActiveTasks).toBe(1);
+    expect(automaticMaxActiveTasks).toBe(2);
     expect(scopedMaxActiveTasks).toBe(2);
     await runtime.dispose();
   });

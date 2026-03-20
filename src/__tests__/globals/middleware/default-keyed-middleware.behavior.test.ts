@@ -87,8 +87,8 @@ describe("default keyed middleware behavior", () => {
       taskId: string;
     }> = [];
     const sharedCache = cacheMiddleware.with({
-      keyBuilder: (_taskId, input: { userId: string }, helpers) => ({
-        cacheKey: `${helpers!.storageTaskId}:user:${input.userId}`,
+      keyBuilder: (taskId, input: { userId: string }) => ({
+        cacheKey: `${taskId}:user:${input.userId}`,
         refs: [`user:${input.userId}`],
       }),
     });

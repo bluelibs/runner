@@ -1,0 +1,80 @@
+---
+id: runner.middleware.task
+title: Task Middleware
+surface: builder
+platform: universal
+when:
+  - custom task middleware
+  - cross-cutting task wrapper
+  - middleware with config
+---
+
+Use when you need a reusable task wrapper for concerns like logging, audit, auth, or tracing.
+
+```ts
+import { Match, resources, r, run } from "@bluelibs/runner";
+
+type AuditConfig = {
+  label: string;
+};
+
+const auditMiddleware = r.middleware
+  .task<AuditConfig>("auditMiddleware")
+  .configSchema({
+    label: Match.NonEmptyString,
+  })
+  .dependencies({
+    logger: resources.logger,
+  })
+  .run(async ({ task, next }, { logger }, config) => {
+    await logger.info(
+      `[${config.label}] starting ${String(task.definition.id)}`,
+    );
+
+    try {
+      return await next(task.input);
+    } finally {
+      await logger.info(
+        `[${config.label}] finished ${String(task.definition.id)}`,
+      );
+    }
+  })
+  .build();
+
+const createUser = r
+  .task<{ email: string }>("createUser")
+  .inputSchema({
+    email: Match.Email,
+  })
+  .middleware([
+    auditMiddleware.with({
+      label: "users",
+    }),
+  ])
+  .run(async (input) => {
+    return {
+      id: "user-1",
+      email: input.email,
+    };
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([createUser])
+  .build();
+
+const runtime = await run(app);
+
+try {
+  await runtime.runTask(createUser, {
+    email: "ada@example.com",
+  });
+} finally {
+  await runtime.dispose();
+}
+```
+
+Notes:
+- Canonical callback shape is `({ task, next, journal }, deps, config) => next(task.input)`.
+- Keep middleware cross-cutting. Do not move business logic into it.

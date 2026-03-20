@@ -2,41 +2,30 @@ import { validationError } from "../../errors";
 import { Serializer } from "../../serializer";
 
 /**
- * Helper values injected into keyed middleware key builders.
- */
-export interface MiddlewareKeyBuilderHelpers {
-  /**
-   * Full canonical task identity for stateful middleware storage keys.
-   *
-   * This preserves the full canonical task lineage so keyed middleware does not
-   * accidentally share state across sibling resources that reuse the same local
-   * task id.
-   */
-  storageTaskId: string;
-}
-
-/**
  * Builds a partition key for keyed middleware state.
+ *
+ * The first argument is the runtime canonical task id, not the local authoring
+ * id from the original builder callsite.
  */
 export type MiddlewareKeyBuilder = (
-  taskId: string,
+  canonicalTaskId: string,
   input: unknown,
-  helpers?: MiddlewareKeyBuilderHelpers,
 ) => string;
 
 const middlewareKeySerializer = new Serializer();
 const KEY_SEPARATOR = ":";
 
-export function createMiddlewareKeyBuilderHelpers(
-  taskId: string,
-): MiddlewareKeyBuilderHelpers {
-  return {
-    storageTaskId: taskId,
-  };
-}
+/**
+ * Default partitioning uses the full storage task id so middleware can keep one
+ * bucket per task lineage without depending on input serialization.
+ */
+export const defaultStorageTaskKeyBuilder: MiddlewareKeyBuilder = (
+  canonicalTaskId,
+  _input,
+) => canonicalTaskId;
 
 function serializeDefaultMiddlewareKeyInput(
-  taskId: string,
+  canonicalTaskId: string,
   input: unknown,
 ): string {
   try {
@@ -47,11 +36,11 @@ function serializeDefaultMiddlewareKeyInput(
 
     return validationError.throw({
       subject: "Middleware config",
-      id: taskId,
+      id: canonicalTaskId,
       originalError:
         "Default keyed middleware partitioning requires serializable input. " +
-        "Provide keyBuilder(taskId, input) when inputs include functions, " +
-        "circular structures, or other non-serializable values. " +
+        "Provide keyBuilder(canonicalTaskId, input) when inputs include " +
+        "functions, circular structures, or other non-serializable values. " +
         originalError,
     });
   }
@@ -62,8 +51,7 @@ function serializeDefaultMiddlewareKeyInput(
  * payloads do not silently collapse into the same middleware bucket.
  */
 export const defaultTaskKeyBuilder: MiddlewareKeyBuilder = (
-  taskId,
+  canonicalTaskId,
   input,
-  helpers,
 ) =>
-  `${helpers?.storageTaskId ?? taskId}${KEY_SEPARATOR}${serializeDefaultMiddlewareKeyInput(taskId, input)}`;
+  `${canonicalTaskId}${KEY_SEPARATOR}${serializeDefaultMiddlewareKeyInput(canonicalTaskId, input)}`;

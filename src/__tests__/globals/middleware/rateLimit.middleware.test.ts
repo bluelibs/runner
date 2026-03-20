@@ -100,6 +100,50 @@ describe("Rate Limit Middleware", () => {
     }
   });
 
+  it("shares the default quota across different inputs", async () => {
+    const task = defineTask({
+      id: "rateLimit-default-shared-across-inputs",
+      middleware: [rateLimitTaskMiddleware.with({ windowMs: 1000, max: 1 })],
+      run: async (input: string) => input,
+    });
+
+    const app = defineResource({
+      id: "app-default-shared-across-inputs",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task("a")).resolves.toBe("a");
+        await expect(task("b")).rejects.toThrow(/Rate limit exceeded/i);
+      },
+    });
+
+    await run(app);
+  });
+
+  it("does not require serializable input when using the default key", async () => {
+    const task = defineTask({
+      id: "rateLimit-default-non-serializable-input",
+      middleware: [rateLimitTaskMiddleware.with({ windowMs: 1000, max: 1 })],
+      run: async (_input: unknown) => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-default-non-serializable-input",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        const callback = () => "still fine";
+
+        await expect(task(callback)).resolves.toBe("ok");
+        await expect(task("another-input")).rejects.toThrow(
+          /Rate limit exceeded/i,
+        );
+      },
+    });
+
+    await run(app);
+  });
+
   it("limits independently per computed key", async () => {
     const task = defineTask({
       id: "rateLimit-keyed",

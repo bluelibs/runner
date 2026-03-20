@@ -44,7 +44,7 @@ class DebugRoutingQueue implements IEventLaneQueue {
     this.nacks.push({ messageId, requeue });
     const message = this.inFlight.get(messageId);
     this.inFlight.delete(messageId);
-    if (requeue && message && message.attempts < message.maxAttempts) {
+    if (requeue && message) {
       this.enqueued.push(message);
     }
     setImmediate(() => void this.process());
@@ -75,9 +75,6 @@ class DebugRoutingQueue implements IEventLaneQueue {
         ...raw,
         attempts: raw.attempts + 1,
       };
-      if (message.attempts > message.maxAttempts) {
-        continue;
-      }
       this.inFlight.set(message.id, message);
       await handler(message);
     }
@@ -183,7 +180,6 @@ describe("event-lanes: debug routing logs", () => {
       source: runtimeSource.runtime("tests.event-lanes.debug-routing"),
       createdAt: new Date(),
       attempts: 1,
-      maxAttempts: 1,
     });
 
     await waitUntil(() =>

@@ -44,7 +44,6 @@ function createMessage(
     source: runtimeSource.task("tests.local-simulated.source"),
     createdAt: new Date(),
     attempts: 1,
-    maxAttempts: 1,
   };
 }
 

@@ -176,19 +176,19 @@ If you tag middleware with a contract tag whose config includes extra fields, th
 
 Runner ships with built-in middleware for common reliability, admission-control, caching, and context-enforcement concerns:
 
-| Middleware     | Config                                    | Notes                                                                                 |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; `keyBuilder` may return a string or `{ cacheKey, refs }` |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                                           |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                                 |
-| debounce       | `{ ms, keyBuilder?, maxKeys? }`           | waits for inactivity, then runs once with the latest input for that key               |
-| throttle       | `{ ms, keyBuilder?, maxKeys? }`           | runs immediately, then suppresses burst calls until the window ends                   |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                                              |
-| identityChecker | `{ tenant?, user?, roles? }`             | blocks task execution unless the active identity satisfies the gate                   |
-| rateLimit      | `{ windowMs, max, keyBuilder?, maxKeys? }` | fixed-window admission limit per key, for cases like "50 per second"                  |
-| requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution             |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                            |
-| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`              |
+| Middleware      | Config                                     | Notes                                                                                 |
+| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| cache           | `{ ttl, max, ttlAutopurge, keyBuilder }`   | backed by `resources.cache`; `keyBuilder` may return a string or `{ cacheKey, refs }` |
+| concurrency     | `{ limit, key?, semaphore? }`              | limits in-flight executions                                                           |
+| circuitBreaker  | `{ failureThreshold, resetTimeout }`       | opens after failures, then fails fast                                                 |
+| debounce        | `{ ms, keyBuilder?, maxKeys? }`            | waits for inactivity, then runs once with the latest input for that key               |
+| throttle        | `{ ms, keyBuilder?, maxKeys? }`            | runs immediately, then suppresses burst calls until the window ends                   |
+| fallback        | `{ fallback }`                             | static value, function, or task fallback                                              |
+| identityChecker | `{ tenant?, user?, roles? }`               | blocks task execution unless the active identity satisfies the gate                   |
+| rateLimit       | `{ windowMs, max, keyBuilder?, maxKeys? }` | fixed-window admission limit per key, for cases like "50 per second"                  |
+| requireContext  | `{ context }`                              | fails fast when a specific async context must exist before task execution             |
+| retry           | `{ retries, stopRetryIf, delayStrategy }`  | transient failures with configurable logic                                            |
+| timeout         | `{ ttl }`                                  | rejects after the deadline and aborts cooperative work via `AbortSignal`              |
 
 Resource equivalents:
 
@@ -339,13 +339,13 @@ const updateUser = r
 
 Notes:
 
-- `keyBuilder(taskId, input, { canonicalKey })` may return either a plain string or `{ cacheKey, refs? }`.
-- Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`.
-- Refs do not follow `identityScope`. If you want tenant-aware invalidation, read the active identity inside your app helper, for example `CacheRefs.getTenantId()`, and build the ref string there so writes and invalidations always match.
+- `keyBuilder(canonicalTaskId, input)` may return either a plain string or `{ cacheKey, refs? }`.
+- Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`. (refs are used for cache invalidation)
+- Refs do not follow `identityScope` intentionally. If you want tenant-aware invalidation, read the active identity inside your app helper, for example `CacheRefs.getTenantId()`, and build the ref string there so writes and invalidations always match.
 
 `totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
 
-- `totalBudgetBytes`: one shared budget across built-in in-memory task caches
+- `totalBudgetBytes`: one shared budget across cache instances for providers that enforce shared budgets, including the built-in in-memory provider and `resources.redisCacheProvider`
 - `defaultOptions.maxSize`: the inherited `lru-cache` size limit for each task cache instance
 
 #### Node Redis Cache Provider
@@ -713,7 +713,7 @@ const sensitiveTask = r
 **Key features:**
 
 - **Fixed-window strategy**: Simple, predictable request counting.
-- **Isolation**: Limits are tracked per serialized input by default.
+- **Isolation**: Limits are tracked per task storage identity by default.
 - **Error handling**: Throws the built-in typed Runner rate-limit error.
 
 **Why would you need this?** For monitoring, you want to see remaining quota to implement client-side throttling.
@@ -773,7 +773,9 @@ const IdentityContext = r
 
 const listProjects = r
   .task("listProjects")
-  .middleware([middleware.task.requireContext.with({ context: IdentityContext })])
+  .middleware([
+    middleware.task.requireContext.with({ context: IdentityContext }),
+  ])
   .run(async () => {
     const { tenantId } = IdentityContext.use();
     return await projectRepo.findByTenant(tenantId);
@@ -983,9 +985,9 @@ const getUser = r
 
 > **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
 
-> **Note:** `cache`, `rateLimit`, `debounce`, and `throttle` default to partitioning by `canonicalTaskKey + ":" + serialized input`, and they fail fast when the input cannot be serialized. Provide `keyBuilder(taskId, input, { canonicalKey })` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values. Keep those keys low-cardinality when possible, and use `maxKeys` to put a hard ceiling on distinct live keys. `canonicalKey` strips the `.tasks.` namespace marker so custom keys can stay readable. If the key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
+> **Note:** `cache`, `debounce`, and `throttle` default to partitioning by `canonicalTaskId + ":" + serialized input`, and they fail fast when the input cannot be serialized. `rateLimit` defaults to `canonicalTaskId` so quotas stay meaningful even when inputs vary. Provide `keyBuilder(canonicalTaskId, input)` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values for the middlewares that serialize by default. The `canonicalTaskId` passed to the builder is the full runtime task id, so sibling resources with the same local task id do not share middleware state by accident. If the key should fully control identity partitioning, set `identityScope: "off"` and read your identity async context directly inside `keyBuilder`.
 
-> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:<baseKey>`, and set `required: false` when identity should only refine the key when available. Omit `identityScope` for the shared cross-identity keyspace. If your app has users but no tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and then use tenant+user scoping normally. Cache refs stay raw and are invalidated exactly as returned by `keyBuilder`.
+> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:<baseKey>`, and set `required: false` when identity should only refine the key when available. Omit `identityScope` to use the default tenant-aware keyspace whenever identity context exists. If your app has users but no tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and then use tenant+user scoping normally. Cache refs stay raw and are invalidated exactly as returned by `keyBuilder`.
 
 ### Resilience Orchestration
 

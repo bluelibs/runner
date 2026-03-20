@@ -10,7 +10,6 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
       eventId: "event.a",
       payload: '{"x":1}',
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 1,
     });
 
     await queue.consume(async (message) => {
@@ -22,7 +21,7 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
     expect(received).toEqual(['{"x":1}']);
   });
 
-  it("requeues on nack when attempts allow", async () => {
+  it("requeues on nack when requested", async () => {
     const queue = new MemoryEventLaneQueue();
     const attempts: number[] = [];
 
@@ -31,7 +30,6 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
       eventId: "event.a",
       payload: '{"x":1}',
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 2,
     });
 
     await queue.consume(async (message) => {
@@ -47,7 +45,7 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
     expect(attempts).toEqual([1, 2]);
   });
 
-  it("does not requeue after max attempts", async () => {
+  it("keeps requeue ownership outside the queue itself", async () => {
     const queue = new MemoryEventLaneQueue();
     let calls = 0;
 
@@ -56,19 +54,22 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
       eventId: "event.a",
       payload: '{"x":1}',
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 1,
     });
 
     await queue.consume(async (message) => {
       calls += 1;
-      await queue.nack(message.id, true);
+      if (calls === 1) {
+        await queue.nack(message.id, true);
+        return;
+      }
+      await queue.ack(message.id);
     });
 
     await new Promise((resolve) => setTimeout(resolve, 25));
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
   });
 
-  it("retries when handler throws and stops after success", async () => {
+  it("does not auto-requeue uncaught handler failures", async () => {
     const queue = new MemoryEventLaneQueue();
     const attempts: number[] = [];
 
@@ -77,40 +78,15 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
       eventId: "event.throw",
       payload: '{"x":1}',
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 3,
     });
 
     await queue.consume(async (message) => {
       attempts.push(message.attempts);
-      if (message.attempts === 1) {
-        throw new Error("fail once");
-      }
-      await queue.ack(message.id);
+      throw new Error("fail once");
     });
 
     await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(attempts).toEqual([1, 2]);
-  });
-
-  it("drops messages that are already beyond max attempts", async () => {
-    const queue = new MemoryEventLaneQueue();
-    const handler = jest.fn();
-
-    await queue.enqueue({
-      laneId: "lane.max-zero",
-      eventId: "event.max-zero",
-      payload: "{}",
-      source: { kind: "runtime", id: "tests" },
-      maxAttempts: 0,
-    });
-
-    await queue.consume(async (message) => {
-      handler(message);
-      await queue.ack(message.id);
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(handler).not.toHaveBeenCalled();
+    expect(attempts).toEqual([1]);
   });
 
   it("supports no-op prefetch, unknown nacks, and dispose cleanup", async () => {
@@ -124,7 +100,6 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
       eventId: "event.dispose",
       payload: "{}",
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 1,
     });
 
     const handler = jest.fn();
@@ -146,7 +121,6 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
       eventId: "event.cooldown",
       payload: "{}",
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 1,
     });
 
     await queue.consume(async (message) => {
@@ -159,27 +133,6 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
     expect(handler).toHaveBeenCalledTimes(0);
   });
 
-  it("does not requeue thrown messages at max attempts", async () => {
-    const queue = new MemoryEventLaneQueue();
-    const attempts: number[] = [];
-
-    await queue.enqueue({
-      laneId: "lane.throw-max",
-      eventId: "event.throw-max",
-      payload: "{}",
-      source: { kind: "runtime", id: "tests" },
-      maxAttempts: 1,
-    });
-
-    await queue.consume(async (message) => {
-      attempts.push(message.attempts);
-      throw new Error("always fail");
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 25));
-    expect(attempts).toEqual([1]);
-  });
-
   it("drops message permanently when nacked with requeue=false", async () => {
     const queue = new MemoryEventLaneQueue();
     const attempts: number[] = [];
@@ -189,7 +142,6 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
       eventId: "event.nack-drop",
       payload: "{}",
       source: { kind: "runtime", id: "tests" },
-      maxAttempts: 5,
     });
 
     await queue.consume(async (message) => {

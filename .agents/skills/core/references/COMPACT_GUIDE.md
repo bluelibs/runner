@@ -1,1 +1,0 @@
-../../../../readmes/COMPACT_GUIDE.md

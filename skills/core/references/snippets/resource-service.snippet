@@ -1,0 +1,50 @@
+---
+id: runner.resource.service
+title: Resource Service
+surface: builder
+platform: universal
+when:
+  - service resource
+  - long-lived dependency value
+  - init plus dispose
+---
+
+Use when you need a long-lived service dependency such as an SDK wrapper, client, or singleton.
+
+```ts
+import { resources, r } from "@bluelibs/runner";
+
+export interface EmailService {
+  send(input: {
+    to: string;
+    subject: string;
+    body: string;
+  }): Promise<void>;
+  close(): Promise<void>;
+}
+
+export const emailService = r
+  .resource("emailService")
+  .dependencies({ logger: resources.logger })
+  .init(async (_config, { logger }): Promise<EmailService> => {
+    await logger.info("Initializing email service");
+
+    return {
+      async send({ to, subject, body }) {
+        await logger.info(`Sending "${subject}" to ${to}`);
+        void body;
+      },
+      async close() {
+        await logger.info("Closing email service");
+      },
+    };
+  })
+  .dispose(async (service) => {
+    await service.close();
+  })
+  .build();
+```
+
+Notes:
+- Keep the base service snippet focused on `init` and `dispose`.
+- Leave `ready`, `cooldown`, `health`, and `subtree` to richer sibling snippets.

@@ -25,7 +25,11 @@ const tenantValue = (tenantId: string, userId?: string) => ({
 
 describe("identityScope shared helpers", () => {
   it("normalizes object config defaults", () => {
-    expect(normalizeIdentityScopeConfig(undefined)).toBeUndefined();
+    expect(normalizeIdentityScopeConfig(undefined)).toEqual({
+      required: false,
+      tenant: true,
+      user: false,
+    });
     expect(normalizeIdentityScopeConfig({ tenant: true })).toEqual({
       required: true,
       tenant: true,
@@ -84,7 +88,8 @@ describe("identityScope shared helpers", () => {
   it("supports explicit helper resolution paths without mutating global identity state", () => {
     expect(
       resolveIdentityContext(undefined, () => tenantValue("ignored")),
-    ).toBeUndefined();
+    ).toEqual(tenantValue("ignored"));
+    expect(resolveIdentityContext(undefined, () => null)).toBeUndefined();
     expect(
       resolveIdentityContext(optionalTenantScope, () => null),
     ).toBeUndefined();
@@ -94,6 +99,9 @@ describe("identityScope shared helpers", () => {
     expect(() =>
       resolveIdentityContext(tenantScope, () => ({ userId: "u1" })),
     ).toThrow();
+    expect(
+      applyIdentityScopeToKey("search", undefined, () => tenantValue("acme")),
+    ).toBe("acme:search");
     expect(
       applyIdentityScopeToKey("search", optionalTenantScope, () => null),
     ).toBe("search");

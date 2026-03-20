@@ -9,6 +9,14 @@ export class MemoryQueue
   extends BaseMemoryQueue<QueueMessage<unknown>>
   implements IDurableQueue
 {
+  protected override shouldDeliver(message: QueueMessage<unknown>): boolean {
+    return message.attempts <= message.maxAttempts;
+  }
+
+  protected override shouldRequeue(message: QueueMessage<unknown>): boolean {
+    return message.attempts < message.maxAttempts;
+  }
+
   async enqueue<T>(
     message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
   ): Promise<string> {

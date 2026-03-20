@@ -1,3 +1,4 @@
+import { defineResource } from "../../../define";
 import { matchError } from "../../../errors/foundation/match.errors";
 import { rpcLanesResourceConfigSchema } from "../../rpc-lanes/configSchema";
 
@@ -13,6 +14,13 @@ function expectMatchFailure(run: () => unknown): void {
 describe("rpcLanes resource config schema", () => {
   it("accepts valid rpc-lanes config shape", () => {
     const lane = { id: "lane-valid" };
+    const serializer = defineResource({
+      id: "tests-rpc-lanes-schema-serializer",
+      init: async () => ({
+        stringify: JSON.stringify,
+        parse: JSON.parse,
+      }),
+    });
     const config = {
       profile: "client",
       topology: {
@@ -26,6 +34,7 @@ describe("rpcLanes resource config schema", () => {
           },
         ],
       },
+      serializer,
       mode: "network" as const,
       exposure: {
         http: {
@@ -35,6 +44,54 @@ describe("rpcLanes resource config schema", () => {
     };
 
     expect(rpcLanesResourceConfigSchema.parse(config)).toEqual(config);
+  });
+
+  it("rejects invalid serializer resource shapes", () => {
+    const lane = { id: "lane-invalid-serializer" };
+
+    expectMatchFailure(() =>
+      rpcLanesResourceConfigSchema.parse({
+        profile: "client",
+        topology: {
+          profiles: {
+            client: { serve: [lane] },
+          },
+          bindings: [{ lane, communicator: { id: "communicator-resource" } }],
+        },
+        serializer: { nope: true },
+      } as never),
+    );
+  });
+
+  it("rejects serializer resources configured via .with(...)", () => {
+    const lane = { id: "lane-configured-serializer" };
+    const serializer = defineResource({
+      id: "tests-rpc-lanes-schema-configured-serializer",
+      init: async (config: { pretty: boolean }) => ({
+        stringify: (value: unknown) =>
+          JSON.stringify(value, null, config.pretty ? 2 : 0),
+        parse: JSON.parse,
+      }),
+    });
+    const config = {
+      profile: "client",
+      topology: {
+        profiles: {
+          client: { serve: [lane] },
+        },
+        bindings: [
+          {
+            lane,
+            communicator: { id: "communicator-resource" },
+          },
+        ],
+      },
+      serializer: serializer.with({ pretty: true }),
+    };
+
+    expectMatchFailure(() =>
+      rpcLanesResourceConfigSchema.parse(config as never),
+    );
   });
 
   it("rejects invalid mode values", () => {

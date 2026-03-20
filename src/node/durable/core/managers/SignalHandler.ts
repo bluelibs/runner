@@ -17,6 +17,12 @@ type WaitingSignalResult = {
   timerId?: string;
 };
 
+const isTerminalExecutionStatus = (status: ExecutionStatus): boolean =>
+  status === ExecutionStatus.Completed ||
+  status === ExecutionStatus.Failed ||
+  status === ExecutionStatus.CompensationFailed ||
+  status === ExecutionStatus.Cancelled;
+
 const isWaitingSignalStep = (step: {
   stepId: string;
   result: unknown;
@@ -63,7 +69,11 @@ export class SignalHandler {
     const deliver = async (): Promise<{
       completedStepId: string;
       shouldResume: boolean;
-    }> => {
+    } | null> => {
+      const execution = await this.store.getExecution(executionId);
+      if (!execution) return null;
+      if (isTerminalExecutionStatus(execution.status)) return null;
+
       let completedStepId: string | null = null;
       let shouldResume = false;
 
@@ -71,6 +81,20 @@ export class SignalHandler {
       if (stepResults) {
         const waiting: Array<{ stepId: string; timerId?: string }> = [];
         for (const step of stepResults) {
+          if (
+            step.stepId === baseStepId ||
+            step.stepId.startsWith(`${baseStepId}:`)
+          ) {
+            // Any persisted step for this signal id must be parseable so we fail
+            // fast on corruption before picking a waiter or buffering more state.
+            const state = parseSignalState(step.result);
+            if (!state) {
+              return durableExecutionInvariantError.throw({
+                message: `Invalid signal step state for '${signalId}' at '${step.stepId}'`,
+              });
+            }
+          }
+
           if (
             step.stepId.startsWith("__signal:") &&
             isWaitingSignalStep(step) &&
@@ -129,8 +153,37 @@ export class SignalHandler {
       }
 
       if (!completedStepId) {
-        for (let index = 0; index < maxSignalSlotsToScan; index += 1) {
-          const stepId = index === 0 ? baseStepId : `${baseStepId}:${index}`;
+        const baseSignal = await this.store.getStepResult(
+          executionId,
+          baseStepId,
+        );
+        if (!baseSignal) {
+          completedStepId = baseStepId;
+        } else {
+          const state = parseSignalState(baseSignal.result);
+          if (!state) {
+            return durableExecutionInvariantError.throw({
+              message: `Invalid signal step state for '${signalId}' at '${baseStepId}'`,
+            });
+          }
+
+          if (state.state === "waiting") {
+            if (state.timerId) {
+              await this.store.deleteTimer(state.timerId);
+            }
+            completedStepId = baseStepId;
+            shouldResume = true;
+          }
+        }
+      }
+
+      if (!completedStepId) {
+        // Indexed waits are sequential for implicit signal slots. When the base
+        // slot is already consumed, the next missing numeric slot is the next
+        // implicit buffer position for back-to-back signals that arrive before
+        // user code reaches the following wait.
+        for (let index = 1; index < maxSignalSlotsToScan; index += 1) {
+          const stepId = `${baseStepId}:${index}`;
           const existing = await this.store.getStepResult(executionId, stepId);
 
           if (!existing) {
@@ -153,16 +206,10 @@ export class SignalHandler {
             shouldResume = true;
             break;
           }
-
-          // completed / timed_out -> keep scanning for the next available slot
         }
       }
 
-      if (!completedStepId) {
-        return durableExecutionInvariantError.throw({
-          message: `Too many signal slots for '${signalId}' (exceeded ${maxSignalSlotsToScan})`,
-        });
-      }
+      if (!completedStepId) return null;
 
       await this.store.saveStepResult({
         executionId,
@@ -171,10 +218,10 @@ export class SignalHandler {
         completedAt: new Date(),
       });
 
-      return { completedStepId: completedStepId!, shouldResume };
+      return { completedStepId, shouldResume };
     };
 
-    let delivered: { completedStepId: string; shouldResume: boolean };
+    let delivered: { completedStepId: string; shouldResume: boolean } | null;
     const canLock = this.store.acquireLock && this.store.releaseLock;
     if (canLock) {
       const lockResource = `signal:${executionId}:${signalId}`;
@@ -207,6 +254,8 @@ export class SignalHandler {
       delivered = await deliver();
     }
 
+    if (!delivered) return;
+
     const execution = await this.store.getExecution(executionId);
     const attempt = execution ? execution.attempt : 0;
     await this.auditLogger.log({
@@ -221,13 +270,7 @@ export class SignalHandler {
     if (!delivered.shouldResume) return;
 
     if (!execution) return;
-    if (
-      execution.status === ExecutionStatus.Completed ||
-      execution.status === ExecutionStatus.Failed ||
-      execution.status === ExecutionStatus.CompensationFailed ||
-      execution.status === ExecutionStatus.Cancelled
-    )
-      return;
+    if (isTerminalExecutionStatus(execution.status)) return;
 
     if (this.queue) {
       await this.queue.enqueue({

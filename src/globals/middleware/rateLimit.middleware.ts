@@ -11,8 +11,7 @@ import { Match } from "../../tools/check";
 import type { ValidationSchemaInput } from "../../types/utilities";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 import {
-  createMiddlewareKeyBuilderHelpers,
-  defaultTaskKeyBuilder,
+  defaultStorageTaskKeyBuilder,
   type MiddlewareKeyBuilder,
 } from "./keyBuilder.shared";
 import { ensureKeyedStateCapacity } from "./keyedState.shared";
@@ -40,7 +39,7 @@ export interface RateLimitMiddlewareConfig extends IdentityScopedMiddlewareConfi
   max: number;
   /**
    * Builds the partition key used to isolate fixed-window counters.
-   * Defaults to `storageTaskId + ":" + serialized input`.
+   * Defaults to `storageTaskId`.
    * Provide an explicit key when you want broader grouping, such as per user or
    * per identity admission limits.
    */
@@ -125,18 +124,14 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     { state, identityContext },
     config: RateLimitMiddlewareConfig,
   ) {
-    const taskId = task.definition.id;
-    const keyBuilder = config.keyBuilder ?? defaultTaskKeyBuilder;
-    const builtKey = keyBuilder(
-      taskId,
-      task.input,
-      createMiddlewareKeyBuilderHelpers(taskId),
-    );
+    const storageTaskId = task.definition.id;
+    const keyBuilder = config.keyBuilder ?? defaultStorageTaskKeyBuilder;
+    const builtKey = keyBuilder(storageTaskId, task.input);
 
     if (typeof builtKey !== "string") {
       validationError.throw({
         subject: "Middleware config",
-        id: taskId,
+        id: storageTaskId,
         originalError: `Rate limit middleware keyBuilder must return a string. Received ${typeof builtKey}.`,
       });
     }
@@ -156,7 +151,7 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     ensureKeyedStateCapacity({
       hasKey: keyedStates.has(key),
       maxKeys: config.maxKeys,
-      middlewareId: taskId,
+      middlewareId: storageTaskId,
       prune: () => {
         pruneRateLimitStatesForCapacity(state, keyedStates, now);
       },

@@ -6,6 +6,7 @@ export {
 } from "./RabbitMQEventLaneQueue";
 export type {
   EventLaneBinding,
+  EventLaneEnqueueMessage,
   EventLaneMessage,
   EventLaneMessageHandler,
   EventLanesProfileId,

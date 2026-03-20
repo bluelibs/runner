@@ -10,7 +10,6 @@ describe("EventLanesFailureHandler", () => {
     source: runtimeSource.runtime("tests"),
     createdAt: new Date(),
     attempts: 1,
-    maxAttempts: 1,
   };
 
   it("normalizes primitive failures to Error and settles with nack(false)", async () => {
@@ -57,10 +56,10 @@ describe("EventLanesFailureHandler", () => {
         lane: { id: "lane-a" },
         queue: {} as any,
         retryDelayMs: 0,
+        maxAttempts: 2,
       } as any,
       message: {
         ...baseMessage,
-        maxAttempts: 2,
       },
       error: failure,
       logger: logger as any,
@@ -96,10 +95,10 @@ describe("EventLanesFailureHandler", () => {
         lane: { id: "lane-a" },
         queue: {} as any,
         retryDelayMs: 25,
+        maxAttempts: 2,
       } as any,
       message: {
         ...baseMessage,
-        maxAttempts: 2,
       },
       error: new Error("retry-with-delay"),
       logger: logger as any,
@@ -109,5 +108,40 @@ describe("EventLanesFailureHandler", () => {
     expect(delay).toHaveBeenCalledWith(25);
     expect(queue.nack).toHaveBeenCalledWith("m1", true);
     expect(order).toEqual(["delay", "nack"]);
+  });
+
+  it("uses binding maxAttempts for retry decisions", async () => {
+    const queue = {
+      nack: jest.fn(async () => undefined),
+    };
+    const logger = {
+      error: jest.fn(async () => undefined),
+    };
+
+    await handleEventLaneConsumerFailure({
+      queue,
+      binding: {
+        lane: { id: "lane-a" },
+        queue: {} as any,
+        maxAttempts: 1,
+      } as any,
+      message: {
+        ...baseMessage,
+        attempts: 1,
+      },
+      error: new Error("should-not-retry"),
+      logger: logger as any,
+      delay: async () => undefined,
+    });
+
+    expect(queue.nack).toHaveBeenCalledWith("m1", false);
+    expect(logger.error).toHaveBeenCalledWith(
+      "Event lane consumer failed.",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          maxAttempts: 1,
+        }),
+      }),
+    );
   });
 });

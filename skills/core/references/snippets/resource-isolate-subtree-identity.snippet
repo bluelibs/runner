@@ -1,0 +1,88 @@
+---
+id: runner.resource.isolate-subtree-identity
+title: Resource Isolate Subtree Identity
+surface: builder
+platform: universal
+when:
+  - isolate exports on a resource
+  - subtree identity policy
+  - boundary resource with access policy
+---
+
+Use when a resource should expose only a small public surface while enforcing subtree-wide identity and middleware policy inside its owned tasks.
+
+```ts
+import { Match, middleware, r, scope } from "@bluelibs/runner";
+
+const createInvoice = r
+  .task("createInvoice")
+  .inputSchema({
+    customerId: Match.NonEmptyString,
+    amountCents: Match.Integer,
+  })
+  .meta({
+    title: "Create Invoice",
+    description: "Creates an invoice for a customer.",
+  })
+  .run(async (input) => {
+    return {
+      invoiceId: "inv-1",
+      customerId: input.customerId,
+      amountCents: input.amountCents,
+    };
+  })
+  .build();
+
+const rebuildLedger = r
+  .task("rebuildLedger")
+  .meta({
+    title: "Rebuild Ledger",
+    description: "Rebuilds internal billing ledger state.",
+  })
+  .run(async () => {
+    return { rebuilt: true as const };
+  })
+  .build();
+
+const billingModule = r
+  .resource("billingModule")
+  .register([createInvoice, rebuildLedger])
+  .isolate({
+    exports: [createInvoice],
+    deny: [scope("system.*", { dependencies: true })],
+  })
+  .subtree({
+    tasks: {
+      identity: {
+        user: true,
+        roles: ["BILLING_ADMIN"],
+      },
+      middleware: [
+        middleware.task.rateLimit.with({
+          windowMs: 60_000,
+          max: 30,
+        }),
+      ],
+    },
+    middleware: {
+      identityScope: {
+        tenant: true,
+        user: true,
+      },
+    },
+  })
+  .meta({
+    title: "Billing Module",
+    description:
+      "Exposes invoice creation while keeping internal billing tasks private and identity-gated.",
+  })
+  .build();
+```
+
+Notes:
+- `exports: [createInvoice]` makes `createInvoice` the public surface and keeps the rest of the subtree private.
+- `scope("system.*", { dependencies: true })` is intentional here because Runner documents string selectors inside `scope(...)` for canonical framework namespaces such as `system.*`.
+- `subtree({ tasks: { identity: ... } })` adds an identity gate to every owned task in that subtree.
+- `subtree({ middleware: { identityScope: ... } })` enforces one shared identity partitioning policy across identity-aware task middleware in the subtree.
+- `deny` and `only` are mutually exclusive on the same resource.
+- Use `scope(...)` when the boundary rule should only affect selected channels such as `dependencies`.

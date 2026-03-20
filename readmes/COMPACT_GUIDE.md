@@ -485,13 +485,13 @@ Important config surfaces:
 Operational notes:
 
 - Register `resources.cache` in a parent resource before using task cache middleware.
-- `cache.keyBuilder(taskId, input, { storageTaskId })` may return either a plain key string or `{ cacheKey, refs? }`.
+- `cache.keyBuilder(canonicalTaskId, input)` may return either a plain key string or `{ cacheKey, refs? }`.
 - Call `resources.cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
-- `cache`, `rateLimit`, `debounce`, and `throttle` default to `storageTaskId + ":" + serialized input` partitioning and fail fast when the input cannot be serialized. `storageTaskId` preserves the full canonical task lineage, so sibling resources with the same local task id do not share middleware state by accident. Treat storage identity and readable names as separate contracts: use explicit app-defined key builders when you want broader grouping such as per user, tenant, or request context, and never rely on implicit lineage stripping in framework-managed state.
-- Omit `identityScope` for shared middleware state. Runner only prefixes internal middleware keys when you opt in.
-- When `identityScope` is present, `required` defaults to `true`. Use `{ tenant: true }` for `<tenantId>:` partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` only when identity should refine the key when present instead of being mandatory.
+- `cache`, `debounce`, and `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast when the input cannot be serialized. `rateLimit` defaults to `canonicalTaskId` so one task keeps one shared quota unless you explicitly provide a broader or narrower `keyBuilder(canonicalTaskId, input)`. The `canonicalTaskId` passed to key builders is the full runtime task id, so sibling resources with the same local task id do not share middleware state by accident.
+- Omit `identityScope` to use automatic tenant partitioning. Runner prefixes internal middleware keys with `<tenantId>:` whenever identity context exists.
+- When `identityScope` object is present, `required` defaults to `true`. Use `{ tenant: true }` for `<tenantId>:` partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` only when identity should refine the key when present instead of being mandatory.
 - Missing required identity fields fail fast with `identityContextRequiredError`.
 - `middleware.identityChecker` is a task gate, not key partitioning. Mentioning it implies tenant identity by default, `user: true` adds `userId`, and `roles` require at least one matching role.
 - `subtree.tasks.identity` uses the same gate contract as `identityChecker`. Gates are additive across nested resources: roles are OR within one gate and AND across layers.
@@ -615,6 +615,10 @@ Important rules:
 
 - The built-in serializer round-trips common non-JSON shapes such as `Date` and `RegExp`.
 - Register custom types through `resources.serializer`.
+- For boundary-specific serializer behavior, either register a custom resource that returns `new Serializer({...})` or fork `resources.serializer` and register a configured fork.
+- `allowedTypes: [...]` restricts deserialization to specific built-in or custom type ids.
+- `new Serializer({ types: [...] })` pre-registers explicit `addType({ ... })` definitions.
+- `serializer.addSchema(DtoClass)` and `new Serializer({ schemas: [DtoClass] })` register `@Match.Schema()` DTOs as serializer-aware types, so parse/deserialize can restore them without an explicit `{ schema }`.
 - Use `serializer.parse(payload, { schema })` when you want deserialization and validation in one step.
 - `@Serializer.Field({ from, deserialize, serialize })` composes with `@Match.Field(...)` on `@Match.Schema()` classes for explicit DTOs.
 - For legacy decorators, import `Serializer` from `@bluelibs/runner/decorators/legacy`.
@@ -710,7 +714,6 @@ Other common patterns:
 - Non-leaf resources cannot be forked.
 - `.fork()` returns a built resource. Do not call `.build()` again.
 - Compose a distinct parent resource when you need a structural variant of a non-leaf resource.
-- Durable support is registered via `resources.durable`, while concrete durable backends use normal forks such as `resources.memoryWorkflow.fork("app-durable")`.
 
 Overrides:
 
@@ -947,7 +950,7 @@ await identity.provide({ tenantId: "acme", userId: "u1" }, () =>
 - Remote lanes and HTTP transport still require the context to be explicitly forwarded and allowlisted.
 - If your SaaS only has users and no real tenant model, provide a constant tenant such as `tenantId: "app"` at ingress when you want to use identity-aware middleware scopes.
 
-Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` use the shared keyspace unless you set `identityScope`.
+Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` automatically use the tenant keyspace when identity context exists, even when you omit `identityScope`.
 
 `identityScope` is an object:
 
@@ -958,7 +961,7 @@ Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, 
 
 Fast rule of thumb:
 
-- omit `identityScope` for intentional cross-tenant sharing
+- omit `identityScope` to use the default tenant scope; cross-tenant sharing only happens when no identity context exists
 - use `{ tenant: true }` for strict tenant-only partitioning
 - use `{ tenant: true, user: true }` for strict tenant+user partitioning
 - add `required: false` when identity should be an optional refinement instead of a requirement
@@ -991,24 +994,6 @@ Platform note:
 - `resources.queue` uses `queue.dispose({ cancel: true })` during runtime teardown and awaits every queue before the resource is considered disposed.
 
 Always respect the signal in tasks that may be cancelled.
-
-## Remote Lanes (Node)
-
-Event lanes are async fire-and-forget routing for events across Runner instances.
-RPC lanes are synchronous cross-runner task or event calls.
-
-Supported modes:
-
-- `network`
-- `transparent`
-- `local-simulated`
-
-Async-context propagation over RPC lanes and event lanes is lane-allowlisted by default.
-
-See:
-
-- [REMOTE_LANES_AI.md](./REMOTE_LANES_AI.md)
-- [REMOTE_LANES.md](./REMOTE_LANES.md)
 
 ## Observability
 
@@ -1046,3 +1031,15 @@ Prefer feature-driven folders and naming by Runner item type:
 - `*.resource-middleware.ts`
 - `*.tag.ts`
 - `*.error.ts`
+
+## Durable Workflows
+
+Durable Workflows are normal Runner tasks with replay-safe checkpoints for long flows (approvals, payouts, onboarding). Use `DurableContext` primitives like `step(id, fn)`, `sleep(ms)`, and `waitForSignal(...)` so progress is persisted and can resume after restarts.
+
+The store is the durable source of truth; queue/pubsub handles wake-ups and worker handoff. This gives at-least-once delivery plus effectively-once step execution.
+
+## Remote Lanes
+
+Remote Lanes scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response. Runtime resource configuration defines profiles and topology, while task/event definitions stay unchanged.
+
+Only lane-assigned work is rerouted, so non-lane flows keep local semantics. This keeps transport out of business logic and lets serializer, auth, and exposure policy stay in lane infrastructure configuration.

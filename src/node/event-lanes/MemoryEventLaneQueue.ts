@@ -1,5 +1,6 @@
 import { BaseMemoryQueue } from "../queue/BaseMemoryQueue";
 import type {
+  EventLaneEnqueueMessage,
   EventLaneMessage,
   EventLaneMessageHandler,
   IEventLaneQueue,
@@ -11,9 +12,7 @@ export class MemoryEventLaneQueue
 {
   private acceptingWork = true;
 
-  async enqueue(
-    message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
-  ): Promise<string> {
+  async enqueue(message: EventLaneEnqueueMessage): Promise<string> {
     return this.enqueueMessage(message);
   }
 
@@ -28,11 +27,17 @@ export class MemoryEventLaneQueue
   }
 
   async ack(messageId: string): Promise<void> {
-    return this.ackMessage(messageId);
+    this.inFlight.delete(messageId);
+    this.scheduleProcessing();
   }
 
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
-    return this.nackMessage(messageId, requeue);
+    const message = this.inFlight.get(messageId);
+    this.inFlight.delete(messageId);
+    if (message && requeue) {
+      this.queue.push(message);
+    }
+    this.scheduleProcessing();
   }
 
   async setPrefetch(_count: number): Promise<void> {
@@ -46,7 +51,17 @@ export class MemoryEventLaneQueue
     this.inFlight.clear();
   }
 
-  protected override canProcess(): boolean {
-    return this.acceptingWork && super.canProcess();
+  protected override canStartProcessing(): boolean {
+    return this.acceptingWork && super.canStartProcessing();
+  }
+
+  protected override canContinueProcessing(): boolean {
+    return this.acceptingWork && super.canContinueProcessing();
+  }
+
+  protected override shouldRequeueOnHandlerError(): boolean {
+    // Retry ownership lives above the queue via explicit nack(true),
+    // so uncaught handler failures are not auto-requeued here.
+    return false;
   }
 }

@@ -28,6 +28,7 @@ import {
   identityScopesMatch,
   type IdentityScopeConfig,
 } from "../../globals/middleware/identityScope.shared";
+import { identityCheckerTaskMiddleware } from "../../globals/middleware/identityChecker.middleware";
 import { mergeMiddlewareConfig } from "../../definers/middlewareConfig";
 
 /**
@@ -222,10 +223,25 @@ export class MiddlewareResolver {
     const allowSet = this.getRpcLaneAllowSet(taskId, policy);
 
     if (!allowSet) {
-      return [];
+      return middlewares.filter((middleware) =>
+        this.shouldRetainRpcMiddlewareByDefault(middleware),
+      );
     }
 
-    return middlewares.filter((middleware) => allowSet.has(middleware.id));
+    return middlewares.filter(
+      (middleware) =>
+        allowSet.has(middleware.id) ||
+        this.shouldRetainRpcMiddlewareByDefault(middleware),
+    );
+  }
+
+  private shouldRetainRpcMiddlewareByDefault(
+    middleware: ITaskMiddleware,
+  ): boolean {
+    // Identity gates are authorization boundaries, not optional caller-side
+    // behavior. Routed tasks must still enforce them even when RPC mode skips
+    // the rest of the local middleware stack by default.
+    return middleware.id === identityCheckerTaskMiddleware.id;
   }
 
   private getRpcLaneAllowSet(

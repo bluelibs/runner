@@ -115,6 +115,8 @@
     "build:types": "tsc -p config/ts/tsconfig.types.json",
     "clean": "rm -rf dist",
     "watch": "tsup --config config/tsup/tsup.config.ts --watch",
+    "skills:pack:materialize": "node ./scripts/pack-npm-skills.mjs materialize",
+    "skills:pack:restore": "node ./scripts/pack-npm-skills.mjs restore",
     "test": "node ./scripts/run-jest-watchdog.mjs -- --config config/jest/jest.config.js --maxWorkers=50% --verbose=false",
     "test:serial": "node ./scripts/run-jest-watchdog.mjs -- --config config/jest/jest.config.js --verbose --runInBand",
     "test:dev": "jest --config config/jest/jest.config.js --verbose --watch",
@@ -138,7 +140,9 @@
     "benchmark": "jest --config config/jest/jest.bench.config.js --verbose --runInBand",
     "benchmark:json": "BENCHMARK_OUTPUT=./config/benchmarks/benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
     "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./config/benchmarks/baseline.json ./config/benchmarks/benchmark-results.json ./config/benchmarks/benchmarks.config.json",
-    "guide:compose": "node ./scripts/compose-guide.mjs"
+    "guide:compose": "node ./scripts/compose-guide.mjs",
+    "prepack": "npm run skills:pack:materialize",
+    "postpack": "npm run skills:pack:restore"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -193,11 +197,8 @@
   },
   "npmSkills": {
     "publish": {
-      "source": ".agents/skills",
       "export": [
-        "core",
-        "durable-workflows",
-        "remote-lanes"
+        "core"
       ]
     }
   },

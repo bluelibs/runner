@@ -2,6 +2,7 @@ import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolve
 import { symbolRpcLanePolicy } from "../../../defs";
 import { defineTaskMiddleware } from "../../../definers/defineTaskMiddleware";
 import { globalTags } from "../../../globals/globalTags";
+import { identityCheckerTaskMiddleware } from "../../../globals/middleware/identityChecker.middleware";
 
 const resolveDefinitionId = (reference: unknown): string | undefined => {
   if (typeof reference === "string") {
@@ -78,6 +79,31 @@ describe("MiddlewareResolver-applyRpcLanePolicyFilter", () => {
     const middlewares = [{ id: "mw-keep" }, { id: "mw-drop" }] as any[];
 
     expect(resolver.applyRpcLanePolicyFilter(task, middlewares)).toEqual([]);
+  });
+
+  test("retains identityChecker when routed task has no allow list policy", () => {
+    const task: any = {
+      id: "registered-identity-gated",
+      middleware: [],
+      isRpcRouted: true,
+    };
+    const store: any = {
+      tasks: new Map([["registered-identity-gated", { task }]]),
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      resources: new Map(),
+      resolveDefinitionId,
+      getOwnerResourceId: () => undefined,
+    };
+    const resolver = new MiddlewareResolver(store);
+    const identityGate = identityCheckerTaskMiddleware.with({ user: true });
+
+    expect(
+      resolver.applyRpcLanePolicyFilter(task, [
+        identityGate,
+        { id: "mw-drop" },
+      ] as any[]),
+    ).toEqual([identityGate]);
   });
 
   test("supports legacy object middleware ids in lane policy allow list", () => {

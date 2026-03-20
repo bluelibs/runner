@@ -4,18 +4,17 @@ import { middleware } from "../../../";
   middleware.task.rateLimit.with({
     windowMs: 1_000,
     max: 1,
-    keyBuilder: (taskId, input, helpers) => {
-      taskId.toUpperCase();
+    keyBuilder: (canonicalTaskId, input) => {
+      canonicalTaskId.toUpperCase();
       void input;
-      helpers?.storageTaskId.toUpperCase();
-      return helpers?.storageTaskId ?? taskId;
+      return canonicalTaskId;
     },
   });
 
   middleware.task.cache.with({
     ttl: 1_000,
-    keyBuilder: (_taskId, input: { id: string }, helpers) => ({
-      cacheKey: `${helpers?.storageTaskId}:user:${input.id}`,
+    keyBuilder: (canonicalTaskId, input: { id: string }) => ({
+      cacheKey: `${canonicalTaskId}:user:${input.id}`,
       refs: [`user:${input.id}`],
     }),
   });

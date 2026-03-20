@@ -359,8 +359,7 @@ Wire payload (simplified):
   "payload": "{\"userId\":\"u1\",\"channel\":\"email\"}",
   "source": { "kind": "runtime", "id": "app" },
   "createdAt": "2026-02-28T12:00:00.000Z",
-  "attempts": 0,
-  "maxAttempts": 3
+  "attempts": 0
 }
 ```
 
@@ -368,7 +367,6 @@ Field intent:
 
 - `payload`: serialized event data string (not raw object)
 - `attempts`: transport-managed retry counter
-- `maxAttempts`: retry budget from lane binding
 - `laneId` + `eventId`: routing and relay target
 - `source`: provenance for diagnostics/behavior
 
@@ -376,8 +374,8 @@ Delivery lifecycle:
 
 1. Producer emits event -> Runner intercepts and enqueues envelope with `attempts: 0`.
 2. Consumer dequeues -> queue adapter increments to current delivery attempt (`attempts + 1`) before handler path.
-3. On failure with retries left -> message is requeued with updated `attempts`.
-4. On final failure (`attempts >= maxAttempts`) -> `nack(false)` and broker policy (for example DLQ) decides final settlement.
+3. On failure with retries left according to the lane binding `maxAttempts` -> message is requeued with updated `attempts`.
+4. On final failure (`attempts >= binding.maxAttempts`) -> `nack(false)` and broker policy (for example DLQ) decides final settlement.
 
 Important boundary:
 
@@ -486,6 +484,67 @@ const app = r
 
 **What you just learned**: RPC lane definition, task tagging, communicator wiring, and profile-based serve routing — the full RPC Lane pattern.
 
+### Serializer Override
+
+`rpcLanesResource` uses `resources.serializer` by default. When an RPC boundary
+needs different serializer registrations or stricter deserialization policy, you
+can fork the built-in serializer resource and point RPC lanes at that configured
+fork.
+
+Register the configured serializer entry in the app yourself, then pass that
+bare serializer resource definition to `rpcLanesResource.with({ serializer: ... })`.
+You can also skip the fork and define a dedicated serializer resource that
+returns `new Serializer({...})` directly.
+
+```typescript
+import { resources, r, Serializer } from "@bluelibs/runner";
+import { rpcLanesResource } from "@bluelibs/runner/node";
+
+const customRpcSerializer = r
+  .resource("customRpcSerializer")
+  .init(
+    async () =>
+      new Serializer({
+        symbolPolicy: "well-known-only",
+        allowedTypes: ["Date", "Map"],
+        maxDepth: 64,
+      }),
+  )
+  .build();
+
+const rpcSerializer = resources.serializer.fork("app.resources.rpcSerializer");
+const rpcSerializerEntry = rpcSerializer.with({
+  symbolPolicy: "well-known-only",
+  types: ["Date", "Map"],
+  maxDepth: 64,
+});
+
+const app = r
+  .resource("app")
+  .register([
+    customRpcSerializer,
+    rpcSerializerEntry,
+    rpcLanesResource.with({
+      profile: "api",
+      topology,
+      mode: "network",
+      serializer: rpcSerializer,
+    }),
+  ])
+  .build();
+```
+
+What this affects:
+
+- RPC lane HTTP exposure request/response serialization
+- `x-runner-context` header encoding/decoding for RPC lanes
+- `local-simulated` serializer roundtrip boundaries
+
+Keep the client and server in sync:
+
+- If your communicator resource also crosses HTTP using Runner serializer semantics, inject the same serializer there too.
+- A custom server-side serializer does not magically change an already-built communicator resource on the caller side.
+
 ### Routing Branches (`mode: "network"`)
 
 | Condition                             | Result                                 |
@@ -494,6 +553,7 @@ const app = r
 | lane is not in active profile `serve` | execute remotely via lane communicator |
 | task/event is not lane-assigned       | use normal local Runner path           |
 
+> **Note:** RPC-routed tasks skip caller-side task middleware by default unless lane policy explicitly allowlists it. `identityChecker` is the built-in exception and is always retained, because identity gates are authorization boundaries. `subtree.tasks.identity` follows the same rule because Runner synthesizes subtree task identity gates as `identityChecker` middleware entries.
 > **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
 
 ### RPC Lane Network Lifecycle (Routing + Exposure + Lane Auth)
@@ -739,11 +799,14 @@ Security defaults:
 - Run behind trusted network boundaries and infrastructure gateway controls (rate-limits, network policy)
 - Keep anonymous exposure disabled unless explicitly needed
 - Exposure HTTP bootstrap is `listen`-based; custom `http.Server` injection is not part of the contract
+- Override `rpcLanesResource.serializer` when this transport boundary needs a stricter or differently-registered serializer than the rest of the app
 
 There are two independent security layers:
 
 1. **Exposure HTTP auth** (`exposure.http.auth`) controls who can hit `POST /__runner/task/...` and `POST /__runner/event/...`.
 2. **Lane JWT auth** (`binding.auth`) controls lane-authorized produce/consume behavior.
+
+`auth.allowAnonymous` affects only the first layer. It allows unauthenticated access when no token or auth validators are configured, but it does not widen the exposure allow-list. Reachability still comes only from served RPC lanes.
 
 You usually want both.
 
@@ -878,6 +941,7 @@ eventLanesResource.with({
 - For `jwt_asymmetric`, the same runtime signs and verifies during simulation, so binding auth must provide both sides of material.
 - Event lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
 - RPC lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
+- RPC-routed task middleware still follows the same filter rules in `local-simulated`: caller-side middleware is skipped by default, but `identityChecker` and therefore `subtree.tasks.identity` remain enforced.
 
 ## Migration Notes (v6)
 
@@ -936,7 +1000,7 @@ When routing does not behave as expected, check in this order:
 | Topology           | `r.rpcLane.topology({ profiles, bindings })`                     |
 | Profile serve      | `profiles[profile].serve: lane[]`                                |
 | Binding            | `{ lane, communicator, auth?, allowAsyncContext? }`              |
-| Runtime resource   | `rpcLanesResource.with({ profile, topology, mode?, exposure? })` |
+| Runtime resource   | `rpcLanesResource.with({ profile, topology, serializer?, mode?, exposure? })` |
 
 ### Communicator Contract
 
