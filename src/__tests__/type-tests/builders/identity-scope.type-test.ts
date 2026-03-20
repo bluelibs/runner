@@ -3,6 +3,7 @@ import { concurrencyTaskMiddleware } from "../../../globals/middleware/concurren
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
 
 {
+  const globalScope: IdentityScopeConfig = { tenant: false };
   const requiredTenantScope: IdentityScopeConfig = { tenant: true };
   const optionalTenantScope: IdentityScopeConfig = {
     required: false,
@@ -26,6 +27,11 @@ import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.m
 
   concurrencyTaskMiddleware.with({
     limit: 1,
+    identityScope: globalScope,
+  });
+
+  concurrencyTaskMiddleware.with({
+    limit: 1,
     identityScope: optionalTenantScope,
   });
 
@@ -41,8 +47,14 @@ import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.m
     identityScope: optionalUserScope,
   });
 
-  // @ts-expect-error identityScope requires tenant: true when configured
+  // @ts-expect-error identityScope requires tenant config when enabling user partitioning
   const invalidScope: IdentityScopeConfig = { user: true };
+  // @ts-expect-error identityScope cannot enable user partitioning when tenant partitioning is off
+  const invalidGlobalUserScope: IdentityScopeConfig = {
+    tenant: false,
+    user: true,
+  };
 
   void invalidScope;
+  void invalidGlobalUserScope;
 }

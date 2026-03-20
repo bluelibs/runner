@@ -491,11 +491,12 @@ Operational notes:
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `debounce`, and `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast when the input cannot be serialized. `rateLimit` defaults to `canonicalTaskId` so one task keeps one shared quota unless you explicitly provide a broader or narrower `keyBuilder(canonicalTaskId, input)`. The `canonicalTaskId` passed to key builders is the full runtime task id, so sibling resources with the same local task id do not share middleware state by accident.
 - Omit `identityScope` to use automatic tenant partitioning. Runner prefixes internal middleware keys with `<tenantId>:` whenever identity context exists.
-- When `identityScope` object is present, `required` defaults to `true`. Use `{ tenant: true }` for `<tenantId>:` partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` only when identity should refine the key when present instead of being mandatory.
+- Set `identityScope: { tenant: false }` when middleware state should stay global across all identities.
+- When `identityScope` object is present with `tenant: true`, `required` defaults to `true`. Use `{ tenant: true }` for `<tenantId>:` partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` only when identity should refine the key when present instead of being mandatory.
 - Missing required identity fields fail fast with `identityContextRequiredError`.
 - `middleware.identityChecker` is a task gate, not key partitioning. Mentioning it implies tenant identity by default, `user: true` adds `userId`, and `roles` require at least one matching role.
 - `subtree.tasks.identity` uses the same gate contract as `identityChecker`. Gates are additive across nested resources: roles are OR within one gate and AND across layers.
-- Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `subtree.tasks.identity`, `middleware.task.identityChecker`, explicit middleware `identityScope`, and `subtree.middleware.identityScope`.
+- Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `subtree.tasks.identity`, `middleware.task.identityChecker`, middleware `identityScope` values that enable tenant partitioning, and `subtree.middleware.identityScope` values that enable tenant partitioning.
 - Cache refs stay raw. For tenant-aware or user-aware invalidation, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same ref format.
 - Middleware tags can enforce middleware config contracts. That contract flows into middleware dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
 - `tags.identityScoped` means: this task middleware supports optional `identityScope`, so subtree `middleware.identityScope` policy may fill a missing scope and require the same effective scope when one is already declared.
@@ -954,6 +955,7 @@ Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, 
 
 `identityScope` is an object:
 
+- `identityScope: { tenant: false }`: disable identity-based partitioning and keep one shared middleware keyspace
 - `identityScope: { tenant: true }`: `required` defaults to `true`, so missing `tenantId` throws `identityContextRequiredError`; otherwise partition as `<tenantId>:...`
 - `identityScope: { tenant: true, user: true }`: same default `required: true`, but require both `tenantId` and `userId` and partition as `<tenantId>:<userId>:...`
 - `identityScope: { required: false, tenant: true }`: use `<tenantId>:...` only when identity exists
@@ -962,6 +964,7 @@ Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, 
 Fast rule of thumb:
 
 - omit `identityScope` to use the default tenant scope; cross-tenant sharing only happens when no identity context exists
+- use `{ tenant: false }` when middleware-managed state must stay shared even when identity exists
 - use `{ tenant: true }` for strict tenant-only partitioning
 - use `{ tenant: true, user: true }` for strict tenant+user partitioning
 - add `required: false` when identity should be an optional refinement instead of a requirement

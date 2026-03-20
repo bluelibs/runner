@@ -21,6 +21,39 @@ const tenantValue = (tenantId: string, userId?: string) => ({
 });
 
 describe("run subtree task identityScope policy", () => {
+  it("can use subtree identityScope to opt out of tenant partitioning", async () => {
+    const task = defineTask({
+      id: "subtree-identity-scope-global-task",
+      middleware: [rateLimitTaskMiddleware.with({ windowMs: 60_000, max: 1 })],
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "subtree-identity-scope-global-app",
+      subtree: {
+        middleware: {
+          identityScope: { tenant: false },
+        },
+      },
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+
+    await expect(
+      asyncContexts.identity.provide(tenantValue("acme", "u1"), () =>
+        runtime.runTask(task),
+      ),
+    ).resolves.toBe("ok");
+    await expect(
+      asyncContexts.identity.provide(tenantValue("globex", "u2"), () =>
+        runtime.runTask(task),
+      ),
+    ).rejects.toThrow(/rate limit exceeded/i);
+
+    await runtime.dispose();
+  });
+
   it("fills missing identityScope for tagged local task middleware", async () => {
     const task = defineTask({
       id: "subtree-identity-scope-local-task",

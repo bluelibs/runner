@@ -190,4 +190,63 @@ describe("IdentitySupportValidator", () => {
       /identityScope on task middleware/i,
     );
   });
+
+  it("allows explicit global identityScope opt-outs on unsupported platforms", () => {
+    setPlatform(new PlatformAdapter("browser"));
+
+    const ctx = {
+      registry: {
+        tasks: new Map([
+          [
+            "task-a",
+            {
+              task: {
+                id: "task-a",
+                middleware: [
+                  {
+                    id: "custom.middleware.task.rateLimit",
+                    config: {
+                      identityScope: { tenant: false },
+                    },
+                    tags: [globalTags.identityScoped],
+                  },
+                ],
+              },
+            },
+          ],
+        ]),
+        resources: new Map([
+          [
+            "resource-a",
+            {
+              resource: {
+                id: "resource-a",
+                subtree: {
+                  middleware: {
+                    identityScope: { tenant: false },
+                  },
+                },
+              },
+            },
+          ],
+        ]),
+      },
+      resolveReferenceId: (reference: unknown) =>
+        typeof reference === "object" &&
+        reference !== null &&
+        "id" in reference &&
+        typeof reference.id === "string"
+          ? reference.id
+          : null,
+      findIdByDefinition: (reference: unknown) =>
+        typeof reference === "object" &&
+        reference !== null &&
+        "id" in reference &&
+        typeof reference.id === "string"
+          ? reference.id
+          : String(reference),
+    } as unknown as ValidatorContext;
+
+    expect(() => validateIdentityAsyncContextSupport(ctx)).not.toThrow();
+  });
 });

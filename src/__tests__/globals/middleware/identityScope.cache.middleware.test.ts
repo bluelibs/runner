@@ -11,6 +11,39 @@ const tenantValue = (tenantId: string, userId?: string) => ({
 });
 
 describe("identityScope cache middleware support", () => {
+  it("can share cache entries across tenants when tenant partitioning is disabled", async () => {
+    let callCount = 0;
+    const task = defineTask({
+      id: "identity-scope-global-cache-task",
+      middleware: [
+        cacheMiddleware.with({
+          ttl: 60_000,
+          identityScope: { tenant: false },
+          keyBuilder: (_taskId: string, input: unknown) => String(input),
+        }),
+      ],
+      run: async (input: string) => `${input}-${++callCount}`,
+    });
+    const app = defineResource({
+      id: "identity-scope-global-cache-app",
+      register: [cacheResource, task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+    const acme = await asyncContexts.identity.provide(tenantValue("acme"), () =>
+      runtime.runTask(task, "x"),
+    );
+    const globex = await asyncContexts.identity.provide(
+      tenantValue("globex"),
+      () => runtime.runTask(task, "x"),
+    );
+
+    expect(acme).toBe("x-1");
+    expect(globex).toBe("x-1");
+    await runtime.dispose();
+  });
+
   it("isolates cache entries by tenant when identityScope is omitted", async () => {
     let callCount = 0;
     const task = defineTask({

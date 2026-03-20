@@ -58,6 +58,10 @@ export function resolveIdentityContext(
   readIdentity: () => unknown = () => asyncContexts.identity.tryUse(),
 ): IdentityContextValue | undefined {
   const scope = normalizeIdentityScopeConfig(identityScope);
+  if (!scope.tenant) {
+    return undefined;
+  }
+
   const identity = readIdentity();
   if (!identity || typeof identity !== "object") {
     if (scope.required) {
@@ -96,6 +100,10 @@ export function getIdentityScopePrefix(
   readIdentity?: () => unknown,
 ): string | undefined {
   const scope = normalizeIdentityScopeConfig(identityScope);
+  if (!scope.tenant) {
+    return undefined;
+  }
+
   const identity = resolveIdentityContext(
     identityScope,
     readIdentity ?? (() => asyncContexts.identity.tryUse()),

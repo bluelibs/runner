@@ -3,6 +3,10 @@ import { getPlatform } from "../../platform";
 import { getStoredSubtreePolicy } from "../../definers/subtreePolicy";
 import { globalTags } from "../../globals/globalTags";
 import { identityCheckerTaskMiddleware } from "../../globals/middleware/identityChecker.middleware";
+import {
+  normalizeIdentityScopeConfig,
+  type IdentityScopeConfig,
+} from "../../globals/middleware/identityScope.shared";
 import { identityFeatureRequiresAsyncLocalStorageError } from "../../errors";
 import {
   getSubtreeMiddlewareDuplicateKey,
@@ -12,7 +16,9 @@ import type { ValidatorContext } from "./ValidatorContext";
 
 type TaskMiddlewareAttachmentWithConfig = {
   id: string;
-  config?: Record<string, unknown>;
+  config?: {
+    identityScope?: IdentityScopeConfig;
+  };
   tags: TagType[];
 };
 
@@ -50,7 +56,11 @@ export function validateIdentityAsyncContextSupport(
       });
     }
 
-    if (subtreePolicy.middleware?.identityScope !== undefined) {
+    if (
+      subtreePolicy.middleware?.identityScope !== undefined &&
+      normalizeIdentityScopeConfig(subtreePolicy.middleware.identityScope)
+        .tenant
+    ) {
       identityFeatureRequiresAsyncLocalStorageError.throw({
         feature: "subtree.middleware.identityScope",
         sourceId: resource.id,
@@ -89,9 +99,8 @@ function assertTaskMiddlewareIdentitySupport(
   const config = middlewareAttachment.config;
   if (
     globalTags.identityScoped.exists(middlewareAttachment) &&
-    config &&
-    typeof config === "object" &&
-    config.identityScope !== undefined
+    config?.identityScope !== undefined &&
+    normalizeIdentityScopeConfig(config.identityScope).tenant
   ) {
     identityFeatureRequiresAsyncLocalStorageError.throw({
       feature: `identityScope on task middleware "${middlewareKey}"`,

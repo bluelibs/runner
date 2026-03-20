@@ -36,12 +36,20 @@ import {
     .build();
 
   identityScopedMiddleware.with({
+    identityScope: { tenant: false },
+  });
+
+  identityScopedMiddleware.with({
     identityScope: { tenant: true, user: true },
   });
 
   identityScopedMiddleware.with({
-    // @ts-expect-error identityScope requires tenant: true
+    // @ts-expect-error identityScope requires tenant config when enabling user partitioning
     identityScope: { user: true },
+  });
+  identityScopedMiddleware.with({
+    // @ts-expect-error identityScope cannot enable user partitioning when tenant partitioning is off
+    identityScope: { tenant: false, user: true },
   });
 
   const configuredIdentityScopedMiddleware = identityScopedMiddleware.with({

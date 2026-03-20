@@ -6,32 +6,49 @@ import { Match } from "../../tools/check";
  *
  * Omit the option to use default automatic tenant partitioning when identity exists.
  * Provide `{ tenant: true }` to require tenant partitioning explicitly.
+ * Provide `{ tenant: false }` to disable identity-based partitioning entirely.
  * Add `user: true` for `<tenantId>:<userId>:...` partitioning.
  * Set `required: false` when identity should refine the key only when present.
  */
-export interface IdentityScopeConfig {
-  /**
-   * Tenant partitioning is always explicit when identity scoping is enabled.
-   */
-  tenant: true;
-  /**
-   * Append `userId` after `tenantId` when it exists.
-   *
-   * When `required` is not set to `false`, `userId` becomes mandatory.
-   */
-  user?: boolean;
-  /**
-   * Require the scoped identity fields to exist.
-   *
-   * Defaults to `true`. Set to `false` when identity should only refine the
-   * key when available.
-   */
-  required?: boolean;
-}
+export type IdentityScopeConfig =
+  | {
+      /**
+       * Disable identity-based partitioning entirely.
+       */
+      tenant: false;
+      /**
+       * User partitioning is not available when tenant partitioning is off.
+       */
+      user?: false;
+      /**
+       * Accepted for config-shape consistency, but ignored because identity is
+       * not read when tenant partitioning is disabled.
+       */
+      required?: boolean;
+    }
+  | {
+      /**
+       * Enable tenant partitioning for middleware-managed state.
+       */
+      tenant: true;
+      /**
+       * Append `userId` after `tenantId` when it exists.
+       *
+       * When `required` is not set to `false`, `userId` becomes mandatory.
+       */
+      user?: boolean;
+      /**
+       * Require the scoped identity fields to exist.
+       *
+       * Defaults to `true`. Set to `false` when identity should only refine the
+       * key when available.
+       */
+      required?: boolean;
+    };
 
 interface NormalizedIdentityScopeConfig {
   required: boolean;
-  tenant: true;
+  tenant: boolean;
   user: boolean;
 }
 
@@ -55,7 +72,8 @@ export function isIdentityScopeConfig(
   const keys = Object.keys(candidate);
 
   return (
-    candidate.tenant === true &&
+    typeof candidate.tenant === "boolean" &&
+    (candidate.tenant === true || candidate.user !== true) &&
     (candidate.user === undefined || typeof candidate.user === "boolean") &&
     (candidate.required === undefined ||
       typeof candidate.required === "boolean") &&
@@ -82,6 +100,14 @@ export function normalizeIdentityScopeConfig(
     return {
       required: false,
       tenant: true,
+      user: false,
+    };
+  }
+
+  if (!identityScope.tenant) {
+    return {
+      required: false,
+      tenant: false,
       user: false,
     };
   }

@@ -2,6 +2,7 @@ import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolve
 import { symbolRpcLanePolicy } from "../../../defs";
 import { defineTaskMiddleware } from "../../../definers/defineTaskMiddleware";
 import { globalTags } from "../../../globals/globalTags";
+import type { IdentityScopeConfig } from "../../../globals/middleware/identityScope.shared";
 import { identityCheckerTaskMiddleware } from "../../../globals/middleware/identityChecker.middleware";
 
 const resolveDefinitionId = (reference: unknown): string | undefined => {
@@ -203,7 +204,7 @@ describe("MiddlewareResolver-applyRpcLanePolicyFilter", () => {
 
   test("applies subtree middleware.identityScope to everywhere task middleware", () => {
     const scopedMiddleware = defineTaskMiddleware<{
-      identityScope?: { tenant: true };
+      identityScope?: IdentityScopeConfig;
     }>({
       id: "tests-middleware-subtree-identity-scope",
       tags: [globalTags.identityScoped],

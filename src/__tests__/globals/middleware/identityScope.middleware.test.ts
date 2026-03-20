@@ -16,6 +16,38 @@ const tenantValue = (tenantId: string, userId?: string) => ({
 });
 
 describe("identityScope middleware support", () => {
+  it("can opt out of tenant partitioning explicitly", async () => {
+    const task = defineTask({
+      id: "identity-scope-global-rate-limit-task",
+      middleware: [
+        rateLimitTaskMiddleware.with({
+          windowMs: 60_000,
+          max: 1,
+          identityScope: { tenant: false },
+        }),
+      ],
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "identity-scope-global-rate-limit-app",
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+    await expect(
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
+        runtime.runTask(task),
+      ),
+    ).resolves.toBe("ok");
+    await expect(
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
+        runtime.runTask(task),
+      ),
+    ).rejects.toThrow(/rate limit exceeded/i);
+    await runtime.dispose();
+  });
+
   it("isolates rate limits by tenant when identityScope is omitted", async () => {
     const task = defineTask({
       id: "identity-scope-shared-rate-limit-task",
@@ -261,6 +293,46 @@ describe("identityScope middleware support", () => {
 
     expect(automaticMaxActiveTasks).toBe(2);
     expect(scopedMaxActiveTasks).toBe(2);
+    await runtime.dispose();
+  });
+
+  it("can share concurrency across tenants when tenant partitioning is disabled", async () => {
+    let activeTasks = 0;
+    let maxActiveTasks = 0;
+
+    const sharedTask = defineTask({
+      id: "identity-scope-global-concurrency-task",
+      middleware: [
+        concurrencyTaskMiddleware.with({
+          limit: 1,
+          identityScope: { tenant: false },
+        }),
+      ],
+      run: async () => {
+        activeTasks += 1;
+        maxActiveTasks = Math.max(maxActiveTasks, activeTasks);
+        await sleep(10);
+        activeTasks -= 1;
+        return "ok";
+      },
+    });
+    const app = defineResource({
+      id: "identity-scope-global-concurrency-app",
+      register: [sharedTask],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+    await Promise.all([
+      asyncContexts.identity.provide(tenantValue("acme"), () =>
+        runtime.runTask(sharedTask),
+      ),
+      asyncContexts.identity.provide(tenantValue("globex"), () =>
+        runtime.runTask(sharedTask),
+      ),
+    ]);
+
+    expect(maxActiveTasks).toBe(1);
     await runtime.dispose();
   });
 

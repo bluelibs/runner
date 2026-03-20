@@ -10,6 +10,7 @@ import {
 import { concurrencyTaskMiddleware } from "../../../globals/middleware/concurrency.middleware";
 
 const tenantScope = { tenant: true } as const;
+const globalScope = { tenant: false } as const;
 const optionalTenantScope = { required: false, tenant: true } as const;
 const userScope = { tenant: true, user: true } as const;
 const optionalUserScope = {
@@ -28,6 +29,11 @@ describe("identityScope shared helpers", () => {
     expect(normalizeIdentityScopeConfig(undefined)).toEqual({
       required: false,
       tenant: true,
+      user: false,
+    });
+    expect(normalizeIdentityScopeConfig(globalScope)).toEqual({
+      required: false,
+      tenant: false,
       user: false,
     });
     expect(normalizeIdentityScopeConfig({ tenant: true })).toEqual({
@@ -49,12 +55,19 @@ describe("identityScope shared helpers", () => {
   });
 
   it("re-exports identity scope contract helpers", () => {
+    expect(isIdentityScopeConfig({ tenant: false })).toBe(true);
     expect(isIdentityScopeConfig({ tenant: true, user: true })).toBe(true);
     expect(isIdentityScopeConfig({ tenant: true, bogus: true } as never)).toBe(
       false,
     );
+    expect(isIdentityScopeConfig({ tenant: false, user: true } as never)).toBe(
+      false,
+    );
     expect(
       identityScopesMatch({ tenant: true }, { required: true, tenant: true }),
+    ).toBe(true);
+    expect(
+      identityScopesMatch({ tenant: false }, { tenant: false, required: true }),
     ).toBe(true);
   });
 
@@ -83,9 +96,18 @@ describe("identityScope shared helpers", () => {
         identityScope: { tenant: true, required: "yes" } as never,
       }),
     ).toThrow();
+    expect(() =>
+      concurrencyTaskMiddleware.with({
+        limit: 1,
+        identityScope: { tenant: false, user: true } as never,
+      }),
+    ).toThrow();
   });
 
   it("supports explicit helper resolution paths without mutating global identity state", () => {
+    expect(
+      resolveIdentityContext(globalScope, () => tenantValue("ignored")),
+    ).toBeUndefined();
     expect(
       resolveIdentityContext(undefined, () => tenantValue("ignored")),
     ).toEqual(tenantValue("ignored"));
@@ -102,6 +124,9 @@ describe("identityScope shared helpers", () => {
     expect(
       applyIdentityScopeToKey("search", undefined, () => tenantValue("acme")),
     ).toBe("acme:search");
+    expect(
+      applyIdentityScopeToKey("search", globalScope, () => tenantValue("acme")),
+    ).toBe("search");
     expect(
       applyIdentityScopeToKey("search", optionalTenantScope, () => null),
     ).toBe("search");

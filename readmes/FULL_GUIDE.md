@@ -2791,9 +2791,9 @@ const getUser = r
 
 > **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
 
-> **Note:** `cache`, `debounce`, and `throttle` default to partitioning by `canonicalTaskId + ":" + serialized input`, and they fail fast when the input cannot be serialized. `rateLimit` defaults to `canonicalTaskId` so quotas stay meaningful even when inputs vary. Provide `keyBuilder(canonicalTaskId, input)` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values for the middlewares that serialize by default. The `canonicalTaskId` passed to the builder is the full runtime task id, so sibling resources with the same local task id do not share middleware state by accident. If the key should fully control identity partitioning, set `identityScope: "off"` and read your identity async context directly inside `keyBuilder`.
+> **Note:** `cache`, `debounce`, and `throttle` default to partitioning by `canonicalTaskId + ":" + serialized input`, and they fail fast when the input cannot be serialized. `rateLimit` defaults to `canonicalTaskId` so quotas stay meaningful even when inputs vary. Provide `keyBuilder(canonicalTaskId, input)` when you want broader grouping such as per-user, per-tenant, or per-IP behavior, or when your input includes non-serializable values for the middlewares that serialize by default. The `canonicalTaskId` passed to the builder is the full runtime task id, so sibling resources with the same local task id do not share middleware state by accident. Use `identityScope: { tenant: false }` when the key should stay global even if identity context exists, then read your identity async context directly inside `keyBuilder` only if your app-specific grouping still needs it.
 
-> **Note:** When identity-aware middleware runs with `identityScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:<baseKey>`, and set `required: false` when identity should only refine the key when available. Omit `identityScope` to use the default tenant-aware keyspace whenever identity context exists. If your app has users but no tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and then use tenant+user scoping normally. Cache refs stay raw and are invalidated exactly as returned by `keyBuilder`.
+> **Note:** When identity-aware middleware runs with tenant partitioning enabled, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada`. Use `identityScope: { tenant: true }` for strict tenant partitioning, add `user: true` for `<tenantId>:<userId>:<baseKey>`, and set `required: false` when identity should only refine the key when available. Omit `identityScope` to use the default tenant-aware keyspace whenever identity context exists, or set `identityScope: { tenant: false }` to keep one shared keyspace across all identities. If your app has users but no tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and then use tenant+user scoping normally. Cache refs stay raw and are invalidated exactly as returned by `keyBuilder`.
 
 ### Resilience Orchestration
 
@@ -5806,9 +5806,10 @@ This is the "partition state" part of the story. It affects middleware-managed b
 - Use `identity.require()` or `identity.use()` when running without an identity would be a correctness bug.
 - `identity.require()` does not validate optional fields such as `userId` or `roles` on the built-in identity context. Prefer `middleware.task.identityChecker` or `subtree({ tasks: { identity: ... } })` when access rules depend on the active user, or use a custom identity context when you want those fields required as part of the identity contract itself.
 - Omit `identityScope` to use the default tenant-aware behavior without requiring identity to exist.
+- Use `identityScope: { tenant: false }` when middleware state should stay global across all identities, even if tenant context exists.
 - Use `identityScope: { tenant: true }` when middleware correctness depends on `tenantId` being present and tenant-only partitioning is enough.
 - Use `identityScope: { tenant: true, user: true }` when middleware correctness depends on both `tenantId` and `userId`, and you want strict per-user isolation as `<tenantId>:<userId>:...`.
-- `required` defaults to `true` whenever `identityScope` is present. That means Runner throws `identityContextRequiredError` if the scoped identity fields are missing. Set `required: false` only when identity should refine the key when present instead of being mandatory.
+- `required` defaults to `true` whenever `identityScope` is present with `tenant: true`. That means Runner throws `identityContextRequiredError` if the scoped identity fields are missing. Set `required: false` only when identity should refine the key when present instead of being mandatory.
 - Resource subtree policy can enforce one shared middleware scope with `subtree({ middleware: { identityScope: { tenant: true, user: true } } })`. Runner applies that policy only to task middleware tagged with `tags.identityScoped`, fills missing `identityScope`, and requires the same effective scope when middleware config already declares one.
 - If your app is effectively single-tenant, an explicit constant such as `tenantId: "app"` is a reasonable way to keep using these scopes without inventing fake tenant logic elsewhere.
 - `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
@@ -5819,6 +5820,7 @@ This is the "partition state" part of the story. It affects middleware-managed b
 Quick choice guide:
 
 - Omit `identityScope` for the default automatic tenant scope that activates only when identity exists.
+- Use `{ tenant: false }` when middleware-managed state must stay shared across tenants and users.
 - Use `{ tenant: true }` when the task must run inside a tenant and tenant-only isolation is enough.
 - Use `{ tenant: true, user: true }` when the task must run inside a tenant and each user needs a separate middleware bucket.
 - Add `required: false` when tenant or user data should only refine an existing key rather than being mandatory. Otherwise the default `required: true` behavior fails fast with `identityContextRequiredError`.
@@ -5837,7 +5839,7 @@ Task identity gates are the "allow or block execution" part of the story.
 - Runner treats roles literally. If your app has inherited roles such as `ADMIN -> MANAGER -> USER`, expand the effective roles in your auth layer before binding identity, then gate on the lowest role the task actually needs.
 - Nested resources add gates additively, so all owner-resource layers must pass.
 - `middleware.task.identityChecker.with({ ... })` uses the same gate contract for one explicit middleware layer.
-- Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `tasks.identity`, `middleware.task.identityChecker`, explicit middleware `identityScope`, and `subtree.middleware.identityScope`.
+- Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `tasks.identity`, `middleware.task.identityChecker`, middleware `identityScope` values that enable tenant partitioning, and `subtree.middleware.identityScope` values that enable tenant partitioning.
 
 ```typescript
 import { asyncContexts, r, run } from "@bluelibs/runner";

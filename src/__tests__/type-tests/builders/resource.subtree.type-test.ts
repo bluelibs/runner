@@ -60,11 +60,28 @@ import { RunnerMode } from "../../../types/runner";
     })
     .build();
 
+  r.resource("types-subtree-task-global-identity-scope")
+    .subtree({
+      middleware: {
+        identityScope: { tenant: false },
+      },
+    })
+    .build();
+
   r.resource("types-subtree-task-identity-scope-invalid")
     .subtree({
       middleware: {
-        // @ts-expect-error subtree task identityScope requires tenant: true
+        // @ts-expect-error subtree task identityScope requires tenant config when enabling user partitioning
         identityScope: { user: true },
+      },
+    })
+    .build();
+
+  r.resource("types-subtree-task-global-identity-scope-invalid")
+    .subtree({
+      middleware: {
+        // @ts-expect-error subtree task identityScope cannot enable user partitioning when tenant partitioning is off
+        identityScope: { tenant: false, user: true },
       },
     })
     .build();

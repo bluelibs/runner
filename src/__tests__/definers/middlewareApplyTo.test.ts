@@ -318,6 +318,14 @@ describe("subtree policy normalization", () => {
         },
       }),
     ).toThrow(/middleware\.identityScope/i);
+
+    expect(() =>
+      normalizeResourceSubtreePolicy({
+        middleware: {
+          identityScope: { tenant: false, user: true } as never,
+        },
+      }),
+    ).toThrow(/middleware\.identityScope/i);
   });
 
   it("rejects invalid tasks.identity values", () => {

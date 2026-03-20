@@ -132,9 +132,10 @@ This is the "partition state" part of the story. It affects middleware-managed b
 - Use `identity.require()` or `identity.use()` when running without an identity would be a correctness bug.
 - `identity.require()` does not validate optional fields such as `userId` or `roles` on the built-in identity context. Prefer `middleware.task.identityChecker` or `subtree({ tasks: { identity: ... } })` when access rules depend on the active user, or use a custom identity context when you want those fields required as part of the identity contract itself.
 - Omit `identityScope` to use the default tenant-aware behavior without requiring identity to exist.
+- Use `identityScope: { tenant: false }` when middleware state should stay global across all identities, even if tenant context exists.
 - Use `identityScope: { tenant: true }` when middleware correctness depends on `tenantId` being present and tenant-only partitioning is enough.
 - Use `identityScope: { tenant: true, user: true }` when middleware correctness depends on both `tenantId` and `userId`, and you want strict per-user isolation as `<tenantId>:<userId>:...`.
-- `required` defaults to `true` whenever `identityScope` is present. That means Runner throws `identityContextRequiredError` if the scoped identity fields are missing. Set `required: false` only when identity should refine the key when present instead of being mandatory.
+- `required` defaults to `true` whenever `identityScope` is present with `tenant: true`. That means Runner throws `identityContextRequiredError` if the scoped identity fields are missing. Set `required: false` only when identity should refine the key when present instead of being mandatory.
 - Resource subtree policy can enforce one shared middleware scope with `subtree({ middleware: { identityScope: { tenant: true, user: true } } })`. Runner applies that policy only to task middleware tagged with `tags.identityScoped`, fills missing `identityScope`, and requires the same effective scope when middleware config already declares one.
 - If your app is effectively single-tenant, an explicit constant such as `tenantId: "app"` is a reasonable way to keep using these scopes without inventing fake tenant logic elsewhere.
 - `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
@@ -145,6 +146,7 @@ This is the "partition state" part of the story. It affects middleware-managed b
 Quick choice guide:
 
 - Omit `identityScope` for the default automatic tenant scope that activates only when identity exists.
+- Use `{ tenant: false }` when middleware-managed state must stay shared across tenants and users.
 - Use `{ tenant: true }` when the task must run inside a tenant and tenant-only isolation is enough.
 - Use `{ tenant: true, user: true }` when the task must run inside a tenant and each user needs a separate middleware bucket.
 - Add `required: false` when tenant or user data should only refine an existing key rather than being mandatory. Otherwise the default `required: true` behavior fails fast with `identityContextRequiredError`.
@@ -163,7 +165,7 @@ Task identity gates are the "allow or block execution" part of the story.
 - Runner treats roles literally. If your app has inherited roles such as `ADMIN -> MANAGER -> USER`, expand the effective roles in your auth layer before binding identity, then gate on the lowest role the task actually needs.
 - Nested resources add gates additively, so all owner-resource layers must pass.
 - `middleware.task.identityChecker.with({ ... })` uses the same gate contract for one explicit middleware layer.
-- Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `tasks.identity`, `middleware.task.identityChecker`, explicit middleware `identityScope`, and `subtree.middleware.identityScope`.
+- Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `tasks.identity`, `middleware.task.identityChecker`, middleware `identityScope` values that enable tenant partitioning, and `subtree.middleware.identityScope` values that enable tenant partitioning.
 
 ```typescript
 import { asyncContexts, r, run } from "@bluelibs/runner";

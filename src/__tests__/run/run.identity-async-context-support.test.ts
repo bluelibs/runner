@@ -58,6 +58,31 @@ describe("identity-sensitive features require AsyncLocalStorage", () => {
     }
   });
 
+  it("does not fail at boot when a task middleware explicitly disables identity partitioning", async () => {
+    setPlatform(new PlatformAdapter("browser"));
+
+    const task = defineTask({
+      id: "identity-als-support-global-scope-task",
+      middleware: [
+        middleware.task.rateLimit.with({
+          windowMs: 5_000,
+          max: 1,
+          identityScope: { tenant: false },
+        }),
+      ],
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "identity-als-support-global-scope-app",
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(task)).resolves.toBe("ok");
+    await runtime.dispose();
+  });
+
   it("fails fast at boot when subtree tasks.identity is declared", async () => {
     setPlatform(new PlatformAdapter("browser"));
 
@@ -116,6 +141,30 @@ describe("identity-sensitive features require AsyncLocalStorage", () => {
     await expect(run(app)).rejects.toThrow(
       /subtree\.middleware\.identityScope/i,
     );
+  });
+
+  it("does not fail at boot when subtree middleware.identityScope disables identity partitioning", async () => {
+    setPlatform(new PlatformAdapter("browser"));
+
+    const task = defineTask({
+      id: "identity-als-support-global-subtree-scope-task",
+      middleware: [middleware.task.rateLimit.with({ windowMs: 5_000, max: 1 })],
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "identity-als-support-global-subtree-scope-app",
+      subtree: {
+        middleware: {
+          identityScope: { tenant: false },
+        },
+      },
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(task)).resolves.toBe("ok");
+    await runtime.dispose();
   });
 
   it("fails fast at boot when subtree task middleware attaches identityChecker", async () => {
