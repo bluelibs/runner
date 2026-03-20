@@ -14,17 +14,6 @@ function resolveCanonicalId(store: Store, id: string): string {
   return resolveRequestedIdFromStore(store, id) ?? id;
 }
 
-function findEntryByRequestedId<TEntry extends { id: string }>(
-  entries: Iterable<TEntry>,
-  requestedId: string,
-): TEntry | undefined {
-  const matches = Array.from(entries).filter(
-    (entry) => entry.id === requestedId || entry.id.endsWith(`.${requestedId}`),
-  );
-
-  return matches.length === 1 ? matches[0] : undefined;
-}
-
 /**
  * Extracts the id string from a lane applyTo target.
  * Accepts a plain string or an object with an `id` property.
@@ -108,13 +97,7 @@ export function collectCrossLaneApplyToEventIds(
   collectTopologyLanes: (topology: unknown) => readonly { applyTo?: unknown }[],
 ): Set<string> {
   const eventIds = new Set<string>();
-  const entry =
-    store.resources.get(resolveCanonicalId(store, resourceId)) ??
-    Array.from(store.resources.values()).find(
-      (candidate) =>
-        candidate.resource.id === resourceId ||
-        candidate.resource.id.endsWith(`.${resourceId}`),
-    );
+  const entry = store.resources.get(resolveCanonicalId(store, resourceId));
   const config = entry?.config as Record<string, unknown> | undefined;
   const topology = config?.topology;
   if (!topology) {
@@ -142,15 +125,7 @@ export function collectCrossLaneApplyToEventIds(
         continue;
       }
 
-      const eventEntry =
-        store.events.get(resolveCanonicalId(store, targetId)) ??
-        (() => {
-          const matchedEvent = findEntryByRequestedId(
-            Array.from(store.events.values()).map((entry) => entry.event),
-            targetId,
-          );
-          return matchedEvent ? store.events.get(matchedEvent.id) : undefined;
-        })();
+      const eventEntry = store.events.get(resolveCanonicalId(store, targetId));
       if (eventEntry) {
         eventIds.add(eventEntry.event.id);
       }

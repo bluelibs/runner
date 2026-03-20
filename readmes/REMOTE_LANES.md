@@ -988,7 +988,7 @@ When routing does not behave as expected, check in this order:
 | Lane definition  | `r.eventLane("...").asyncContexts([...]).applyTo([...])` or `r.eventLane("...").asyncContexts([...]).applyTo((event) => boolean)` |
 | Topology         | `r.eventLane.topology({ profiles, bindings })`                   |
 | Profile consume  | `profiles[profile].consume: [{ lane, hooks?: { only?: hook[] } }]` |
-| Binding          | `{ lane, queue, prefetch?, maxAttempts?, retryDelayMs? }`        |
+| Binding          | `{ lane, queue, auth?, prefetch?, maxAttempts?, retryDelayMs? }` |
 | Runtime resource | `eventLanesResource.with({ profile, topology, mode? })`          |
 
 ### RPC Lane Contract
@@ -1001,6 +1001,9 @@ When routing does not behave as expected, check in this order:
 | Profile serve      | `profiles[profile].serve: lane[]`                                |
 | Binding            | `{ lane, communicator, auth?, allowAsyncContext? }`              |
 | Runtime resource   | `rpcLanesResource.with({ profile, topology, serializer?, mode?, exposure? })` |
+
+Node-side allow-list helper:
+`computeRpcLaneAllowList(store)` inspects active `rpcLanesResource` runtime values and returns the effective served task/event ids plus async-context policy maps. It is mainly useful for custom exposure or discovery integrations that need the same allow-list view Runner's built-in HTTP exposure uses.
 
 ### Communicator Contract
 
