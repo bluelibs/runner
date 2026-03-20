@@ -4,7 +4,7 @@ import { middleware } from "../../../";
   middleware.task.rateLimit.with({
     windowMs: 1_000,
     max: 1,
-    keyBuilder: (canonicalTaskId, input) => {
+    keyBuilder: (canonicalTaskId: string, input: unknown) => {
       canonicalTaskId.toUpperCase();
       void input;
       return canonicalTaskId;

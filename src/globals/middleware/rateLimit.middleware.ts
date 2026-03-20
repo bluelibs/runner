@@ -8,6 +8,7 @@ import {
   validationError,
 } from "../../errors";
 import { Match } from "../../tools/check";
+import type { MatchPattern } from "../../tools/check";
 import type { ValidationSchemaInput } from "../../types/utilities";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 import {
@@ -63,6 +64,10 @@ const rateLimitConfigPattern: ValidationSchemaInput<RateLimitMiddlewareConfig> =
     maxKeys: Match.Optional(positiveNonZeroIntegerPattern),
     identityScope: identityScopePattern,
   });
+
+const rateLimitRuntimeConfigSchema = Match.compile(
+  rateLimitConfigPattern as MatchPattern,
+);
 
 /**
  * Custom error class for rate limit errors.
@@ -124,6 +129,8 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     { state, identityContext },
     config: RateLimitMiddlewareConfig,
   ) {
+    rateLimitRuntimeConfigSchema.parse(config);
+
     const storageTaskId = task.definition.id;
     const keyBuilder = config.keyBuilder ?? defaultStorageTaskKeyBuilder;
     const builtKey = keyBuilder(storageTaskId, task.input);
