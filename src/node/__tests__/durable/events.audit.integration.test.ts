@@ -3,20 +3,8 @@ import { durableResource } from "../../durable/core/resource";
 import { durableEvents } from "../../durable/events";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { waitUntil } from "../../durable/test-utils";
 import { genericError } from "../../../errors";
-
-async function waitUntil(
-  predicate: () => boolean | Promise<boolean>,
-  options: { timeoutMs: number; intervalMs: number },
-): Promise<void> {
-  const startedAt = Date.now();
-  while (!(await predicate())) {
-    if (Date.now() - startedAt > options.timeoutMs) {
-      throw genericError.new({ message: "waitUntil timed out" });
-    }
-    await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
-  }
-}
 
 describe("durable: audit runner events (integration)", () => {
   it("emits durable runner events by default (without audit persistence)", async () => {
@@ -74,7 +62,6 @@ describe("durable: audit runner events (integration)", () => {
 
     const executionId = await service.start(task, undefined, {
       timeout: 5_000,
-      waitPollIntervalMs: 5,
     });
 
     await expect(
@@ -140,7 +127,6 @@ describe("durable: audit runner events (integration)", () => {
 
     const executionId = await service.start(task, undefined, {
       timeout: 5_000,
-      waitPollIntervalMs: 5,
     });
 
     await expect(

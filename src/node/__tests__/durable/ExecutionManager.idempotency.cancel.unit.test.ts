@@ -10,6 +10,8 @@ import type { ITaskExecutor } from "../../durable/core/interfaces/service";
 import type { IDurableQueue } from "../../durable/core/interfaces/queue";
 import type { ITask } from "../../../types/task";
 import { genericError } from "../../../errors";
+import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createBareStore } from "./DurableService.unit.helpers";
 
 enum TaskId {
   T = "durable-tests-executionManager-t",
@@ -55,25 +57,16 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     );
   };
 
+  const createStore = (overrides: Partial<IDurableStore>): IDurableStore =>
+    createBareStore(new MemoryStore(), overrides);
+
   it("throws when idempotencyKey is used with a store that lacks support", async () => {
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const manager = createManager({
       store,
@@ -88,28 +81,16 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("fails fast when idempotency lock cannot be acquired", async () => {
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
       getExecutionIdByIdempotencyKey: async () => null,
       setExecutionIdByIdempotencyKey: async () => true,
       acquireLock: async () => null,
       releaseLock: async () => {},
-    };
+    });
 
     const manager = createManager({
       store,
@@ -126,32 +107,20 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   it("returns the raced mapping when setExecutionIdByIdempotencyKey fails", async () => {
     let getCalls = 0;
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {
         throw genericError.new({ message: "should not create execution" });
       },
       getExecution: async () => null,
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
       getExecutionIdByIdempotencyKey: async () => {
         getCalls += 1;
         if (getCalls === 1) return null;
         return "existing";
       },
       setExecutionIdByIdempotencyKey: async () => false,
-    };
+    });
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
@@ -169,28 +138,16 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("throws if setExecutionIdByIdempotencyKey fails without an existing mapping", async () => {
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {
         throw genericError.new({ message: "should not create execution" });
       },
       getExecution: async () => null,
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
       getExecutionIdByIdempotencyKey: async () => null,
       setExecutionIdByIdempotencyKey: async () => false,
-    };
+    });
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
@@ -208,26 +165,14 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("cancelExecution is a no-op when the execution does not exist", async () => {
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution: async () => {
         throw genericError.new({ message: "should not update" });
       },
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const manager = createManager({
       store,
@@ -252,24 +197,12 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const updateExecution = jest.fn(async () => undefined);
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => exec,
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const manager = createManager({
       store,
@@ -296,24 +229,12 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const updateExecution = jest.fn(async () => undefined);
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => exec,
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const manager = createManager({
       store,
@@ -335,7 +256,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const updateExecution = jest.fn(async () => undefined);
 
     let getCalls = 0;
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => {
         getCalls += 1;
@@ -371,19 +292,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       },
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const taskExecutor = createFixedTaskExecutor({ ok: true });
 
@@ -404,7 +313,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const updateExecution = jest.fn(async () => undefined);
 
     let getCalls = 0;
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => {
         getCalls += 1;
@@ -435,19 +344,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       },
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const taskExecutor = createFixedTaskExecutor({ ok: true });
 
@@ -461,7 +358,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const updateExecution = jest.fn(async () => undefined);
 
     let getCalls = 0;
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => {
         getCalls += 1;
@@ -497,19 +394,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       },
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
@@ -535,7 +420,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const createTimer = jest.fn(async () => undefined);
 
     let getCalls = 0;
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => {
         getCalls += 1;
@@ -571,19 +456,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       },
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
       createTimer,
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
@@ -626,24 +500,12 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       updatedAt: new Date(),
     };
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => execution,
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
@@ -697,24 +559,13 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       updatedAt: new Date(),
     };
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => execution,
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
       createTimer,
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const taskExecutor: ITaskExecutor = {
       run: async () =>
@@ -774,24 +625,12 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       updatedAt: new Date(),
     };
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => execution,
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const manager = createManager({
       store,
@@ -836,24 +675,12 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         undefined,
     );
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const manager = createManager({
       store,
@@ -891,24 +718,12 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       error: { message: "already failed" },
     };
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => execution,
       updateExecution,
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const manager = createManager({
       store,
@@ -938,24 +753,12 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       unsubscribe: async () => {},
     };
 
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const taskRegistry = new TaskRegistry();
     const auditLogger = new AuditLogger({ enabled: false }, store);
@@ -990,25 +793,76 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     ]);
   });
 
+  it("keeps completed executions completed when terminal event publishing fails", async () => {
+    const store = new MemoryStore();
+    const taskRegistry = new TaskRegistry();
+    taskRegistry.register(task);
+    const auditLogger = new AuditLogger({ enabled: false }, store);
+    const waitManager = new WaitManager(store);
+    const logger = {
+      with: () => logger,
+      error: jest.fn(async () => {}),
+    };
+
+    const manager = new ExecutionManager(
+      {
+        store,
+        taskExecutor: createFixedTaskExecutor("ok"),
+        logger: logger as any,
+        eventBus: {
+          publish: async () => {
+            throw genericError.new({ message: "bus-down" });
+          },
+          subscribe: async () => {},
+          unsubscribe: async () => {},
+        } as any,
+      },
+      taskRegistry,
+      auditLogger,
+      waitManager,
+    );
+
+    await store.saveExecution({
+      id: "e-completed-publish-failure",
+      taskId: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      manager.processExecution("e-completed-publish-failure"),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      store.getExecution("e-completed-publish-failure"),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "e-completed-publish-failure",
+        status: ExecutionStatus.Completed,
+        result: "ok",
+      }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Durable execution finished notification failed.",
+      expect.objectContaining({
+        executionId: "e-completed-publish-failure",
+        status: ExecutionStatus.Completed,
+        error: expect.any(Error),
+      }),
+    );
+  });
+
   it("falls back to NoopEventBus when eventBus is not provided", async () => {
-    const store: IDurableStore = {
+    const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const taskRegistry = new TaskRegistry();
     const auditLogger = new AuditLogger({ enabled: false }, store);

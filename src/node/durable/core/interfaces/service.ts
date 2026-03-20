@@ -15,13 +15,35 @@ export interface ITaskExecutor {
   ): Promise<TResult>;
 }
 
-export interface ScheduleConfig<TInput = unknown> {
-  id: string;
-  task: ITask<TInput, Promise<any>, any, any, any, any> | string;
+export type RecurringScheduleConfig<TInput = unknown> =
+  | {
+      id: string;
+      task: ITask<TInput, Promise<any>, any, any, any, any> | string;
+      cron: string;
+      interval?: never;
+      input: TInput;
+    }
+  | {
+      id: string;
+      task: ITask<TInput, Promise<any>, any, any, any, any> | string;
+      interval: number;
+      cron?: never;
+      input: TInput;
+    };
+
+export type ScheduleConfig<TInput = unknown> = RecurringScheduleConfig<TInput>;
+
+export interface ScheduleOptions {
+  id?: string;
+  at?: Date;
+  delay?: number;
   cron?: string;
   interval?: number;
-  input: TInput;
 }
+
+export type EnsureScheduleOptions =
+  | (ScheduleOptions & { cron: string; interval?: undefined })
+  | (ScheduleOptions & { interval: number; cron?: undefined });
 
 export interface DurableServiceConfig {
   store: IDurableStore;
@@ -91,7 +113,6 @@ export interface DurableServiceConfig {
 export interface ExecuteOptions {
   timeout?: number;
   priority?: number;
-  waitPollIntervalMs?: number;
   /**
    * Optional workflow-level idempotency key.
    * When supported by the store, multiple concurrent callers using the same key will receive the same executionId.
@@ -99,12 +120,18 @@ export interface ExecuteOptions {
   idempotencyKey?: string;
 }
 
-export interface ScheduleOptions {
-  id?: string;
-  at?: Date;
-  delay?: number;
-  cron?: string;
-  interval?: number;
+export interface WaitOptions {
+  timeout?: number;
+  waitPollIntervalMs?: number;
+}
+
+export interface StartAndWaitOptions extends ExecuteOptions {
+  /**
+   * Optional caller wait timeout for `startAndWait()`.
+   * Separate from `ExecuteOptions.timeout`, which bounds workflow runtime.
+   */
+  waitTimeout?: number;
+  waitPollIntervalMs?: number;
 }
 
 export interface DurableStartAndWaitResult<TResult = unknown> {
@@ -133,10 +160,7 @@ export interface IDurableService {
    */
   cancelExecution(executionId: string, reason?: string): Promise<void>;
 
-  wait<TResult>(
-    executionId: string,
-    options?: { timeout?: number; waitPollIntervalMs?: number },
-  ): Promise<TResult>;
+  wait<TResult>(executionId: string, options?: WaitOptions): Promise<TResult>;
 
   /**
    * Starts a workflow and waits for completion.
@@ -145,12 +169,12 @@ export interface IDurableService {
   startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
   startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
 
   schedule<TInput, TResult>(
@@ -171,12 +195,12 @@ export interface IDurableService {
   ensureSchedule<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
   ensureSchedule(
     task: string,
     input: unknown,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
 
   recover(): Promise<void>;
@@ -199,9 +223,11 @@ export interface IDurableService {
   removeSchedule(scheduleId: string): Promise<void>;
 
   /**
-   * Deliver a signal payload to a waiting workflow execution and resume it.
-   * If the first wait has not been recorded yet, the base signal slot may be
-   * prebuffered so the upcoming `waitForSignal()` can consume it on replay.
+   * Deliver a signal payload to a workflow execution.
+   * Missing or terminal executions reject new signals.
+   * Live executions retain signal history at the execution level and queue
+   * unawaited signals per `signalId` for `waitForSignal()` to consume in FIFO
+   * order before suspending again. Duplicate queued payloads are de-duplicated.
    */
   signal<TPayload>(
     executionId: string,

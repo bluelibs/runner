@@ -17,6 +17,24 @@ import { genericError } from "../../../errors";
 import { Logger, type ILog } from "../../../models/Logger";
 
 describe("durable: DurableService — polling & lifecycle (unit)", () => {
+  it("stops registered worker consumers before finishing service shutdown", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const workerStop = jest.fn(async () => {});
+
+    (
+      service as unknown as {
+        registerWorker: (worker: { stop: () => Promise<void> }) => void;
+      }
+    ).registerWorker({
+      stop: workerStop,
+    });
+
+    await service.stop();
+
+    expect(workerStop).toHaveBeenCalledTimes(1);
+  });
+
   it("polls timers and handles schedule timers end-to-end", async () => {
     const store = new MemoryStore();
     const task = okTask("t-run");
@@ -160,6 +178,102 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
     resolveFirst([]);
 
     await new Promise((resolve) => setTimeout(resolve, 25));
+  });
+
+  it("renews timer claims while a long-running timer handler is still active", async () => {
+    const store = new MemoryStore();
+    const renewTimerClaimSpy = jest.spyOn(store, "renewTimerClaim");
+    const queue: IDurableQueue = {
+      enqueue: jest.fn(
+        async () =>
+          await new Promise<string>((resolve) => {
+            setTimeout(() => resolve("m1"), 1_200);
+          }),
+      ),
+      consume: jest.fn(async () => {}),
+      ack: jest.fn(async () => {}),
+      nack: jest.fn(async () => {}),
+    };
+    const service = new DurableService({
+      store,
+      queue,
+      taskExecutor: createTaskExecutor({}),
+      polling: { claimTtlMs: 3_000 },
+    });
+
+    const timer: Timer = {
+      id: "t-renew-claim",
+      executionId: "e1",
+      type: "retry",
+      fireAt: new Date(0),
+      status: "pending",
+    };
+    await store.createTimer(timer);
+
+    await service.handleTimer(timer);
+
+    expect(renewTimerClaimSpy).toHaveBeenCalledWith(
+      "t-renew-claim",
+      expect.any(String),
+      3_000,
+    );
+  });
+
+  it("keeps timers pending when the timer claim is lost mid-handler", async () => {
+    const store = new MemoryStore();
+    jest.spyOn(store, "renewTimerClaim").mockResolvedValue(false);
+    const logs: ILog[] = [];
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    logger.onLog((log) => {
+      logs.push(log);
+    });
+    const queue: IDurableQueue = {
+      enqueue: jest.fn(
+        async () =>
+          await new Promise<string>((resolve) => {
+            setTimeout(() => resolve("m1"), 1_200);
+          }),
+      ),
+      consume: jest.fn(async () => {}),
+      ack: jest.fn(async () => {}),
+      nack: jest.fn(async () => {}),
+    };
+    const service = new DurableService({
+      store,
+      queue,
+      taskExecutor: createTaskExecutor({}),
+      polling: { claimTtlMs: 3_000 },
+      logger,
+    });
+
+    const timer: Timer = {
+      id: "t-lost-claim",
+      executionId: "e-lost-claim",
+      type: "retry",
+      fireAt: new Date(0),
+      status: "pending",
+    };
+    await store.createTimer(timer);
+
+    await service.handleTimer(timer);
+
+    expect(
+      (await store.getReadyTimers(new Date(Date.now() + 60_000))).some(
+        (readyTimer) => readyTimer.id === timer.id,
+      ),
+    ).toBe(true);
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Durable timer handling failed.",
+        }),
+      ]),
+    );
   });
 
   it("handles sleep timer branches directly", async () => {

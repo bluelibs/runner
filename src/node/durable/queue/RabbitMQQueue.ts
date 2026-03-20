@@ -147,6 +147,10 @@ export class RabbitMQQueue implements IDurableQueue {
     await this.transport.nack(messageId, requeue);
   }
 
+  async cancelConsumer(): Promise<void> {
+    await this.transport.cancelConsumer();
+  }
+
   async dispose(): Promise<void> {
     this.attemptsByMessageId.clear();
     await this.transport.dispose();

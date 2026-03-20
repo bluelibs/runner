@@ -10,9 +10,11 @@ import type { IDurableContext } from "./interfaces/context";
 import type { IDurableResource } from "./interfaces/resource";
 import type {
   DurableStartAndWaitResult,
+  EnsureScheduleOptions,
   ExecuteOptions,
   IDurableService,
   ScheduleOptions,
+  StartAndWaitOptions,
 } from "./interfaces/service";
 import type { Schedule } from "./types";
 import type { IDurableStore } from "./interfaces/store";
@@ -243,17 +245,17 @@ export class DurableResource implements IDurableResource {
   startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
   startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
   startAndWait(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<unknown>> {
     if (typeof task === "string") {
       return this.service.startAndWait(task, input, options);
@@ -285,17 +287,17 @@ export class DurableResource implements IDurableResource {
   ensureSchedule<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
   ensureSchedule(
     task: string,
     input: unknown,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
   ensureSchedule(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input: unknown,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string> {
     if (typeof task === "string") {
       return this.service.ensureSchedule(task, input, options);

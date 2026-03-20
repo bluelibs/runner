@@ -1,4 +1,8 @@
 import {
+  type DurableSignalRecord,
+  type DurableQueuedSignalRecord,
+  type DurableSignalState,
+  type DurableSignalWaiter,
   ExecutionStatus,
   ScheduleStatus,
   TimerStatus,
@@ -14,10 +18,42 @@ import type {
 import type { DurableAuditEntry } from "../core/audit";
 import { randomUUID } from "node:crypto";
 
+const createEmptySignalState = (
+  executionId: string,
+  signalId: string,
+): DurableSignalState => ({
+  executionId,
+  signalId,
+  queued: [],
+  history: [],
+});
+
+const cloneQueuedSignalRecord = (
+  record: DurableQueuedSignalRecord,
+): DurableQueuedSignalRecord => ({ ...record });
+
+const cloneSignalState = (
+  signalState: DurableSignalState,
+): DurableSignalState => ({
+  executionId: signalState.executionId,
+  signalId: signalState.signalId,
+  queued: signalState.queued.map(cloneQueuedSignalRecord),
+  history: signalState.history.map((record) => ({ ...record })),
+});
+
+const cloneSignalWaiter = (
+  waiter: DurableSignalWaiter,
+): DurableSignalWaiter => ({ ...waiter });
+
 export class MemoryStore implements IDurableStore {
   private executions = new Map<string, Execution>();
   private executionIdByIdempotencyKey = new Map<string, string>();
   private stepResults = new Map<string, Map<string, StepResult>>();
+  private signalStates = new Map<string, Map<string, DurableSignalState>>();
+  private signalWaiters = new Map<
+    string,
+    Map<string, Map<string, DurableSignalWaiter>>
+  >();
   private auditEntries = new Map<string, DurableAuditEntry[]>();
   private timers = new Map<string, Timer>();
   private schedules = new Map<string, Schedule>();
@@ -217,6 +253,152 @@ export class MemoryStore implements IDurableStore {
     results.set(result.stepId, { ...result });
   }
 
+  private getOrCreateSignalState(
+    executionId: string,
+    signalId: string,
+  ): DurableSignalState {
+    let executionSignals = this.signalStates.get(executionId);
+    if (!executionSignals) {
+      executionSignals = new Map();
+      this.signalStates.set(executionId, executionSignals);
+    }
+
+    let signalState = executionSignals.get(signalId);
+    if (!signalState) {
+      signalState = createEmptySignalState(executionId, signalId);
+      executionSignals.set(signalId, signalState);
+    }
+
+    return signalState;
+  }
+
+  async getSignalState(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalState | null> {
+    const signalState = this.signalStates.get(executionId)?.get(signalId);
+    if (!signalState) return null;
+
+    return cloneSignalState(signalState);
+  }
+
+  async appendSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableSignalRecord,
+  ): Promise<void> {
+    const signalState = this.getOrCreateSignalState(executionId, signalId);
+    signalState.history.push({ ...record });
+  }
+
+  async enqueueQueuedSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableQueuedSignalRecord,
+  ): Promise<"enqueued" | "deduped"> {
+    const signalState = this.getOrCreateSignalState(executionId, signalId);
+    const alreadyQueued = signalState.queued.some(
+      (queuedRecord) =>
+        queuedRecord.serializedPayload === record.serializedPayload,
+    );
+    if (alreadyQueued) {
+      return "deduped";
+    }
+
+    signalState.queued.push(cloneQueuedSignalRecord(record));
+    return "enqueued";
+  }
+
+  async consumeQueuedSignalRecord(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalRecord | null> {
+    const signalState = this.signalStates.get(executionId)?.get(signalId);
+    const record = signalState?.queued.shift();
+    if (!record) return null;
+
+    return {
+      id: record.id,
+      payload: record.payload,
+      receivedAt: record.receivedAt,
+    };
+  }
+
+  private getOrCreateSignalWaiters(
+    executionId: string,
+    signalId: string,
+  ): Map<string, DurableSignalWaiter> {
+    let executionWaiters = this.signalWaiters.get(executionId);
+    if (!executionWaiters) {
+      executionWaiters = new Map();
+      this.signalWaiters.set(executionId, executionWaiters);
+    }
+
+    let signalWaiters = executionWaiters.get(signalId);
+    if (!signalWaiters) {
+      signalWaiters = new Map();
+      executionWaiters.set(signalId, signalWaiters);
+    }
+
+    return signalWaiters;
+  }
+
+  async upsertSignalWaiter(waiter: DurableSignalWaiter): Promise<void> {
+    const signalWaiters = this.getOrCreateSignalWaiters(
+      waiter.executionId,
+      waiter.signalId,
+    );
+    signalWaiters.set(waiter.stepId, cloneSignalWaiter(waiter));
+  }
+
+  async takeNextSignalWaiter(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalWaiter | null> {
+    const signalWaiters = this.signalWaiters.get(executionId)?.get(signalId);
+    if (!signalWaiters || signalWaiters.size === 0) return null;
+
+    let nextWaiter: DurableSignalWaiter | null = null;
+    for (const waiter of signalWaiters.values()) {
+      if (
+        nextWaiter === null ||
+        waiter.sortKey.localeCompare(nextWaiter.sortKey) < 0
+      ) {
+        nextWaiter = waiter;
+      }
+    }
+
+    if (!nextWaiter) return null;
+
+    signalWaiters.delete(nextWaiter.stepId);
+    if (signalWaiters.size === 0) {
+      this.signalWaiters.get(executionId)?.delete(signalId);
+      if (this.signalWaiters.get(executionId)?.size === 0) {
+        this.signalWaiters.delete(executionId);
+      }
+    }
+
+    return cloneSignalWaiter(nextWaiter);
+  }
+
+  async deleteSignalWaiter(
+    executionId: string,
+    signalId: string,
+    stepId: string,
+  ): Promise<void> {
+    const executionWaiters = this.signalWaiters.get(executionId);
+    const signalWaiters = executionWaiters?.get(signalId);
+    if (!signalWaiters) return;
+
+    signalWaiters.delete(stepId);
+    if (signalWaiters.size === 0) {
+      executionWaiters!.delete(signalId);
+    }
+    if (executionWaiters && executionWaiters.size === 0) {
+      this.signalWaiters.delete(executionId);
+    }
+  }
+
   async createTimer(timer: Timer): Promise<void> {
     this.timers.set(timer.id, { ...timer });
   }
@@ -257,6 +439,21 @@ export class MemoryStore implements IDurableStore {
     return true;
   }
 
+  async renewTimerClaim(
+    timerId: string,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const claimKey = `timer:claim:${timerId}`;
+    const now = Date.now();
+    this.pruneExpiredLocks(now);
+    const existing = this.locks.get(claimKey);
+    if (!existing) return false;
+    if (existing.id !== workerId) return false;
+    this.locks.set(claimKey, { id: workerId, expires: now + ttlMs });
+    return true;
+  }
+
   async createSchedule(schedule: Schedule): Promise<void> {
     this.schedules.set(schedule.id, { ...schedule });
   }
@@ -270,6 +467,11 @@ export class MemoryStore implements IDurableStore {
     const s = this.schedules.get(id);
     if (!s) return;
     this.schedules.set(id, { ...s, ...updates });
+  }
+
+  async saveScheduleWithTimer(schedule: Schedule, timer: Timer): Promise<void> {
+    this.schedules.set(schedule.id, { ...schedule });
+    this.timers.set(timer.id, { ...timer });
   }
 
   async deleteSchedule(id: string): Promise<void> {

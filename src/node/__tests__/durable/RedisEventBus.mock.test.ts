@@ -215,7 +215,20 @@ describe("durable: RedisEventBus", () => {
     expect(redisMock.unsubscribe).toHaveBeenCalledWith("durable:bus:chan");
 
     await bus.dispose?.();
-    expect(redisMock.quit).toHaveBeenCalled();
+    expect(redisMock.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not quit an injected publisher client unless explicitly configured", async () => {
+    await bus.dispose?.();
+    expect(redisMock.quit).toHaveBeenCalledTimes(1);
+
+    const ownedBus = new RedisEventBus({
+      redis: redisMock,
+      disposeProvidedClient: true,
+    });
+    await ownedBus.dispose?.();
+
+    expect(redisMock.quit).toHaveBeenCalledTimes(3);
   });
 
   it("unsubscribe(channel, handler) only removes that handler until last one", async () => {
@@ -233,6 +246,32 @@ describe("durable: RedisEventBus", () => {
 
   it("unsubscribe is a no-op for unknown channels", async () => {
     await expect(bus.unsubscribe("missing")).resolves.toBeUndefined();
+  });
+
+  it("still unsubscribes when the pending subscription promise rejects", async () => {
+    let rejectSubscription!: (error: Error) => void;
+    (
+      bus as unknown as {
+        channels: Map<
+          string,
+          {
+            handlers: Set<unknown>;
+            subscriptionPromise: Promise<void> | null;
+          }
+        >;
+      }
+    ).channels.set("durable:bus:chan", {
+      handlers: new Set(),
+      subscriptionPromise: new Promise<void>((_, reject) => {
+        rejectSubscription = reject;
+      }),
+    });
+
+    const unsubscribe = bus.unsubscribe("chan");
+    rejectSubscription(new Error("subscribe failed"));
+
+    await expect(unsubscribe).resolves.toBeUndefined();
+    expect(redisMock.unsubscribe).toHaveBeenCalledWith("durable:bus:chan");
   });
 
   it("supports string redis url and default redis in constructor", async () => {

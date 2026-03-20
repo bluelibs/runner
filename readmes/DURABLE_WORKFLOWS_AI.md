@@ -33,7 +33,9 @@ Rule: side effects belong inside `durableContext.step(...)`.
 
 For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres): `store.getExecution(executionId)` (or `new DurableOperator(store).getExecutionDetail(executionId)` when supported).
 
-Signals can prebuffer only the base signal slot before a waiter exists; after that, later signals are ignored until a matching `waitForSignal(...)` has been recorded.
+Signals retain execution-level history for live workflows. Each `executionId + signalId`
+keeps a FIFO queue of unmatched signals for automatic `waitForSignal(...)` consumption,
+while all arrivals remain available in signal history.
 
 `taskOrTaskId` can be:
 
@@ -46,6 +48,7 @@ Signals can prebuffer only the base signal slot before a waiter exists; after th
 
 - `start(taskOrTaskId, input)` returns `executionId` immediately.
 - `startAndWait(taskOrTaskId, input)` starts, waits, and returns `{ durable: { executionId }, data }`.
+  `timeout` still means workflow runtime timeout; use `waitTimeout` to bound the caller wait.
 
 ## Tagging workflows (required for discovery)
 
@@ -78,11 +81,17 @@ const onboarding = r
 // const workflows = durableRuntime.getWorkflows();
 ```
 
-`tags.durableWorkflow` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. Register `resources.durable` once in the app so the durable tag definition and durable events are available at runtime.
+`tags.durableWorkflow` is **required for workflow discovery** — workflows without this tag
+will not be discoverable via `getWorkflows()`. Execution APIs such as `start()`,
+`startAndWait()`, `schedule()`, and `ensureSchedule()` do not require the tag as long as
+the task is otherwise registered. Register `resources.durable` once in the app so the
+durable tag definition and durable events are available at runtime.
 
 `tags.durableWorkflow` is discovery metadata, and can also carry optional `defaults` for `describe(...)`.
 The unified response envelope is produced by `startAndWait(...)`: `{ durable: { executionId }, data }`.
 `defaults` are applied only by `describe(task)` when no explicit describe input is passed.
+It can also declare optional workflow-local `signals` to constrain which signal ids the
+workflow may wait for or receive.
 
 ### Starting workflows from dependencies (HTTP route)
 

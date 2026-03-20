@@ -70,7 +70,7 @@ describe("laneAssignmentUtils", () => {
     expect(eventIds.size).toBe(0);
   });
 
-  it("resolves a uniquely suffix-matched event id from applyTo", () => {
+  it("requires exact event ids when collecting cross-lane event ids", () => {
     const canonicalEventId = "app.events.user.created";
     const eventIds = collectCrossLaneApplyToEventIds(
       {
@@ -91,7 +91,7 @@ describe("laneAssignmentUtils", () => {
           [canonicalEventId, { event: { id: canonicalEventId } }],
         ]),
       } as any,
-      "rpc",
+      "app.resources.rpc",
       (topology) =>
         (
           topology as {
@@ -100,20 +100,26 @@ describe("laneAssignmentUtils", () => {
         ).bindings.map((binding) => binding.lane),
     );
 
-    expect(Array.from(eventIds)).toEqual([canonicalEventId]);
+    expect(eventIds.size).toBe(0);
   });
 
-  it("skips ambiguous suffix-matches when more than one event could match", () => {
+  it("requires exact resource ids when canonical resolution misses", () => {
     const eventIds = collectCrossLaneApplyToEventIds(
       {
         resources: new Map([
           [
-            "resource",
+            "app.resources.rpc",
             {
-              resource: { id: "resource" },
+              resource: { id: "app.resources.rpc" },
               config: {
                 topology: {
-                  bindings: [{ lane: { applyTo: ["created"] } }],
+                  bindings: [
+                    {
+                      lane: {
+                        applyTo: ["app.events.user.created"],
+                      },
+                    },
+                  ],
                 },
               },
             },
@@ -124,13 +130,9 @@ describe("laneAssignmentUtils", () => {
             "app.events.user.created",
             { event: { id: "app.events.user.created" } },
           ],
-          [
-            "app.events.audit.created",
-            { event: { id: "app.events.audit.created" } },
-          ],
         ]),
       } as any,
-      "resource",
+      "rpc",
       (topology) =>
         (
           topology as {

@@ -76,7 +76,10 @@ export interface IDurableContext {
 
   /**
    * Suspend until an external signal is delivered via DurableService.signal().
-   * The signal is memoized as a durable step under `__signal:<signalId>[:index]`.
+   * Accepted live-execution signals are retained at the execution level, while
+   * consumed waits are memoized as durable steps under `__signal:<signalId>[:index]`.
+   * Unawaited signals are queued per signal type and consumed in FIFO order.
+   * Duplicate queued payloads are de-duplicated using serialized payload identity.
    * Use options.stepId to provide a stable identifier for replay safety.
    */
   waitForSignal<TPayload>(

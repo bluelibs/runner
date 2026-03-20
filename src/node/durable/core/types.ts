@@ -40,6 +40,33 @@ export interface StepResult<T = unknown> {
   completedAt: Date;
 }
 
+export interface DurableSignalRecord<TPayload = unknown> {
+  id: string;
+  payload: TPayload;
+  receivedAt: Date;
+}
+
+export interface DurableQueuedSignalRecord<
+  TPayload = unknown,
+> extends DurableSignalRecord<TPayload> {
+  serializedPayload: string;
+}
+
+export interface DurableSignalState<TPayload = unknown> {
+  executionId: string;
+  signalId: string;
+  queued: Array<DurableQueuedSignalRecord<TPayload>>;
+  history: Array<DurableSignalRecord<TPayload>>;
+}
+
+export interface DurableSignalWaiter {
+  executionId: string;
+  signalId: string;
+  stepId: string;
+  sortKey: string;
+  timerId?: string;
+}
+
 export const TimerType = {
   Sleep: "sleep",
   Timeout: "timeout",

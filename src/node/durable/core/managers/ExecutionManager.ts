@@ -6,6 +6,7 @@ import type {
   DurableServiceConfig,
   ExecuteOptions,
   ITaskExecutor,
+  StartAndWaitOptions,
 } from "../interfaces/service";
 import type { ITask } from "../../../../types/task";
 import { DurableAuditEntryKind } from "../audit";
@@ -18,8 +19,11 @@ import {
 import type { TaskRegistry } from "./TaskRegistry";
 import type { AuditLogger } from "./AuditLogger";
 import type { WaitManager } from "./WaitManager";
+import { Logger } from "../../../../models/Logger";
 import { DurableContext } from "../DurableContext";
 import { SuspensionSignal } from "../interfaces/context";
+import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.tag";
+import { acquireStoreLock, withStoreLock } from "../locking";
 import {
   createExecutionId,
   isTimeoutExceededError,
@@ -35,6 +39,7 @@ export interface ExecutionManagerConfig {
   eventBus?: IEventBus;
   taskExecutor?: ITaskExecutor;
   contextProvider?: DurableServiceConfig["contextProvider"];
+  logger?: Logger;
   audit?: DurableServiceConfig["audit"];
   determinism?: DurableServiceConfig["determinism"];
   execution?: {
@@ -43,6 +48,13 @@ export interface ExecutionManagerConfig {
     kickoffFailsafeDelayMs?: number;
   };
 }
+
+type ExecutionLockState = {
+  lost: boolean;
+  lossError: Error | null;
+  triggerLoss: (error: Error) => void;
+  waitForLoss: Promise<never>;
+};
 
 /**
  * Runs durable executions (the "workflow engine" for attempts).
@@ -57,6 +69,7 @@ export interface ExecutionManagerConfig {
  */
 export class ExecutionManager {
   private readonly eventBus: IEventBus;
+  private readonly logger: Logger;
 
   constructor(
     private readonly config: ExecutionManagerConfig,
@@ -65,6 +78,14 @@ export class ExecutionManager {
     private readonly waitManager: WaitManager,
   ) {
     this.eventBus = this.config.eventBus ?? new NoopEventBus();
+    const baseLogger =
+      this.config.logger ??
+      new Logger({
+        printThreshold: "error",
+        printStrategy: "pretty",
+        bufferLogs: false,
+      });
+    this.logger = baseLogger.with({ source: "durable.execution" });
   }
 
   async start(
@@ -162,36 +183,19 @@ export class ExecutionManager {
     idempotencyKey: string,
     fn: () => Promise<T>,
   ): Promise<T> {
-    const canLock =
-      !!this.config.store.acquireLock && !!this.config.store.releaseLock;
-    if (!canLock) return fn();
-
-    const lockResource = `idempotency:${taskId}:${idempotencyKey}`;
-    const lockTtlMs = 10_000;
-    const maxAttempts = 50;
-
-    let lockId: string | null = null;
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      lockId = await this.config.store.acquireLock!(lockResource, lockTtlMs);
-      if (lockId !== null) break;
-      await sleepMs(5);
-    }
-
-    if (lockId === null) {
-      durableExecutionInvariantError.throw({
-        message: `Failed to acquire idempotency lock for '${taskId}:${idempotencyKey}'`,
-      });
-    }
-
-    try {
-      return await fn();
-    } finally {
-      try {
-        await this.config.store.releaseLock!(lockResource, lockId!);
-      } catch {
-        // best-effort cleanup; ignore
-      }
-    }
+    return await withStoreLock({
+      store: this.config.store,
+      resource: `idempotency:${taskId}:${idempotencyKey}`,
+      ttlMs: 10_000,
+      maxAttempts: 50,
+      retryDelayMs: 5,
+      sleep: sleepMs,
+      onLockUnavailable: () =>
+        durableExecutionInvariantError.throw({
+          message: `Failed to acquire idempotency lock for '${taskId}:${idempotencyKey}'`,
+        }),
+      fn,
+    });
   }
 
   /**
@@ -330,11 +334,11 @@ export class ExecutionManager {
   async startAndWait(
     taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<unknown>> {
     const executionId = await this.start(taskRef, input, options);
     const data = await this.waitManager.waitForResult(executionId, {
-      timeout: options?.timeout,
+      timeout: options?.waitTimeout,
       waitPollIntervalMs: options?.waitPollIntervalMs,
     });
     return {
@@ -361,26 +365,49 @@ export class ExecutionManager {
 
     const lockResource = `execution:${execution.id}`;
     const lockTtlMs = 30_000;
-    const lockId = this.config.store.acquireLock
-      ? await this.config.store.acquireLock(lockResource, lockTtlMs)
-      : "no-lock";
+    const acquiredLock = await acquireStoreLock({
+      store: this.config.store,
+      resource: lockResource,
+      ttlMs: lockTtlMs,
+      sleep: sleepMs,
+    });
 
-    if (lockId === null) return;
+    if (acquiredLock === null) return;
 
+    const executionLockState = this.createExecutionLockState();
     const stopLockHeartbeat = this.startLockHeartbeat({
       lockResource,
-      lockId,
+      lockId: acquiredLock.lockId,
       lockTtlMs,
+      lockState: executionLockState,
     });
 
     try {
-      await this.runExecutionAttempt(execution, task);
+      await this.runExecutionAttempt(execution, task, executionLockState);
     } finally {
       stopLockHeartbeat();
-      if (lockId !== "no-lock" && this.config.store.releaseLock) {
-        await this.config.store.releaseLock(lockResource, lockId);
-      }
+      await acquiredLock.release();
     }
+  }
+
+  private createExecutionLockState(): ExecutionLockState {
+    let didLoseLock = false;
+    let rejectLoss: ((error: Error) => void) | null = null;
+    const waitForLoss = new Promise<never>((_, reject) => {
+      rejectLoss = reject;
+    });
+    void waitForLoss.catch(() => {});
+
+    return {
+      lost: false,
+      lossError: null,
+      triggerLoss: (error) => {
+        if (didLoseLock || rejectLoss === null) return;
+        didLoseLock = true;
+        rejectLoss(error);
+      },
+      waitForLoss,
+    };
   }
 
   async failExecutionDeliveryExhausted(
@@ -413,24 +440,53 @@ export class ExecutionManager {
     lockResource: string;
     lockId: string | "no-lock";
     lockTtlMs: number;
+    lockState: ExecutionLockState;
   }): () => void {
     if (params.lockId === "no-lock") return () => {};
     if (!this.config.store.renewLock) return () => {};
 
     const intervalMs = Math.max(1_000, Math.floor(params.lockTtlMs / 3));
-    const interval = setInterval(() => {
-      void this.config.store.renewLock!(
-        params.lockResource,
-        params.lockId,
-        params.lockTtlMs,
-      ).catch(() => {
-        // Best effort. If renewal fails, the lock TTL remains a safety net.
-      });
-    }, intervalMs);
-    interval.unref?.();
+    let stopped = false;
+
+    const scheduleRenewal = () => {
+      const timer = setTimeout(() => {
+        if (stopped) return;
+        void this.config.store.renewLock!(
+          params.lockResource,
+          params.lockId,
+          params.lockTtlMs,
+        )
+          .then((renewed) => {
+            if (!renewed) {
+              const lossError = durableExecutionInvariantError.new({
+                message: `Execution lock lost for '${params.lockResource}' while the attempt was still running.`,
+              });
+              params.lockState.lost = true;
+              params.lockState.lossError = lossError;
+              params.lockState.triggerLoss(lossError);
+            }
+          })
+          .catch(() => {
+            const lossError = durableExecutionInvariantError.new({
+              message: `Execution lock lost for '${params.lockResource}' while the attempt was still running.`,
+            });
+            params.lockState.lost = true;
+            params.lockState.lossError = lossError;
+            params.lockState.triggerLoss(lossError);
+          })
+          .finally(() => {
+            if (!stopped) {
+              scheduleRenewal();
+            }
+          });
+      }, intervalMs);
+      timer.unref?.();
+    };
+
+    scheduleRenewal();
 
     return () => {
-      clearInterval(interval);
+      stopped = true;
     };
   }
 
@@ -448,21 +504,50 @@ export class ExecutionManager {
   }
 
   async notifyExecutionFinished(execution: Execution): Promise<void> {
-    await this.eventBus.publish(`execution:${execution.id}`, {
-      type: "finished",
-      payload: execution,
-      timestamp: new Date(),
-    });
+    try {
+      await this.eventBus.publish(`execution:${execution.id}`, {
+        type: "finished",
+        payload: execution,
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      // Completion state lives in the durable store; pub/sub notification is best-effort.
+      try {
+        await this.logger.error(
+          "Durable execution finished notification failed.",
+          {
+            executionId: execution.id,
+            status: execution.status,
+            error,
+          },
+        );
+      } catch {
+        // Logging must not affect durable terminal state handling.
+      }
+    }
   }
 
   private async runExecutionAttempt(
     execution: Execution<unknown, unknown>,
     task: ITask<unknown, Promise<unknown>, any, any, any, any>,
+    executionLockState: ExecutionLockState,
   ): Promise<void> {
+    const assertLockOwnership = (): void => {
+      if (executionLockState.lost) {
+        durableExecutionInvariantError.throw({
+          message: `Execution lock lost for '${execution.id}' while the attempt was still running.`,
+        });
+      }
+    };
+    const raceWithLockLoss = async <T>(promise: Promise<T>): Promise<T> =>
+      await Promise.race([promise, executionLockState.waitForLoss]);
+
     const isCancelled = async (): Promise<boolean> => {
       const current = await this.config.store.getExecution(execution.id);
       return current?.status === ExecutionStatus.Cancelled;
     };
+
+    assertLockOwnership();
 
     if (await isCancelled()) return;
 
@@ -496,6 +581,8 @@ export class ExecutionManager {
         auditEmitter: this.config.audit?.emitter,
         implicitInternalStepIds:
           this.config.determinism?.implicitInternalStepIds,
+        declaredSignalIds: getDeclaredDurableWorkflowSignalIds(task),
+        assertLockOwnership,
       },
     );
     const failExecution = async (
@@ -536,10 +623,14 @@ export class ExecutionManager {
           return;
         }
 
-        result = await withTimeout(promise, remainingTimeout, timeoutMessage);
+        result = await raceWithLockLoss(
+          withTimeout(promise, remainingTimeout, timeoutMessage),
+        );
       } else {
-        result = await promise;
+        result = await raceWithLockLoss(promise);
       }
+
+      assertLockOwnership();
 
       // Cancellation wins over completion.
       if (await isCancelled()) return;
@@ -562,7 +653,15 @@ export class ExecutionManager {
       });
       await this.notifyExecutionFinished(finishedExecution);
     } catch (error) {
+      if (error === executionLockState.lossError) {
+        return;
+      }
+      if (executionLockState.lost) {
+        return;
+      }
+
       if (error instanceof SuspensionSignal) {
+        assertLockOwnership();
         if (await isCancelled()) return;
         await this.config.store.updateExecution(execution.id, {
           status: ExecutionStatus.Sleeping,
@@ -596,6 +695,7 @@ export class ExecutionManager {
       const timedOut = isTimeoutExceededError(error);
 
       if (timedOut || execution.attempt >= execution.maxAttempts) {
+        assertLockOwnership();
         await failExecution(timedOut ? "timed_out" : "failed", errorInfo);
         return;
       }
@@ -603,6 +703,7 @@ export class ExecutionManager {
       const delayMs = Math.pow(2, execution.attempt) * 1000;
       const fireAt = new Date(Date.now() + delayMs);
 
+      assertLockOwnership();
       await this.config.store.createTimer({
         id: `retry:${execution.id}:${execution.attempt}`,
         executionId: execution.id,

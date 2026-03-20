@@ -5,6 +5,7 @@ export * from "./core/interfaces/service";
 export * from "./core/interfaces/store";
 export * from "./core/interfaces/context";
 export * from "./core/interfaces/bus";
+export * from "./core/interfaces/queue";
 export * from "./core/DurableResource";
 
 export { durableEvents, durableEventsArray } from "./events";
@@ -52,6 +53,7 @@ export type { DurableTestSetup, DurableTestSetupOptions } from "./test-utils";
 export {
   durableWorkflowTag,
   type DurableWorkflowTagConfig,
+  type DurableWorkflowSignalDefinition,
 } from "./tags/durableWorkflow.tag";
 export { durableSupportResource } from "./resources/durable.resource";
 

@@ -116,6 +116,7 @@ const onboarding = r
     tags.durableWorkflow.with({
       category: "users",
       defaults: { invitedBy: "system" },
+      signals: [],
     }),
   ])
   .run(async (_input, { durable }) => {
@@ -130,9 +131,11 @@ const onboarding = r
 // const workflows = durableRuntime.getWorkflows();
 ```
 
-`tags.durableWorkflow` is **required** — workflows without this tag will not be discoverable
-via `getWorkflows()`. Register `resources.durable` once in the app so the durable tag
-definition and durable events are available at runtime.
+`tags.durableWorkflow` is **required for workflow discovery** — workflows without this
+tag will not be discoverable via `getWorkflows()`. Execution APIs such as `start()`,
+`startAndWait()`, `schedule()`, and `ensureSchedule()` do not require the tag as long as
+the task is otherwise registered. Register `resources.durable` once in the app so the
+durable tag definition and durable events are available at runtime.
 
 `tags.durableWorkflow` is discovery metadata only. The unified response envelope
 is produced by `durable.startAndWait(...)`:
@@ -141,6 +144,23 @@ is produced by `durable.startAndWait(...)`:
 `tags.durableWorkflow` also supports optional `defaults` used by
 `durable.describe(task)` **only when no explicit describe input is provided**.
 This does not affect `start()`, `startAndWait()`, `schedule()`, or `ensureSchedule()`.
+
+`tags.durableWorkflow` can also declare optional workflow-local signals:
+
+```ts
+const Paid = defineEvent<{ paidAt: number }>({ id: "paid" });
+const Refunded = defineEvent<{ refundedAt: number }>({ id: "refunded" });
+
+tags.durableWorkflow.with({
+  category: "orders",
+  signals: [Paid, Refunded],
+});
+```
+
+When `signals` is omitted, durable workflows keep backwards-compatible behavior
+and allow any signal id. When `signals` is provided, only those local signal ids
+may be used by `durableContext.waitForSignal(...)` and `durable.signal(...)` for
+that workflow. Signal ids must be unique within the workflow declaration.
 
 ### Starting Durable Workflows From Resource Dependencies (HTTP route)
 
@@ -766,6 +786,8 @@ const result = await d.startAndWait(processOrder, {
 - `startAndWait(taskOrTaskId, input)`:
   convenience wrapper for `start(...)` + `wait(executionId)`; returns
   `{ durable: { executionId }, data }`.
+  `timeout` still bounds workflow runtime; use `waitTimeout` to bound how long
+  the caller waits for completion.
 
 `start()` and `startAndWait()` are the only supported durable execution APIs.
 
@@ -896,9 +918,9 @@ This section summarizes the safety guarantees and expectations of the durable wo
 - **Signals (wait until external confirmation)**
   - `durableContext.waitForSignal(signal)` suspends an execution until `durable.signal(executionId, signal, payload)` is called.
   - `stepId` keeps the same return type (payload + timeout error), while `timeoutMs` switches to a `{ kind: "signal" | "timeout" }` outcome.
-  - Signals are memoized as steps under `__signal:<signal.id>[:index]` (or `__signal:<id>[:index]` for string ids).
-  - Runner may prebuffer the base slot `__signal:<id>` before the workflow reaches its first wait, so a signal that arrives slightly early is still consumed by the next `waitForSignal(...)`.
-  - Repeated waits use `__signal:<id>:<index>` and are resolved by the earliest recorded waiting slot. If no matching wait is currently recorded, later signals are ignored instead of creating new indexed slots.
+  - Accepted signals for live executions are retained in execution-level signal state, while consumed waits are memoized as steps under `__signal:<signal.id>[:index]` (or `__signal:<id>[:index]` for string ids).
+  - Each `executionId + signalId` keeps a FIFO queue of unmatched signals for automatic `waitForSignal(...)` consumption; arrivals are still retained in the execution's signal history.
+  - Repeated waits use `__signal:<id>:<index>` and are resolved by the earliest recorded waiting slot. If no matching wait is currently recorded, arrivals are queued in FIFO order until a later wait consumes them.
   - **Determinism note:** like `emit`, the `:<index>` suffixes are derived from call order within the workflow; code changes can shift indexes on replay.
 
 - **Retries and timeouts**
@@ -1582,8 +1604,11 @@ export interface IDurableService {
   startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any> | string,
     input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
+    options?: ExecuteOptions & {
+      waitTimeout?: number;
+      waitPollIntervalMs?: number;
+    },
+  ): Promise<{ durable: { executionId: string }; data: TResult }>;
 
   /**
    * Start a task execution and return the ID immediately.
@@ -2206,7 +2231,7 @@ const mirrorAudit = r
 - **Always put side effects inside `durableContext.step(...)`**: anything outside a step can run multiple times on retries/replays.
 - **Keep step ids stable**: renaming a step id (or changing control-flow so a different call order happens) can break replay determinism for existing executions.
 - **Call-order indexing is real**: `emit()` and repeated `waitForSignal()` allocate `:<index>` internally based on call order; refactors that add/remove calls can shift indexes.
-- **Signals are "deliver to current wait"**: `durableService.signal(executionId, ...)` can prebuffer only the base signal slot before the workflow reaches its first wait. After that, additional signals deliver only to already-recorded waiting slots; otherwise they are ignored.
+- **Signals retain history and queue unmatched arrivals FIFO**: `durableService.signal(executionId, ...)` keeps execution-level signal history for live executions, and unmatched arrivals are queued in FIFO order for later `waitForSignal(...)` consumption.
 - **Don't hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
 - **Compensation failures are terminal**: if `durableContext.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
 - **Intervals can overlap**: interval schedules are currently measured from kickoff time, not completion time. If you need non-overlapping behavior, implement it via `durableContext.sleep()` inside the workflow.

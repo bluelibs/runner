@@ -12,8 +12,14 @@ import type { AuditLogger } from "./AuditLogger";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ScheduleManager } from "./ScheduleManager";
 import { parseSignalState, createExecutionId } from "../utils";
+import {
+  deleteSignalWaiter,
+  getSignalIdFromStepId,
+  withSignalLock,
+} from "../signalWaiters";
 import { clearTimeout, setTimeout } from "node:timers";
 import { Logger } from "../../../../models/Logger";
+import { durableExecutionInvariantError } from "../../../../errors";
 
 export interface PollingConfig {
   enabled?: boolean;
@@ -24,6 +30,10 @@ export interface PollingConfig {
 export interface PollingManagerCallbacks {
   processExecution: (executionId: string) => Promise<void>;
   kickoffExecution: (executionId: string) => Promise<void>;
+}
+
+interface TimerClaimState {
+  lossError: Error | null;
 }
 
 /**
@@ -92,9 +102,7 @@ export class PollingManager {
     while (this.isRunning) {
       try {
         const ready = await this.store.getReadyTimers();
-        for (const timer of ready) {
-          await this.handleTimer(timer);
-        }
+        await Promise.allSettled(ready.map((timer) => this.handleTimer(timer)));
       } catch (error) {
         try {
           await this.logger.error("Durable polling loop failed.", { error });
@@ -120,6 +128,22 @@ export class PollingManager {
 
   /** @internal - public for testing */
   async handleTimer(timer: Timer): Promise<void> {
+    let stopClaimHeartbeat = () => {};
+    let timerClaimState: TimerClaimState | null = null;
+
+    const assertTimerClaimIsStillOwned = (): void => {
+      if (timerClaimState?.lossError) {
+        throw timerClaimState.lossError;
+      }
+    };
+
+    const finalizeTimer = async (): Promise<void> => {
+      assertTimerClaimIsStillOwned();
+      await this.store.markTimerFired(timer.id);
+      assertTimerClaimIsStillOwned();
+      await this.store.deleteTimer(timer.id);
+    };
+
     // Distributed timer coordination. Failures must not drop timers (at-least-once).
     if (this.store.claimTimer) {
       const defaultClaimTtlMs = this.queue ? 5_000 : 30_000;
@@ -130,9 +154,18 @@ export class PollingManager {
         claimTtlMs,
       );
       if (!claimed) return; // Another worker is handling this timer
+
+      timerClaimState = { lossError: null };
+      stopClaimHeartbeat = this.startTimerClaimHeartbeat(
+        timer.id,
+        claimTtlMs,
+        timerClaimState,
+      );
     }
 
     try {
+      assertTimerClaimIsStillOwned();
+
       if (timer.type === TimerType.Sleep && timer.executionId && timer.stepId) {
         await this.store.saveStepResult({
           executionId: timer.executionId,
@@ -152,40 +185,81 @@ export class PollingManager {
         });
       }
 
+      assertTimerClaimIsStillOwned();
+
       if (
         timer.type === TimerType.SignalTimeout &&
         timer.executionId &&
         timer.stepId
       ) {
-        const existing = await this.store.getStepResult(
+        const fallbackSignalId = timer.stepId.startsWith("__signal:")
+          ? getSignalIdFromStepId(timer.stepId)
+          : timer.stepId.split(":")[0];
+        const currentSignalStep = await this.store.getStepResult(
           timer.executionId,
           timer.stepId,
         );
-        const state = parseSignalState(existing?.result);
-        if (state?.state === "waiting") {
-          await this.store.saveStepResult({
-            executionId: timer.executionId,
-            stepId: timer.stepId,
-            result: { state: "timed_out" },
-            completedAt: new Date(),
-          });
+        const currentSignalState = parseSignalState(currentSignalStep?.result);
+        const signalIdForLock =
+          currentSignalState?.signalId ?? fallbackSignalId;
+
+        const persistedSignalId = await withSignalLock({
+          store: this.store,
+          executionId: timer.executionId,
+          signalId: signalIdForLock ?? "__unknown_signal_timeout__",
+          fn: async () => {
+            const existing = await this.store.getStepResult(
+              timer.executionId!,
+              timer.stepId!,
+            );
+            const state = parseSignalState(existing?.result);
+            if (state?.state !== "waiting") return null;
+
+            const signalId = state.signalId ?? fallbackSignalId;
+            if (!signalId) {
+              return durableExecutionInvariantError.throw({
+                message: `Invalid signal timeout step id '${timer.stepId}' for timer '${timer.id}'`,
+              });
+            }
+
+            await deleteSignalWaiter({
+              store: this.store,
+              executionId: timer.executionId!,
+              signalId,
+              stepId: timer.stepId!,
+            });
+
+            const timedOutState =
+              state.signalId !== undefined
+                ? { state: "timed_out" as const, signalId: state.signalId }
+                : { state: "timed_out" as const };
+            await this.store.saveStepResult({
+              executionId: timer.executionId!,
+              stepId: timer.stepId!,
+              result: timedOutState,
+              completedAt: new Date(),
+            });
+
+            return signalId;
+          },
+        });
+
+        if (persistedSignalId) {
           const execution = await this.store.getExecution(timer.executionId);
           const attempt = execution ? execution.attempt : 0;
-          const stepSuffix = timer.stepId.startsWith("__signal:")
-            ? timer.stepId.slice("__signal:".length)
-            : timer.stepId;
-          const signalId = stepSuffix.split(":")[0];
           await this.auditLogger.log({
             kind: DurableAuditEntryKind.SignalTimedOut,
             executionId: timer.executionId,
             taskId: execution?.taskId,
             attempt,
             stepId: timer.stepId,
-            signalId,
+            signalId: persistedSignalId,
             timerId: timer.id,
           });
         }
       }
+
+      assertTimerClaimIsStillOwned();
 
       if (timer.executionId) {
         if (this.queue) {
@@ -198,23 +272,21 @@ export class PollingManager {
           await this.callbacks.processExecution(timer.executionId);
         }
 
-        await this.store.markTimerFired(timer.id);
-        await this.store.deleteTimer(timer.id);
+        await finalizeTimer();
         return;
       }
 
       if (!timer.taskId) {
-        await this.store.markTimerFired(timer.id);
-        await this.store.deleteTimer(timer.id);
+        await finalizeTimer();
         return;
       }
 
       if (timer.scheduleId) {
         const schedule = await this.store.getSchedule(timer.scheduleId);
+        assertTimerClaimIsStillOwned();
         // If the schedule no longer exists, or is paused, don't execute.
         if (!schedule || schedule.status !== ScheduleStatus.Active) {
-          await this.store.markTimerFired(timer.id);
-          await this.store.deleteTimer(timer.id);
+          await finalizeTimer();
           return;
         }
         // If schedule.nextRun exists, treat mismatched timers as stale (race/updates).
@@ -222,16 +294,15 @@ export class PollingManager {
           schedule.nextRun &&
           timer.fireAt.getTime() !== schedule.nextRun.getTime()
         ) {
-          await this.store.markTimerFired(timer.id);
-          await this.store.deleteTimer(timer.id);
+          await finalizeTimer();
           return;
         }
       }
 
+      assertTimerClaimIsStillOwned();
       const task = this.taskRegistry.find(timer.taskId);
       if (!task) {
-        await this.store.markTimerFired(timer.id);
-        await this.store.deleteTimer(timer.id);
+        await finalizeTimer();
         return;
       }
 
@@ -249,19 +320,22 @@ export class PollingManager {
       };
 
       await this.store.saveExecution(execution);
+      assertTimerClaimIsStillOwned();
       await this.callbacks.kickoffExecution(executionId);
+      assertTimerClaimIsStillOwned();
 
       if (timer.scheduleId) {
         const schedule = await this.store.getSchedule(timer.scheduleId);
+        assertTimerClaimIsStillOwned();
         if (schedule && schedule.status === ScheduleStatus.Active) {
           await this.scheduleManager.reschedule(schedule, {
             lastRunAt: new Date(),
           });
+          assertTimerClaimIsStillOwned();
         }
       }
 
-      await this.store.markTimerFired(timer.id);
-      await this.store.deleteTimer(timer.id);
+      await finalizeTimer();
     } catch (error) {
       // Keep the timer pending so it can be retried by the poller.
       try {
@@ -278,6 +352,67 @@ export class PollingManager {
       } catch {
         // Logging must not crash durable timer retry loops.
       }
+    } finally {
+      stopClaimHeartbeat();
     }
+  }
+
+  private startTimerClaimHeartbeat(
+    timerId: string,
+    claimTtlMs: number,
+    claimState: TimerClaimState,
+  ): () => void {
+    if (!this.store.renewTimerClaim) {
+      return () => {};
+    }
+
+    const intervalMs = Math.max(1_000, Math.floor(claimTtlMs / 3));
+    let stopped = false;
+
+    const loseClaim = (message: string) => {
+      if (claimState.lossError) return;
+      claimState.lossError = durableExecutionInvariantError.new({ message });
+      stopped = true;
+    };
+
+    const tick = () => {
+      if (stopped) return;
+
+      const timer = setTimeout(() => {
+        if (stopped) return;
+        void this.store.renewTimerClaim!(timerId, this.workerId, claimTtlMs)
+          .then((renewed) => {
+            if (!renewed) {
+              loseClaim(
+                `Timer claim lost for '${timerId}' while worker '${this.workerId}' was still handling it.`,
+              );
+            }
+          })
+          .catch(async (error) => {
+            loseClaim(
+              `Timer-claim heartbeat failed for '${timerId}' while worker '${this.workerId}' was still handling it.`,
+            );
+            try {
+              await this.logger.error("Durable timer-claim heartbeat failed.", {
+                error,
+                data: { timerId, workerId: this.workerId },
+              });
+            } catch {
+              // Logging must not crash timer-claim heartbeat loops.
+            }
+          })
+          .finally(() => {
+            tick();
+          });
+      }, intervalMs);
+
+      timer.unref?.();
+    };
+
+    tick();
+
+    return () => {
+      stopped = true;
+    };
   }
 }

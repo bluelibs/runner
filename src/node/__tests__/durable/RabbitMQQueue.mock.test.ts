@@ -7,6 +7,7 @@ type ChannelMock = {
   prefetch: jest.Mock;
   sendToQueue: jest.Mock;
   consume: jest.Mock;
+  cancel: jest.Mock;
   ack: jest.Mock;
   nack: jest.Mock;
   close: jest.Mock;
@@ -30,6 +31,7 @@ describe("durable: RabbitMQQueue", () => {
       prefetch: jest.fn().mockResolvedValue({}),
       sendToQueue: jest.fn().mockResolvedValue(true),
       consume: jest.fn().mockResolvedValue({ consumerTag: "tag" }),
+      cancel: jest.fn().mockResolvedValue({}),
       ack: jest.fn(),
       nack: jest.fn(),
       close: jest.fn().mockResolvedValue({}),
@@ -401,6 +403,18 @@ describe("durable: RabbitMQQueue", () => {
 
   it("disposes connections", async () => {
     await queue.init();
+    await queue.dispose();
+    expect(channelMock.close).toHaveBeenCalled();
+    expect(connMock.close).toHaveBeenCalled();
+  });
+
+  it("cancels an active consumer before disposing", async () => {
+    await queue.init();
+    await queue.consume(async () => {});
+
+    await queue.cancelConsumer();
+    expect(channelMock.cancel).toHaveBeenCalledWith("tag");
+
     await queue.dispose();
     expect(channelMock.close).toHaveBeenCalled();
     expect(connMock.close).toHaveBeenCalled();

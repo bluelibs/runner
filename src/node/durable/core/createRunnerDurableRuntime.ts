@@ -98,11 +98,12 @@ export async function createRunnerDurableRuntime(
   });
 
   if (config.worker === true && config.queue) {
-    await initDurableWorker(
+    const worker = await initDurableWorker(
       service,
       config.queue,
       durableLogger.with({ source: "durable.worker" }),
     );
+    service.registerWorker(worker);
   }
 
   return new DurableResource(

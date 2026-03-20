@@ -12,9 +12,16 @@ describe("durable: DurableService - signals audit", () => {
 
     await service.signal("e1", Paid, { paidAt: 1 });
 
-    expect((await base.getStepResult("e1", "__signal:paid"))?.result).toEqual({
-      state: "completed",
-      payload: { paidAt: 1 },
+    await expect(base.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [
+        expect.objectContaining({
+          payload: { paidAt: 1 },
+          serializedPayload: JSON.stringify({ paidAt: 1 }),
+        }),
+      ],
+      history: [expect.objectContaining({ payload: { paidAt: 1 } })],
     });
     const entries = await base.listAuditEntries("e1");
     expect(entries.some((entry) => entry.kind === "signal_delivered")).toBe(

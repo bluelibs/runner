@@ -8,9 +8,13 @@ import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { genericError } from "../../../errors";
+import { createBareStore } from "./DurableService.unit.helpers";
 
 describe("durable: DurableContext", () => {
   const Paid = defineEvent<{ paidAt: number }>({ id: "durable-tests-paid" });
+  const Refunded = defineEvent<{ refundedAt: number }>({
+    id: "durable-tests-refunded",
+  });
   const createContext = (
     executionId = "e1",
     attempt = 1,
@@ -19,6 +23,7 @@ describe("durable: DurableContext", () => {
       auditEnabled?: boolean;
       auditEmitter?: DurableAuditEmitter;
       implicitInternalStepIds?: "allow" | "warn" | "error";
+      declaredSignalIds?: ReadonlySet<string> | null;
     } = {},
   ) => {
     const bus = new MemoryEventBus();
@@ -319,6 +324,115 @@ describe("durable: DurableContext", () => {
     ).toEqual(expect.objectContaining({ state: "waiting", signalId: Paid.id }));
   });
 
+  it("consumes the pending queued signal before suspending", async () => {
+    const { store, ctx } = createContext();
+    const queuedRecord = {
+      id: "sig-1",
+      payload: { paidAt: 7 },
+      receivedAt: new Date(),
+      serializedPayload: JSON.stringify({ paidAt: 7 }),
+    };
+
+    await store.appendSignalRecord!("e1", Paid.id, {
+      id: queuedRecord.id,
+      payload: queuedRecord.payload,
+      receivedAt: queuedRecord.receivedAt,
+    });
+    await store.enqueueQueuedSignalRecord!("e1", Paid.id, queuedRecord);
+
+    await expect(ctx.waitForSignal(Paid)).resolves.toEqual({ paidAt: 7 });
+    expect(
+      (await store.getStepResult("e1", "__signal:durable-tests-paid"))?.result,
+    ).toEqual({ state: "completed", payload: { paidAt: 7 } });
+    expect((await store.getSignalState!("e1", Paid.id))?.queued).toEqual([]);
+    expect((await store.getSignalState!("e1", Paid.id))?.history).toHaveLength(
+      1,
+    );
+  });
+
+  it("consumes the pending queued signal for explicit signal step ids", async () => {
+    const { store, ctx } = createContext();
+    const queuedRecord = {
+      id: "sig-explicit",
+      payload: { paidAt: 9 },
+      receivedAt: new Date(),
+      serializedPayload: JSON.stringify({ paidAt: 9 }),
+    };
+    await store.appendSignalRecord!("e1", Paid.id, {
+      id: queuedRecord.id,
+      payload: { paidAt: 9 },
+      receivedAt: queuedRecord.receivedAt,
+    });
+    await store.enqueueQueuedSignalRecord!("e1", Paid.id, queuedRecord);
+
+    await expect(
+      ctx.waitForSignal(Paid, { stepId: "stable-paid" }),
+    ).resolves.toEqual({ paidAt: 9 });
+    expect(
+      (await store.getStepResult("e1", "__signal:stable-paid"))?.result,
+    ).toEqual({
+      state: "completed",
+      signalId: Paid.id,
+      payload: { paidAt: 9 },
+    });
+    expect((await store.getSignalState!("e1", Paid.id))?.queued).toEqual([]);
+  });
+
+  it("rejects an explicit signal step replay when the persisted signal id changed", async () => {
+    const { store, ctx } = createContext();
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:stable-paid",
+      result: {
+        state: "completed",
+        signalId: Paid.id,
+        payload: { paidAt: 9 },
+      },
+      completedAt: new Date(),
+    });
+
+    await expect(
+      ctx.waitForSignal(Refunded, { stepId: "stable-paid" }),
+    ).rejects.toThrow("Invalid signal step state");
+  });
+
+  it("throws when waitForSignal() cannot access pending signal journal state", async () => {
+    const base = new MemoryStore();
+    const storeWithoutPendingConsumer: IDurableStore = createBareStore(base, {
+      consumeQueuedSignalRecord: undefined,
+    });
+    const bus = new MemoryEventBus();
+    const ctx = new DurableContext(storeWithoutPendingConsumer, bus, "e1", 1);
+
+    await expect(ctx.waitForSignal(Paid)).rejects.toThrow(
+      "consumeQueuedSignalRecord",
+    );
+  });
+
+  it("throws when waitForSignal() uses an undeclared signal", async () => {
+    const { ctx } = createContext("e1", 1, new MemoryStore(), {
+      declaredSignalIds: new Set(["another-signal"]),
+    });
+
+    await expect(ctx.waitForSignal(Paid)).rejects.toThrow(
+      "not declared in durableWorkflow.signals",
+    );
+  });
+
+  it("allows waitForSignal() when the signal is declared", async () => {
+    const { store, ctx } = createContext("e1", 1, new MemoryStore(), {
+      declaredSignalIds: new Set([Paid.id]),
+    });
+
+    await expect(ctx.waitForSignal(Paid)).rejects.toBeInstanceOf(
+      SuspensionSignal,
+    );
+    expect(
+      (await store.getStepResult("e1", "__signal:durable-tests-paid"))?.result,
+    ).toEqual(expect.objectContaining({ state: "waiting", signalId: Paid.id }));
+  });
+
   it("suspends again when signal is still waiting (replay branch)", async () => {
     const { store, ctx } = createContext();
 
@@ -516,24 +630,7 @@ describe("durable: DurableContext", () => {
   it("fails fast when waitForSignal() uses stepId but the store cannot list steps", async () => {
     const base = new MemoryStore();
 
-    const storeNoList: IDurableStore = {
-      saveExecution: base.saveExecution.bind(base),
-      getExecution: base.getExecution.bind(base),
-      updateExecution: base.updateExecution.bind(base),
-      listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
-      getStepResult: base.getStepResult.bind(base),
-      saveStepResult: base.saveStepResult.bind(base),
-      createTimer: base.createTimer.bind(base),
-      getReadyTimers: base.getReadyTimers.bind(base),
-      markTimerFired: base.markTimerFired.bind(base),
-      deleteTimer: base.deleteTimer.bind(base),
-      createSchedule: base.createSchedule.bind(base),
-      getSchedule: base.getSchedule.bind(base),
-      updateSchedule: base.updateSchedule.bind(base),
-      deleteSchedule: base.deleteSchedule.bind(base),
-      listSchedules: base.listSchedules.bind(base),
-      listActiveSchedules: base.listActiveSchedules.bind(base),
-    };
+    const storeNoList: IDurableStore = createBareStore(base);
 
     const { ctx } = createContext("e1", 1, storeNoList);
 
@@ -545,27 +642,11 @@ describe("durable: DurableContext", () => {
   it("throws when waitForSignal() cannot acquire the signal lock", async () => {
     const base = new MemoryStore();
 
-    const storeLocked: IDurableStore = {
-      saveExecution: base.saveExecution.bind(base),
-      getExecution: base.getExecution.bind(base),
-      updateExecution: base.updateExecution.bind(base),
-      listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
-      getStepResult: base.getStepResult.bind(base),
-      saveStepResult: base.saveStepResult.bind(base),
-      createTimer: base.createTimer.bind(base),
-      getReadyTimers: base.getReadyTimers.bind(base),
-      markTimerFired: base.markTimerFired.bind(base),
-      deleteTimer: base.deleteTimer.bind(base),
-      createSchedule: base.createSchedule.bind(base),
-      getSchedule: base.getSchedule.bind(base),
-      updateSchedule: base.updateSchedule.bind(base),
-      deleteSchedule: base.deleteSchedule.bind(base),
-      listSchedules: base.listSchedules.bind(base),
-      listActiveSchedules: base.listActiveSchedules.bind(base),
+    const storeLocked: IDurableStore = createBareStore(base, {
       listStepResults: base.listStepResults.bind(base),
       acquireLock: async () => null,
       releaseLock: async () => {},
-    };
+    });
 
     const { ctx } = createContext("e1", 1, storeLocked);
 

@@ -4,6 +4,7 @@ import type {
   DurableStartAndWaitResult,
   ExecuteOptions,
   IDurableService,
+  StartAndWaitOptions,
 } from "./service";
 import type { DurableOperator } from "../DurableOperator";
 import type { DurableFlowShape } from "../flowShape";
@@ -37,12 +38,12 @@ export interface IDurableResource extends Pick<
   startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
   startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
 
   /**

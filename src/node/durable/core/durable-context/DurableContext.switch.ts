@@ -25,7 +25,7 @@ interface SwitchStepResult<TResult> {
 export async function switchDurably<TValue, TResult>(params: {
   store: IDurableStore;
   executionId: string;
-  assertNotCancelled: () => Promise<void>;
+  assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
   assertUniqueStepId: (stepId: string) => void;
   stepId: string;
@@ -33,7 +33,7 @@ export async function switchDurably<TValue, TResult>(params: {
   branches: SwitchBranch<TValue, TResult>[];
   defaultBranch?: Omit<SwitchBranch<TValue, TResult>, "match">;
 }): Promise<TResult> {
-  await params.assertNotCancelled();
+  await params.assertCanContinue();
 
   params.assertUniqueStepId(params.stepId);
 

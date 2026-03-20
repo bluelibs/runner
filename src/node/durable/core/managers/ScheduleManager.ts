@@ -1,5 +1,8 @@
 import type { IDurableStore } from "../interfaces/store";
-import type { ScheduleOptions } from "../interfaces/service";
+import type {
+  EnsureScheduleOptions,
+  ScheduleOptions,
+} from "../interfaces/service";
 import {
   ScheduleStatus,
   ScheduleType,
@@ -9,6 +12,7 @@ import {
 } from "../types";
 import { CronParser } from "../CronParser";
 import { createExecutionId, sleepMs } from "../utils";
+import { withStoreLock } from "../locking";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ITask } from "../../../../types/task";
 import {
@@ -32,7 +36,7 @@ export class ScheduleManager {
   async ensureSchedule(
     taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
     input: unknown,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string> {
     if (!options.cron && options.interval === undefined) {
       durableScheduleConfigError.throw({
@@ -45,77 +49,57 @@ export class ScheduleManager {
 
     const scheduleId = options.id;
 
-    const lockTtlMs = 10_000;
-    const lockResource = `schedule:${scheduleId}`;
-    const canLock = !!this.store.acquireLock && !!this.store.releaseLock;
-
-    let lockId: string | null = null;
-    if (canLock) {
-      const maxAttempts = 20;
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        lockId = await this.store.acquireLock!(lockResource, lockTtlMs);
-        if (lockId !== null) break;
-        await sleepMs(5);
-      }
-      if (lockId === null) {
+    return await withStoreLock({
+      store: this.store,
+      resource: `schedule:${scheduleId}`,
+      ttlMs: 10_000,
+      maxAttempts: 20,
+      retryDelayMs: 5,
+      sleep: sleepMs,
+      onLockUnavailable: () =>
         durableScheduleConfigError.throw({
           message: `Failed to acquire schedule lock for '${scheduleId}'`,
-        });
-      }
-    }
+        }),
+      fn: async () => {
+        const existing = await this.store.getSchedule(scheduleId);
 
-    try {
-      const existing = await this.store.getSchedule(scheduleId);
+        const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
+        const pattern = options.cron ?? String(options.interval);
 
-      const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
-      const pattern = options.cron ?? String(options.interval);
+        if (existing) {
+          if (existing.taskId !== task.id) {
+            durableScheduleConfigError.throw({
+              message: `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${task.id}'`,
+            });
+          }
 
-      if (existing) {
-        if (existing.taskId !== task.id) {
-          durableScheduleConfigError.throw({
-            message: `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${task.id}'`,
+          await this.reschedule({
+            ...existing,
+            type,
+            pattern,
+            input,
+            status: ScheduleStatus.Active,
+            updatedAt: new Date(),
           });
+
+          return scheduleId;
         }
 
-        await this.store.updateSchedule(scheduleId, {
-          type,
-          pattern,
+        const schedule: Schedule = {
+          id: scheduleId,
+          taskId: task.id,
           input,
+          pattern,
+          type,
           status: ScheduleStatus.Active,
+          createdAt: new Date(),
           updatedAt: new Date(),
-        });
+        };
 
-        const updated = await this.store.getSchedule(scheduleId);
-        if (updated) {
-          await this.reschedule(updated);
-        }
-
+        await this.reschedule(schedule);
         return scheduleId;
-      }
-
-      const schedule: Schedule = {
-        id: scheduleId,
-        taskId: task.id,
-        input,
-        pattern,
-        type,
-        status: ScheduleStatus.Active,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await this.store.createSchedule(schedule);
-      await this.reschedule(schedule);
-      return scheduleId;
-    } finally {
-      if (canLock && lockId !== null) {
-        try {
-          await this.store.releaseLock!(lockResource, lockId);
-        } catch {
-          // best-effort cleanup; ignore
-        }
-      }
-    }
+      },
+    });
   }
 
   async schedule(
@@ -140,7 +124,6 @@ export class ScheduleManager {
         updatedAt: new Date(),
       };
 
-      await this.store.createSchedule(schedule);
       await this.reschedule(schedule);
       return id;
     }
@@ -165,9 +148,8 @@ export class ScheduleManager {
     options?: { lastRunAt?: Date },
   ): Promise<void> {
     const nextRun = this.computeNextRun(schedule);
-    await this.armScheduleTimer(schedule, nextRun);
-
-    await this.store.updateSchedule(schedule.id, {
+    await this.saveScheduleWithTimer({
+      ...schedule,
       lastRun: options?.lastRunAt,
       nextRun,
       updatedAt: new Date(),
@@ -183,14 +165,10 @@ export class ScheduleManager {
     if (!schedule) return;
     if (schedule.status === ScheduleStatus.Active) return;
 
-    await this.store.updateSchedule(id, {
-      status: ScheduleStatus.Active,
-      updatedAt: new Date(),
-    });
-
     await this.reschedule({
       ...schedule,
       status: ScheduleStatus.Active,
+      updatedAt: new Date(),
     });
   }
 
@@ -231,14 +209,13 @@ export class ScheduleManager {
       this.computeNextRun(updatedSchedule);
     }
 
-    await this.store.updateSchedule(id, {
-      type,
-      pattern,
-      input,
-      updatedAt,
-    });
-
     if (existing.status !== ScheduleStatus.Active) {
+      await this.store.updateSchedule(id, {
+        type,
+        pattern,
+        input,
+        updatedAt,
+      });
       return;
     }
 
@@ -248,8 +225,19 @@ export class ScheduleManager {
     }
 
     if (existing.nextRun) {
-      await this.armScheduleTimer(updatedSchedule, existing.nextRun);
+      await this.saveScheduleWithTimer({
+        ...updatedSchedule,
+        nextRun: existing.nextRun,
+      });
+      return;
     }
+
+    await this.store.updateSchedule(id, {
+      type,
+      pattern,
+      input,
+      updatedAt,
+    });
   }
 
   private computeNextRun(schedule: Schedule): Date {
@@ -266,17 +254,21 @@ export class ScheduleManager {
     return new Date(Date.now() + intervalMs);
   }
 
-  private async armScheduleTimer(
-    schedule: Schedule,
-    fireAt: Date,
-  ): Promise<void> {
-    await this.store.createTimer({
+  private async saveScheduleWithTimer(schedule: Schedule): Promise<void> {
+    const nextRun = schedule.nextRun!;
+    if (!nextRun) {
+      durableExecutionInvariantError.throw({
+        message: `Schedule '${schedule.id}' must have nextRun before arming its timer.`,
+      });
+    }
+
+    await this.store.saveScheduleWithTimer(schedule, {
       id: `sched:${schedule.id}`,
       scheduleId: schedule.id,
       taskId: schedule.taskId,
       input: schedule.input,
       type: TimerType.Scheduled,
-      fireAt,
+      fireAt: nextRun,
       status: TimerStatus.Pending,
     });
   }

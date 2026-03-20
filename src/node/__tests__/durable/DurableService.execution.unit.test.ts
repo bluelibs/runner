@@ -460,7 +460,7 @@ describe("durable: DurableService — execution (unit)", () => {
     }
   });
 
-  it("continues processing when lock renewal rejects during heartbeat", async () => {
+  it("stops short of completion when lock renewal rejects during heartbeat", async () => {
     jest.useFakeTimers();
 
     try {
@@ -489,6 +489,9 @@ describe("durable: DurableService — execution (unit)", () => {
       await advanceTimers(35_000);
       await expect(processing).resolves.toBeUndefined();
       expect(renewLockSpy).toHaveBeenCalled();
+      expect((await store.getExecution("e-renew-reject"))?.status).toBe(
+        "running",
+      );
     } finally {
       jest.useRealTimers();
     }
@@ -514,7 +517,7 @@ describe("durable: DurableService — execution (unit)", () => {
     expect((await base.getExecution("e1"))?.status).toBe("completed");
   });
 
-  it("ignores lock-renewal heartbeat failures", async () => {
+  it("does not mark execution completed after lock-renewal heartbeat failures", async () => {
     jest.useFakeTimers();
 
     try {
@@ -538,7 +541,7 @@ describe("durable: DurableService — execution (unit)", () => {
       await advanceTimers(12_000);
       await processing;
 
-      expect((await store.getExecution("e1"))?.status).toBe("completed");
+      expect((await store.getExecution("e1"))?.status).toBe("running");
     } finally {
       jest.useRealTimers();
     }
@@ -569,10 +572,55 @@ describe("durable: DurableService — execution (unit)", () => {
 
     await expect(
       service.startAndWait(task, undefined, {
-        timeout: 20,
+        waitTimeout: 20,
         waitPollIntervalMs: 5,
       }),
     ).rejects.toBeInstanceOf(DurableExecutionError);
+  });
+
+  it("passes waitTimeout separately from execution timeout", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-wait-timeout-separation");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+      tasks: [task],
+    });
+
+    const executionManager = service._executionManager as unknown as {
+      start: typeof service._executionManager.start;
+      waitManager: {
+        waitForResult: (
+          executionId: string,
+          options?: { timeout?: number; waitPollIntervalMs?: number },
+        ) => Promise<string>;
+      };
+    };
+    const start = jest.spyOn(executionManager, "start").mockResolvedValue("e1");
+    const waitForResult = jest
+      .spyOn(executionManager.waitManager, "waitForResult")
+      .mockResolvedValue("ok");
+
+    await expect(
+      service.startAndWait(task, undefined, {
+        timeout: 111,
+        waitTimeout: 222,
+        waitPollIntervalMs: 7,
+      }),
+    ).resolves.toEqual({
+      durable: { executionId: "e1" },
+      data: "ok",
+    });
+
+    expect(start).toHaveBeenCalledWith(task, undefined, {
+      timeout: 111,
+      waitTimeout: 222,
+      waitPollIntervalMs: 7,
+    });
+    expect(waitForResult).toHaveBeenCalledWith("e1", {
+      timeout: 222,
+      waitPollIntervalMs: 7,
+    });
   });
 
   it("covers timeout and non-Error failure shapes", async () => {
@@ -712,7 +760,7 @@ describe("durable: DurableService — execution (unit)", () => {
     ).rejects.toBeInstanceOf(DurableExecutionError);
   });
 
-  it("recovers incomplete executions", async () => {
+  it("recovers only running executions when a queue is configured", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
     const task = okTask("t-ok");
@@ -748,6 +796,7 @@ describe("durable: DurableService — execution (unit)", () => {
       { type: "execute", payload: { executionId: "p" } },
       { type: "execute", payload: { executionId: "r" } },
       { type: "execute", payload: { executionId: "s" } },
+      { type: "execute", payload: { executionId: "x" } },
     ]);
   });
 });

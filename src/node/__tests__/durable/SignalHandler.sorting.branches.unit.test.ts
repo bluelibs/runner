@@ -2,6 +2,7 @@ import { defineEvent } from "../../..";
 import { DurableService } from "../../durable/core/DurableService";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { SpyQueue, sleepingExecution } from "./DurableService.unit.helpers";
+import { createSignalWaiterSortKey } from "../../durable/core/signalWaiters";
 
 const Paid = defineEvent<{ paidAt: number }>({ id: "paid" });
 
@@ -17,6 +18,12 @@ describe("durable: SignalHandler sorting branch coverage", () => {
       stepId: "__signal:paid:foo",
       result: { state: "waiting", signalId: "paid" },
       completedAt: new Date(),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid:foo",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid:foo"),
     });
 
     await service.signal("e1", Paid, { paidAt: 1 });
@@ -43,6 +50,18 @@ describe("durable: SignalHandler sorting branch coverage", () => {
       stepId: "__signal:paid:01",
       result: { state: "waiting", signalId: "paid" },
       completedAt: new Date(),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid:1",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid:1"),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid:01",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid:01"),
     });
 
     await service.signal("e1", Paid, { paidAt: 2 });

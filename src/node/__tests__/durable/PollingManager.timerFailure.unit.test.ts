@@ -14,7 +14,8 @@ import {
 } from "../../durable/core/managers";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { genericError } from "../../../errors";
-import { Logger } from "../../../models/Logger";
+import { Logger, type ILog } from "../../../models/Logger";
+import { sleepingExecution } from "./DurableService.unit.helpers";
 
 class ThrowingQueue implements IDurableQueue {
   async enqueue<T>(
@@ -83,5 +84,56 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
 
     const timers = await futureTimers(store);
     expect(timers).toEqual([expect.objectContaining({ id: timer.id })]);
+  });
+
+  it("keeps signal-timeout timers pending when the step id cannot resolve a signal id", async () => {
+    const store = new MemoryStore();
+    const logs: ILog[] = [];
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    logger.onLog((log) => {
+      logs.push(log);
+    });
+    const service = new DurableService({ store, tasks: [], logger });
+
+    await store.saveExecution(sleepingExecution());
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+
+    const timer: Timer = {
+      id: "t-invalid-signal-timeout",
+      executionId: "e1",
+      stepId: "__signal:",
+      type: TimerType.SignalTimeout,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    await service.handleTimer(timer);
+
+    expect(
+      (await futureTimers(store)).some(
+        (readyTimer) => readyTimer.id === timer.id,
+      ),
+    ).toBe(true);
+    expect((await store.getStepResult("e1", "__signal:"))?.result).toEqual({
+      state: "waiting",
+    });
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Durable timer handling failed.",
+        }),
+      ]),
+    );
   });
 });

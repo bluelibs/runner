@@ -7,7 +7,7 @@ import { TimerStatus, TimerType } from "../types";
 export async function sleepDurably(params: {
   store: IDurableStore;
   executionId: string;
-  assertNotCancelled: () => Promise<void>;
+  assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
   assertUniqueStepId: (stepId: string) => void;
   assertOrWarnImplicitInternalStepId: (
@@ -17,7 +17,7 @@ export async function sleepDurably(params: {
   durationMs: number;
   options?: SleepOptions;
 }): Promise<void> {
-  await params.assertNotCancelled();
+  await params.assertCanContinue();
 
   let sleepStepId: string;
 

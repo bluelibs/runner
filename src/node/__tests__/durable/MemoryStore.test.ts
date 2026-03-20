@@ -1,5 +1,6 @@
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { ExecutionStatus } from "../../durable/core/types";
+import { createSignalWaiterSortKey } from "../../durable/core/signalWaiters";
 
 describe("durable: MemoryStore", () => {
   it("supports execution idempotency key mapping", async () => {
@@ -241,6 +242,16 @@ describe("durable: MemoryStore", () => {
     expect(firstClaim).toBe(true);
     expect(secondClaim).toBe(false);
 
+    await expect(
+      store.renewTimerClaim("missing", "worker-1", 1000),
+    ).resolves.toBe(false);
+    await expect(store.renewTimerClaim("t1", "worker-1", 1000)).resolves.toBe(
+      true,
+    );
+    await expect(store.renewTimerClaim("t1", "worker-2", 1000)).resolves.toBe(
+      false,
+    );
+
     await store.createSchedule({
       id: "s1",
       taskId: "t1",
@@ -274,5 +285,251 @@ describe("durable: MemoryStore", () => {
     expect(await store.acquireLock("res", 1000)).toBeNull();
     await store.releaseLock("res", "wrong");
     await store.releaseLock("res", lockId!);
+  });
+
+  it("returns null when no signal waiter exists", async () => {
+    const store = new MemoryStore();
+
+    await expect(
+      store.takeNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
+  });
+
+  it("returns null when a waiter bucket exists but no waiter can be selected", async () => {
+    const store = new MemoryStore();
+    const emptyBucket = {
+      size: 1,
+      values: function* () {},
+      delete: jest.fn(),
+    };
+
+    (
+      store as unknown as {
+        signalWaiters: Map<string, Map<string, typeof emptyBucket>>;
+      }
+    ).signalWaiters = new Map([["e1", new Map([["paid", emptyBucket]])]]);
+
+    await expect(store.takeNextSignalWaiter("e1", "paid")).resolves.toBeNull();
+  });
+
+  it("ignores deleteSignalWaiter() when no waiter bucket exists", async () => {
+    const store = new MemoryStore();
+
+    await expect(
+      store.deleteSignalWaiter("e1", "paid", "__signal:paid"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps other signal buckets when deleting the final waiter for one signal", async () => {
+    const store = new MemoryStore();
+
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "shipped",
+      stepId: "__signal:shipped",
+      sortKey: createSignalWaiterSortKey("shipped", "__signal:shipped"),
+    });
+
+    await store.deleteSignalWaiter("e1", "paid", "__signal:paid");
+
+    await expect(store.takeNextSignalWaiter("e1", "paid")).resolves.toBeNull();
+    await expect(store.takeNextSignalWaiter("e1", "shipped")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "shipped",
+      stepId: "__signal:shipped",
+      sortKey: createSignalWaiterSortKey("shipped", "__signal:shipped"),
+    });
+  });
+
+  it("removes the execution waiter bucket when deleting the final waiter overall", async () => {
+    const store = new MemoryStore();
+
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+
+    await store.deleteSignalWaiter("e1", "paid", "__signal:paid");
+
+    expect(
+      (
+        store as unknown as {
+          signalWaiters: Map<string, Map<string, unknown>>;
+        }
+      ).signalWaiters.has("e1"),
+    ).toBe(false);
+  });
+
+  it("removes the execution waiter bucket when taking the final waiter overall", async () => {
+    const store = new MemoryStore();
+
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+
+    await expect(store.takeNextSignalWaiter("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+    expect(
+      (
+        store as unknown as {
+          signalWaiters: Map<string, Map<string, unknown>>;
+        }
+      ).signalWaiters.has("e1"),
+    ).toBe(false);
+  });
+
+  it("keeps the execution waiter bucket when taking the final waiter for one of multiple signals", async () => {
+    const store = new MemoryStore();
+
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "shipped",
+      stepId: "__signal:shipped",
+      sortKey: createSignalWaiterSortKey("shipped", "__signal:shipped"),
+    });
+
+    await expect(store.takeNextSignalWaiter("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+    expect(
+      (
+        store as unknown as {
+          signalWaiters: Map<string, Map<string, unknown>>;
+        }
+      ).signalWaiters.has("e1"),
+    ).toBe(true);
+    await expect(store.takeNextSignalWaiter("e1", "shipped")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "shipped",
+      stepId: "__signal:shipped",
+      sortKey: createSignalWaiterSortKey("shipped", "__signal:shipped"),
+    });
+  });
+
+  it("stores signal history separately from the queued signal records", async () => {
+    const store = new MemoryStore();
+    const record = {
+      id: "sig-1",
+      payload: { paidAt: 1 },
+      receivedAt: new Date(),
+    };
+    const queuedRecord = {
+      ...record,
+      serializedPayload: JSON.stringify(record.payload),
+    };
+
+    await expect(store.getSignalState("e1", "paid")).resolves.toBeNull();
+
+    await store.appendSignalRecord("e1", "paid", record);
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid", queuedRecord),
+    ).resolves.toBe("enqueued");
+    await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [queuedRecord],
+      history: [record],
+    });
+
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid", queuedRecord),
+    ).resolves.toBe("deduped");
+
+    await expect(
+      store.consumeQueuedSignalRecord("e1", "paid"),
+    ).resolves.toEqual(record);
+    await expect(
+      store.consumeQueuedSignalRecord("e1", "paid"),
+    ).resolves.toBeNull();
+
+    expect((await store.getSignalState("e1", "paid"))?.queued).toEqual([]);
+  });
+
+  it("dedupes queued signal records with the same serialized payload", async () => {
+    const store = new MemoryStore();
+    const queuedRecord = {
+      id: "sig-1",
+      payload: { paidAt: 1 },
+      receivedAt: new Date(),
+      serializedPayload: JSON.stringify({ paidAt: 1 }),
+    };
+
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid", queuedRecord),
+    ).resolves.toBe("enqueued");
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid", {
+        ...queuedRecord,
+        id: "sig-2",
+      }),
+    ).resolves.toBe("deduped");
+    expect((await store.getSignalState("e1", "paid"))?.queued).toHaveLength(1);
+  });
+
+  it("orders and deletes signal waiters by sort key", async () => {
+    const store = new MemoryStore();
+
+    await store.upsertSignalWaiter?.({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:stable-paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:stable-paid"),
+    });
+    await store.upsertSignalWaiter?.({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid:2",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid:2"),
+    });
+    await store.upsertSignalWaiter?.({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+      timerId: "timer-1",
+    });
+
+    await store.deleteSignalWaiter?.("e1", "paid", "__signal:paid:2");
+
+    await expect(store.takeNextSignalWaiter?.("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+      timerId: "timer-1",
+    });
+    await expect(store.takeNextSignalWaiter?.("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:stable-paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:stable-paid"),
+    });
+    await expect(
+      store.takeNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
   });
 });

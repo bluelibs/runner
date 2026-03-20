@@ -5,33 +5,14 @@ import { DurableResource } from "../../durable/core/DurableResource";
 import { DurableService } from "../../durable/core/DurableService";
 import type { Schedule, Timer } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createBareStore } from "./DurableService.unit.helpers";
 
 function futureTimers(store: IDurableStore): Promise<Timer[]> {
   return store.getReadyTimers(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
 }
 
 function createNoLockStore(base: MemoryStore): IDurableStore {
-  return {
-    saveExecution: base.saveExecution.bind(base),
-    getExecution: base.getExecution.bind(base),
-    updateExecution: base.updateExecution.bind(base),
-    listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
-
-    getStepResult: base.getStepResult.bind(base),
-    saveStepResult: base.saveStepResult.bind(base),
-
-    createTimer: base.createTimer.bind(base),
-    getReadyTimers: base.getReadyTimers.bind(base),
-    markTimerFired: base.markTimerFired.bind(base),
-    deleteTimer: base.deleteTimer.bind(base),
-
-    createSchedule: base.createSchedule.bind(base),
-    getSchedule: base.getSchedule.bind(base),
-    updateSchedule: base.updateSchedule.bind(base),
-    deleteSchedule: base.deleteSchedule.bind(base),
-    listSchedules: base.listSchedules.bind(base),
-    listActiveSchedules: base.listActiveSchedules.bind(base),
-  };
+  return createBareStore(base);
 }
 
 describe("ensureSchedule()", () => {
@@ -127,6 +108,31 @@ describe("ensureSchedule()", () => {
     await expect(
       service.ensureSchedule(task, undefined, { id: "s1", interval: 1000 }),
     ).resolves.toBe("s1");
+  });
+
+  it("fails fast when schedule timer arming is attempted without nextRun", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const scheduleManager = (
+      service as unknown as {
+        scheduleManager: {
+          saveScheduleWithTimer: (schedule: Schedule) => Promise<void>;
+        };
+      }
+    ).scheduleManager;
+
+    await expect(
+      scheduleManager.saveScheduleWithTimer({
+        id: "s-missing-next-run",
+        taskId: "t-missing-next-run",
+        input: undefined,
+        pattern: "1000",
+        type: "interval",
+        status: "active",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as Schedule),
+    ).rejects.toThrow("must have nextRun before arming its timer");
   });
 
   it("fails fast when the schedule lock cannot be acquired", async () => {

@@ -1,4 +1,4 @@
-import { defineResource, r, run } from "../../..";
+import { defineEvent, defineResource, r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 
@@ -11,12 +11,14 @@ const fakeRpcLanesState = defineResource({
 });
 
 describe("eventLanes applyTo cross-source topology checks", () => {
-  it("detects rpc lane assignment from string applyTo ids in topology state", async () => {
-    const event = r.event("cross-event").build();
+  it("does not treat non-canonical rpc applyTo string ids in topology state as matches", async () => {
+    const event = defineEvent({
+      id: "cross-event",
+    });
     const lane = r.eventLane("cross-lane").applyTo([event]).build();
-    const app = r
-      .resource("cross-app")
-      .register([
+    const app = defineResource({
+      id: "cross-app",
+      register: [
         event,
         fakeRpcLanesState.with({
           topology: {
@@ -36,12 +38,11 @@ describe("eventLanes applyTo cross-source topology checks", () => {
             bindings: [],
           },
         }),
-      ])
-      .build();
+      ],
+    });
 
-    await expect(run(app)).rejects.toThrow(
-      /Event ".*cross-event" cannot be assigned to eventLane "cross-lane" because it is already assigned to an rpcLane\./,
-    );
+    const runtime = await run(app);
+    await runtime.dispose();
   });
 
   it("ignores non-event rpc applyTo entries while collecting cross-lane assignments", async () => {

@@ -1,6 +1,10 @@
 import type {
   Execution,
   ExecutionStatus,
+  DurableSignalRecord,
+  DurableQueuedSignalRecord,
+  DurableSignalState,
+  DurableSignalWaiter,
   StepResult,
   Timer,
   Schedule,
@@ -61,6 +65,42 @@ export interface IDurableStore {
     stepId: string,
   ): Promise<StepResult | null>;
   saveStepResult(result: StepResult): Promise<void>;
+  /**
+   * Signal journaling is part of the core durable contract because live
+   * delivery and `waitForSignal()` both rely on it.
+   */
+  getSignalState(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalState | null>;
+  appendSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableSignalRecord,
+  ): Promise<void>;
+  enqueueQueuedSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableQueuedSignalRecord,
+  ): Promise<"enqueued" | "deduped">;
+  consumeQueuedSignalRecord(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalRecord | null>;
+  /**
+   * Signal waiter indexing is part of the core durable contract.
+   * `waitForSignal()` and live signal delivery rely on deterministic waiter ordering.
+   */
+  upsertSignalWaiter(waiter: DurableSignalWaiter): Promise<void>;
+  takeNextSignalWaiter(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalWaiter | null>;
+  deleteSignalWaiter(
+    executionId: string,
+    signalId: string,
+    stepId: string,
+  ): Promise<void>;
 
   createTimer(timer: Timer): Promise<void>;
   getReadyTimers(now?: Date): Promise<Timer[]>;
@@ -77,11 +117,25 @@ export interface IDurableStore {
     workerId: string,
     ttlMs: number,
   ): Promise<boolean>;
+  /**
+   * Renews an active timer claim when the same worker is still handling it.
+   * Allows long-running timer handlers to retain ownership until they finish.
+   */
+  renewTimerClaim?(
+    timerId: string,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<boolean>;
   deleteTimer(timerId: string): Promise<void>;
 
   createSchedule(schedule: Schedule): Promise<void>;
   getSchedule(id: string): Promise<Schedule | null>;
   updateSchedule(id: string, updates: Partial<Schedule>): Promise<void>;
+  /**
+   * Atomically persists the active schedule record together with its current
+   * pending timer so recurring schedule state cannot diverge mid-update.
+   */
+  saveScheduleWithTimer(schedule: Schedule, timer: Timer): Promise<void>;
   deleteSchedule(id: string): Promise<void>;
   listSchedules(): Promise<Schedule[]>;
   listActiveSchedules(): Promise<Schedule[]>;

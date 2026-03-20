@@ -1,21 +1,36 @@
 import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
 import type { IEventDefinition } from "../../../../types/event";
+import type { ITask } from "../../../../types/task";
+import type { IValidationSchema } from "../../../../defs";
+import { Serializer } from "../../../../serializer";
 import type { AuditLogger } from "./AuditLogger";
 import { DurableAuditEntryKind } from "../audit";
-import { ExecutionStatus } from "../types";
-import { isRecord, sleepMs, parseSignalState } from "../utils";
-import { durableExecutionInvariantError } from "../../../../errors";
+import { requireSignalJournalStore } from "../signalJournal";
+import {
+  type DurableSignalRecord,
+  type DurableSignalWaiter,
+  ExecutionStatus,
+} from "../types";
+import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.tag";
+import { isMatchError } from "../../../../tools/check";
+import {
+  createExecutionId,
+  shouldPersistStableSignalId,
+  parseSignalState,
+} from "../utils";
+import { withSignalLock } from "../signalWaiters";
+import {
+  durableExecutionInvariantError,
+  validationError,
+} from "../../../../errors";
 
 export interface SignalHandlerCallbacks {
   processExecution: (executionId: string) => Promise<void>;
+  resolveTask: (
+    taskId: string,
+  ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
 }
-
-type WaitingSignalResult = {
-  state: "waiting";
-  signalId: string;
-  timerId?: string;
-};
 
 const isTerminalExecutionStatus = (status: ExecutionStatus): boolean =>
   status === ExecutionStatus.Completed ||
@@ -23,20 +38,40 @@ const isTerminalExecutionStatus = (status: ExecutionStatus): boolean =>
   status === ExecutionStatus.CompensationFailed ||
   status === ExecutionStatus.Cancelled;
 
-const isWaitingSignalStep = (step: {
+const isValidationSchema = <TPayload>(
+  value: IEventDefinition<TPayload>["payloadSchema"],
+): value is IValidationSchema<TPayload> =>
+  typeof value === "object" &&
+  value !== null &&
+  "parse" in value &&
+  typeof value.parse === "function";
+
+function validateSignalWaiterState(params: {
+  signalId: string;
   stepId: string;
   result: unknown;
-}): step is { stepId: string; result: WaitingSignalResult } => {
-  const result = step.result;
-  if (!isRecord(result)) return false;
-  const waitResult = result as WaitingSignalResult;
-  if (waitResult.state !== "waiting") return false;
-  if (typeof waitResult.signalId !== "string") return false;
-  if (waitResult.timerId !== undefined) {
-    if (typeof waitResult.timerId !== "string") return false;
+}): { timerId?: string } {
+  const state = parseSignalState(params.result);
+  if (!state) {
+    return durableExecutionInvariantError.throw({
+      message: `Invalid signal step state for '${params.signalId}' at '${params.stepId}'`,
+    });
   }
-  return true;
-};
+
+  if (state.signalId !== undefined && state.signalId !== params.signalId) {
+    return durableExecutionInvariantError.throw({
+      message: `Invalid signal step state for '${params.signalId}' at '${params.stepId}'`,
+    });
+  }
+
+  if (state.state !== "waiting") {
+    return durableExecutionInvariantError.throw({
+      message: `Invalid signal waiter state for '${params.signalId}' at '${params.stepId}'`,
+    });
+  }
+
+  return { timerId: state.timerId };
+}
 
 /**
  * Delivers external signals to durable executions waiting in `DurableContext.waitForSignal()`.
@@ -48,6 +83,8 @@ const isWaitingSignalStep = (step: {
  * - trigger execution resumption (queue message or direct processing)
  */
 export class SignalHandler {
+  private readonly serializer = new Serializer();
+
   constructor(
     private readonly store: IDurableStore,
     private readonly auditLogger: AuditLogger,
@@ -56,6 +93,13 @@ export class SignalHandler {
     private readonly callbacks: SignalHandlerCallbacks,
   ) {}
 
+  private async takeWaitingSignalWaiter(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalWaiter | null> {
+    return await this.store.takeNextSignalWaiter(executionId, signalId);
+  }
+
   async signal<TPayload>(
     executionId: string,
     signal: IEventDefinition<TPayload>,
@@ -63,196 +107,108 @@ export class SignalHandler {
   ): Promise<void> {
     const signalId = signal.id;
     const baseStepId = `__signal:${signalId}`;
-
-    const maxSignalSlotsToScan = 1000;
+    const validatedPayload = this.validateSignalPayload(signal, payload);
+    const signalJournalStore = requireSignalJournalStore(
+      this.store,
+      "signal()",
+    );
 
     const deliver = async (): Promise<{
-      completedStepId: string;
+      auditStepId: string;
       shouldResume: boolean;
     } | null> => {
       const execution = await this.store.getExecution(executionId);
       if (!execution) return null;
       if (isTerminalExecutionStatus(execution.status)) return null;
+      const task = this.callbacks.resolveTask(execution.taskId);
+      const declaredSignalIds = task
+        ? getDeclaredDurableWorkflowSignalIds(task)
+        : null;
+      if (declaredSignalIds !== null && !declaredSignalIds.has(signalId)) {
+        return durableExecutionInvariantError.throw({
+          message: `Signal '${signalId}' is not declared in durableWorkflow.signals for task '${execution.taskId}'.`,
+        });
+      }
+
+      const signalRecord: DurableSignalRecord<TPayload> = {
+        id: createExecutionId(),
+        payload: validatedPayload,
+        receivedAt: new Date(),
+      };
+      const serializedPayload = this.serializer.stringify(validatedPayload);
 
       let completedStepId: string | null = null;
       let shouldResume = false;
 
-      const stepResults = await this.store.listStepResults?.(executionId);
-      if (stepResults) {
-        const waiting: Array<{ stepId: string; timerId?: string }> = [];
-        for (const step of stepResults) {
-          if (
-            step.stepId === baseStepId ||
-            step.stepId.startsWith(`${baseStepId}:`)
-          ) {
-            // Any persisted step for this signal id must be parseable so we fail
-            // fast on corruption before picking a waiter or buffering more state.
-            const state = parseSignalState(step.result);
-            if (!state) {
-              return durableExecutionInvariantError.throw({
-                message: `Invalid signal step state for '${signalId}' at '${step.stepId}'`,
-              });
-            }
-          }
-
-          if (
-            step.stepId.startsWith("__signal:") &&
-            isWaitingSignalStep(step) &&
-            step.result.signalId === signalId
-          ) {
-            waiting.push({
-              stepId: step.stepId,
-              timerId: step.result.timerId,
-            });
-          }
-        }
-
-        if (waiting.length > 0) {
-          const pickKey = (stepId: string) => {
-            if (stepId === baseStepId) {
-              return { group: 0, index: 0, stepId };
-            }
-            if (stepId.startsWith(`${baseStepId}:`)) {
-              const index = Number(stepId.slice(baseStepId.length + 1));
-              if (Number.isFinite(index)) {
-                return { group: 1, index, stepId };
-              }
-            }
-            return { group: 2, index: 0, stepId };
-          };
-
-          const compareKey = (
-            a: ReturnType<typeof pickKey>,
-            b: ReturnType<typeof pickKey>,
-          ): number => {
-            if (a.group !== b.group) return a.group - b.group;
-            if (a.group === 1) {
-              if (a.index !== b.index) return a.index - b.index;
-            }
-            return a.stepId.localeCompare(b.stepId);
-          };
-
-          let best = waiting[0];
-          let bestKey = pickKey(best.stepId);
-
-          for (let index = 1; index < waiting.length; index += 1) {
-            const candidate = waiting[index];
-            const candidateKey = pickKey(candidate.stepId);
-            if (compareKey(candidateKey, bestKey) < 0) {
-              best = candidate;
-              bestKey = candidateKey;
-            }
-          }
-
-          completedStepId = best.stepId;
-          shouldResume = true;
-          if (best.timerId) {
-            await this.store.deleteTimer(best.timerId);
-          }
-        }
-      }
-
-      if (!completedStepId) {
-        const baseSignal = await this.store.getStepResult(
+      const waiter = await this.takeWaitingSignalWaiter(executionId, signalId);
+      if (waiter) {
+        const waitingStep = await this.store.getStepResult(
           executionId,
-          baseStepId,
+          waiter.stepId,
         );
-        if (!baseSignal) {
-          completedStepId = baseStepId;
-        } else {
-          const state = parseSignalState(baseSignal.result);
-          if (!state) {
-            return durableExecutionInvariantError.throw({
-              message: `Invalid signal step state for '${signalId}' at '${baseStepId}'`,
-            });
-          }
+        if (!waitingStep) {
+          return durableExecutionInvariantError.throw({
+            message: `Invalid signal step state for '${signalId}' at '${waiter.stepId}'`,
+          });
+        }
 
-          if (state.state === "waiting") {
-            if (state.timerId) {
-              await this.store.deleteTimer(state.timerId);
-            }
-            completedStepId = baseStepId;
-            shouldResume = true;
-          }
+        const { timerId } = validateSignalWaiterState({
+          signalId,
+          stepId: waiter.stepId,
+          result: waitingStep.result,
+        });
+
+        completedStepId = waiter.stepId;
+        shouldResume = true;
+        if (timerId ?? waiter.timerId) {
+          await this.store.deleteTimer(timerId ?? waiter.timerId!);
         }
       }
 
-      if (!completedStepId) {
-        // Indexed waits are sequential for implicit signal slots. When the base
-        // slot is already consumed, the next missing numeric slot is the next
-        // implicit buffer position for back-to-back signals that arrive before
-        // user code reaches the following wait.
-        for (let index = 1; index < maxSignalSlotsToScan; index += 1) {
-          const stepId = `${baseStepId}:${index}`;
-          const existing = await this.store.getStepResult(executionId, stepId);
-
-          if (!existing) {
-            completedStepId = stepId;
-            break;
-          }
-
-          const state = parseSignalState(existing.result);
-          if (!state) {
-            return durableExecutionInvariantError.throw({
-              message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
-            });
-          }
-
-          if (state.state === "waiting") {
-            if (state.timerId) {
-              await this.store.deleteTimer(state.timerId);
-            }
-            completedStepId = stepId;
-            shouldResume = true;
-            break;
-          }
-        }
-      }
-
-      if (!completedStepId) return null;
-
-      await this.store.saveStepResult({
-        executionId,
-        stepId: completedStepId,
-        result: { state: "completed", payload },
-        completedAt: new Date(),
-      });
-
-      return { completedStepId, shouldResume };
-    };
-
-    let delivered: { completedStepId: string; shouldResume: boolean } | null;
-    const canLock = this.store.acquireLock && this.store.releaseLock;
-    if (canLock) {
-      const lockResource = `signal:${executionId}:${signalId}`;
-      const lockTtlMs = 10_000;
-      const maxLockAttempts = 20;
-
-      let lockId: string | null = null;
-      for (let attempt = 0; attempt < maxLockAttempts; attempt += 1) {
-        lockId = await this.store.acquireLock!(lockResource, lockTtlMs);
-        if (lockId !== null) break;
-        await sleepMs(5);
-      }
-
-      if (lockId === null) {
-        return durableExecutionInvariantError.throw({
-          message: `Failed to acquire signal lock for '${signalId}' on execution '${executionId}'`,
+      if (completedStepId) {
+        const completedSignalState = shouldPersistStableSignalId(
+          completedStepId,
+          signalId,
+        )
+          ? { state: "completed" as const, signalId, payload: validatedPayload }
+          : { state: "completed" as const, payload: validatedPayload };
+        await this.store.saveStepResult({
+          executionId,
+          stepId: completedStepId,
+          result: completedSignalState,
+          completedAt: new Date(),
         });
       }
 
-      try {
-        delivered = await deliver();
-      } finally {
-        try {
-          await this.store.releaseLock!(lockResource, lockId!);
-        } catch {
-          // best-effort cleanup; ignore
-        }
+      await signalJournalStore.appendSignalRecord(
+        executionId,
+        signalId,
+        signalRecord,
+      );
+
+      if (!shouldResume) {
+        await signalJournalStore.enqueueQueuedSignalRecord(
+          executionId,
+          signalId,
+          {
+            ...signalRecord,
+            serializedPayload,
+          },
+        );
       }
-    } else {
-      delivered = await deliver();
-    }
+
+      return {
+        auditStepId: completedStepId ?? baseStepId,
+        shouldResume,
+      };
+    };
+
+    const delivered = await withSignalLock({
+      store: this.store,
+      executionId,
+      signalId,
+      fn: deliver,
+    });
 
     if (!delivered) return;
 
@@ -263,7 +219,7 @@ export class SignalHandler {
       executionId,
       taskId: execution?.taskId,
       attempt,
-      stepId: delivered.completedStepId,
+      stepId: delivered.auditStepId,
       signalId,
     });
 
@@ -280,6 +236,30 @@ export class SignalHandler {
       });
     } else {
       await this.callbacks.processExecution(executionId);
+    }
+  }
+
+  private validateSignalPayload<TPayload>(
+    signal: IEventDefinition<TPayload>,
+    payload: TPayload,
+  ): TPayload {
+    if (!isValidationSchema(signal.payloadSchema)) {
+      return payload;
+    }
+
+    try {
+      return signal.payloadSchema.parse(payload);
+    } catch (error) {
+      if (isMatchError(error)) {
+        throw error;
+      }
+
+      return validationError.throw({
+        subject: "Signal payload",
+        id: signal.id,
+        originalError:
+          error instanceof Error ? error : new Error(String(error)),
+      });
     }
   }
 }

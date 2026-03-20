@@ -7,6 +7,7 @@ import type {
   Timer,
 } from "../../durable/core/types";
 import { ExecutionStatus } from "../../durable/core/types";
+import { createSignalWaiterSortKey } from "../../durable/core/signalWaiters";
 import { Serializer } from "../../../serializer";
 import type { DurableAuditEntry } from "../../durable/core/audit";
 import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
@@ -114,10 +115,17 @@ describe("durable: RedisStore", () => {
       updatedAt: new Date(),
     };
     await store.saveExecution(exec);
-    expect(redisMock.set).toHaveBeenCalled();
-    expect(redisMock.sadd).toHaveBeenCalledWith(
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("set", KEYS[1], ARGV[1])'),
+      4,
+      "durable:exec:1",
+      "durable:all_executions",
       "durable:active_executions",
+      "durable:stuck_executions",
+      expect.any(String),
       "1",
+      "1",
+      "0",
     );
 
     redisMock.get.mockResolvedValue(serializer.stringify(exec));
@@ -141,9 +149,45 @@ describe("durable: RedisStore", () => {
 
     await store.saveExecution(exec);
 
-    expect(redisMock.srem).toHaveBeenCalledWith(
+    expect(redisMock.eval).toHaveBeenLastCalledWith(
+      expect.stringContaining('redis.call("set", KEYS[1], ARGV[1])'),
+      4,
+      "durable:exec:c1",
+      "durable:all_executions",
       "durable:active_executions",
+      "durable:stuck_executions",
+      expect.any(String),
       "c1",
+      "0",
+      "0",
+    );
+  });
+
+  it("tracks compensation-failed executions as stuck", async () => {
+    const exec: Execution = {
+      id: "stuck-1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.CompensationFailed,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await store.saveExecution(exec);
+
+    expect(redisMock.eval).toHaveBeenLastCalledWith(
+      expect.stringContaining('redis.call("set", KEYS[1], ARGV[1])'),
+      4,
+      "durable:exec:stuck-1",
+      "durable:all_executions",
+      "durable:active_executions",
+      "durable:stuck_executions",
+      expect.any(String),
+      "stuck-1",
+      "0",
+      "1",
     );
   });
 
@@ -162,18 +206,56 @@ describe("durable: RedisStore", () => {
     redisMock.eval.mockResolvedValueOnce("OK");
     await store.updateExecution("1", { status: "failed" });
     expect(redisMock.eval).toHaveBeenCalled();
-    expect(redisMock.srem).toHaveBeenCalledWith(
-      "durable:active_executions",
-      "1",
-    );
 
     redisMock.get.mockResolvedValue(null);
     redisMock.eval.mockResolvedValueOnce(null);
     await store.updateExecution("ghost", { status: "failed" });
-    expect(redisMock.srem).not.toHaveBeenCalledWith(
+    expect(redisMock.eval).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates execution without touching status indexes when status is unchanged", async () => {
+    const exec: Execution = {
+      id: "no-status",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    redisMock.get.mockResolvedValue(serializer.stringify(exec));
+    redisMock.eval.mockResolvedValueOnce("OK");
+
+    await store.updateExecution("no-status", { timeout: 1234 });
+
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("set", KEYS[1], ARGV[1])'),
+      4,
+      "durable:exec:no-status",
+      "durable:all_executions",
       "durable:active_executions",
-      "ghost",
+      "durable:stuck_executions",
+      expect.any(String),
+      "no-status",
+      "1",
+      "0",
     );
+  });
+
+  it("throws a durable store error when a Lua script reports corrupted signal state", async () => {
+    redisMock.eval.mockResolvedValueOnce(
+      "__error__:Corrupted durable signal state",
+    );
+
+    await expect(
+      store.appendSignalRecord("e1", "paid", {
+        id: "sig-1",
+        payload: { paidAt: 1 },
+        receivedAt: new Date("2024-01-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow("Corrupted durable signal state");
   });
 
   it("preserves serializer marker payloads through updateExecution merge roundtrips", async () => {
@@ -202,31 +284,27 @@ describe("durable: RedisStore", () => {
         scriptUnknown: unknown,
         _numKeysUnknown: unknown,
         keyUnknown: unknown,
-        updatesUnknown: unknown,
+        _allExecutionsKeyUnknown: unknown,
+        _activeExecutionsKeyUnknown: unknown,
+        _stuckExecutionsKeyUnknown: unknown,
+        executionPayloadUnknown: unknown,
       ) => {
         const script = typeof scriptUnknown === "string" ? scriptUnknown : "";
         const key = typeof keyUnknown === "string" ? keyUnknown : "";
-        const updatesPayload =
-          typeof updatesUnknown === "string" ? updatesUnknown : "";
+        const executionPayload =
+          typeof executionPayloadUnknown === "string"
+            ? executionPayloadUnknown
+            : "";
 
         if (
-          !script.includes("cjson.decode(current)") ||
+          !script.includes('redis.call("set", KEYS[1], ARGV[1])') ||
           key.length === 0 ||
-          updatesPayload.length === 0
+          executionPayload.length === 0
         ) {
           return null;
         }
 
-        const current = redisState.get(key);
-        if (!current) return null;
-
-        const decodedCurrent = JSON.parse(current) as Record<string, unknown>;
-        const decodedUpdates = JSON.parse(updatesPayload) as Record<
-          string,
-          unknown
-        >;
-        const merged = { ...decodedCurrent, ...decodedUpdates };
-        redisState.set(key, JSON.stringify(merged));
+        redisState.set(key, executionPayload);
         return "OK";
       },
     );
@@ -282,6 +360,34 @@ describe("durable: RedisStore", () => {
     expect(results.map((e) => e.id)).toEqual(["1", "2"]);
   });
 
+  it("lists executions from the indexed execution set without SCAN fallback", async () => {
+    redisMock.sscan.mockResolvedValueOnce(["0", ["1"]]);
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        [
+          null,
+          serializer.stringify({
+            id: "1",
+            taskId: "t-indexed",
+            input: undefined,
+            status: "pending",
+            attempt: 1,
+            maxAttempts: 1,
+            createdAt: new Date("2024-01-01T00:00:00.000Z"),
+            updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+          }),
+        ],
+      ]),
+    } as any);
+
+    await expect(store.listExecutions()).resolves.toEqual([
+      expect.objectContaining({ id: "1", taskId: "t-indexed" }),
+    ]);
+    expect(redisMock.scan).not.toHaveBeenCalled();
+  });
+
   it("lists step results for dashboard", async () => {
     redisMock.scan.mockResolvedValue(["0", ["durable:step:e1:s1"]]);
     redisMock.pipeline.mockReturnValue({
@@ -312,6 +418,30 @@ describe("durable: RedisStore", () => {
     const results = await store.listStepResults("e1");
     expect(results.length).toBe(2);
     expect(results.map((s) => s.stepId)).toEqual(["s1", "s2"]);
+  });
+
+  it("prefers indexed step buckets and filters non-string hash entries", async () => {
+    redisMock.hgetall.mockResolvedValue({
+      s2: serializer.stringify({
+        executionId: "e1",
+        stepId: "s2",
+        result: 2,
+        completedAt: new Date("2024-01-02T00:00:00.000Z"),
+      }),
+      ignored: 123,
+      s1: serializer.stringify({
+        executionId: "e1",
+        stepId: "s1",
+        result: 1,
+        completedAt: new Date("2024-01-01T00:00:00.000Z"),
+      }),
+    } as any);
+
+    await expect(store.listStepResults("e1")).resolves.toEqual([
+      expect.objectContaining({ stepId: "s1" }),
+      expect.objectContaining({ stepId: "s2" }),
+    ]);
+    expect(redisMock.scan).not.toHaveBeenCalled();
   });
 
   it("appends and lists audit entries", async () => {
@@ -398,6 +528,24 @@ describe("durable: RedisStore", () => {
     await expect(store.listAuditEntries("e1")).resolves.toEqual([]);
   });
 
+  it("lists audit entries from the indexed audit bucket without SCAN fallback", async () => {
+    const entry = {
+      id: "audit-1",
+      executionId: "e1",
+      at: new Date("2024-01-01T00:00:00.000Z"),
+      attempt: 1,
+      kind: "note",
+      message: "hello",
+    } as DurableAuditEntry;
+
+    redisMock.hgetall.mockResolvedValueOnce({
+      [entry.id]: serializer.stringify(entry),
+    });
+
+    await expect(store.listAuditEntries("e1")).resolves.toEqual([entry]);
+    expect(redisMock.scan).not.toHaveBeenCalled();
+  });
+
   it("throws when Redis SCAN returns an unexpected shape", async () => {
     redisMock.sscan.mockResolvedValueOnce("bad" as any);
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
@@ -451,6 +599,19 @@ describe("durable: RedisStore", () => {
     expect(await store.getStepResult("e1", "ghost")).toBeNull();
   });
 
+  it("reads step results from the indexed step bucket before legacy keys", async () => {
+    const step = {
+      executionId: "e1",
+      stepId: "s-indexed",
+      result: { ok: true },
+      completedAt: new Date("2024-01-01T00:00:00.000Z"),
+    };
+    redisMock.hget.mockResolvedValueOnce(serializer.stringify(step));
+
+    await expect(store.getStepResult("e1", "s-indexed")).resolves.toEqual(step);
+    expect(redisMock.get).not.toHaveBeenCalled();
+  });
+
   it("lists incomplete executions", async () => {
     redisMock.sscan.mockResolvedValue(["0", ["1"]]);
     redisMock.pipeline.mockReturnValue({
@@ -491,10 +652,15 @@ describe("durable: RedisStore", () => {
 
     const listed = await store.listIncompleteExecutions();
     expect(listed.map((e) => e.id)).toEqual(["1"]);
-    expect(redisMock.srem).toHaveBeenCalledWith(
+    expect(redisMock.srem).toHaveBeenNthCalledWith(
+      1,
+      "durable:active_executions",
+      "3",
+    );
+    expect(redisMock.srem).toHaveBeenNthCalledWith(
+      2,
       "durable:active_executions",
       "2",
-      "3",
     );
   });
 
@@ -540,6 +706,34 @@ describe("durable: RedisStore", () => {
 
     redisMock.scan.mockResolvedValue(["0", []]);
     expect(await store.listStuckExecutions()).toEqual([]);
+  });
+
+  it("lists stuck executions from the indexed stuck set", async () => {
+    redisMock.sscan.mockResolvedValueOnce(["0", ["stuck-1"]]);
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        [
+          null,
+          serializer.stringify({
+            id: "stuck-1",
+            taskId: "t-stuck",
+            input: undefined,
+            status: ExecutionStatus.CompensationFailed,
+            attempt: 1,
+            maxAttempts: 1,
+            createdAt: new Date("2024-01-01T00:00:00.000Z"),
+            updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+          }),
+        ],
+      ]),
+    } as any);
+
+    await expect(store.listStuckExecutions()).resolves.toEqual([
+      expect.objectContaining({ id: "stuck-1" }),
+    ]);
+    expect(redisMock.scan).not.toHaveBeenCalled();
   });
 
   it("covers listStuckExecutions with null pipeline entries", async () => {
@@ -592,17 +786,18 @@ describe("durable: RedisStore", () => {
     redisMock.get.mockResolvedValue(serializer.stringify(exec));
 
     await store.retryRollback("1");
-    expect(redisMock.set).toHaveBeenCalledWith(
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("set", KEYS[1], ARGV[1])'),
+      4,
       "durable:exec:1",
+      "durable:all_executions",
+      "durable:active_executions",
+      "durable:stuck_executions",
       expect.any(String),
+      "1",
+      "1",
+      "0",
     );
-    const savedPayload = redisMock.set.mock.calls.find(
-      (c) => c[0] === "durable:exec:1",
-    )?.[1];
-    expect(typeof savedPayload).toBe("string");
-    const savedExec = serializer.parse(savedPayload as string) as Execution;
-    expect(savedExec.status).toBe("pending");
-    expect(savedExec.error).toBeUndefined();
 
     await store.forceFail("1", { message: "manual", stack: "s" });
     expect(redisMock.eval).toHaveBeenCalled();
@@ -642,6 +837,239 @@ describe("durable: RedisStore", () => {
   it("returns [] from listStepResults when no step keys exist", async () => {
     redisMock.scan.mockResolvedValue(["0", []]);
     await expect(store.listStepResults("e1")).resolves.toEqual([]);
+  });
+
+  it("returns [] from listStepResults when the indexed hash is null", async () => {
+    redisMock.hgetall.mockResolvedValueOnce(null as any);
+    redisMock.scan.mockResolvedValueOnce(["0", []]);
+
+    await expect(store.listStepResults("e1")).resolves.toEqual([]);
+  });
+
+  it("stores retained signal history and queued signal records", async () => {
+    const redisState = new Map<string, string>();
+
+    redisMock.get.mockImplementation(async (key: unknown) => {
+      if (typeof key !== "string") return null;
+      return redisState.get(key) ?? null;
+    });
+    redisMock.set.mockImplementation(
+      async (key: unknown, value: unknown): Promise<unknown> => {
+        if (typeof key === "string" && typeof value === "string") {
+          redisState.set(key, value);
+        }
+        return "OK";
+      },
+    );
+    redisMock.eval.mockImplementation(
+      async (
+        scriptUnknown: unknown,
+        _keyCountUnknown: unknown,
+        keyUnknown: unknown,
+        defaultStateUnknown?: unknown,
+        recordUnknown?: unknown,
+      ) => {
+        const script = String(scriptUnknown);
+        const key = typeof keyUnknown === "string" ? keyUnknown : "";
+        const storedState = redisState.get(key);
+
+        if (script.includes("table.insert(state.history, record)")) {
+          const state = storedState
+            ? (serializer.parse(storedState) as {
+                history: unknown[];
+                queued: unknown[];
+              })
+            : (serializer.parse(String(defaultStateUnknown)) as {
+                history: unknown[];
+                queued: unknown[];
+              });
+          state.history.push(serializer.parse(String(recordUnknown)));
+          redisState.set(key, serializer.stringify(state));
+          return "OK";
+        }
+
+        if (
+          script.includes("queuedRecord.serializedPayload") &&
+          script.includes('return "deduped"')
+        ) {
+          const state = storedState
+            ? (serializer.parse(storedState) as {
+                history: unknown[];
+                queued: Array<{ serializedPayload: string }>;
+              })
+            : (serializer.parse(String(defaultStateUnknown)) as {
+                history: unknown[];
+                queued: Array<{ serializedPayload: string }>;
+              });
+          const record = serializer.parse(String(recordUnknown)) as {
+            serializedPayload: string;
+          };
+          if (
+            state.queued.some(
+              (queuedRecord) =>
+                queuedRecord.serializedPayload === record.serializedPayload,
+            )
+          ) {
+            return "deduped";
+          }
+          state.queued.push(record);
+          redisState.set(key, serializer.stringify(state));
+          return "enqueued";
+        }
+
+        if (script.includes("table.remove(state.queued, 1)")) {
+          if (!storedState) return null;
+          const state = serializer.parse(storedState) as {
+            history: unknown[];
+            queued: Array<Record<string, unknown>>;
+          };
+          const record = state.queued.shift() ?? null;
+          redisState.set(key, serializer.stringify(state));
+          if (!record) return null;
+          const { serializedPayload: _ignored, ...strippedRecord } = record;
+          return serializer.stringify(strippedRecord);
+        }
+
+        return 1;
+      },
+    );
+
+    const record = {
+      id: "sig-1",
+      payload: { paidAt: 1 },
+      receivedAt: new Date("2024-01-01T00:00:00.000Z"),
+    };
+    const queuedRecord = {
+      ...record,
+      serializedPayload: JSON.stringify(record.payload),
+    };
+
+    await expect(
+      store.getSignalState("e1", "paid/with spaces"),
+    ).resolves.toBeNull();
+
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "empty-first", queuedRecord),
+    ).resolves.toBe("enqueued");
+    await expect(store.getSignalState("e1", "empty-first")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "empty-first",
+      queued: [queuedRecord],
+      history: [],
+    });
+
+    await store.appendSignalRecord("e1", "paid/with spaces", record);
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid/with spaces", queuedRecord),
+    ).resolves.toBe("enqueued");
+
+    await expect(
+      store.getSignalState("e1", "paid/with spaces"),
+    ).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid/with spaces",
+      queued: [queuedRecord],
+      history: [record],
+    });
+
+    await expect(
+      store.consumeQueuedSignalRecord("e1", "paid/with spaces"),
+    ).resolves.toEqual(record);
+    expect(await store.getSignalState("e1", "paid/with spaces")).toEqual({
+      executionId: "e1",
+      signalId: "paid/with spaces",
+      queued: [],
+      history: [record],
+    });
+    expect(redisMock.get).toHaveBeenCalledWith(
+      "durable:signal:e1:paid%2Fwith%20spaces",
+    );
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid/with spaces", queuedRecord),
+    ).resolves.toBe("enqueued");
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid/with spaces", queuedRecord),
+    ).resolves.toBe("deduped");
+    await expect(
+      store.consumeQueuedSignalRecord("e1", "missing-signal"),
+    ).resolves.toBeNull();
+  });
+
+  it("dedupes queued redis signal records with the same serialized payload", async () => {
+    const redisState = new Map<string, string>();
+
+    redisMock.get.mockImplementation(async (key: unknown) => {
+      if (typeof key !== "string") return null;
+      return redisState.get(key) ?? null;
+    });
+    redisMock.set.mockImplementation(
+      async (key: unknown, value: unknown): Promise<unknown> => {
+        if (typeof key === "string" && typeof value === "string") {
+          redisState.set(key, value);
+        }
+        return "OK";
+      },
+    );
+    redisMock.eval.mockImplementation(
+      async (
+        scriptUnknown: unknown,
+        _keyCountUnknown: unknown,
+        keyUnknown: unknown,
+        defaultStateUnknown?: unknown,
+        recordUnknown?: unknown,
+      ) => {
+        const script = String(scriptUnknown);
+        if (!script.includes("queuedRecord.serializedPayload")) {
+          return 1;
+        }
+
+        const key = typeof keyUnknown === "string" ? keyUnknown : "";
+        const storedState = redisState.get(key);
+        const state = storedState
+          ? (serializer.parse(storedState) as {
+              history: unknown[];
+              queued: Array<{ serializedPayload: string }>;
+            })
+          : (serializer.parse(String(defaultStateUnknown)) as {
+              history: unknown[];
+              queued: Array<{ serializedPayload: string }>;
+            });
+        const record = serializer.parse(String(recordUnknown)) as {
+          serializedPayload: string;
+        };
+
+        if (
+          state.queued.some(
+            (queuedRecord) =>
+              queuedRecord.serializedPayload === record.serializedPayload,
+          )
+        ) {
+          return "deduped";
+        }
+
+        state.queued.push(record);
+        redisState.set(key, serializer.stringify(state));
+        return "enqueued";
+      },
+    );
+
+    const queuedRecord = {
+      id: "sig-1",
+      payload: { paidAt: 1 },
+      receivedAt: new Date("2024-01-01T00:00:00.000Z"),
+      serializedPayload: JSON.stringify({ paidAt: 1 }),
+    };
+
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid", queuedRecord),
+    ).resolves.toBe("enqueued");
+    await expect(
+      store.enqueueQueuedSignalRecord("e1", "paid", {
+        ...queuedRecord,
+        id: "sig-2",
+      }),
+    ).resolves.toBe("deduped");
+    expect((await store.getSignalState("e1", "paid"))?.queued).toHaveLength(1);
   });
 
   it("filters non-string pipeline entries when listing step results", async () => {
@@ -707,13 +1135,25 @@ describe("durable: RedisStore", () => {
 
     redisMock.hget.mockResolvedValue(serializer.stringify(timer));
     await store.markTimerFired("t1");
-    expect(redisMock.zrem).toHaveBeenCalled();
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining("timer.status = ARGV[2]"),
+      2,
+      "durable:timers",
+      "durable:timers_schedule",
+      "t1",
+      "fired",
+    );
 
-    redisMock.hget.mockResolvedValue(null);
     await store.markTimerFired("missing");
 
     await store.deleteTimer("t1");
-    expect(redisMock.hdel).toHaveBeenCalledWith("durable:timers", "t1");
+    expect(redisMock.eval).toHaveBeenLastCalledWith(
+      expect.stringContaining('redis.call("hdel", KEYS[1], ARGV[1])'),
+      2,
+      "durable:timers",
+      "durable:timers_schedule",
+      "t1",
+    );
   });
 
   it("creates timers atomically to avoid ghost timer entries", async () => {
@@ -760,6 +1200,55 @@ describe("durable: RedisStore", () => {
     expect(await store.getReadyTimers()).toEqual([]);
   });
 
+  it("stores, takes, and deletes signal waiters atomically", async () => {
+    const waiter = {
+      executionId: "e1",
+      signalId: "paid/with spaces",
+      stepId: "__signal:stable-paid",
+      sortKey: createSignalWaiterSortKey(
+        "paid/with spaces",
+        "__signal:stable-paid",
+      ),
+      timerId: "timer-1",
+    };
+
+    await store.upsertSignalWaiter?.(waiter);
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("zadd"'),
+      3,
+      "durable:signal_waiters:e1:paid%2Fwith%20spaces:order",
+      "durable:signal_waiters:e1:paid%2Fwith%20spaces:payloads",
+      "durable:signal_waiters:e1:paid%2Fwith%20spaces:steps",
+      "__signal:stable-paid",
+      `${waiter.sortKey}\n__signal:stable-paid`,
+      expect.any(String),
+    );
+
+    redisMock.eval.mockResolvedValueOnce(serializer.stringify(waiter));
+    await expect(
+      store.takeNextSignalWaiter?.("e1", "paid/with spaces"),
+    ).resolves.toEqual(waiter);
+
+    redisMock.eval.mockResolvedValueOnce(null);
+    await expect(
+      store.takeNextSignalWaiter?.("e1", "paid/with spaces"),
+    ).resolves.toBeNull();
+
+    await store.deleteSignalWaiter?.(
+      "e1",
+      "paid/with spaces",
+      "__signal:stable-paid",
+    );
+    expect(redisMock.eval).toHaveBeenLastCalledWith(
+      expect.stringContaining('redis.call("hget", KEYS[3], ARGV[1])'),
+      3,
+      "durable:signal_waiters:e1:paid%2Fwith%20spaces:order",
+      "durable:signal_waiters:e1:paid%2Fwith%20spaces:payloads",
+      "durable:signal_waiters:e1:paid%2Fwith%20spaces:steps",
+      "__signal:stable-paid",
+    );
+  });
+
   it("manages schedules", async () => {
     const sched: Schedule = {
       id: "s1",
@@ -789,6 +1278,43 @@ describe("durable: RedisStore", () => {
     expect(redisMock.hdel).toHaveBeenCalledWith("durable:schedules", "s1");
   });
 
+  it("saves recurring schedules and timers atomically", async () => {
+    const schedule: Schedule = {
+      id: "s-atomic",
+      taskId: "t",
+      type: "interval",
+      pattern: "1000",
+      input: undefined,
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      nextRun: new Date("2024-01-01T00:00:00.000Z"),
+    };
+    const timer: Timer = {
+      id: "timer-atomic",
+      scheduleId: "s-atomic",
+      taskId: "t",
+      type: "scheduled",
+      fireAt: schedule.nextRun!,
+      status: "pending",
+    };
+
+    await store.saveScheduleWithTimer(schedule, timer);
+
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("hset", KEYS[1], ARGV[1], ARGV[2])'),
+      3,
+      "durable:schedules",
+      "durable:timers",
+      "durable:timers_schedule",
+      "s-atomic",
+      expect.any(String),
+      "timer-atomic",
+      expect.any(String),
+      timer.fireAt.getTime(),
+    );
+  });
+
   it("returns empty schedules when Redis HGETALL returns a non-object", async () => {
     redisMock.hgetall.mockResolvedValue(null as any);
     await expect(store.listSchedules()).resolves.toEqual([]);
@@ -815,7 +1341,32 @@ describe("durable: RedisStore", () => {
     expect(redisMock.eval).toHaveBeenCalled();
 
     await store.dispose?.();
-    expect(redisMock.quit).toHaveBeenCalled();
+    expect(redisMock.quit).not.toHaveBeenCalled();
+  });
+
+  it("disposes injected Redis clients only when explicitly configured", async () => {
+    await store.dispose?.();
+    expect(redisMock.quit).not.toHaveBeenCalled();
+
+    const ownedStore = new RedisStore({
+      redis: redisMock,
+      disposeProvidedClient: true,
+    });
+    await ownedStore.dispose?.();
+
+    expect(redisMock.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("renews timer claims via Redis scripts", async () => {
+    redisMock.eval.mockResolvedValueOnce(1 as any);
+    await expect(
+      store.renewTimerClaim("timer-1", "worker-1", 5000),
+    ).resolves.toBe(true);
+
+    redisMock.eval.mockResolvedValueOnce(0 as any);
+    await expect(
+      store.renewTimerClaim("timer-1", "worker-1", 5000),
+    ).resolves.toBe(false);
   });
 
   it("returns null lockId when Redis SET NX fails", async () => {

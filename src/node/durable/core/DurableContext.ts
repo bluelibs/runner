@@ -30,7 +30,10 @@ import { emitDurably } from "./durable-context/DurableContext.emit";
 import { sleepDurably } from "./durable-context/DurableContext.sleep";
 import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSignal";
 import { switchDurably } from "./durable-context/DurableContext.switch";
-import { durableContextCancelledError } from "../../../errors";
+import {
+  durableContextCancelledError,
+  durableExecutionInvariantError,
+} from "../../../errors";
 
 /**
  * Per-execution workflow toolkit used by durable tasks.
@@ -63,6 +66,8 @@ export class DurableContext implements IDurableContext {
   private readonly auditEnabled: boolean;
   private readonly auditEmitter: DurableAuditEmitter | null;
   private readonly implicitInternalStepIdsPolicy: ImplicitInternalStepIdsPolicy;
+  private readonly declaredSignalIds: ReadonlySet<string> | null;
+  private readonly assertLockOwnership: () => void;
 
   constructor(
     private readonly store: IDurableStore,
@@ -73,12 +78,16 @@ export class DurableContext implements IDurableContext {
       auditEnabled?: boolean;
       auditEmitter?: DurableAuditEmitter;
       implicitInternalStepIds?: ImplicitInternalStepIdsPolicy;
+      declaredSignalIds?: ReadonlySet<string> | null;
+      assertLockOwnership?: () => void;
     } = {},
   ) {
     this.auditEnabled = options.auditEnabled ?? false;
     this.auditEmitter = options.auditEmitter ?? null;
     this.implicitInternalStepIdsPolicy =
       options.implicitInternalStepIds ?? "allow";
+    this.declaredSignalIds = options.declaredSignalIds ?? null;
+    this.assertLockOwnership = options.assertLockOwnership ?? (() => {});
 
     this.audit = createDurableContextAudit({
       store: this.store,
@@ -103,6 +112,11 @@ export class DurableContext implements IDurableContext {
         message: exec.error?.message || "Execution cancelled",
       });
     }
+  }
+
+  private async assertCanContinue(): Promise<void> {
+    this.assertLockOwnership();
+    await this.assertNotCancelled();
   }
 
   private getStepId(stepId: string | DurableStepId<unknown>): string {
@@ -152,7 +166,7 @@ export class DurableContext implements IDurableContext {
     return await executeDurableStep({
       store: this.store,
       executionId: this.executionId,
-      assertNotCancelled: this.assertNotCancelled.bind(this),
+      assertCanContinue: this.assertCanContinue.bind(this),
       appendAuditEntry: this.audit.append,
       stepId,
       options,
@@ -176,7 +190,7 @@ export class DurableContext implements IDurableContext {
     return await sleepDurably({
       store: this.store,
       executionId: this.executionId,
-      assertNotCancelled: this.assertNotCancelled.bind(this),
+      assertCanContinue: this.assertCanContinue.bind(this),
       appendAuditEntry: this.audit.append,
       assertUniqueStepId: this.determinism.assertUniqueStepId,
       assertOrWarnImplicitInternalStepId:
@@ -202,10 +216,19 @@ export class DurableContext implements IDurableContext {
     signal: IEventDefinition<TPayload>,
     options?: SignalOptions,
   ): Promise<any> {
+    if (
+      this.declaredSignalIds !== null &&
+      !this.declaredSignalIds.has(signal.id)
+    ) {
+      durableExecutionInvariantError.throw({
+        message: `Signal '${signal.id}' is not declared in durableWorkflow.signals for this workflow.`,
+      });
+    }
+
     return await waitForSignalDurably({
       store: this.store,
       executionId: this.executionId,
-      assertNotCancelled: this.assertNotCancelled.bind(this),
+      assertCanContinue: this.assertCanContinue.bind(this),
       appendAuditEntry: this.audit.append,
       assertUniqueStepId: this.determinism.assertUniqueStepId,
       assertOrWarnImplicitInternalStepId:
@@ -223,7 +246,7 @@ export class DurableContext implements IDurableContext {
   ): Promise<void> {
     return await emitDurably({
       bus: this.bus,
-      assertNotCancelled: this.assertNotCancelled.bind(this),
+      assertCanContinue: this.assertCanContinue.bind(this),
       appendAuditEntry: this.audit.append,
       assertUniqueStepId: this.determinism.assertUniqueStepId,
       assertOrWarnImplicitInternalStepId:
@@ -247,7 +270,7 @@ export class DurableContext implements IDurableContext {
     return await switchDurably({
       store: this.store,
       executionId: this.executionId,
-      assertNotCancelled: this.assertNotCancelled.bind(this),
+      assertCanContinue: this.assertCanContinue.bind(this),
       appendAuditEntry: this.audit.append,
       assertUniqueStepId: this.determinism.assertUniqueStepId,
       stepId,

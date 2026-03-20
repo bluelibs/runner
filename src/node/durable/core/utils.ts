@@ -71,23 +71,35 @@ export function createExecutionId(): string {
 export function parseSignalState(value: unknown): {
   state: "waiting" | "completed" | "timed_out";
   timerId?: string;
+  signalId?: string;
 } | null {
   if (!isRecord(value)) return null;
   const state = value.state;
+  const signalId =
+    typeof value.signalId === "string" ? value.signalId : undefined;
   if (state === "waiting") {
     const timerId = value.timerId;
     return {
       state: "waiting",
       timerId: typeof timerId === "string" ? timerId : undefined,
+      signalId,
     };
   }
   if (state === "completed") {
-    return { state: "completed" };
+    return { state: "completed", signalId };
   }
   if (state === "timed_out") {
-    return { state: "timed_out" };
+    return { state: "timed_out", signalId };
   }
   return null;
+}
+
+export function shouldPersistStableSignalId(
+  stepId: string,
+  signalId: string,
+): boolean {
+  const baseStepId = `__signal:${signalId}`;
+  return stepId !== baseStepId && !stepId.startsWith(`${baseStepId}:`);
 }
 
 /**

@@ -11,6 +11,7 @@ import { Logger } from "../../../models/Logger";
 export interface RedisEventBusConfig {
   prefix?: string;
   redis?: RedisEventBusClient | string;
+  disposeProvidedClient?: boolean;
   logger?: Logger;
   onHandlerError?: (error: unknown) => void | Promise<void>;
 }
@@ -37,8 +38,13 @@ export class RedisEventBus implements IEventBus {
   private readonly serializer = new Serializer();
   private readonly logger: Logger;
   private readonly onHandlerError?: (error: unknown) => void | Promise<void>;
+  private readonly ownsPublisherClient: boolean;
 
   constructor(config: RedisEventBusConfig = {}) {
+    this.ownsPublisherClient =
+      typeof config.redis === "string" ||
+      config.redis === undefined ||
+      config.disposeProvidedClient === true;
     this.pub =
       typeof config.redis === "string" || config.redis === undefined
         ? (createIORedisClient(config.redis) as RedisEventBusClient)
@@ -226,7 +232,9 @@ export class RedisEventBus implements IEventBus {
   }
 
   async dispose(): Promise<void> {
-    await this.pub.quit();
+    if (this.ownsPublisherClient) {
+      await this.pub.quit();
+    }
     await this.sub.quit();
   }
 }

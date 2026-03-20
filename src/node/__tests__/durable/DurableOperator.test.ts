@@ -2,6 +2,7 @@ import { DurableOperator } from "../../durable/core/DurableOperator";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import type { DurableAuditEntry } from "../../durable/core/audit";
+import { createBareStore } from "./DurableService.unit.helpers";
 
 describe("durable: DurableOperator", () => {
   it("delegates to store operator APIs", async () => {
@@ -56,24 +57,7 @@ describe("durable: DurableOperator", () => {
   });
 
   it("throws helpful errors when store does not support an operator action", async () => {
-    const store: IDurableStore = {
-      saveExecution: async () => {},
-      getExecution: async () => null,
-      updateExecution: async () => {},
-      listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    const store: IDurableStore = createBareStore(new MemoryStore());
 
     const operator = new DurableOperator(store);
 
@@ -106,7 +90,7 @@ describe("durable: DurableOperator", () => {
     const executions = await operator.listExecutions({ taskId: "t" });
     expect(executions.map((e) => e.id)).toEqual(["e1"]);
 
-    const fallbackStore: IDurableStore = {
+    const fallbackStore: IDurableStore = createBareStore(new MemoryStore(), {
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution: async () => {},
@@ -122,19 +106,7 @@ describe("durable: DurableOperator", () => {
           updatedAt: new Date(),
         },
       ],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const fallbackOperator = new DurableOperator(fallbackStore);
     const fallback = await fallbackOperator.listExecutions();
@@ -180,7 +152,7 @@ describe("durable: DurableOperator", () => {
   });
 
   it("returns empty arrays for missing step/audit listing support", async () => {
-    const store: IDurableStore = {
+    const store: IDurableStore = createBareStore(new MemoryStore(), {
       saveExecution: async () => {},
       getExecution: async () => ({
         id: "e1",
@@ -194,19 +166,7 @@ describe("durable: DurableOperator", () => {
       }),
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getStepResult: async () => null,
-      saveStepResult: async () => {},
-      createTimer: async () => {},
-      getReadyTimers: async () => [],
-      markTimerFired: async () => {},
-      deleteTimer: async () => {},
-      createSchedule: async () => {},
-      getSchedule: async () => null,
-      updateSchedule: async () => {},
-      deleteSchedule: async () => {},
-      listSchedules: async () => [],
-      listActiveSchedules: async () => [],
-    };
+    });
 
     const operator = new DurableOperator(store);
     const detail = await operator.getExecutionDetail("e1");

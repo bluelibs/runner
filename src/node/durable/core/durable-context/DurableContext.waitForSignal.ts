@@ -4,7 +4,8 @@ import type { IDurableStore } from "../interfaces/store";
 import type { IEventDefinition } from "../../../../types/event";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
 import { TimerStatus, TimerType } from "../types";
-import { isRecord, sleepMs } from "../utils";
+import { isRecord, shouldPersistStableSignalId } from "../utils";
+import { upsertSignalWaiter, withSignalLock } from "../signalWaiters";
 import {
   durableExecutionInvariantError,
   durableSignalTimeoutError,
@@ -22,8 +23,8 @@ type SignalStepState =
       timeoutAtMs: number;
       timerId: string;
     }
-  | { state: "completed"; payload: unknown }
-  | { state: "timed_out" };
+  | { state: "completed"; payload: unknown; signalId?: string }
+  | { state: "timed_out"; signalId?: string };
 
 type SignalInput<TPayload> = IEventDefinition<TPayload>;
 
@@ -33,22 +34,22 @@ function getSignalId(signal: SignalInput<unknown>): string {
 
 function parseSignalStepState(value: unknown): SignalStepState | null {
   if (!isRecord(value)) return null;
+  const signalId = value.signalId;
+  if (signalId !== undefined && typeof signalId !== "string") return null;
   const state = value.state;
   if (state === "waiting") {
-    const signalId = value.signalId;
     const timeoutAtMs = value.timeoutAtMs;
     const timerId = value.timerId;
-    if (signalId !== undefined && typeof signalId !== "string") return null;
     if (typeof timeoutAtMs === "number" && typeof timerId === "string") {
       return { state: "waiting", signalId, timeoutAtMs, timerId };
     }
     return { state: "waiting", signalId };
   }
   if (state === "completed") {
-    return { state: "completed", payload: value.payload };
+    return { state: "completed", payload: value.payload, signalId };
   }
   if (state === "timed_out") {
-    return { state: "timed_out" };
+    return { state: "timed_out", signalId };
   }
   return null;
 }
@@ -59,50 +60,10 @@ function nextIndex(counter: Map<string, number>, key: string): number {
   return current;
 }
 
-async function withSignalLock<TPayload>(params: {
-  store: IDurableStore;
-  executionId: string;
-  signalId: string;
-  fn: () => Promise<TPayload>;
-}): Promise<TPayload> {
-  if (!params.store.acquireLock || !params.store.releaseLock) {
-    return params.fn();
-  }
-
-  const lockResource = `signal:${params.executionId}:${params.signalId}`;
-  const lockTtlMs = 10_000;
-  const maxAttempts = 20;
-
-  let lockId: string | null = null;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    lockId = await params.store.acquireLock(lockResource, lockTtlMs);
-    if (lockId !== null) break;
-    await sleepMs(5);
-  }
-
-  if (lockId === null) {
-    return durableExecutionInvariantError.throw({
-      message: `Failed to acquire signal lock for '${params.signalId}' on execution '${params.executionId}'`,
-    });
-  }
-
-  const acquiredLockId = lockId;
-
-  try {
-    return await params.fn();
-  } finally {
-    try {
-      await params.store.releaseLock(lockResource, acquiredLockId);
-    } catch {
-      // best-effort cleanup; ignore
-    }
-  }
-}
-
 export async function waitForSignalDurably<TPayload>(params: {
   store: IDurableStore;
   executionId: string;
-  assertNotCancelled: () => Promise<void>;
+  assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
   assertUniqueStepId: (stepId: string) => void;
   assertOrWarnImplicitInternalStepId: (
@@ -112,7 +73,7 @@ export async function waitForSignalDurably<TPayload>(params: {
   signal: SignalInput<TPayload>;
   options?: SignalOptions;
 }): Promise<TPayload | WaitForSignalOutcome<TPayload>> {
-  await params.assertNotCancelled();
+  await params.assertCanContinue();
 
   const signalId = getSignalId(params.signal);
   const hasTimeout = params.options?.timeoutMs !== undefined;
@@ -166,14 +127,6 @@ export async function waitForSignalDurably<TPayload>(params: {
           });
         }
         const parsedState = state;
-        if (parsedState.state === "completed") {
-          const payload = parsedState.payload as TPayload;
-          return resolveCompleted(payload);
-        }
-        if (parsedState.state === "timed_out") {
-          return resolveTimedOut();
-        }
-        // Remaining valid parsed state is "waiting" (completed/timed_out returned above).
         if (
           parsedState.signalId !== undefined &&
           parsedState.signalId !== signalId
@@ -182,6 +135,15 @@ export async function waitForSignalDurably<TPayload>(params: {
             message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
           });
         }
+        if (parsedState.state === "completed") {
+          const payload = parsedState.payload as TPayload;
+          return resolveCompleted(payload);
+        }
+        if (parsedState.state === "timed_out") {
+          return resolveTimedOut();
+        }
+        // Remaining valid parsed state is "waiting" (completed/timed_out returned above).
+        let waiterTimerId: string | undefined;
         if (params.options?.timeoutMs !== undefined) {
           if ("timeoutAtMs" in parsedState && "timerId" in parsedState) {
             await params.store.createTimer({
@@ -192,6 +154,7 @@ export async function waitForSignalDurably<TPayload>(params: {
               fireAt: new Date(parsedState.timeoutAtMs),
               status: TimerStatus.Pending,
             });
+            waiterTimerId = parsedState.timerId;
           } else {
             const timerId = `signal_timeout:${params.executionId}:${stepId}`;
             const timeoutAtMs = Date.now() + params.options.timeoutMs;
@@ -221,9 +184,43 @@ export async function waitForSignalDurably<TPayload>(params: {
               timerId,
               reason: "timeout_armed",
             });
+            waiterTimerId = timerId;
           }
         }
+
+        await upsertSignalWaiter({
+          store: params.store,
+          executionId: params.executionId,
+          signalId,
+          stepId,
+          timerId: waiterTimerId,
+        });
         throw new SuspensionSignal("yield");
+      }
+
+      const queuedSignal = await params.store.consumeQueuedSignalRecord(
+        params.executionId,
+        signalId,
+      );
+      if (queuedSignal) {
+        const completedSignalState = shouldPersistStableSignalId(
+          stepId,
+          signalId,
+        )
+          ? {
+              state: "completed" as const,
+              signalId,
+              payload: queuedSignal.payload,
+            }
+          : { state: "completed" as const, payload: queuedSignal.payload };
+        await params.store.saveStepResult({
+          executionId: params.executionId,
+          stepId,
+          result: completedSignalState,
+          completedAt: new Date(),
+        });
+
+        return resolveCompleted(queuedSignal.payload as TPayload);
       }
 
       if (params.options?.timeoutMs !== undefined) {
@@ -246,6 +243,14 @@ export async function waitForSignalDurably<TPayload>(params: {
           completedAt: new Date(),
         });
 
+        await upsertSignalWaiter({
+          store: params.store,
+          executionId: params.executionId,
+          signalId,
+          stepId,
+          timerId,
+        });
+
         await params.appendAuditEntry({
           kind: DurableAuditEntryKind.SignalWaiting,
           stepId,
@@ -264,6 +269,13 @@ export async function waitForSignalDurably<TPayload>(params: {
         stepId,
         result: { state: "waiting", signalId },
         completedAt: new Date(),
+      });
+
+      await upsertSignalWaiter({
+        store: params.store,
+        executionId: params.executionId,
+        signalId,
+        stepId,
       });
 
       await params.appendAuditEntry({

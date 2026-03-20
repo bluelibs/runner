@@ -2,9 +2,12 @@ import { NoopEventBus } from "../bus/NoopEventBus";
 import type {
   DurableStartAndWaitResult,
   DurableServiceConfig,
+  EnsureScheduleOptions,
   ExecuteOptions,
   IDurableService,
   ScheduleOptions,
+  StartAndWaitOptions,
+  WaitOptions,
 } from "./interfaces/service";
 import { ExecutionStatus, type Schedule } from "./types";
 import type { IEventDefinition } from "../../../types/event";
@@ -22,6 +25,7 @@ import {
 } from "./managers";
 import { durableExecutionInvariantError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
+import type { DurableWorker } from "./DurableWorker";
 
 export { DurableExecutionError } from "./utils";
 
@@ -50,6 +54,7 @@ export class DurableService implements IDurableService {
   private readonly executionManager: ExecutionManager;
   private readonly pollingManager: PollingManager;
   private readonly logger: Logger;
+  private readonly stopHandlers: Array<() => Promise<void>> = [];
 
   /** Unique worker ID for distributed timer coordination */
   private readonly workerId: string;
@@ -98,7 +103,6 @@ export class DurableService implements IDurableService {
 
     // Initialize wait manager
     this.waitManager = new WaitManager(config.store, config.eventBus, {
-      defaultTimeout: config.execution?.timeout,
       defaultPollIntervalMs: 500,
     });
 
@@ -113,6 +117,7 @@ export class DurableService implements IDurableService {
         eventBus: config.eventBus ?? new NoopEventBus(),
         taskExecutor: config.taskExecutor,
         contextProvider: config.contextProvider,
+        logger: this.logger,
         audit: config.audit,
         determinism: config.determinism,
         execution: config.execution,
@@ -130,6 +135,7 @@ export class DurableService implements IDurableService {
       config.execution?.maxAttempts ?? 3,
       {
         processExecution: (id) => this.executionManager.processExecution(id),
+        resolveTask: (taskId) => this.taskRegistry.find(taskId),
       },
     );
 
@@ -197,25 +203,22 @@ export class DurableService implements IDurableService {
   startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
   startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
   async startAndWait(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<unknown>> {
     return this.executionManager.startAndWait(task, input, options);
   }
 
-  wait<TResult>(
-    executionId: string,
-    options?: { timeout?: number; waitPollIntervalMs?: number },
-  ): Promise<TResult> {
+  wait<TResult>(executionId: string, options?: WaitOptions): Promise<TResult> {
     return this.waitManager.waitForResult(executionId, options);
   }
 
@@ -240,17 +243,17 @@ export class DurableService implements IDurableService {
   ensureSchedule<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
   ensureSchedule(
     task: string,
     input: unknown,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
   async ensureSchedule(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input: unknown,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string> {
     return this.scheduleManager.ensureSchedule(task, input, options);
   }
@@ -261,6 +264,7 @@ export class DurableService implements IDurableService {
       if (
         exec.status === ExecutionStatus.Pending ||
         exec.status === ExecutionStatus.Running ||
+        exec.status === ExecutionStatus.Retrying ||
         exec.status === ExecutionStatus.Sleeping
       ) {
         await this.executionManager.kickoffExecution(exec.id);
@@ -269,7 +273,18 @@ export class DurableService implements IDurableService {
   }
 
   async stop(): Promise<void> {
+    while (this.stopHandlers.length > 0) {
+      const stop = this.stopHandlers.pop()!;
+      await stop();
+    }
     await this.pollingManager.stop();
+  }
+
+  /** @internal - used by Runner runtime wiring to stop embedded workers */
+  registerWorker(worker: DurableWorker): void {
+    this.stopHandlers.push(async () => {
+      await worker.stop();
+    });
   }
 
   async pauseSchedule(id: string): Promise<void> {

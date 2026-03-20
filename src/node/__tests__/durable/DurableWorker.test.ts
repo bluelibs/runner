@@ -12,6 +12,7 @@ class TestQueue implements IDurableQueue {
   public handler: MessageHandler<unknown> | null = null;
   public ackCalls: string[] = [];
   public nackCalls: Array<{ id: string; requeue?: boolean }> = [];
+  public cancelConsumerCalls = 0;
 
   async enqueue<T>(
     _message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
@@ -29,6 +30,26 @@ class TestQueue implements IDurableQueue {
 
   async nack(messageId: string, requeue?: boolean): Promise<void> {
     this.nackCalls.push({ id: messageId, requeue });
+  }
+
+  async cancelConsumer(): Promise<void> {
+    this.cancelConsumerCalls += 1;
+    this.handler = null;
+  }
+}
+
+class FailingConsumeQueue extends TestQueue {
+  constructor(private remainingFailures: number) {
+    super();
+  }
+
+  override async consume<T>(handler: MessageHandler<T>): Promise<void> {
+    if (this.remainingFailures > 0) {
+      this.remainingFailures -= 1;
+      throw genericError.new({ message: "consume failed" });
+    }
+
+    await super.consume(handler);
   }
 }
 
@@ -108,6 +129,31 @@ describe("durable: DurableWorker", () => {
 
     expect(processExecution).toHaveBeenCalledWith("e1");
     expect(queue.ackCalls).toEqual(["m1"]);
+  });
+
+  it("allows start() to be retried after queue.consume() fails during startup", async () => {
+    const queue = new FailingConsumeQueue(1);
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+
+    await expect(worker.start()).rejects.toThrow("consume failed");
+    await expect(worker.start()).resolves.toBeUndefined();
+
+    expect(queue.handler).not.toBeNull();
+  });
+
+  it("treats repeated successful start() calls as idempotent", async () => {
+    const queue = new TestQueue();
+    const consumeSpy = jest.spyOn(queue, "consume");
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+
+    await worker.start();
+    await worker.start();
+
+    expect(consumeSpy).toHaveBeenCalledTimes(1);
   });
 
   it("nacks on handler errors", async () => {
@@ -244,7 +290,7 @@ describe("durable: DurableWorker", () => {
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
-  it("ignores unknown payload shapes", async () => {
+  it("nacks malformed payload shapes instead of acknowledging them", async () => {
     const queue = new TestQueue();
     const { service, processExecution } = createService();
 
@@ -254,7 +300,11 @@ describe("durable: DurableWorker", () => {
     await queue.handler?.(message("bad", "execute"));
     await queue.handler?.(message({ executionId: 123 }, "execute"));
     expect(processExecution).not.toHaveBeenCalled();
-    expect(queue.ackCalls).toEqual(["m1", "m1"]);
+    expect(queue.ackCalls).toEqual([]);
+    expect(queue.nackCalls).toEqual([
+      { id: "m1", requeue: true },
+      { id: "m1", requeue: true },
+    ]);
   });
 
   it("ignores non-execution message types", async () => {
@@ -269,7 +319,7 @@ describe("durable: DurableWorker", () => {
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
-  it("acks unsupported message types without processing executions", async () => {
+  it("nacks unsupported message types instead of dropping them", async () => {
     const queue = new TestQueue();
     const { service, processExecution } = createService();
 
@@ -280,6 +330,19 @@ describe("durable: DurableWorker", () => {
     await queue.handler?.(unknown as QueueMessage);
 
     expect(processExecution).not.toHaveBeenCalled();
-    expect(queue.ackCalls).toEqual(["m1"]);
+    expect(queue.ackCalls).toEqual([]);
+    expect(queue.nackCalls).toEqual([{ id: "m1", requeue: true }]);
+  });
+
+  it("stops the active queue consumer when the worker stops", async () => {
+    const queue = new TestQueue();
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+    await worker.stop();
+
+    expect(queue.cancelConsumerCalls).toBe(1);
+    expect(queue.handler).toBeNull();
   });
 });

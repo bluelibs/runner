@@ -27,7 +27,7 @@ function registerCompensation<T>(
 export async function executeDurableStep<T>(params: {
   store: IDurableStore;
   executionId: string;
-  assertNotCancelled: () => Promise<void>;
+  assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
   stepId: string;
   options: StepOptions;
@@ -35,7 +35,7 @@ export async function executeDurableStep<T>(params: {
   downFn?: (result: T) => Promise<void>;
   compensations: DurableCompensation[];
 }): Promise<T> {
-  await params.assertNotCancelled();
+  await params.assertCanContinue();
 
   const cached = await params.store.getStepResult(
     params.executionId,
@@ -81,6 +81,8 @@ export async function executeDurableStep<T>(params: {
 
   const result = await executeWithRetry();
   const durationMs = Date.now() - startedAt;
+
+  await params.assertCanContinue();
 
   await params.store.saveStepResult({
     executionId: params.executionId,

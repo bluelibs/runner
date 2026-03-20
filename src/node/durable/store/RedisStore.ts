@@ -1,5 +1,9 @@
 import * as crypto from "node:crypto";
 import {
+  type DurableSignalRecord,
+  type DurableQueuedSignalRecord,
+  type DurableSignalState,
+  type DurableSignalWaiter,
   ExecutionStatus,
   ScheduleStatus,
   TimerStatus,
@@ -54,13 +58,29 @@ export interface RedisClient {
 export interface RedisStoreConfig {
   prefix?: string;
   redis?: RedisClient | string;
+  disposeProvidedClient?: boolean;
 }
+
+const createRedisSignalState = (
+  executionId: string,
+  signalId: string,
+): DurableSignalState => ({
+  executionId,
+  signalId,
+  queued: [],
+  history: [],
+});
 
 export class RedisStore implements IDurableStore {
   private redis: RedisClient;
   private prefix: string;
+  private readonly ownsRedisClient: boolean;
 
   constructor(config: RedisStoreConfig) {
+    this.ownsRedisClient =
+      typeof config.redis === "string" ||
+      config.redis === undefined ||
+      config.disposeProvidedClient === true;
     this.redis =
       typeof config.redis === "string" || config.redis === undefined
         ? (createIORedisClient(config.redis) as RedisClient)
@@ -103,6 +123,14 @@ export class RedisStore implements IDurableStore {
     return typeof value === "string" ? value : null;
   }
 
+  private assertEvalResultNotError(value: unknown): void {
+    if (typeof value === "string" && value.startsWith("__error__:")) {
+      durableStoreShapeError.throw({
+        message: value.slice("__error__:".length),
+      });
+    }
+  }
+
   private parseScanResponse(value: unknown): [string, string[]] | null {
     if (!Array.isArray(value) || value.length !== 2) return null;
     const [cursor, keys] = value;
@@ -112,24 +140,28 @@ export class RedisStore implements IDurableStore {
     return [cursor, keys];
   }
 
+  private expectScanResponse(
+    value: unknown,
+    operation: "SCAN" | "SSCAN",
+  ): [string, string[]] {
+    const parsed = this.parseScanResponse(value);
+    if (parsed === null) {
+      durableStoreShapeError.throw({
+        message: `Unexpected Redis ${operation} response shape`,
+      });
+    }
+    return parsed as [string, string[]];
+  }
+
   private async scanKeys(pattern: string): Promise<string[]> {
     const keys: string[] = [];
     let cursor = "0";
     do {
-      const scanned = await this.redis.scan(
-        cursor,
-        "MATCH",
-        pattern,
-        "COUNT",
-        100,
+      const parsed = this.expectScanResponse(
+        await this.redis.scan(cursor, "MATCH", pattern, "COUNT", 100),
+        "SCAN",
       );
-      const parsed = this.parseScanResponse(scanned);
-      if (!parsed) {
-        durableStoreShapeError.throw({
-          message: "Unexpected Redis SCAN response shape",
-        });
-      }
-      const [newCursor, scannedKeys] = parsed!;
+      const [newCursor, scannedKeys] = parsed;
       cursor = newCursor;
       keys.push(...scannedKeys);
     } while (cursor !== "0");
@@ -140,14 +172,11 @@ export class RedisStore implements IDurableStore {
     const members: string[] = [];
     let cursor = "0";
     do {
-      const scanned = await this.redis.sscan(setKey, cursor, "COUNT", 100);
-      const parsed = this.parseScanResponse(scanned);
-      if (!parsed) {
-        durableStoreShapeError.throw({
-          message: "Unexpected Redis SSCAN response shape",
-        });
-      }
-      const [newCursor, scannedMembers] = parsed!;
+      const parsed = this.expectScanResponse(
+        await this.redis.sscan(setKey, cursor, "COUNT", 100),
+        "SSCAN",
+      );
+      const [newCursor, scannedMembers] = parsed;
       cursor = newCursor;
       members.push(...scannedMembers);
     } while (cursor !== "0");
@@ -156,6 +185,47 @@ export class RedisStore implements IDurableStore {
 
   private activeExecutionsKey(): string {
     return this.k("active_executions");
+  }
+
+  private allExecutionsKey(): string {
+    return this.k("all_executions");
+  }
+
+  private stuckExecutionsKey(): string {
+    return this.k("stuck_executions");
+  }
+
+  private stepBucketKey(executionId: string): string {
+    return this.k(`steps:${executionId}`);
+  }
+
+  private auditBucketKey(executionId: string): string {
+    return this.k(`audit:${executionId}`);
+  }
+
+  private signalKey(executionId: string, signalId: string): string {
+    return this.k(`signal:${executionId}:${this.encodeKeyPart(signalId)}`);
+  }
+
+  private signalWaiterOrderKey(executionId: string, signalId: string): string {
+    return this.k(
+      `signal_waiters:${executionId}:${this.encodeKeyPart(signalId)}:order`,
+    );
+  }
+
+  private signalWaiterPayloadKey(
+    executionId: string,
+    signalId: string,
+  ): string {
+    return this.k(
+      `signal_waiters:${executionId}:${this.encodeKeyPart(signalId)}:payloads`,
+    );
+  }
+
+  private signalWaiterStepKey(executionId: string, signalId: string): string {
+    return this.k(
+      `signal_waiters:${executionId}:${this.encodeKeyPart(signalId)}:steps`,
+    );
   }
 
   private isActiveExecutionStatus(status: ExecutionStatus): boolean {
@@ -167,25 +237,113 @@ export class RedisStore implements IDurableStore {
     );
   }
 
-  private async updateActiveExecutionMembership(
-    executionId: string,
-    status: ExecutionStatus,
-  ): Promise<void> {
-    const key = this.activeExecutionsKey();
-    if (this.isActiveExecutionStatus(status)) {
-      await this.redis.sadd(key, executionId);
-      return;
+  private saveExecutionIndexesScript(): string {
+    return `
+      redis.call("sadd", KEYS[2], ARGV[2])
+
+      if ARGV[3] == "1" then
+        redis.call("sadd", KEYS[3], ARGV[2])
+      else
+        redis.call("srem", KEYS[3], ARGV[2])
+      end
+
+      if ARGV[4] == "1" then
+        redis.call("sadd", KEYS[4], ARGV[2])
+      else
+        redis.call("srem", KEYS[4], ARGV[2])
+      end
+    `;
+  }
+
+  private saveExecutionScript(): string {
+    return `
+      redis.call("set", KEYS[1], ARGV[1])
+      ${this.saveExecutionIndexesScript()}
+      return "OK"
+    `;
+  }
+
+  private statusFlags(status: ExecutionStatus): {
+    isActive: "1" | "0";
+    isStuck: "1" | "0";
+  } {
+    return {
+      isActive: this.isActiveExecutionStatus(status) ? "1" : "0",
+      isStuck: status === ExecutionStatus.CompensationFailed ? "1" : "0",
+    };
+  }
+
+  private parseHashValues<T>(data: unknown): T[] {
+    if (typeof data !== "object" || data === null) return [];
+
+    return Object.values(data as Record<string, unknown>)
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => serializer.parse(value) as T);
+  }
+
+  private async loadExecutionsFromSet(setKey: string): Promise<Execution[]> {
+    const executionIds = await this.scanSetMembers(setKey);
+    if (executionIds.length === 0) return [];
+
+    const pipeline = this.redis.pipeline();
+    executionIds.forEach((id) => pipeline.get(this.k(`exec:${id}`)));
+    const results = await pipeline.exec();
+    if (!results) return [];
+
+    const staleIds: string[] = [];
+    const executions: Execution[] = [];
+
+    for (let index = 0; index < executionIds.length; index += 1) {
+      const raw = results[index]?.[1];
+      if (typeof raw !== "string") {
+        staleIds.push(executionIds[index]);
+        continue;
+      }
+
+      executions.push(serializer.parse(raw) as Execution);
     }
 
-    await this.redis.srem(key, executionId);
+    if (staleIds.length > 0) {
+      try {
+        await this.redis.srem(setKey, ...staleIds);
+      } catch {
+        // Best-effort cleanup; ignore.
+      }
+    }
+
+    return executions;
+  }
+
+  private async loadExecutionsByScan(): Promise<Execution[]> {
+    const keys = await this.scanKeys(this.k("exec:*"));
+    if (keys.length === 0) return [];
+
+    const pipeline = this.redis.pipeline();
+    keys.forEach((key) => pipeline.get(key));
+    const results = await pipeline.exec();
+
+    return (results || [])
+      .map(([_, res]) =>
+        typeof res === "string" ? (serializer.parse(res) as Execution) : null,
+      )
+      .filter((execution): execution is Execution => execution !== null);
   }
 
   async saveExecution(execution: Execution): Promise<void> {
-    await this.redis.set(
+    const { isActive, isStuck } = this.statusFlags(execution.status);
+
+    await this.redis.eval(
+      this.saveExecutionScript(),
+      4,
       this.k(`exec:${execution.id}`),
+      this.allExecutionsKey(),
+      this.activeExecutionsKey(),
+      this.stuckExecutionsKey(),
       serializer.stringify(execution),
+      execution.id,
+      isActive,
+      isStuck,
     );
-    await this.updateActiveExecutionMembership(execution.id, execution.status);
   }
 
   async getExecution(id: string): Promise<Execution | null> {
@@ -199,90 +357,58 @@ export class RedisStore implements IDurableStore {
     id: string,
     updates: Partial<Execution>,
   ): Promise<void> {
-    const key = this.k(`exec:${id}`);
+    const current = await this.getExecution(id);
+    if (!current) return;
+
     const updatesWithTime = { ...updates, updatedAt: new Date() };
-    const updatesStr = serializer.stringify(updatesWithTime);
+    const next = { ...current, ...updatesWithTime };
+    const { isActive, isStuck } = this.statusFlags(next.status);
 
-    const script = `
-      local current = redis.call("get", KEYS[1])
-      if not current then return nil end
-      
-      local data = cjson.decode(current)
-      local upd = cjson.decode(ARGV[1])
-      
-      for k, v in pairs(upd) do
-        data[k] = v
-      end
-      
-      local result = cjson.encode(data)
-      redis.call("set", KEYS[1], result)
-      return "OK"
-    `;
-
-    const updated = await this.redis.eval(script, 1, key, updatesStr);
-
-    if (updated === "OK" && updates.status) {
-      await this.updateActiveExecutionMembership(id, updates.status);
-    }
+    await this.redis.eval(
+      this.saveExecutionScript(),
+      4,
+      this.k(`exec:${id}`),
+      this.allExecutionsKey(),
+      this.activeExecutionsKey(),
+      this.stuckExecutionsKey(),
+      serializer.stringify(next),
+      id,
+      isActive,
+      isStuck,
+    );
   }
 
   async listIncompleteExecutions(): Promise<Execution[]> {
-    const activeIds = await this.scanSetMembers(this.activeExecutionsKey());
-    if (activeIds.length === 0) return [];
-    const pipeline = this.redis.pipeline();
-    activeIds.forEach((id) => pipeline.get(this.k(`exec:${id}`)));
-    const results = await pipeline.exec();
-    if (!results) return [];
+    const executions = await this.loadExecutionsFromSet(
+      this.activeExecutionsKey(),
+    );
+    const inactiveIds = executions
+      .filter((execution) => !this.isActiveExecutionStatus(execution.status))
+      .map((execution) => execution.id);
 
-    const staleIds: string[] = [];
-    const executions = results
-      .map(([_, res]) =>
-        typeof res === "string" ? (serializer.parse(res) as Execution) : null,
-      )
-      .filter(
-        (e): e is Execution =>
-          e !== null && this.isActiveExecutionStatus(e.status),
-      );
-
-    for (let i = 0; i < activeIds.length; i += 1) {
-      const raw = results[i]?.[1];
-      if (typeof raw !== "string") {
-        staleIds.push(activeIds[i]);
-        continue;
-      }
-      const execution = serializer.parse(raw) as Execution;
-      if (!this.isActiveExecutionStatus(execution.status)) {
-        staleIds.push(activeIds[i]);
-      }
-    }
-
-    if (staleIds.length > 0) {
+    if (inactiveIds.length > 0) {
       try {
-        await this.redis.srem(this.activeExecutionsKey(), ...staleIds);
+        await this.redis.srem(this.activeExecutionsKey(), ...inactiveIds);
       } catch {
         // Best-effort cleanup; ignore.
       }
     }
 
-    return executions;
+    return executions.filter((execution) =>
+      this.isActiveExecutionStatus(execution.status),
+    );
   }
 
   async listStuckExecutions(): Promise<Execution[]> {
-    const keys = await this.scanKeys(this.k("exec:*"));
-    if (keys.length === 0) return [];
-
-    const pipeline = this.redis.pipeline();
-    keys.forEach((k: string) => pipeline.get(k));
-    const results = await pipeline.exec();
-
-    return (results || [])
-      .map(([_, res]) =>
-        typeof res === "string" ? (serializer.parse(res) as Execution) : null,
-      )
-      .filter(
-        (e): e is Execution =>
-          e !== null && e.status === ExecutionStatus.CompensationFailed,
-      );
+    let executions = await this.loadExecutionsFromSet(
+      this.stuckExecutionsKey(),
+    );
+    if (executions.length === 0) {
+      executions = await this.loadExecutionsByScan();
+    }
+    return executions.filter(
+      (execution) => execution.status === ExecutionStatus.CompensationFailed,
+    );
   }
 
   // Operator API
@@ -334,18 +460,10 @@ export class RedisStore implements IDurableStore {
   async listExecutions(
     options: ListExecutionsOptions = {},
   ): Promise<Execution[]> {
-    const keys = await this.scanKeys(this.k("exec:*"));
-    if (keys.length === 0) return [];
-
-    const pipeline = this.redis.pipeline();
-    keys.forEach((k: string) => pipeline.get(k));
-    const results = await pipeline.exec();
-
-    let executions = (results || [])
-      .map(([_, res]) =>
-        typeof res === "string" ? (serializer.parse(res) as Execution) : null,
-      )
-      .filter((e): e is Execution => e !== null);
+    let executions = await this.loadExecutionsFromSet(this.allExecutionsKey());
+    if (executions.length === 0) {
+      executions = await this.loadExecutionsByScan();
+    }
 
     // Filter by status
     if (options.status && options.status.length > 0) {
@@ -372,18 +490,28 @@ export class RedisStore implements IDurableStore {
   }
 
   async listStepResults(executionId: string): Promise<StepResult[]> {
+    const bucketEntries = this.parseHashValues<StepResult>(
+      await this.redis.hgetall(this.stepBucketKey(executionId)),
+    );
+    if (bucketEntries.length > 0) {
+      return bucketEntries.sort(
+        (a, b) =>
+          new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
+      );
+    }
+
     const keys = await this.scanKeys(this.k(`step:${executionId}:*`));
     if (keys.length === 0) return [];
 
     const pipeline = this.redis.pipeline();
-    keys.forEach((k: string) => pipeline.get(k));
+    keys.forEach((key) => pipeline.get(key));
     const results = await pipeline.exec();
 
     return (results || [])
       .map(([_, res]) =>
         typeof res === "string" ? (serializer.parse(res) as StepResult) : null,
       )
-      .filter((s): s is StepResult => s !== null)
+      .filter((step): step is StepResult => step !== null)
       .sort(
         (a, b) =>
           new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
@@ -393,30 +521,37 @@ export class RedisStore implements IDurableStore {
   async appendAuditEntry(entry: DurableAuditEntry): Promise<void> {
     const atMs = entry.at.getTime();
     const id = entry.id || createDurableAuditEntryId(atMs);
-    await this.redis.set(
-      this.k(`audit:${entry.executionId}:${id}`),
-      serializer.stringify({ ...entry, id }),
-    );
+    const payload = serializer.stringify({ ...entry, id });
+    await this.redis.hset(this.auditBucketKey(entry.executionId), id, payload);
+    await this.redis.set(this.k(`audit:${entry.executionId}:${id}`), payload);
   }
 
   async listAuditEntries(
     executionId: string,
     options: { limit?: number; offset?: number } = {},
   ): Promise<DurableAuditEntry[]> {
-    const keys = await this.scanKeys(this.k(`audit:${executionId}:*`));
-    if (keys.length === 0) return [];
-
-    const pipeline = this.redis.pipeline();
-    keys.forEach((k: string) => pipeline.get(k));
-    const results = await pipeline.exec();
-    let entries = (results || [])
-      .map(([_, res]) =>
-        typeof res === "string"
-          ? (serializer.parse(res) as DurableAuditEntry)
-          : null,
-      )
-      .filter((e): e is DurableAuditEntry => e !== null)
-      .sort((a, b) => a.at.getTime() - b.at.getTime());
+    let entries = this.parseHashValues<DurableAuditEntry>(
+      await this.redis.hgetall(this.auditBucketKey(executionId)),
+    );
+    if (entries.length === 0) {
+      const keys = await this.scanKeys(this.k(`audit:${executionId}:*`));
+      if (keys.length > 0) {
+        const pipeline = this.redis.pipeline();
+        keys.forEach((key) => pipeline.get(key));
+        const results = await pipeline.exec();
+        entries = (results || [])
+          .map(([_, res]) =>
+            typeof res === "string"
+              ? (serializer.parse(res) as DurableAuditEntry)
+              : null,
+          )
+          .filter(
+            (auditEntry): auditEntry is DurableAuditEntry =>
+              auditEntry !== null,
+          );
+      }
+    }
+    entries.sort((a, b) => a.at.getTime() - b.at.getTime());
 
     const offset = options.offset ?? 0;
     const limit = options.limit ?? entries.length;
@@ -428,16 +563,236 @@ export class RedisStore implements IDurableStore {
     executionId: string,
     stepId: string,
   ): Promise<StepResult | null> {
-    const data = this.parseRedisString(
-      await this.redis.get(this.k(`step:${executionId}:${stepId}`)),
+    let data = this.parseRedisString(
+      await this.redis.hget(this.stepBucketKey(executionId), stepId),
     );
+    if (!data) {
+      data = this.parseRedisString(
+        await this.redis.get(this.k(`step:${executionId}:${stepId}`)),
+      );
+    }
     return data ? (serializer.parse(data) as StepResult) : null;
   }
 
   async saveStepResult(result: StepResult): Promise<void> {
+    const payload = serializer.stringify(result);
+    await this.redis.hset(
+      this.stepBucketKey(result.executionId),
+      result.stepId,
+      payload,
+    );
     await this.redis.set(
       this.k(`step:${result.executionId}:${result.stepId}`),
-      serializer.stringify(result),
+      payload,
+    );
+  }
+
+  async getSignalState(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalState | null> {
+    const data = this.parseRedisString(
+      await this.redis.get(this.signalKey(executionId, signalId)),
+    );
+    return data ? (serializer.parse(data) as DurableSignalState) : null;
+  }
+
+  async appendSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableSignalRecord,
+  ): Promise<void> {
+    const script = `
+      local current = redis.call("get", KEYS[1])
+      local okState, state = pcall(cjson.decode, current or ARGV[1])
+      if not okState then
+        return "__error__:Corrupted durable signal state"
+      end
+      local okRecord, record = pcall(cjson.decode, ARGV[2])
+      if not okRecord then
+        return "__error__:Invalid durable signal record payload"
+      end
+      table.insert(state.history, record)
+      redis.call("set", KEYS[1], cjson.encode(state))
+      return "OK"
+    `;
+
+    const outcome = await this.redis.eval(
+      script,
+      1,
+      this.signalKey(executionId, signalId),
+      serializer.stringify(createRedisSignalState(executionId, signalId)),
+      serializer.stringify(record),
+    );
+    this.assertEvalResultNotError(outcome);
+  }
+
+  async enqueueQueuedSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableQueuedSignalRecord,
+  ): Promise<"enqueued" | "deduped"> {
+    const script = `
+      local current = redis.call("get", KEYS[1])
+      local okState, state = pcall(cjson.decode, current or ARGV[1])
+      if not okState then
+        return "__error__:Corrupted durable signal state"
+      end
+      local okRecord, record = pcall(cjson.decode, ARGV[2])
+      if not okRecord then
+        return "__error__:Invalid durable queued signal payload"
+      end
+
+      for _, queuedRecord in ipairs(state.queued) do
+        if queuedRecord.serializedPayload == record.serializedPayload then
+          return "deduped"
+        end
+      end
+
+      table.insert(state.queued, record)
+      redis.call("set", KEYS[1], cjson.encode(state))
+      return "enqueued"
+    `;
+
+    const outcome = await this.redis.eval(
+      script,
+      1,
+      this.signalKey(executionId, signalId),
+      serializer.stringify(createRedisSignalState(executionId, signalId)),
+      serializer.stringify(record),
+    );
+    this.assertEvalResultNotError(outcome);
+
+    return outcome === "deduped" ? "deduped" : "enqueued";
+  }
+
+  async consumeQueuedSignalRecord(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalRecord | null> {
+    const script = `
+      local current = redis.call("get", KEYS[1])
+      if not current then
+        return nil
+      end
+
+      local okState, state = pcall(cjson.decode, current)
+      if not okState then
+        return "__error__:Corrupted durable signal state"
+      end
+      local record = table.remove(state.queued, 1)
+      redis.call("set", KEYS[1], cjson.encode(state))
+
+      if not record then
+        return nil
+      end
+
+      record.serializedPayload = nil
+      return cjson.encode(record)
+    `;
+
+    const outcome = await this.redis.eval(
+      script,
+      1,
+      this.signalKey(executionId, signalId),
+    );
+    this.assertEvalResultNotError(outcome);
+    const payload = this.parseRedisString(outcome);
+
+    return payload ? (serializer.parse(payload) as DurableSignalRecord) : null;
+  }
+
+  async upsertSignalWaiter(waiter: DurableSignalWaiter): Promise<void> {
+    const member = `${waiter.sortKey}\n${waiter.stepId}`;
+    const payload = serializer.stringify(waiter);
+    const script = `
+      local existingMember = redis.call("hget", KEYS[3], ARGV[1])
+      if existingMember and existingMember ~= ARGV[2] then
+        redis.call("zrem", KEYS[1], existingMember)
+        redis.call("hdel", KEYS[2], existingMember)
+      end
+      redis.call("zadd", KEYS[1], 0, ARGV[2])
+      redis.call("hset", KEYS[2], ARGV[2], ARGV[3])
+      redis.call("hset", KEYS[3], ARGV[1], ARGV[2])
+      return "OK"
+    `;
+
+    await this.redis.eval(
+      script,
+      3,
+      this.signalWaiterOrderKey(waiter.executionId, waiter.signalId),
+      this.signalWaiterPayloadKey(waiter.executionId, waiter.signalId),
+      this.signalWaiterStepKey(waiter.executionId, waiter.signalId),
+      waiter.stepId,
+      member,
+      payload,
+    );
+  }
+
+  async takeNextSignalWaiter(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalWaiter | null> {
+    const script = `
+      local member = redis.call("zrange", KEYS[1], 0, 0)[1]
+      if not member then
+        return nil
+      end
+
+      local payload = redis.call("hget", KEYS[2], member)
+      redis.call("zrem", KEYS[1], member)
+      redis.call("hdel", KEYS[2], member)
+
+      if payload then
+        local okPayload, decoded = pcall(cjson.decode, payload)
+        if not okPayload then
+          return "__error__:Corrupted durable signal waiter payload"
+        end
+        if decoded and decoded.stepId then
+          redis.call("hdel", KEYS[3], decoded.stepId)
+        end
+      end
+
+      return payload
+    `;
+
+    const outcome = await this.redis.eval(
+      script,
+      3,
+      this.signalWaiterOrderKey(executionId, signalId),
+      this.signalWaiterPayloadKey(executionId, signalId),
+      this.signalWaiterStepKey(executionId, signalId),
+    );
+    this.assertEvalResultNotError(outcome);
+    const payload = this.parseRedisString(outcome);
+
+    return payload ? (serializer.parse(payload) as DurableSignalWaiter) : null;
+  }
+
+  async deleteSignalWaiter(
+    executionId: string,
+    signalId: string,
+    stepId: string,
+  ): Promise<void> {
+    const script = `
+      local member = redis.call("hget", KEYS[3], ARGV[1])
+      if not member then
+        return 0
+      end
+
+      redis.call("zrem", KEYS[1], member)
+      redis.call("hdel", KEYS[2], member)
+      redis.call("hdel", KEYS[3], ARGV[1])
+      return 1
+    `;
+
+    await this.redis.eval(
+      script,
+      3,
+      this.signalWaiterOrderKey(executionId, signalId),
+      this.signalWaiterPayloadKey(executionId, signalId),
+      this.signalWaiterStepKey(executionId, signalId),
+      stepId,
     );
   }
 
@@ -485,23 +840,47 @@ export class RedisStore implements IDurableStore {
   }
 
   async markTimerFired(timerId: string): Promise<void> {
-    const data = this.parseRedisString(
-      await this.redis.hget(this.k("timers"), timerId),
-    );
-    if (!data) return;
-    const timer = serializer.parse(data) as Timer;
-    timer.status = TimerStatus.Fired;
-    await this.redis.hset(
+    const script = `
+      local current = redis.call("hget", KEYS[1], ARGV[1])
+      if not current then
+        return 0
+      end
+
+      local okTimer, timer = pcall(cjson.decode, current)
+      if not okTimer then
+        return "__error__:Corrupted durable timer payload"
+      end
+      timer.status = ARGV[2]
+      redis.call("hset", KEYS[1], ARGV[1], cjson.encode(timer))
+      redis.call("zrem", KEYS[2], ARGV[1])
+      return 1
+    `;
+
+    const outcome = await this.redis.eval(
+      script,
+      2,
       this.k("timers"),
+      this.k("timers_schedule"),
       timerId,
-      serializer.stringify(timer),
+      TimerStatus.Fired,
     );
-    await this.redis.zrem(this.k("timers_schedule"), timerId);
+    this.assertEvalResultNotError(outcome);
   }
 
   async deleteTimer(timerId: string): Promise<void> {
-    await this.redis.hdel(this.k("timers"), timerId);
-    await this.redis.zrem(this.k("timers_schedule"), timerId);
+    const script = `
+      redis.call("hdel", KEYS[1], ARGV[1])
+      redis.call("zrem", KEYS[2], ARGV[1])
+      return 1
+    `;
+
+    await this.redis.eval(
+      script,
+      2,
+      this.k("timers"),
+      this.k("timers_schedule"),
+      timerId,
+    );
   }
 
   async claimTimer(
@@ -512,6 +891,24 @@ export class RedisStore implements IDurableStore {
     const key = this.k(`timer:claim:${timerId}`);
     const result = await this.redis.set(key, workerId, "PX", ttlMs, "NX");
     return result === "OK";
+  }
+
+  async renewTimerClaim(
+    timerId: string,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const key = this.k(`timer:claim:${timerId}`);
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("pexpire", KEYS[1], ARGV[2])
+      else
+        return 0
+      end
+    `;
+
+    const result = await this.redis.eval(script, 1, key, workerId, `${ttlMs}`);
+    return Number(result) === 1;
   }
 
   async createSchedule(schedule: Schedule): Promise<void> {
@@ -533,6 +930,28 @@ export class RedisStore implements IDurableStore {
     const s = await this.getSchedule(id);
     if (!s) return;
     await this.createSchedule({ ...s, ...updates });
+  }
+
+  async saveScheduleWithTimer(schedule: Schedule, timer: Timer): Promise<void> {
+    const script = `
+      redis.call("hset", KEYS[1], ARGV[1], ARGV[2])
+      redis.call("hset", KEYS[2], ARGV[3], ARGV[4])
+      redis.call("zadd", KEYS[3], ARGV[5], ARGV[3])
+      return "OK"
+    `;
+
+    await this.redis.eval(
+      script,
+      3,
+      this.k("schedules"),
+      this.k("timers"),
+      this.k("timers_schedule"),
+      schedule.id,
+      serializer.stringify(schedule),
+      timer.id,
+      serializer.stringify(timer),
+      timer.fireAt.getTime(),
+    );
   }
 
   async deleteSchedule(id: string): Promise<void> {
@@ -591,6 +1010,8 @@ export class RedisStore implements IDurableStore {
   }
 
   async dispose(): Promise<void> {
-    await this.redis.quit();
+    if (this.ownsRedisClient) {
+      await this.redis.quit();
+    }
   }
 }
