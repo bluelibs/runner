@@ -511,6 +511,48 @@ describe("Rate Limit Middleware", () => {
     }
   });
 
+  it("re-registers the keyed state map after a full expiration sweep", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+    const middleware = rateLimitTaskMiddleware.with({
+      windowMs: 100,
+      max: 1,
+      keyBuilder: (_taskId, input) => String(input),
+    });
+    const task = defineTask({
+      id: "rateLimit-reregister-after-sweep",
+      middleware: [middleware],
+      run: async (input: string) => input,
+    });
+    const app = defineResource({
+      id: "app-rateLimit-reregister-after-sweep",
+      register: [task],
+      dependencies: { task, rateLimit: rateLimitResource },
+      init: async () => "ok",
+    });
+
+    try {
+      const runtime = await run(app);
+      const state = runtime.getResourceValue(rateLimitResource);
+
+      await expect(runtime.runTask(task, "expired")).resolves.toBe("expired");
+
+      jest.setSystemTime(new Date("2026-01-01T00:00:00.200Z"));
+
+      await expect(runtime.runTask(task, "fresh")).resolves.toBe("fresh");
+      expect(state.states.get(middleware.config)?.has("fresh")).toBe(true);
+
+      await expect(runtime.runTask(task, "fresh")).rejects.toThrow(
+        /Rate limit exceeded/i,
+      );
+
+      await runtime.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("cancels the cleanup timer during cooldown and dispose", async () => {
     const cancel = jest.fn();
     const context = {

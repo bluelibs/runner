@@ -158,7 +158,7 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
       size: () => keyedStates.size,
     });
 
-    if (!hadKeyedStates) {
+    if (!hadKeyedStates || state.states.get(config) !== keyedStates) {
       state.registerConfigMap(config, keyedStates);
     }
 
