@@ -309,6 +309,27 @@ describe("RedisCache", () => {
     expect(await redis.get((firstCache as any).globalBytesKey)).toBe("0");
   });
 
+  it("treats malformed payloads as cache misses and cleans poisoned entries", async () => {
+    const redis = new FakeRedis();
+    const cache = new RedisCache({
+      options: {},
+      prefix: "tests:redis:malformed",
+      redis,
+      serializer,
+      taskId: "tests-redis-malformed",
+    });
+
+    await cache.set("key", "value");
+    const entryId = (cache as any).createEntryId("key");
+    const dataKey = (cache as any).getEntryDataKey(entryId);
+
+    await redis.set(dataKey, "not-valid-json");
+
+    await expect(cache.get("key")).resolves.toBeUndefined();
+    await expect(cache.has("key")).resolves.toBe(false);
+    expect(await redis.hget((cache as any).entrySizesKey, entryId)).toBeNull();
+  });
+
   it("cleans stale bookkeeping and orphaned entries", async () => {
     const redis = new FakeRedis();
     const cache = new RedisCache({

@@ -70,8 +70,14 @@ export class RedisCache implements ICacheProvider {
       return undefined;
     }
 
-    await this.touch(entryId);
-    return this.config.serializer.parse(payload);
+    try {
+      const value = this.config.serializer.parse(payload);
+      await this.touch(entryId);
+      return value;
+    } catch {
+      await this.removeTrackedEntry(entryId);
+      return undefined;
+    }
   }
 
   async set(
