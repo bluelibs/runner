@@ -10,6 +10,7 @@ import type {
 } from "./remote-lanes/http/types";
 import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
 import { linkAbortSignals } from "./tools/abortSignals";
+import { RUNNER_ASYNC_CONTEXT_HEADER } from "./remote-lanes/http/constants";
 export { normalizeError } from "./tools/normalizeError";
 export type {
   ExposureFetchAuthConfig,
@@ -56,7 +57,9 @@ async function postSerialized<T = any>(options: {
       "content-type": "application/json; charset=utf-8",
       ...headers,
     } as Record<string, string>;
-    if (contextHeaderText) reqHeaders["x-runner-context"] = contextHeaderText;
+    if (contextHeaderText) {
+      reqHeaders[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeaderText;
+    }
     if (onRequest) await onRequest({ url, headers: reqHeaders });
     const res = await fetchFn(url, {
       method: "POST",

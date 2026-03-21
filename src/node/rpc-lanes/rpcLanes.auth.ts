@@ -40,6 +40,9 @@ export function enforceRpcLaneAuthReadiness(
   config: RpcLanesResourceConfig,
   resolved: RpcLaneAuthResolvedState,
 ): void {
+  const bindingAuthByLaneId = new Map(
+    config.topology.bindings.map((binding) => [binding.lane.id, binding.auth]),
+  );
   const laneById = new Map<string, IRpcLaneDefinition>();
   for (const lane of resolved.taskLaneByTaskId.values()) {
     laneById.set(lane.id, lane);
@@ -52,7 +55,7 @@ export function enforceRpcLaneAuthReadiness(
     laneId: string,
   ): RemoteLaneBindingAuth | undefined =>
     resolved.bindingsByLaneId.get(laneId)?.auth ??
-    getBindingAuthForRpcLane(config, laneId);
+    bindingAuthByLaneId.get(laneId);
 
   if (resolved.mode === "network") {
     for (const lane of laneById.values()) {

@@ -2,6 +2,10 @@ import { defineEvent, defineResource } from "../../../define";
 import { run } from "../../../run";
 import { r } from "../../../public";
 import { rpcLanesResource } from "../../rpc-lanes";
+import {
+  createClientRpcLaneTopology,
+  createMockRpcLaneCommunicator,
+} from "./test.utils";
 
 describe("rpcLanes applyTo validation", () => {
   it("fails fast when applyTo string target does not exist", async () => {
@@ -9,18 +13,10 @@ describe("rpcLanes applyTo validation", () => {
       .rpcLane("tests-rpc-lanes-apply-to-missing-target-lane")
       .applyTo(["tests.rpc-lanes.apply-to.missing-target.task"])
       .build();
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-apply-to-missing-target-communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [{ lane, communicator }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-apply-to-missing-target-communicator",
+    );
+    const topology = createClientRpcLaneTopology([{ lane, communicator }]);
     const app = defineResource({
       id: "tests-rpc-lanes-apply-to-missing-target-app",
       register: [
@@ -29,9 +25,9 @@ describe("rpcLanes applyTo validation", () => {
       ],
     });
 
-    await expect(run(app)).rejects.toThrow(
-      `rpcLane "${lane.id}" applyTo target "tests.rpc-lanes.apply-to.missing-target.task" was not found in this container.`,
-    );
+    await expect(run(app)).rejects.toMatchObject({
+      name: "rpcLane-applyToTargetNotFound",
+    });
   });
 
   it("fails fast when applyTo receives an invalid target value", async () => {
@@ -39,18 +35,10 @@ describe("rpcLanes applyTo validation", () => {
       .rpcLane("tests-rpc-lanes-apply-to-invalid-shape-lane")
       .applyTo([{} as any])
       .build();
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-apply-to-invalid-shape-communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [{ lane, communicator }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-apply-to-invalid-shape-communicator",
+    );
+    const topology = createClientRpcLaneTopology([{ lane, communicator }]);
     const app = defineResource({
       id: "tests-rpc-lanes-apply-to-invalid-shape-app",
       register: [
@@ -59,9 +47,9 @@ describe("rpcLanes applyTo validation", () => {
       ],
     });
 
-    await expect(run(app)).rejects.toThrow(
-      `rpcLane "${lane.id}" applyTo() received an invalid target.`,
-    );
+    await expect(run(app)).rejects.toMatchObject({
+      name: "rpcLane-applyToInvalidTarget",
+    });
   });
 
   it("fails when two rpc lanes applyTo the same event", async () => {
@@ -76,12 +64,9 @@ describe("rpcLanes applyTo validation", () => {
       .rpcLane("tests-rpc-lanes-apply-to-reassign-event-b")
       .applyTo([event.id])
       .build();
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-apply-to-reassign-event-communicator",
-      init: async () => ({
-        event: async () => undefined,
-      }),
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-apply-to-reassign-event-communicator",
+    );
     const app = defineResource({
       id: "tests-rpc-lanes-apply-to-reassign-event-app",
       register: [
@@ -100,10 +85,8 @@ describe("rpcLanes applyTo validation", () => {
       ],
     });
 
-    await expect(run(app)).rejects.toThrow(
-      new RegExp(
-        `Event ".*${event.id}" is already assigned to rpcLane "${laneA.id}"\\.`,
-      ),
-    );
+    await expect(run(app)).rejects.toMatchObject({
+      name: "rpcLane-eventAssignmentConflict",
+    });
   });
 });

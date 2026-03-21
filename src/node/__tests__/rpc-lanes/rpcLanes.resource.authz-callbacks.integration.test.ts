@@ -4,6 +4,10 @@ import { globalTags } from "../../../globals/globalTags";
 import { rpcLanesResource } from "../../rpc-lanes";
 import { r } from "../../../public";
 import * as exposureModule from "../../exposure/createNodeExposure";
+import {
+  createMockRpcLaneCommunicator,
+  createServerRpcLaneTopology,
+} from "./test.utils";
 
 describe("rpcLanesResource exposure auth callbacks", () => {
   afterEach(() => {
@@ -31,18 +35,12 @@ describe("rpcLanesResource exposure auth callbacks", () => {
       id: "tests-rpc-lanes-authz-callbacks-event",
       tags: [globalTags.rpcLane.with({ lane: servedLane })],
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-authz-callbacks-communicator",
-      init: async () => ({
-        task: async () => "remote",
-        event: async () => undefined,
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        server: { serve: [servedLane] },
-      },
-      bindings: [
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-authz-callbacks-communicator",
+    );
+    const topology = createServerRpcLaneTopology(
+      [servedLane],
+      [
         {
           lane: servedLane,
           communicator,
@@ -54,7 +52,7 @@ describe("rpcLanesResource exposure auth callbacks", () => {
           auth: { secret: "callback-secret" },
         },
       ],
-    });
+    );
 
     const callbackAssertions = jest.fn();
     jest
@@ -158,25 +156,19 @@ describe("rpcLanesResource exposure auth callbacks", () => {
       id: "tests-rpc-lanes-authz-fallback-event",
       tags: [globalTags.rpcLane.with({ lane: servedLane })],
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-authz-fallback-communicator",
-      init: async () => ({
-        task: async () => "remote",
-        event: async () => undefined,
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        server: { serve: [servedLane] },
-      },
-      bindings: [
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-authz-fallback-communicator",
+    );
+    const topology = createServerRpcLaneTopology(
+      [servedLane],
+      [
         {
           lane: servedLane,
           communicator,
           auth: { secret: "fallback-secret" },
         },
       ],
-    });
+    );
 
     const callbackAssertions = jest.fn();
     jest

@@ -10,20 +10,14 @@ import {
   resolveLaneAsyncContextPolicy,
 } from "../remote-lanes/asyncContextAllowlist";
 import {
-  issueRemoteLaneToken,
-  verifyRemoteLaneToken,
-} from "../remote-lanes/laneAuth";
-import { getBindingAuthForRpcLane } from "./rpcLanes.auth";
-import {
   assertTaskOwnership,
   type RpcLanesRuntimeContext,
 } from "./rpcLanes.runtime.utils";
-import type { RpcLanesResourceConfig } from "./types";
 
 export function applyLocalSimulatedModeRouting(
   context: RpcLanesRuntimeContext,
 ): void {
-  const { config, resolved, dependencies, resourceId } = context;
+  const { resolved, dependencies, resourceId } = context;
   const store = dependencies.store;
   const runInLocalSimulatedScope = createLocalSimulatedScopeRunner(context);
   const roundTrip = <T>(value: T): T =>
@@ -31,7 +25,6 @@ export function applyLocalSimulatedModeRouting(
 
   for (const [taskId, lane] of resolved.taskLaneByTaskId.entries()) {
     const taskEntry = store.tasks.get(taskId)!;
-    const bindingAuth = getBindingAuthForRpcLane(config, lane.id);
 
     assertTaskOwnership(taskEntry.task.id, taskEntry.task, resourceId);
 
@@ -39,7 +32,6 @@ export function applyLocalSimulatedModeRouting(
     taskEntry.task = {
       ...taskEntry.task,
       run: (async (input: unknown, taskDependencies: unknown, taskContext) => {
-        verifyProduceToken(lane.id, bindingAuth);
         const transportedInput = roundTrip(input);
         const localTask = executeLocalTask as (
           taskInput: unknown,
@@ -64,9 +56,6 @@ export function applyLocalSimulatedModeRouting(
       return next(emission);
     }
 
-    const bindingAuth = getBindingAuthForRpcLane(config, lane.id);
-    verifyProduceToken(lane.id, bindingAuth);
-
     const transportedPayload = roundTrip(emission.data);
     const resultPayload = await runInLocalSimulatedScope(lane, async () => {
       emission.data = transportedPayload;
@@ -80,21 +69,25 @@ export function applyLocalSimulatedModeRouting(
 function createLocalSimulatedScopeRunner(context: RpcLanesRuntimeContext) {
   const { config, dependencies } = context;
   const store = dependencies.store;
-  const localSimulatedScope = new AsyncResource(
-    "runner.rpcLanes.localSimulated",
+  const localSimulatedScopeFactory = new AsyncResource(
+    "runner.rpcLanes.localSimulated.factory",
+  );
+  const asyncContextPolicyByLaneId = new Map(
+    config.topology.bindings.map((binding) => [
+      binding.lane.id,
+      resolveLaneAsyncContextPolicy({
+        laneAsyncContexts: binding.lane.asyncContexts,
+        legacyAllowAsyncContext: binding.allowAsyncContext,
+      }),
+    ]),
   );
 
-  const resolveLocalSimulatedAsyncContextPolicy = (
-    lane: IRpcLaneDefinition,
-  ) => {
-    const configuredBinding = config.topology.bindings.find(
-      (entry) => entry.lane.id === lane.id,
-    );
-    return resolveLaneAsyncContextPolicy({
+  const resolveLocalSimulatedAsyncContextPolicy = (lane: IRpcLaneDefinition) =>
+    asyncContextPolicyByLaneId.get(lane.id) ??
+    resolveLaneAsyncContextPolicy({
       laneAsyncContexts: lane.asyncContexts,
-      legacyAllowAsyncContext: configuredBinding?.allowAsyncContext,
+      legacyAllowAsyncContext: undefined,
     });
-  };
 
   return async <T>(
     lane: IRpcLaneDefinition,
@@ -107,14 +100,19 @@ function createLocalSimulatedScopeRunner(context: RpcLanesRuntimeContext) {
     });
 
     return await new Promise<T>((resolve, reject) => {
-      localSimulatedScope.runInAsyncScope(() => {
-        Promise.resolve(
-          applySerializedAsyncContexts(
-            capturedContexts,
-            fn,
-            policy.allowAsyncContext,
-          ),
-        ).then(resolve, reject);
+      localSimulatedScopeFactory.runInAsyncScope(() => {
+        const localSimulatedScope = new AsyncResource(
+          "runner.rpcLanes.localSimulated",
+        );
+        localSimulatedScope.runInAsyncScope(() => {
+          Promise.resolve(
+            applySerializedAsyncContexts(
+              capturedContexts,
+              fn,
+              policy.allowAsyncContext,
+            ),
+          ).then(resolve, reject);
+        });
       });
     });
   };
@@ -173,24 +171,4 @@ async function applySerializedAsyncContexts<T>(
   }
 
   return wrapped();
-}
-
-function verifyProduceToken(
-  laneId: string,
-  bindingAuth: RpcLanesResourceConfig["topology"]["bindings"][number]["auth"],
-): void {
-  const token = issueRemoteLaneToken({
-    laneId,
-    bindingAuth,
-    capability: "produce",
-  });
-  if (!token) {
-    return;
-  }
-  verifyRemoteLaneToken({
-    laneId,
-    bindingAuth,
-    token,
-    requiredCapability: "produce",
-  });
 }

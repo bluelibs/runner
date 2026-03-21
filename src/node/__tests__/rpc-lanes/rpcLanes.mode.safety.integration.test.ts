@@ -3,6 +3,10 @@ import { run } from "../../../run";
 import { globalTags } from "../../../globals/globalTags";
 import { rpcLanesResource } from "../../rpc-lanes";
 import { r } from "../../../public";
+import {
+  createClientRpcLaneTopology,
+  createMockRpcLaneCommunicator,
+} from "./test.utils";
 
 describe("rpcLanesResource mode safety", () => {
   it("transparent mode does not require communicator dependency resolution", async () => {
@@ -12,19 +16,10 @@ describe("rpcLanesResource mode safety", () => {
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "local",
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-transparent-no-deps-communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [{ lane, communicator }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-transparent-no-deps-communicator",
+    );
+    const topology = createClientRpcLaneTopology([{ lane, communicator }]);
 
     const app = defineResource({
       id: "tests-rpc-lanes-transparent-no-deps-app",
@@ -53,19 +48,10 @@ describe("rpcLanesResource mode safety", () => {
         return input.count;
       },
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-simulated-no-deps-communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [{ lane, communicator }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-simulated-no-deps-communicator",
+    );
+    const topology = createClientRpcLaneTopology([{ lane, communicator }]);
 
     const app = defineResource({
       id: "tests-rpc-lanes-simulated-no-deps-app",
@@ -94,28 +80,18 @@ describe("rpcLanesResource mode safety", () => {
       run: async () => "local",
     });
 
-    const communicatorA = defineResource({
-      id: "tests-rpc-lanes-duplicate-binding-communicator-a",
-      init: async () => ({
-        task: async () => "remote-a",
-      }),
-    });
-    const communicatorB = defineResource({
-      id: "tests-rpc-lanes-duplicate-binding-communicator-b",
-      init: async () => ({
-        task: async () => "remote-b",
-      }),
-    });
-
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [
-        { lane, communicator: communicatorA },
-        { lane, communicator: communicatorB },
-      ],
-    });
+    const communicatorA = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-duplicate-binding-communicator-a",
+      { task: async () => "remote-a" },
+    );
+    const communicatorB = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-duplicate-binding-communicator-b",
+      { task: async () => "remote-b" },
+    );
+    const topology = createClientRpcLaneTopology([
+      { lane, communicator: communicatorA },
+      { lane, communicator: communicatorB },
+    ]);
 
     const app = defineResource({
       id: "tests-rpc-lanes-duplicate-binding-app",
@@ -127,18 +103,13 @@ describe("rpcLanesResource mode safety", () => {
       ],
     });
 
-    await expect(run(app)).rejects.toThrow(
-      `rpcLane "${lane.id}" is bound multiple times`,
-    );
+    await expect(run(app)).rejects.toMatchObject({
+      name: "rpcLane-duplicateBinding",
+    });
   });
 
   it("fails when exposure.http is configured outside network mode", async () => {
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [],
-    });
+    const topology = createClientRpcLaneTopology([]);
 
     const app = defineResource({
       id: "tests-rpc-lanes-mode-exposure-conflict-app",
@@ -158,8 +129,8 @@ describe("rpcLanesResource mode safety", () => {
       ],
     });
 
-    await expect(run(app)).rejects.toThrow(
-      'exposure.http }) is only supported in mode "network"',
-    );
+    await expect(run(app)).rejects.toMatchObject({
+      name: "rpcLane-exposureMode",
+    });
   });
 });

@@ -2,6 +2,7 @@ import type { Store } from "../../models/Store";
 import type { ResourceStoreElementType } from "../../types/storeTypes";
 import type { ITag } from "../../defs";
 import { globalTags } from "../../globals/globalTags";
+import type { RpcLanesResourceValue } from "./types";
 
 export interface RpcLaneAllowList {
   enabled: boolean;
@@ -11,15 +12,6 @@ export interface RpcLaneAllowList {
   eventAcceptsAsyncContext: Map<string, boolean>;
   taskAsyncContextAllowList: Map<string, readonly string[] | undefined>;
   eventAsyncContextAllowList: Map<string, readonly string[] | undefined>;
-}
-
-interface RpcLanesResourceValue {
-  serveTaskIds?: readonly string[];
-  serveEventIds?: readonly string[];
-  taskAllowAsyncContext?: Readonly<Record<string, boolean>>;
-  eventAllowAsyncContext?: Readonly<Record<string, boolean>>;
-  taskAsyncContextAllowList?: Readonly<Record<string, readonly string[]>>;
-  eventAsyncContextAllowList?: Readonly<Record<string, readonly string[]>>;
 }
 
 export function computeRpcLaneAllowList(store: Store): RpcLaneAllowList {

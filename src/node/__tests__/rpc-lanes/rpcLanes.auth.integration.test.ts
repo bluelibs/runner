@@ -9,6 +9,11 @@ import { r } from "../../../public";
 import { issueRemoteLaneToken } from "../../remote-lanes/laneAuth";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { genericError } from "../../../errors";
+import {
+  createClientRpcLaneTopology,
+  createMockRpcLaneCommunicator,
+  createServerRpcLaneTopology,
+} from "./test.utils";
 
 describe("rpcLanes auth", () => {
   const allocatePort = async (): Promise<number> => {
@@ -40,18 +45,13 @@ describe("rpcLanes auth", () => {
       tags: [globalTags.rpcLane.with({ lane })],
       run: async (input) => input.value + 1,
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-auth-local-simulated-communicator",
-      init: async () => ({
-        task: async () => 1,
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [{ lane, communicator, auth: { secret: "simulated-secret" } }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-auth-local-simulated-communicator",
+      { task: async () => 1 },
+    );
+    const topology = createClientRpcLaneTopology([
+      { lane, communicator, auth: { secret: "simulated-secret" } },
+    ]);
 
     const app = defineResource({
       id: "tests-rpc-lanes-auth-local-simulated-app",
@@ -79,18 +79,12 @@ describe("rpcLanes auth", () => {
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "ok",
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-auth-local-simulated-missing-communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [{ lane, communicator, auth: {} }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-auth-local-simulated-missing-communicator",
+    );
+    const topology = createClientRpcLaneTopology([
+      { lane, communicator, auth: {} },
+    ]);
     const app = defineResource({
       id: "tests-rpc-lanes-auth-local-simulated-missing-app",
       register: [
@@ -127,18 +121,13 @@ describe("rpcLanes auth", () => {
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "secured",
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-auth-network-communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        server: { serve: [lane] },
-      },
-      bindings: [{ lane, communicator, auth: { secret: "network-secret" } }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-auth-network-communicator",
+    );
+    const topology = createServerRpcLaneTopology(
+      [lane],
+      [{ lane, communicator, auth: { secret: "network-secret" } }],
+    );
     const exposurePort = await allocatePort();
     const lanes = rpcLanesResource.with({
       profile: "server",

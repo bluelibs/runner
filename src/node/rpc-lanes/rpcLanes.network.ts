@@ -9,6 +9,7 @@ import {
   assertTaskOwnership,
   type RpcLanesRuntimeContext,
 } from "./rpcLanes.runtime.utils";
+import { RUNNER_ASYNC_CONTEXT_HEADER } from "../../remote-lanes/http/constants";
 
 export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   const { resolved, dependencies, resourceId } = context;
@@ -129,7 +130,7 @@ function createRpcLaneRequestHeadersBuilder(context: RpcLanesRuntimeContext) {
       serializer: dependencies.serializer,
     });
     if (contextHeader) {
-      headers["x-runner-context"] = contextHeader;
+      headers[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeader;
     }
 
     return Object.keys(headers).length > 0 ? headers : undefined;
