@@ -83,6 +83,49 @@ describe("budget ledger", () => {
     ).toThrow(/minute/);
   });
 
+  test("counts minute-rejected requests toward hour and day limits", () => {
+    const ledger = createBudgetLedger(
+      buildState(),
+      10,
+      { inputPer1M: 1, cachedInputPer1M: 0.1, outputPer1M: 1 },
+      { perMinute: 1, perHour: 2, perDay: 2 },
+    );
+
+    ledger.enforceIpLimit({
+      day: "2026-03-09",
+      hourBucket: "2026-03-09T10",
+      minuteBucket: "2026-03-09T10:00",
+      ip: "1.1.1.1",
+    });
+
+    expect(() =>
+      ledger.enforceIpLimit({
+        day: "2026-03-09",
+        hourBucket: "2026-03-09T10",
+        minuteBucket: "2026-03-09T10:00",
+        ip: "1.1.1.1",
+      }),
+    ).toThrow(/minute/);
+
+    expect(() =>
+      ledger.enforceIpLimit({
+        day: "2026-03-09",
+        hourBucket: "2026-03-09T10",
+        minuteBucket: "2026-03-09T10:01",
+        ip: "1.1.1.1",
+      }),
+    ).toThrow(/hour/);
+
+    expect(() =>
+      ledger.enforceIpLimit({
+        day: "2026-03-09",
+        hourBucket: "2026-03-09T11",
+        minuteBucket: "2026-03-09T11:00",
+        ip: "1.1.1.1",
+      }),
+    ).toThrow(/day/);
+  });
+
   test("enforces per-hour limits across minute buckets", () => {
     const ledger = createBudgetLedger(
       buildState(),

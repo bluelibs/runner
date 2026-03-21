@@ -433,6 +433,36 @@ describe("durable: DurableContext", () => {
     );
   });
 
+  it("consumes a buffered signal before re-registering a replayed waiting step", async () => {
+    const { store, bus } = createContext();
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:durable-tests-paid",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+    await store.bufferSignalRecord("e1", Paid.id, {
+      id: "sig-1",
+      payload: { paidAt: 77 },
+      receivedAt: new Date(),
+    });
+
+    const replayedCtx = new DurableContext(store, bus, "e1", 1);
+
+    await expect(replayedCtx.waitForSignal(Paid)).resolves.toEqual({
+      paidAt: 77,
+    });
+    expect(
+      (await store.getStepResult("e1", "__signal:durable-tests-paid"))?.result,
+    ).toEqual({
+      state: "completed",
+      payload: { paidAt: 77 },
+    });
+    expect(await store.peekNextSignalWaiter("e1", Paid.id)).toBeNull();
+    expect((await store.getSignalState("e1", Paid.id))?.queued).toEqual([]);
+  });
+
   it("returns signal payload when completed and supports multiple waits", async () => {
     const { store, ctx } = createContext();
 
@@ -550,6 +580,56 @@ describe("durable: DurableContext", () => {
 
     const timers = await store.getReadyTimers(new Date(Date.now() + 60_000));
     expect(timers.some((t) => t.type === "signal_timeout")).toBe(true);
+  });
+
+  it("consumes a buffered signal before re-registering a timeout-backed replayed waiting step", async () => {
+    const { store, bus } = createContext();
+    const timerId = "signal_timeout:e1:__signal:durable-tests-paid";
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:durable-tests-paid",
+      result: {
+        state: "waiting",
+        signalId: Paid.id,
+        timeoutAtMs: Date.now() + 60_000,
+        timerId,
+      },
+      completedAt: new Date(),
+    });
+    await store.createTimer({
+      id: timerId,
+      executionId: "e1",
+      stepId: "__signal:durable-tests-paid",
+      type: "signal_timeout",
+      fireAt: new Date(Date.now() + 60_000),
+      status: "pending",
+    });
+    await store.bufferSignalRecord("e1", Paid.id, {
+      id: "sig-timeout",
+      payload: { paidAt: 88 },
+      receivedAt: new Date(),
+    });
+
+    const replayedCtx = new DurableContext(store, bus, "e1", 1);
+
+    await expect(
+      replayedCtx.waitForSignal(Paid, { timeoutMs: 10 }),
+    ).resolves.toEqual({
+      kind: "signal",
+      payload: { paidAt: 88 },
+    });
+    expect(
+      (await store.getStepResult("e1", "__signal:durable-tests-paid"))?.result,
+    ).toEqual({
+      state: "completed",
+      payload: { paidAt: 88 },
+    });
+    expect(await store.peekNextSignalWaiter("e1", Paid.id)).toBeNull();
+    expect((await store.getSignalState("e1", Paid.id))?.queued).toEqual([]);
+
+    const timers = await store.getReadyTimers(new Date(Date.now() + 120_000));
+    expect(timers.some((timer) => timer.id === timerId)).toBe(false);
   });
 
   it("throws when a signal step result is an invalid primitive", async () => {

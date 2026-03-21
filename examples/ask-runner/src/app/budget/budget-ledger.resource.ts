@@ -65,30 +65,31 @@ export function createBudgetLedger(
         ip,
         storageLimits.maxTrackedMinuteIps,
       );
-      if (minuteCount > rateLimits.perMinute) {
-        rateLimitExceededError.throw({
-          message: "Rate limit exceeded for this minute.",
-        });
-      }
-
       const hourCount = incrementWindowCount(
         state.hourWindow,
         hourBucket,
         ip,
         storageLimits.maxTrackedHourIps,
       );
-      if (hourCount > rateLimits.perHour) {
-        rateLimitExceededError.throw({
-          message: "Rate limit exceeded for this hour.",
-        });
-      }
-
       const dayCount = incrementWindowCount(
         state.dayWindow,
         day,
         ip,
         storageLimits.maxTrackedDayIps,
       );
+
+      if (minuteCount > rateLimits.perMinute) {
+        rateLimitExceededError.throw({
+          message: "Rate limit exceeded for this minute.",
+        });
+      }
+
+      if (hourCount > rateLimits.perHour) {
+        rateLimitExceededError.throw({
+          message: "Rate limit exceeded for this hour.",
+        });
+      }
+
       if (dayCount > rateLimits.perDay) {
         rateLimitExceededError.throw({
           message: "Rate limit exceeded for this day.",

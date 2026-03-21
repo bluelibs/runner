@@ -60,6 +60,16 @@ function nextIndex(counter: Map<string, number>, key: string): number {
   return current;
 }
 
+function createCompletedSignalState(stepId: string, signalId: string) {
+  return shouldPersistStableSignalId(stepId, signalId)
+    ? {
+        state: "completed" as const,
+        signalId,
+        payload: undefined as unknown,
+      }
+    : { state: "completed" as const, payload: undefined as unknown };
+}
+
 export async function waitForSignalDurably<TPayload>(params: {
   store: IDurableStore;
   executionId: string;
@@ -137,6 +147,23 @@ export async function waitForSignalDurably<TPayload>(params: {
           return resolveTimedOut();
         }
         // Remaining valid parsed state is "waiting" (completed/timed_out returned above).
+        const queuedSignal = await params.store.consumeBufferedSignalForStep({
+          executionId: params.executionId,
+          stepId,
+          result: createCompletedSignalState(stepId, signalId),
+          completedAt: new Date(),
+        });
+        if (queuedSignal) {
+          if ("timerId" in parsedState) {
+            try {
+              await params.store.deleteTimer(parsedState.timerId);
+            } catch {
+              // Durable completion already won; stale timer cleanup stays best-effort.
+            }
+          }
+          return resolveCompleted(queuedSignal.payload as TPayload);
+        }
+
         let waiterTimerId: string | undefined;
         if (params.options?.timeoutMs !== undefined) {
           if ("timeoutAtMs" in parsedState && "timerId" in parsedState) {
@@ -192,17 +219,10 @@ export async function waitForSignalDurably<TPayload>(params: {
         throw new SuspensionSignal("yield");
       }
 
-      const completedSignalState = shouldPersistStableSignalId(stepId, signalId)
-        ? {
-            state: "completed" as const,
-            signalId,
-            payload: undefined as unknown,
-          }
-        : { state: "completed" as const, payload: undefined as unknown };
       const queuedSignal = await params.store.consumeBufferedSignalForStep({
         executionId: params.executionId,
         stepId,
-        result: completedSignalState,
+        result: createCompletedSignalState(stepId, signalId),
         completedAt: new Date(),
       });
       if (queuedSignal) {

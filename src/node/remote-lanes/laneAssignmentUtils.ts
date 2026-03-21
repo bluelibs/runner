@@ -93,11 +93,11 @@ export function isRegisteredDefinitionId(store: Store, id: string): boolean {
  */
 export function collectCrossLaneApplyToEventIds(
   store: Store,
-  resourceId: string,
+  resourceReference: unknown,
   collectTopologyLanes: (topology: unknown) => readonly { applyTo?: unknown }[],
 ): Set<string> {
   const eventIds = new Set<string>();
-  const entry = store.resources.get(resolveCanonicalId(store, resourceId));
+  const entry = tryGetResolvedResourceEntry(store, resourceReference);
   const config = entry?.config as Record<string, unknown> | undefined;
   const topology = config?.topology;
   if (!topology) {
@@ -133,6 +133,17 @@ export function collectCrossLaneApplyToEventIds(
   }
 
   return eventIds;
+}
+
+function tryGetResolvedResourceEntry(store: Store, resourceReference: unknown) {
+  const canonicalId = resolveRequestedIdFromStore(store, resourceReference);
+  if (canonicalId) {
+    return store.resources.get(canonicalId);
+  }
+
+  return typeof resourceReference === "string"
+    ? store.resources.get(resourceReference)
+    : undefined;
 }
 
 export function toPublicPredicateCandidate<T extends { id: string }>(

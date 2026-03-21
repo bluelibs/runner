@@ -867,4 +867,48 @@ describe("rpcLanesResource", () => {
       name: "rpcLane-ownershipConflict",
     });
   });
+
+  it("marks routed tasks with the canonical nested rpcLanes resource id", async () => {
+    const task = defineTask({
+      id: "tests-rpc-lanes-canonical-owner-task",
+      run: async () => "local",
+    });
+    const lane = r
+      .rpcLane("tests-rpc-lanes-canonical-owner-lane")
+      .applyTo([task])
+      .build();
+    const communicator = defineResource({
+      id: "tests-rpc-lanes-canonical-owner-communicator",
+      init: async () => ({
+        task: async () => "remote",
+      }),
+    });
+    const nestedRemote = defineResource({
+      id: "remote",
+      register: [
+        communicator,
+        rpcLanesResource.with({
+          profile: "client",
+          topology: {
+            profiles: { client: { serve: [] } },
+            bindings: [{ lane, communicator }],
+          },
+        }),
+      ],
+    });
+    const app = defineResource({
+      id: "tests-rpc-lanes-canonical-owner-app",
+      register: [task, nestedRemote],
+    });
+
+    const runtime = await run(app);
+    const taskEntry = runtime.store.tasks.get(
+      runtime.store.findIdByDefinition(task),
+    );
+    const rpcOwnerId = runtime.store.findIdByDefinition(rpcLanesResource);
+
+    expect(taskEntry?.task[symbolRpcLaneRoutedBy]).toBe(rpcOwnerId);
+
+    await runtime.dispose();
+  });
 });

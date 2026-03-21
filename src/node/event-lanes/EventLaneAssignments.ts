@@ -17,7 +17,7 @@ import {
   toPublicPredicateCandidate,
   visitLaneApplyTo,
 } from "../remote-lanes/laneAssignmentUtils";
-import { RPC_LANES_RESOURCE_ID } from "../rpc-lanes/rpcLanes.resource";
+import { rpcLanesResource } from "../rpc-lanes/rpcLanes.resource";
 
 export interface EventLaneRoute {
   lane: IEventLaneDefinition;
@@ -142,7 +142,7 @@ function resolveEventLaneTarget(
 function collectRpcLaneApplyToEventIds(store: Store): Set<string> {
   return collectCrossLaneApplyToEventIds(
     store,
-    RPC_LANES_RESOURCE_ID,
+    rpcLanesResource,
     collectRpcTopologyLanes as (
       topology: unknown,
     ) => readonly { applyTo?: unknown }[],

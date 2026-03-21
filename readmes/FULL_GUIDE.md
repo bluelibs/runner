@@ -3187,7 +3187,7 @@ Fail-fast rule: if a tagged item depends on the same tag, Runner throws during s
 
 Typed Runner errors are declared once and can be used in two ways:
 
-- recommended app/runtime usage: register them and inject them through dependencies
+- recommended app/runtime usage: register them, inject them through dependencies, and prefer `throw errorHelper.new({ ... })`
 - local/helper usage: call `.new()`, `.throw()`, or `.is()` directly on the built helper even outside `run(...)`
 
 Registering an error makes it part of the Runner definition graph, so it can be injected, discovered, and referenced declaratively via `.throws(...)`. The helper itself does not require a running runtime for local construction or `.is()` checks.
@@ -3214,12 +3214,15 @@ const getUser = r
   .task("getUser")
   .dependencies({ userNotFoundError })
   .run(async (input, { userNotFoundError }) => {
-    userNotFoundError.throw({ code: 404, message: `User ${input} not found` });
+    throw userNotFoundError.new({
+      code: 404,
+      message: `User ${input} not found`,
+    });
   })
   .build();
 ```
 
-**What you just learned**: Runner errors are declared once as typed helpers, injected via dependencies, and consumed with `.throw()`, `.is()`, or `.new()`. They carry structured data, optional HTTP codes, and remediation advice.
+**What you just learned**: Runner errors are declared once as typed helpers, injected via dependencies, and consumed with `.new()`, `.throw()`, or `.is()`. In app code, prefer `throw helper.new(...)`; it keeps the `throw` explicit, tends to preserve sharper TypeScript inference at the throw site, and avoids adding the helper method itself to the stack. They carry structured data, optional HTTP codes, and remediation advice.
 
 The thrown error uses the helper id as its `name`.
 By default `message` is `JSON.stringify(data)`, but `.format(...)` lets you produce a human-friendly message.
@@ -3249,6 +3252,8 @@ Notes:
 - `errorHelper.is(err, partialData?)` is lineage-aware and works on errors created locally with the same helper, even outside `run(...)`
 - `partialData` uses shallow strict matching
 - `errorHelper.new(data)` returns the typed `RunnerError` without throwing
+- prefer `throw errorHelper.new(data)` in snippets and application code
+- `errorHelper.throw(data)` remains a valid shorthand when you want helper-managed throwing in one call
 - `.new()` / `.throw()` / `.is()` do not require the helper to be registered
 - registration is required when you want DI, store visibility, tag/discovery participation, or `.throws(...)` contracts to refer to that definition inside the app graph
 - `errors.genericError` is the built-in fallback for ad-hoc message-only errors; prefer domain-specific helpers when the contract is stable
@@ -3314,6 +3319,7 @@ The `throws` list accepts Runner error helpers only, and is normalized and dedup
 Recommended practice:
 
 - inject registered error helpers inside tasks/resources/hooks/middleware that are part of the Runner graph
+- prefer `throw helper.new({ ... })` in runtime code and snippets; reserve `.throw({ ... })` as shorthand, not the default recommendation
 - use standalone local helpers for isolated utility code, tests, or pre-runtime construction when DI is not needed
 - do not assume `.throws(...)` alone makes an error injectable; injection still depends on registration
 

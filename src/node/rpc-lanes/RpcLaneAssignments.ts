@@ -10,7 +10,7 @@ import {
 import { globalTags } from "../../globals/globalTags";
 import type { Store } from "../../models/Store";
 import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
-import { EVENT_LANES_RESOURCE_ID } from "../event-lanes/eventLanes.resource";
+import { eventLanesResource } from "../event-lanes/eventLanes.resource";
 import {
   assignLaneTargetOrThrow,
   assertEventNotAssignedToOtherLane,
@@ -215,7 +215,7 @@ function resolveRpcLaneTarget(
 function collectEventLaneApplyToEventIds(store: Store): Set<string> {
   return collectCrossLaneApplyToEventIds(
     store,
-    EVENT_LANES_RESOURCE_ID,
+    eventLanesResource,
     collectEventTopologyLanes as (
       topology: unknown,
     ) => readonly { applyTo?: unknown }[],

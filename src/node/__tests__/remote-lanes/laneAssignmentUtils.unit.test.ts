@@ -2,6 +2,7 @@ import {
   assignLaneTargetOrThrow,
   collectCrossLaneApplyToEventIds,
 } from "../../remote-lanes/laneAssignmentUtils";
+import { rpcLanesResource } from "../../rpc-lanes/rpcLanes.resource";
 
 describe("laneAssignmentUtils", () => {
   it("uses the raw resource id fallback when canonical resolution returns null", () => {
@@ -103,14 +104,14 @@ describe("laneAssignmentUtils", () => {
     expect(eventIds.size).toBe(0);
   });
 
-  it("requires exact resource ids when canonical resolution misses", () => {
+  it("resolves configured resource definitions through the store lookup", () => {
     const eventIds = collectCrossLaneApplyToEventIds(
       {
         resources: new Map([
           [
-            "app.resources.rpc",
+            "app.rpcLanes",
             {
-              resource: { id: "app.resources.rpc" },
+              resource: { id: "app.rpcLanes" },
               config: {
                 topology: {
                   bindings: [
@@ -131,8 +132,11 @@ describe("laneAssignmentUtils", () => {
             { event: { id: "app.events.user.created" } },
           ],
         ]),
+        hasDefinition: (reference: unknown) => reference === rpcLanesResource,
+        findIdByDefinition: (reference: unknown) =>
+          reference === rpcLanesResource ? "app.rpcLanes" : String(reference),
       } as any,
-      "rpc",
+      rpcLanesResource,
       (topology) =>
         (
           topology as {
@@ -141,7 +145,7 @@ describe("laneAssignmentUtils", () => {
         ).bindings.map((binding) => binding.lane),
     );
 
-    expect(eventIds.size).toBe(0);
+    expect(Array.from(eventIds)).toEqual(["app.events.user.created"]);
   });
 
   it("falls back to raw target ids when canonical resolution returns null", () => {
@@ -167,5 +171,18 @@ describe("laneAssignmentUtils", () => {
       currentLaneId: "lane-a",
       attemptedLaneId: "lane-b",
     });
+  });
+
+  it("ignores unresolved non-string resource references", () => {
+    const eventIds = collectCrossLaneApplyToEventIds(
+      {
+        resources: new Map(),
+        events: new Map(),
+      } as any,
+      { resource: "rpcLanes" },
+      () => [],
+    );
+
+    expect(eventIds.size).toBe(0);
   });
 });

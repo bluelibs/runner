@@ -273,4 +273,57 @@ describe("rpcLanes applyTo", () => {
       /already assigned to an (rpcLane|event lane)/,
     );
   });
+
+  it("fails when rpcLane applyTo collides with a nested eventLane applyTo on the same event", async () => {
+    const event = defineEvent<{ value: number }>({
+      id: "tests-rpc-lanes-apply-to-cross-lane-nested-event",
+    });
+    const rpc = r
+      .rpcLane("tests-rpc-lanes-apply-to-cross-lane-nested-rpc")
+      .applyTo([event])
+      .build();
+    const eventLane = r
+      .eventLane("tests-rpc-lanes-apply-to-cross-lane-nested-event-lane")
+      .applyTo([event])
+      .build();
+    const communicator = defineResource({
+      id: "tests-rpc-lanes-apply-to-cross-lane-nested-communicator",
+      init: async () => ({
+        event: async () => undefined,
+      }),
+    });
+    const nestedWorker = defineResource({
+      id: "nested-worker",
+      register: [
+        eventLanesResource.with({
+          profile: "worker",
+          mode: "transparent",
+          topology: {
+            profiles: { worker: { consume: [{ lane: eventLane }] } },
+            bindings: [],
+          },
+        }),
+      ],
+    });
+
+    const app = defineResource({
+      id: "tests-rpc-lanes-apply-to-cross-lane-nested-app",
+      register: [
+        event,
+        nestedWorker,
+        communicator,
+        rpcLanesResource.with({
+          profile: "client",
+          topology: {
+            profiles: { client: { serve: [] } },
+            bindings: [{ lane: rpc, communicator }],
+          },
+        }),
+      ],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      /already assigned to an (rpcLane|event lane)/,
+    );
+  });
 });

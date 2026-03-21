@@ -313,4 +313,42 @@ describe("rpcLanesResource modes", () => {
       name: "rpcLane-ownershipConflict",
     });
   });
+
+  it("local-simulated mode marks routed tasks with the canonical nested rpcLanes resource id", async () => {
+    const task = defineTask({
+      id: "tests-rpc-lanes-mode-simulated-canonical-owner-task",
+      run: async () => "local",
+    });
+    const lane = r
+      .rpcLane("tests-rpc-lanes-mode-simulated-canonical-owner-lane")
+      .applyTo([task])
+      .build();
+    const nestedRemote = defineResource({
+      id: "remote",
+      register: [
+        rpcLanesResource.with({
+          profile: "client",
+          topology: {
+            profiles: { client: { serve: [lane] } },
+            bindings: [],
+          },
+          mode: "local-simulated",
+        }),
+      ],
+    });
+    const app = defineResource({
+      id: "tests-rpc-lanes-mode-simulated-canonical-owner-app",
+      register: [task, nestedRemote],
+    });
+
+    const runtime = await run(app);
+    const taskEntry = runtime.store.tasks.get(
+      runtime.store.findIdByDefinition(task),
+    );
+    const rpcOwnerId = runtime.store.findIdByDefinition(rpcLanesResource);
+
+    expect(taskEntry?.task[symbolRpcLaneRoutedBy]).toBe(rpcOwnerId);
+
+    await runtime.dispose();
+  });
 });
