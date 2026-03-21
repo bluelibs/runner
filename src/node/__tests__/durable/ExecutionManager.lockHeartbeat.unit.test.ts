@@ -2,30 +2,60 @@ import { DurableService } from "../../durable/core/DurableService";
 import type { Execution } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import {
+  advanceTimers,
+  captureScheduledTimeout,
   createTaskExecutor,
+  flushMicrotasks,
   okTask,
   pendingExecution,
 } from "./DurableService.unit.helpers";
 
-async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+type TestExecutionManager = {
+  startLockHeartbeat: (params: {
+    lockResource: string;
+    lockId: string | "no-lock";
+    lockTtlMs: number;
+    lockState: { lost: boolean };
+  }) => () => void;
+  createExecutionLockState: () => {
+    lost: boolean;
+    lossError: Error | null;
+    triggerLoss: (error: Error) => void;
+    waitForLoss: Promise<never>;
+  };
+  runExecutionAttempt: (
+    execution: Execution,
+    taskDef: ReturnType<typeof okTask>,
+    lockState: {
+      lost: boolean;
+      lossError: Error | null;
+      triggerLoss: (error: Error) => void;
+      waitForLoss: Promise<never>;
+    },
+  ) => Promise<void>;
+};
+
+function getTestExecutionManager(
+  service: DurableService,
+): TestExecutionManager {
+  return service._executionManager as unknown as TestExecutionManager;
 }
 
-async function advanceTimers(ms: number): Promise<void> {
-  const asyncAdvance = (
-    jest as unknown as {
-      advanceTimersByTimeAsync?: (msToRun: number) => Promise<void>;
-    }
-  ).advanceTimersByTimeAsync;
-
-  if (asyncAdvance) {
-    await asyncAdvance(ms);
-    return;
-  }
-
-  jest.advanceTimersByTime(ms);
-  await flushMicrotasks();
+function startLockHeartbeat(
+  service: DurableService,
+  params: {
+    lockResource: string;
+    lockId: string | "no-lock";
+    lockTtlMs?: number;
+    lockState?: { lost: boolean };
+  },
+): () => void {
+  return getTestExecutionManager(service).startLockHeartbeat({
+    lockResource: params.lockResource,
+    lockId: params.lockId,
+    lockTtlMs: params.lockTtlMs ?? 3_000,
+    lockState: params.lockState ?? { lost: false },
+  });
 }
 
 describe("durable: ExecutionManager lock heartbeat (unit)", () => {
@@ -36,20 +66,9 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
       const store = new MemoryStore();
       const renewLockSpy = jest.spyOn(store, "renewLock");
       const service = new DurableService({ store, tasks: [] });
-
-      const stopHeartbeat = (
-        service._executionManager as unknown as {
-          startLockHeartbeat: (params: {
-            lockResource: string;
-            lockId: string | "no-lock";
-            lockTtlMs: number;
-            lockState: { lost: boolean };
-          }) => () => void;
-        }
-      ).startLockHeartbeat({
+      const stopHeartbeat = startLockHeartbeat(service, {
         lockResource: "execution:e-stop",
         lockId: "lock-stop",
-        lockTtlMs: 3_000,
         lockState: { lost: false },
       });
 
@@ -59,6 +78,86 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
       expect(renewLockSpy).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
+    }
+  });
+
+  it("ignores an already-scheduled renewal callback after the heartbeat is stopped", async () => {
+    const store = new MemoryStore();
+    const renewLockSpy = jest.spyOn(store, "renewLock");
+    const service = new DurableService({ store, tasks: [] });
+    const scheduledTimeout = captureScheduledTimeout();
+
+    try {
+      const stopHeartbeat = startLockHeartbeat(service, {
+        lockResource: "execution:e-stopped-callback",
+        lockId: "lock-stopped-callback",
+        lockState: { lost: false },
+      });
+
+      stopHeartbeat();
+      const callback = scheduledTimeout.getScheduledCallback(
+        "Expected lock-heartbeat callback to be scheduled",
+      );
+      callback();
+      await flushMicrotasks();
+
+      expect(renewLockSpy).not.toHaveBeenCalled();
+    } finally {
+      scheduledTimeout.restore();
+    }
+  });
+
+  it("does not require timer handles to expose unref", () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const mockSetTimeout = (() => ({})) as unknown as typeof setTimeout;
+    const setTimeoutSpy = jest
+      .spyOn(global, "setTimeout")
+      .mockImplementation(mockSetTimeout);
+
+    try {
+      const stopHeartbeat = startLockHeartbeat(service, {
+        lockResource: "execution:e-no-unref",
+        lockId: "lock-no-unref",
+        lockState: { lost: false },
+      });
+
+      expect(stopHeartbeat).toBeInstanceOf(Function);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
+  it("stops cleanly after a lock renewal has already started", async () => {
+    const store = new MemoryStore();
+    let resolveRenewal!: (value: boolean) => void;
+    jest.spyOn(store, "renewLock").mockImplementation(
+      async () =>
+        await new Promise<boolean>((resolve) => {
+          resolveRenewal = resolve;
+        }),
+    );
+    const service = new DurableService({ store, tasks: [] });
+    const scheduledTimeout = captureScheduledTimeout();
+
+    try {
+      const stopHeartbeat = startLockHeartbeat(service, {
+        lockResource: "execution:e-in-flight-stop",
+        lockId: "lock-in-flight-stop",
+        lockState: { lost: false },
+      });
+
+      const callback = scheduledTimeout.getScheduledCallback(
+        "Expected lock-heartbeat callback to be scheduled",
+      );
+      callback();
+      stopHeartbeat();
+      resolveRenewal(true);
+      await flushMicrotasks();
+
+      expect(scheduledTimeout.clearTimeoutSpy).not.toHaveBeenCalled();
+    } finally {
+      scheduledTimeout.restore();
     }
   });
 
@@ -75,20 +174,9 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
           }),
       );
       const service = new DurableService({ store, tasks: [] });
-
-      const stopHeartbeat = (
-        service._executionManager as unknown as {
-          startLockHeartbeat: (params: {
-            lockResource: string;
-            lockId: string | "no-lock";
-            lockTtlMs: number;
-            lockState: { lost: boolean };
-          }) => () => void;
-        }
-      ).startLockHeartbeat({
+      const stopHeartbeat = startLockHeartbeat(service, {
         lockResource: "execution:e-overlap",
         lockId: "lock-overlap",
-        lockTtlMs: 3_000,
         lockState: { lost: false },
       });
 
@@ -142,17 +230,8 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
   it("ignores duplicate lock-loss notifications", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
-
-    const lockState = (
-      service._executionManager as unknown as {
-        createExecutionLockState: () => {
-          lost: boolean;
-          lossError: Error | null;
-          triggerLoss: (error: Error) => void;
-          waitForLoss: Promise<never>;
-        };
-      }
-    ).createExecutionLockState();
+    const lockState =
+      getTestExecutionManager(service).createExecutionLockState();
 
     const firstError = new Error("first");
     lockState.triggerLoss(firstError);
@@ -173,20 +252,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
     });
 
     await expect(
-      (
-        service._executionManager as unknown as {
-          runExecutionAttempt: (
-            execution: ReturnType<typeof pendingExecution>,
-            taskDef: typeof task,
-            lockState: {
-              lost: boolean;
-              lossError: Error | null;
-              triggerLoss: (error: Error) => void;
-              waitForLoss: Promise<never>;
-            },
-          ) => Promise<void>;
-        }
-      ).runExecutionAttempt(
+      getTestExecutionManager(service).runExecutionAttempt(
         pendingExecution({ id: "e-already-lost", taskId: task.id }),
         task,
         {
@@ -230,15 +296,11 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
       };
 
       type TestLockState = typeof lockState;
-      const processing = (
-        service._executionManager as unknown as {
-          runExecutionAttempt: (
-            execution: Execution,
-            taskDef: typeof task,
-            lockState: TestLockState,
-          ) => Promise<void>;
-        }
-      ).runExecutionAttempt(execution, task, lockState);
+      const processing = getTestExecutionManager(service).runExecutionAttempt(
+        execution,
+        task,
+        lockState as TestLockState,
+      );
 
       lockState.lost = true;
       await advanceTimers(0);

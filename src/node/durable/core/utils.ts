@@ -94,6 +94,10 @@ export function parseSignalState(value: unknown): {
   return null;
 }
 
+/**
+ * Returns whether a signal step id is stable enough to persist its signal id in
+ * stored step state instead of relying on the generated `__signal:*` form.
+ */
 export function shouldPersistStableSignalId(
   stepId: string,
   signalId: string,

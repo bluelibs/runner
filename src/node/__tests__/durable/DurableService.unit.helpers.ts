@@ -10,6 +10,7 @@ import type { Execution } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { DurableService } from "../../durable/core/DurableService";
 import { genericError } from "../../../errors";
+import { Logger, type ILog } from "../../../models/Logger";
 
 // ---------------------------------------------------------------------------
 // Task executor
@@ -48,6 +49,88 @@ export class SpyQueue implements IDurableQueue {
   async consume<T>(_handler: MessageHandler<T>): Promise<void> {}
   async ack(_messageId: string): Promise<void> {}
   async nack(_messageId: string, _requeue?: boolean): Promise<void> {}
+}
+
+// ---------------------------------------------------------------------------
+// Async / timer helpers
+// ---------------------------------------------------------------------------
+
+export async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+export async function advanceTimers(ms: number): Promise<void> {
+  const asyncAdvance = (
+    jest as unknown as {
+      advanceTimersByTimeAsync?: (msToRun: number) => Promise<void>;
+    }
+  ).advanceTimersByTimeAsync;
+
+  if (asyncAdvance) {
+    await asyncAdvance(ms);
+    return;
+  }
+
+  jest.advanceTimersByTime(ms);
+  await flushMicrotasks();
+}
+
+export function requireScheduledCallback(
+  callback: (() => void) | null,
+  message: string,
+): () => void {
+  if (!callback) {
+    throw genericError.new({ message });
+  }
+
+  return callback;
+}
+
+export function captureScheduledTimeout() {
+  let scheduledCallback: (() => void) | null = null;
+  const clearTimeoutSpy = jest
+    .spyOn(global, "clearTimeout")
+    .mockImplementation(() => undefined);
+  const mockSetTimeout = ((callback: TimerHandler) => {
+    if (typeof callback === "function") {
+      scheduledCallback = callback as () => void;
+    }
+    return { unref: jest.fn() } as unknown as ReturnType<typeof setTimeout>;
+  }) as unknown as typeof setTimeout;
+  const setTimeoutSpy = jest
+    .spyOn(global, "setTimeout")
+    .mockImplementation(mockSetTimeout);
+
+  return {
+    clearTimeoutSpy,
+    getScheduledCallback(message: string) {
+      return requireScheduledCallback(scheduledCallback, message);
+    },
+    restore() {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Logger helpers
+// ---------------------------------------------------------------------------
+
+export function createBufferedLogger(): { logger: Logger; logs: ILog[] } {
+  const logs: ILog[] = [];
+  const logger = new Logger({
+    printThreshold: null,
+    printStrategy: "pretty",
+    bufferLogs: false,
+  });
+
+  logger.onLog((log) => {
+    logs.push(log);
+  });
+
+  return { logger, logs };
 }
 
 // ---------------------------------------------------------------------------

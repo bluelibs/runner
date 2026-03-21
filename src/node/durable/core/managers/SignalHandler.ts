@@ -6,7 +6,6 @@ import type { IValidationSchema } from "../../../../defs";
 import { Serializer } from "../../../../serializer";
 import type { AuditLogger } from "./AuditLogger";
 import { DurableAuditEntryKind } from "../audit";
-import { requireSignalJournalStore } from "../signalJournal";
 import {
   type DurableSignalRecord,
   type DurableSignalWaiter,
@@ -108,10 +107,6 @@ export class SignalHandler {
     const signalId = signal.id;
     const baseStepId = `__signal:${signalId}`;
     const validatedPayload = this.validateSignalPayload(signal, payload);
-    const signalJournalStore = requireSignalJournalStore(
-      this.store,
-      "signal()",
-    );
 
     const deliver = async (): Promise<{
       auditStepId: string;
@@ -180,21 +175,13 @@ export class SignalHandler {
         });
       }
 
-      await signalJournalStore.appendSignalRecord(
-        executionId,
-        signalId,
-        signalRecord,
-      );
+      await this.store.appendSignalRecord(executionId, signalId, signalRecord);
 
       if (!shouldResume) {
-        await signalJournalStore.enqueueQueuedSignalRecord(
-          executionId,
-          signalId,
-          {
-            ...signalRecord,
-            serializedPayload,
-          },
-        );
+        await this.store.enqueueQueuedSignalRecord(executionId, signalId, {
+          ...signalRecord,
+          serializedPayload,
+        });
       }
 
       return {

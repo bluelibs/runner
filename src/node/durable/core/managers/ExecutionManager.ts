@@ -447,9 +447,11 @@ export class ExecutionManager {
 
     const intervalMs = Math.max(1_000, Math.floor(params.lockTtlMs / 3));
     let stopped = false;
+    let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 
     const scheduleRenewal = () => {
-      const timer = setTimeout(() => {
+      heartbeatTimer = setTimeout(() => {
+        heartbeatTimer = null;
         if (stopped) return;
         void this.config.store.renewLock!(
           params.lockResource,
@@ -480,13 +482,17 @@ export class ExecutionManager {
             }
           });
       }, intervalMs);
-      timer.unref?.();
+      heartbeatTimer.unref?.();
     };
 
     scheduleRenewal();
 
     return () => {
       stopped = true;
+      if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer);
+        heartbeatTimer = null;
+      }
     };
   }
 

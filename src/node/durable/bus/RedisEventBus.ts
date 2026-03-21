@@ -11,6 +11,10 @@ import { Logger } from "../../../models/Logger";
 export interface RedisEventBusConfig {
   prefix?: string;
   redis?: RedisEventBusClient | string;
+  /**
+   * When `true`, `dispose()` also closes a caller-provided Redis client.
+   * By default externally provided clients remain owned by the caller.
+   */
   disposeProvidedClient?: boolean;
   logger?: Logger;
   onHandlerError?: (error: unknown) => void | Promise<void>;

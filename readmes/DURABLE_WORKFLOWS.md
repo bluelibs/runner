@@ -580,6 +580,12 @@ One of Runner's core philosophies is **zero lock-in**. If your team uses Postgre
 
 To implement a custom store (e.g., for SQL), you only need to satisfy the `IDurableStore` interface. The engine is designed to be "dumb" and trust the store for all persistence.
 
+The current durable contract has a small required core and a larger optional operator/tooling surface:
+
+- Required: execution persistence, step persistence, timers, schedules, signal journaling (`getSignalState`, `appendSignalRecord`, `enqueueQueuedSignalRecord`, `consumeQueuedSignalRecord`), and signal waiter ordering (`upsertSignalWaiter`, `takeNextSignalWaiter`, `deleteSignalWaiter`).
+- Optional: operator/dashboard helpers such as `listExecutions`, `listStepResults`, `appendAuditEntry`, `listAuditEntries`, `retryRollback`, `skipStep`, `forceFail`, `editStepResult`, and `listStuckExecutions`.
+- Required ordering note: `takeNextSignalWaiter` must return the earliest waiter for a given execution/signal pair using the same deterministic ordering as the built-in stores.
+
 **Minimum Viable Store (Pseudo-SQL):**
 
 ```typescript

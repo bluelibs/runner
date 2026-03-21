@@ -255,9 +255,9 @@ export class ScheduleManager {
   }
 
   private async saveScheduleWithTimer(schedule: Schedule): Promise<void> {
-    const nextRun = schedule.nextRun!;
+    const nextRun = schedule.nextRun;
     if (!nextRun) {
-      durableExecutionInvariantError.throw({
+      return durableExecutionInvariantError.throw({
         message: `Schedule '${schedule.id}' must have nextRun before arming its timer.`,
       });
     }

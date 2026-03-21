@@ -17,7 +17,6 @@ import {
   getSignalIdFromStepId,
   withSignalLock,
 } from "../signalWaiters";
-import { clearTimeout, setTimeout } from "node:timers";
 import { Logger } from "../../../../models/Logger";
 import { durableExecutionInvariantError } from "../../../../errors";
 
@@ -202,11 +201,31 @@ export class PollingManager {
         const currentSignalState = parseSignalState(currentSignalStep?.result);
         const signalIdForLock =
           currentSignalState?.signalId ?? fallbackSignalId;
+        const lockSignalId = signalIdForLock ?? "__unknown_signal_timeout__";
+
+        if (!signalIdForLock) {
+          try {
+            await this.logger.warn(
+              "Durable signal-timeout handler fell back to an unknown signal id.",
+              {
+                data: {
+                  timerId: timer.id,
+                  executionId: timer.executionId,
+                  stepId: timer.stepId,
+                  fallbackSignalId: lockSignalId,
+                  timerType: timer.type,
+                },
+              },
+            );
+          } catch {
+            // Logging must not crash durable timer handling.
+          }
+        }
 
         const persistedSignalId = await withSignalLock({
           store: this.store,
           executionId: timer.executionId,
-          signalId: signalIdForLock ?? "__unknown_signal_timeout__",
+          signalId: lockSignalId,
           fn: async () => {
             const existing = await this.store.getStepResult(
               timer.executionId!,
@@ -368,6 +387,7 @@ export class PollingManager {
 
     const intervalMs = Math.max(1_000, Math.floor(claimTtlMs / 3));
     let stopped = false;
+    let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 
     const loseClaim = (message: string) => {
       if (claimState.lossError) return;
@@ -378,7 +398,8 @@ export class PollingManager {
     const tick = () => {
       if (stopped) return;
 
-      const timer = setTimeout(() => {
+      heartbeatTimer = setTimeout(() => {
+        heartbeatTimer = null;
         if (stopped) return;
         void this.store.renewTimerClaim!(timerId, this.workerId, claimTtlMs)
           .then((renewed) => {
@@ -406,13 +427,17 @@ export class PollingManager {
           });
       }, intervalMs);
 
-      timer.unref?.();
+      heartbeatTimer.unref?.();
     };
 
     tick();
 
     return () => {
       stopped = true;
+      if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer);
+        heartbeatTimer = null;
+      }
     };
   }
 }

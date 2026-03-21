@@ -8,8 +8,6 @@ import {
   validationError,
 } from "../../errors";
 import { Match } from "../../tools/check";
-import type { MatchPattern } from "../../tools/check";
-import type { ValidationSchemaInput } from "../../types/utilities";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 import {
   defaultStorageTaskKeyBuilder,
@@ -56,18 +54,15 @@ const positiveNonZeroIntegerPattern = Match.Where(
     typeof value === "number" && Number.isInteger(value) && value > 0,
 );
 
-const rateLimitConfigPattern: ValidationSchemaInput<RateLimitMiddlewareConfig> =
-  Match.ObjectIncluding({
-    windowMs: positiveNonZeroIntegerPattern,
-    max: positiveNonZeroIntegerPattern,
-    keyBuilder: Match.Optional(Function),
-    maxKeys: Match.Optional(positiveNonZeroIntegerPattern),
-    identityScope: identityScopePattern,
-  });
+const rateLimitConfigPattern = Match.ObjectIncluding({
+  windowMs: positiveNonZeroIntegerPattern,
+  max: positiveNonZeroIntegerPattern,
+  keyBuilder: Match.Optional(Function),
+  maxKeys: Match.Optional(positiveNonZeroIntegerPattern),
+  identityScope: identityScopePattern,
+});
 
-const rateLimitRuntimeConfigSchema = Match.compile(
-  rateLimitConfigPattern as MatchPattern,
-);
+const rateLimitRuntimeConfigSchema = Match.compile(rateLimitConfigPattern);
 
 /**
  * Custom error class for rate limit errors.

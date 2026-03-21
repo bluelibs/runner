@@ -13,6 +13,13 @@ export function getSignalLockResource(
   return `signal:${executionId}:${signalId}`;
 }
 
+/**
+ * Creates a deterministic waiter sort key for a signal waiter step id.
+ *
+ * Base `__signal:${signalId}` waiters sort first, indexed `__signal:${signalId}:<n>`
+ * waiters sort next by zero-padded numeric index, and all other stable/custom
+ * step ids sort last.
+ */
 export function createSignalWaiterSortKey(
   signalId: string,
   stepId: string,

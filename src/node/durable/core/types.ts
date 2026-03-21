@@ -40,18 +40,33 @@ export interface StepResult<T = unknown> {
   completedAt: Date;
 }
 
+/**
+ * Persisted delivery record for a durable signal.
+ */
 export interface DurableSignalRecord<TPayload = unknown> {
+  /**
+   * Unique signal-record identifier for dedupe/history purposes.
+   */
   id: string;
   payload: TPayload;
   receivedAt: Date;
 }
 
+/**
+ * Queued durable signal payload stored before a waiter consumes it.
+ */
 export interface DurableQueuedSignalRecord<
   TPayload = unknown,
 > extends DurableSignalRecord<TPayload> {
+  /**
+   * Serialized payload form used for queue dedupe decisions.
+   */
   serializedPayload: string;
 }
 
+/**
+ * Persisted signal journal state for one execution + signal id pair.
+ */
 export interface DurableSignalState<TPayload = unknown> {
   executionId: string;
   signalId: string;
@@ -59,11 +74,20 @@ export interface DurableSignalState<TPayload = unknown> {
   history: Array<DurableSignalRecord<TPayload>>;
 }
 
+/**
+ * Indexed durable signal waiter metadata used to resume the earliest waiter.
+ */
 export interface DurableSignalWaiter {
   executionId: string;
   signalId: string;
   stepId: string;
+  /**
+   * Deterministic ordering key for waiter selection.
+   */
   sortKey: string;
+  /**
+   * Optional timeout timer id associated with this waiter.
+   */
   timerId?: string;
 }
 

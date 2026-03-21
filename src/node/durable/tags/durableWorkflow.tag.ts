@@ -1,4 +1,5 @@
 import { defineTag } from "../../../definers/defineTag";
+import { genericError } from "../../../errors";
 import { Match } from "../../../tools/check";
 import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask } from "../../../types/task";
@@ -46,9 +47,10 @@ const durableWorkflowConfigSchema = {
     const uniqueSignalIds = new Set(signalIds);
 
     if (uniqueSignalIds.size !== signalIds.length) {
-      throw new Error(
-        "durableWorkflow.signals must contain unique local signal ids.",
-      );
+      throw genericError.new({
+        message:
+          "durableWorkflow.signals must contain unique local signal ids.",
+      });
     }
 
     return config;

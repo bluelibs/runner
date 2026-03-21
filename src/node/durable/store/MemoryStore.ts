@@ -28,9 +28,23 @@ const createEmptySignalState = (
   history: [],
 });
 
+const cloneSignalPayload = <TPayload>(payload: TPayload): TPayload =>
+  structuredClone(payload);
+
+const cloneSignalRecord = <TPayload>(
+  record: DurableSignalRecord<TPayload>,
+): DurableSignalRecord<TPayload> => ({
+  id: record.id,
+  payload: cloneSignalPayload(record.payload),
+  receivedAt: record.receivedAt,
+});
+
 const cloneQueuedSignalRecord = (
   record: DurableQueuedSignalRecord,
-): DurableQueuedSignalRecord => ({ ...record });
+): DurableQueuedSignalRecord => ({
+  ...record,
+  payload: cloneSignalPayload(record.payload),
+});
 
 const cloneSignalState = (
   signalState: DurableSignalState,
@@ -38,7 +52,7 @@ const cloneSignalState = (
   executionId: signalState.executionId,
   signalId: signalState.signalId,
   queued: signalState.queued.map(cloneQueuedSignalRecord),
-  history: signalState.history.map((record) => ({ ...record })),
+  history: signalState.history.map(cloneSignalRecord),
 });
 
 const cloneSignalWaiter = (
@@ -288,7 +302,7 @@ export class MemoryStore implements IDurableStore {
     record: DurableSignalRecord,
   ): Promise<void> {
     const signalState = this.getOrCreateSignalState(executionId, signalId);
-    signalState.history.push({ ...record });
+    signalState.history.push(cloneSignalRecord(record));
   }
 
   async enqueueQueuedSignalRecord(
@@ -317,11 +331,7 @@ export class MemoryStore implements IDurableStore {
     const record = signalState?.queued.shift();
     if (!record) return null;
 
-    return {
-      id: record.id,
-      payload: record.payload,
-      receivedAt: record.receivedAt,
-    };
+    return cloneSignalRecord(record);
   }
 
   private getOrCreateSignalWaiters(

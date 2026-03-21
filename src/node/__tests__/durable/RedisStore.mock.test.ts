@@ -325,7 +325,7 @@ describe("durable: RedisStore", () => {
   });
 
   it("lists executions for dashboard", async () => {
-    redisMock.scan.mockResolvedValue(["0", ["durable:exec:1"]]);
+    redisMock.sscan.mockResolvedValue(["0", ["1", "2"]]);
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
@@ -389,30 +389,19 @@ describe("durable: RedisStore", () => {
   });
 
   it("lists step results for dashboard", async () => {
-    redisMock.scan.mockResolvedValue(["0", ["durable:step:e1:s1"]]);
-    redisMock.pipeline.mockReturnValue({
-      get: jest.fn().mockReturnThis(),
-      hget: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([
-        [
-          null,
-          serializer.stringify({
-            executionId: "e1",
-            stepId: "s2",
-            result: "late",
-            completedAt: new Date("2024-01-02T00:00:00.000Z"),
-          }),
-        ],
-        [
-          null,
-          serializer.stringify({
-            executionId: "e1",
-            stepId: "s1",
-            result: "early",
-            completedAt: new Date("2024-01-01T00:00:00.000Z"),
-          }),
-        ],
-      ]),
+    redisMock.hgetall.mockResolvedValue({
+      s2: serializer.stringify({
+        executionId: "e1",
+        stepId: "s2",
+        result: "late",
+        completedAt: new Date("2024-01-02T00:00:00.000Z"),
+      }),
+      s1: serializer.stringify({
+        executionId: "e1",
+        stepId: "s1",
+        result: "early",
+        completedAt: new Date("2024-01-01T00:00:00.000Z"),
+      }),
     });
 
     const results = await store.listStepResults("e1");
@@ -467,8 +456,9 @@ describe("durable: RedisStore", () => {
     };
 
     await store.appendAuditEntry(entry1);
-    expect(redisMock.set).toHaveBeenCalledWith(
-      `durable:audit:e1:${entry1.id}`,
+    expect(redisMock.hset).toHaveBeenCalledWith(
+      "durable:audit:e1",
+      entry1.id,
       expect.any(String),
     );
 
@@ -481,26 +471,18 @@ describe("durable: RedisStore", () => {
       message: "needs-id",
     };
     await store.appendAuditEntry(missingId);
-    expect(redisMock.set).toHaveBeenCalledWith(
-      expect.stringMatching(/^durable:audit:e1:1704067200000:.+/),
+    expect(redisMock.hset).toHaveBeenLastCalledWith(
+      "durable:audit:e1",
+      expect.stringMatching(/^1704067200000:.+/),
       expect.any(String),
     );
 
-    redisMock.scan.mockResolvedValue(["0", []]);
+    redisMock.hgetall.mockResolvedValueOnce({});
     await expect(store.listAuditEntries("e1")).resolves.toEqual([]);
 
-    redisMock.scan.mockResolvedValue([
-      "0",
-      [`durable:audit:e1:${entry2.id}`, `durable:audit:e1:${entry1.id}`],
-    ]);
-
-    redisMock.pipeline.mockReturnValue({
-      get: jest.fn().mockReturnThis(),
-      hget: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([
-        [null, serializer.stringify(entry2)],
-        [null, serializer.stringify(entry1)],
-      ]),
+    redisMock.hgetall.mockResolvedValue({
+      [entry2.id]: serializer.stringify(entry2),
+      [entry1.id]: serializer.stringify(entry1),
     });
 
     const listed = await store.listAuditEntries("e1");
@@ -512,19 +494,7 @@ describe("durable: RedisStore", () => {
     expect(
       paged.map((e) => (e.kind === "note" ? e.message : "not-note")),
     ).toEqual(["second"]);
-
-    redisMock.pipeline.mockReturnValue({
-      get: jest.fn().mockReturnThis(),
-      hget: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([[null, 123]]),
-    });
-    await expect(store.listAuditEntries("e1")).resolves.toEqual([]);
-
-    redisMock.pipeline.mockReturnValue({
-      get: jest.fn().mockReturnThis(),
-      hget: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue(null),
-    });
+    redisMock.hgetall.mockResolvedValueOnce({ ignored: 123 } as any);
     await expect(store.listAuditEntries("e1")).resolves.toEqual([]);
   });
 
@@ -551,11 +521,6 @@ describe("durable: RedisStore", () => {
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
   });
 
-  it("throws when Redis SCAN returns an unexpected shape (scanKeys)", async () => {
-    redisMock.scan.mockResolvedValueOnce("bad" as any);
-    await expect(store.listExecutions()).rejects.toThrow("SCAN");
-  });
-
   it("throws when Redis SCAN returns a non-string cursor", async () => {
     redisMock.sscan.mockResolvedValueOnce([1, []] as any);
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
@@ -573,8 +538,9 @@ describe("durable: RedisStore", () => {
 
   it("covers skipStep persistence", async () => {
     await store.skipStep("e1", "s1");
-    expect(redisMock.set).toHaveBeenCalledWith(
-      "durable:step:e1:s1",
+    expect(redisMock.hset).toHaveBeenCalledWith(
+      "durable:steps:e1",
+      "s1",
       expect.any(String),
     );
   });
@@ -587,19 +553,20 @@ describe("durable: RedisStore", () => {
       completedAt: new Date(),
     };
     await store.saveStepResult(step);
-    expect(redisMock.set).toHaveBeenCalledWith(
-      "durable:step:e1:s1",
+    expect(redisMock.hset).toHaveBeenCalledWith(
+      "durable:steps:e1",
+      "s1",
       expect.any(String),
     );
 
-    redisMock.get.mockResolvedValue(serializer.stringify(step));
+    redisMock.hget.mockResolvedValue(serializer.stringify(step));
     expect((await store.getStepResult("e1", "s1"))?.result).toBe("ok");
 
-    redisMock.get.mockResolvedValue(null);
+    redisMock.hget.mockResolvedValue(null);
     expect(await store.getStepResult("e1", "ghost")).toBeNull();
   });
 
-  it("reads step results from the indexed step bucket before legacy keys", async () => {
+  it("reads step results from the indexed step bucket", async () => {
     const step = {
       executionId: "e1",
       stepId: "s-indexed",
@@ -685,10 +652,7 @@ describe("durable: RedisStore", () => {
   });
 
   it("lists stuck executions (compensation_failed)", async () => {
-    redisMock.scan.mockResolvedValue([
-      "0",
-      ["durable:exec:1", "durable:exec:2"],
-    ]);
+    redisMock.sscan.mockResolvedValue(["0", ["1", "2"]]);
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
@@ -704,7 +668,7 @@ describe("durable: RedisStore", () => {
     const stuck = await store.listStuckExecutions();
     expect(stuck?.map((e) => e.id)).toEqual(["1"]);
 
-    redisMock.scan.mockResolvedValue(["0", []]);
+    redisMock.sscan.mockResolvedValue(["0", []]);
     expect(await store.listStuckExecutions()).toEqual([]);
   });
 
@@ -737,10 +701,7 @@ describe("durable: RedisStore", () => {
   });
 
   it("covers listStuckExecutions with null pipeline entries", async () => {
-    redisMock.scan.mockResolvedValue([
-      "0",
-      ["durable:exec:1", "durable:exec:2"],
-    ]);
+    redisMock.sscan.mockResolvedValue(["0", ["1", "2"]]);
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
@@ -758,7 +719,7 @@ describe("durable: RedisStore", () => {
   });
 
   it("covers listStuckExecutions null pipeline and operator missing branches", async () => {
-    redisMock.scan.mockResolvedValue(["0", ["durable:exec:1"]]);
+    redisMock.sscan.mockResolvedValue(["0", ["1"]]);
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
@@ -803,19 +764,20 @@ describe("durable: RedisStore", () => {
     expect(redisMock.eval).toHaveBeenCalled();
 
     await store.editStepResult("e1", "s1", { ok: true });
-    expect(redisMock.set).toHaveBeenCalledWith(
-      "durable:step:e1:s1",
+    expect(redisMock.hset).toHaveBeenCalledWith(
+      "durable:steps:e1",
+      "s1",
       expect.any(String),
     );
   });
 
   it("returns [] from listExecutions when no execution keys exist", async () => {
-    redisMock.scan.mockResolvedValue(["0", []]);
+    redisMock.sscan.mockResolvedValue(["0", []]);
     await expect(store.listExecutions()).resolves.toEqual([]);
   });
 
   it("returns [] from listExecutions when pipeline results are null", async () => {
-    redisMock.scan.mockResolvedValue(["0", ["durable:exec:1"]]);
+    redisMock.sscan.mockResolvedValue(["0", ["1"]]);
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
@@ -825,7 +787,7 @@ describe("durable: RedisStore", () => {
   });
 
   it("filters non-string pipeline entries when listing executions", async () => {
-    redisMock.scan.mockResolvedValue(["0", ["durable:exec:1"]]);
+    redisMock.sscan.mockResolvedValue(["0", ["1"]]);
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
@@ -834,14 +796,13 @@ describe("durable: RedisStore", () => {
     await expect(store.listExecutions()).resolves.toEqual([]);
   });
 
-  it("returns [] from listStepResults when no step keys exist", async () => {
-    redisMock.scan.mockResolvedValue(["0", []]);
+  it("returns [] from listStepResults when no indexed step results exist", async () => {
+    redisMock.hgetall.mockResolvedValueOnce({});
     await expect(store.listStepResults("e1")).resolves.toEqual([]);
   });
 
   it("returns [] from listStepResults when the indexed hash is null", async () => {
     redisMock.hgetall.mockResolvedValueOnce(null as any);
-    redisMock.scan.mockResolvedValueOnce(["0", []]);
 
     await expect(store.listStepResults("e1")).resolves.toEqual([]);
   });
@@ -1072,25 +1033,13 @@ describe("durable: RedisStore", () => {
     expect((await store.getSignalState("e1", "paid"))?.queued).toHaveLength(1);
   });
 
-  it("filters non-string pipeline entries when listing step results", async () => {
-    redisMock.scan.mockResolvedValue(["0", ["durable:step:e1:s1"]]);
-    redisMock.pipeline.mockReturnValue({
-      get: jest.fn().mockReturnThis(),
-      hget: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([[null, 123]]),
-    });
-    await expect(store.listStepResults("e1")).resolves.toEqual([]);
-
-    redisMock.pipeline.mockReturnValue({
-      get: jest.fn().mockReturnThis(),
-      hget: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue(null),
-    });
+  it("filters non-string hash entries when listing step results", async () => {
+    redisMock.hgetall.mockResolvedValueOnce({ ignored: 123 } as any);
     await expect(store.listStepResults("e1")).resolves.toEqual([]);
   });
 
   it("handles empty and null pipeline results when listing incomplete executions", async () => {
-    redisMock.scan.mockResolvedValue(["0", ["durable:exec:1"]]);
+    redisMock.sscan.mockResolvedValue(["0", ["1"]]);
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),

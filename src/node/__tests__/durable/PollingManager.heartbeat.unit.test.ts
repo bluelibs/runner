@@ -1,18 +1,25 @@
-import type { IDurableStore } from "../../durable/core/interfaces/store";
 import {
   AuditLogger,
   PollingManager,
   ScheduleManager,
   TaskRegistry,
 } from "../../durable/core/managers";
+import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { Logger, type ILog } from "../../../models/Logger";
+import { Logger } from "../../../models/Logger";
+import {
+  advanceTimers,
+  captureScheduledTimeout,
+  createBufferedLogger,
+} from "./DurableService.unit.helpers";
 
-async function waitMs(ms: number): Promise<void> {
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+type TestPollingManager = {
+  startTimerClaimHeartbeat: (
+    timerId: string,
+    claimTtlMs: number,
+    claimState: { lossError: Error | null },
+  ) => () => void;
+};
 
 function createPollingManager(store: IDurableStore, logger?: Logger) {
   const taskRegistry = new TaskRegistry();
@@ -37,23 +44,109 @@ function createPollingManager(store: IDurableStore, logger?: Logger) {
   );
 }
 
+function startTimerClaimHeartbeat(
+  manager: PollingManager,
+  timerId: string,
+  claimState: { lossError: Error | null } = { lossError: null },
+): () => void {
+  return (manager as unknown as TestPollingManager).startTimerClaimHeartbeat(
+    timerId,
+    3_000,
+    claimState,
+  );
+}
+
 describe("durable: PollingManager heartbeat (unit)", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("returns a no-op heartbeat stopper when claim renewal is unavailable", () => {
     const store = {} as IDurableStore;
     const manager = createPollingManager(store);
-
-    const stopHeartbeat = (
-      manager as unknown as {
-        startTimerClaimHeartbeat: (
-          timerId: string,
-          claimTtlMs: number,
-          claimState: { lossError: Error | null },
-        ) => () => void;
-      }
-    ).startTimerClaimHeartbeat("timer-1", 3_000, { lossError: null });
+    const stopHeartbeat = startTimerClaimHeartbeat(manager, "timer-1");
 
     expect(stopHeartbeat).toBeInstanceOf(Function);
     expect(() => stopHeartbeat()).not.toThrow();
+  });
+
+  it("ignores an already-scheduled renewal callback after the heartbeat is stopped", async () => {
+    const store = new MemoryStore();
+    const renewTimerClaimSpy = jest.spyOn(store, "renewTimerClaim");
+    const manager = createPollingManager(store);
+    const scheduledTimeout = captureScheduledTimeout();
+
+    try {
+      const stopHeartbeat = startTimerClaimHeartbeat(
+        manager,
+        "timer-stopped-callback",
+      );
+
+      stopHeartbeat();
+      const callback = scheduledTimeout.getScheduledCallback(
+        "Expected timer-claim heartbeat callback to be scheduled",
+      );
+      callback();
+      await Promise.resolve();
+
+      expect(renewTimerClaimSpy).not.toHaveBeenCalled();
+    } finally {
+      scheduledTimeout.restore();
+    }
+  });
+
+  it("does not require timer handles to expose unref", () => {
+    const store = new MemoryStore();
+    const manager = createPollingManager(store);
+    const mockSetTimeout = (() => ({})) as unknown as typeof setTimeout;
+    const setTimeoutSpy = jest
+      .spyOn(global, "setTimeout")
+      .mockImplementation(mockSetTimeout);
+
+    try {
+      const stopHeartbeat = startTimerClaimHeartbeat(manager, "timer-no-unref");
+
+      expect(stopHeartbeat).toBeInstanceOf(Function);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
+  it("stops cleanly after a timer-claim renewal has already started", async () => {
+    const store = new MemoryStore();
+    let resolveRenewal!: (value: boolean) => void;
+    jest.spyOn(store, "renewTimerClaim").mockImplementation(
+      async () =>
+        await new Promise<boolean>((resolve) => {
+          resolveRenewal = resolve;
+        }),
+    );
+    const manager = createPollingManager(store);
+    const scheduledTimeout = captureScheduledTimeout();
+
+    try {
+      const stopHeartbeat = startTimerClaimHeartbeat(
+        manager,
+        "timer-in-flight-stop",
+      );
+
+      const callback = scheduledTimeout.getScheduledCallback(
+        "Expected timer-claim heartbeat callback to be scheduled",
+      );
+      callback();
+      stopHeartbeat();
+      resolveRenewal(true);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(scheduledTimeout.clearTimeoutSpy).not.toHaveBeenCalled();
+    } finally {
+      scheduledTimeout.restore();
+    }
   });
 
   it("does not overlap timer-claim renewals while one renewal is still pending", async () => {
@@ -68,21 +161,12 @@ describe("durable: PollingManager heartbeat (unit)", () => {
           }),
       );
     const manager = createPollingManager(store);
+    const stopHeartbeat = startTimerClaimHeartbeat(manager, "timer-overlap");
 
-    const stopHeartbeat = (
-      manager as unknown as {
-        startTimerClaimHeartbeat: (
-          timerId: string,
-          claimTtlMs: number,
-          claimState: { lossError: Error | null },
-        ) => () => void;
-      }
-    ).startTimerClaimHeartbeat("timer-overlap", 3_000, { lossError: null });
-
-    await waitMs(1_100);
+    await advanceTimers(1_100);
     expect(renewTimerClaimSpy).toHaveBeenCalledTimes(1);
 
-    await waitMs(1_100);
+    await advanceTimers(1_100);
     expect(renewTimerClaimSpy).toHaveBeenCalledTimes(1);
 
     resolveRenewal(true);
@@ -96,21 +180,14 @@ describe("durable: PollingManager heartbeat (unit)", () => {
     jest.spyOn(store, "renewTimerClaim").mockResolvedValue(false);
     const manager = createPollingManager(store);
     const existingLoss = new Error("already lost");
-    const claimState = {
-      lossError: existingLoss,
-    };
+    const claimState = { lossError: existingLoss };
+    const stopHeartbeat = startTimerClaimHeartbeat(
+      manager,
+      "timer-existing-loss",
+      claimState,
+    );
 
-    const stopHeartbeat = (
-      manager as unknown as {
-        startTimerClaimHeartbeat: (
-          timerId: string,
-          claimTtlMs: number,
-          claimState: { lossError: Error | null },
-        ) => () => void;
-      }
-    ).startTimerClaimHeartbeat("timer-existing-loss", 3_000, claimState);
-
-    await waitMs(1_100);
+    await advanceTimers(1_100);
     await Promise.resolve();
 
     expect(claimState.lossError).toBe(existingLoss);
@@ -119,34 +196,19 @@ describe("durable: PollingManager heartbeat (unit)", () => {
 
   it("logs timer-claim heartbeat failures and records claim loss", async () => {
     const store = new MemoryStore();
-    const logs: ILog[] = [];
-    const logger = new Logger({
-      printThreshold: null,
-      printStrategy: "pretty",
-      bufferLogs: false,
-    });
-    logger.onLog((log) => {
-      logs.push(log);
-    });
+    const { logger, logs } = createBufferedLogger();
     jest
       .spyOn(store, "renewTimerClaim")
       .mockRejectedValue(new Error("renew exploded"));
     const manager = createPollingManager(store, logger);
-    const claimState = {
-      lossError: null as Error | null,
-    };
+    const claimState = { lossError: null as Error | null };
+    const stopHeartbeat = startTimerClaimHeartbeat(
+      manager,
+      "timer-reject",
+      claimState,
+    );
 
-    const stopHeartbeat = (
-      manager as unknown as {
-        startTimerClaimHeartbeat: (
-          timerId: string,
-          claimTtlMs: number,
-          claimState: { lossError: Error | null },
-        ) => () => void;
-      }
-    ).startTimerClaimHeartbeat("timer-reject", 3_000, claimState);
-
-    await waitMs(1_100);
+    await advanceTimers(1_100);
     await Promise.resolve();
 
     expect(claimState.lossError?.message).toContain(

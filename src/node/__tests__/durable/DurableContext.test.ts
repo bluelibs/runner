@@ -397,19 +397,6 @@ describe("durable: DurableContext", () => {
     ).rejects.toThrow("Invalid signal step state");
   });
 
-  it("throws when waitForSignal() cannot access pending signal journal state", async () => {
-    const base = new MemoryStore();
-    const storeWithoutPendingConsumer: IDurableStore = createBareStore(base, {
-      consumeQueuedSignalRecord: undefined,
-    });
-    const bus = new MemoryEventBus();
-    const ctx = new DurableContext(storeWithoutPendingConsumer, bus, "e1", 1);
-
-    await expect(ctx.waitForSignal(Paid)).rejects.toThrow(
-      "consumeQueuedSignalRecord",
-    );
-  });
-
   it("throws when waitForSignal() uses an undeclared signal", async () => {
     const { ctx } = createContext("e1", 1, new MemoryStore(), {
       declaredSignalIds: new Set(["another-signal"]),

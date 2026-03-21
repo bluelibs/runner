@@ -153,21 +153,6 @@ export class RedisStore implements IDurableStore {
     return parsed as [string, string[]];
   }
 
-  private async scanKeys(pattern: string): Promise<string[]> {
-    const keys: string[] = [];
-    let cursor = "0";
-    do {
-      const parsed = this.expectScanResponse(
-        await this.redis.scan(cursor, "MATCH", pattern, "COUNT", 100),
-        "SCAN",
-      );
-      const [newCursor, scannedKeys] = parsed;
-      cursor = newCursor;
-      keys.push(...scannedKeys);
-    } while (cursor !== "0");
-    return keys;
-  }
-
   private async scanSetMembers(setKey: string): Promise<string[]> {
     const members: string[] = [];
     let cursor = "0";
@@ -314,21 +299,6 @@ export class RedisStore implements IDurableStore {
     return executions;
   }
 
-  private async loadExecutionsByScan(): Promise<Execution[]> {
-    const keys = await this.scanKeys(this.k("exec:*"));
-    if (keys.length === 0) return [];
-
-    const pipeline = this.redis.pipeline();
-    keys.forEach((key) => pipeline.get(key));
-    const results = await pipeline.exec();
-
-    return (results || [])
-      .map(([_, res]) =>
-        typeof res === "string" ? (serializer.parse(res) as Execution) : null,
-      )
-      .filter((execution): execution is Execution => execution !== null);
-  }
-
   async saveExecution(execution: Execution): Promise<void> {
     const { isActive, isStuck } = this.statusFlags(execution.status);
 
@@ -400,12 +370,9 @@ export class RedisStore implements IDurableStore {
   }
 
   async listStuckExecutions(): Promise<Execution[]> {
-    let executions = await this.loadExecutionsFromSet(
+    const executions = await this.loadExecutionsFromSet(
       this.stuckExecutionsKey(),
     );
-    if (executions.length === 0) {
-      executions = await this.loadExecutionsByScan();
-    }
     return executions.filter(
       (execution) => execution.status === ExecutionStatus.CompensationFailed,
     );
@@ -461,9 +428,6 @@ export class RedisStore implements IDurableStore {
     options: ListExecutionsOptions = {},
   ): Promise<Execution[]> {
     let executions = await this.loadExecutionsFromSet(this.allExecutionsKey());
-    if (executions.length === 0) {
-      executions = await this.loadExecutionsByScan();
-    }
 
     // Filter by status
     if (options.status && options.status.length > 0) {
@@ -490,32 +454,12 @@ export class RedisStore implements IDurableStore {
   }
 
   async listStepResults(executionId: string): Promise<StepResult[]> {
-    const bucketEntries = this.parseHashValues<StepResult>(
+    return this.parseHashValues<StepResult>(
       await this.redis.hgetall(this.stepBucketKey(executionId)),
+    ).sort(
+      (a, b) =>
+        new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
     );
-    if (bucketEntries.length > 0) {
-      return bucketEntries.sort(
-        (a, b) =>
-          new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
-      );
-    }
-
-    const keys = await this.scanKeys(this.k(`step:${executionId}:*`));
-    if (keys.length === 0) return [];
-
-    const pipeline = this.redis.pipeline();
-    keys.forEach((key) => pipeline.get(key));
-    const results = await pipeline.exec();
-
-    return (results || [])
-      .map(([_, res]) =>
-        typeof res === "string" ? (serializer.parse(res) as StepResult) : null,
-      )
-      .filter((step): step is StepResult => step !== null)
-      .sort(
-        (a, b) =>
-          new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
-      );
   }
 
   async appendAuditEntry(entry: DurableAuditEntry): Promise<void> {
@@ -523,7 +467,6 @@ export class RedisStore implements IDurableStore {
     const id = entry.id || createDurableAuditEntryId(atMs);
     const payload = serializer.stringify({ ...entry, id });
     await this.redis.hset(this.auditBucketKey(entry.executionId), id, payload);
-    await this.redis.set(this.k(`audit:${entry.executionId}:${id}`), payload);
   }
 
   async listAuditEntries(
@@ -533,24 +476,6 @@ export class RedisStore implements IDurableStore {
     let entries = this.parseHashValues<DurableAuditEntry>(
       await this.redis.hgetall(this.auditBucketKey(executionId)),
     );
-    if (entries.length === 0) {
-      const keys = await this.scanKeys(this.k(`audit:${executionId}:*`));
-      if (keys.length > 0) {
-        const pipeline = this.redis.pipeline();
-        keys.forEach((key) => pipeline.get(key));
-        const results = await pipeline.exec();
-        entries = (results || [])
-          .map(([_, res]) =>
-            typeof res === "string"
-              ? (serializer.parse(res) as DurableAuditEntry)
-              : null,
-          )
-          .filter(
-            (auditEntry): auditEntry is DurableAuditEntry =>
-              auditEntry !== null,
-          );
-      }
-    }
     entries.sort((a, b) => a.at.getTime() - b.at.getTime());
 
     const offset = options.offset ?? 0;
@@ -563,14 +488,9 @@ export class RedisStore implements IDurableStore {
     executionId: string,
     stepId: string,
   ): Promise<StepResult | null> {
-    let data = this.parseRedisString(
+    const data = this.parseRedisString(
       await this.redis.hget(this.stepBucketKey(executionId), stepId),
     );
-    if (!data) {
-      data = this.parseRedisString(
-        await this.redis.get(this.k(`step:${executionId}:${stepId}`)),
-      );
-    }
     return data ? (serializer.parse(data) as StepResult) : null;
   }
 
@@ -579,10 +499,6 @@ export class RedisStore implements IDurableStore {
     await this.redis.hset(
       this.stepBucketKey(result.executionId),
       result.stepId,
-      payload,
-    );
-    await this.redis.set(
-      this.k(`step:${result.executionId}:${result.stepId}`),
       payload,
     );
   }

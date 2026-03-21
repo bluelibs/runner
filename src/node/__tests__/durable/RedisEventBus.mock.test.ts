@@ -8,10 +8,8 @@ describe("durable: RedisEventBus", () => {
   let bus: RedisEventBus;
   let onMessage: ((chan: string, msg: string) => void) | undefined;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    onMessage = undefined;
-    redisMock = {
+  function createRedisMockClient(): any {
+    return {
       publish: jest.fn().mockResolvedValue(1),
       subscribe: jest.fn().mockResolvedValue(1),
       unsubscribe: jest.fn().mockResolvedValue(1),
@@ -19,8 +17,14 @@ describe("durable: RedisEventBus", () => {
         if (evt === "message") onMessage = fn;
       }),
       quit: jest.fn().mockResolvedValue("OK"),
-      duplicate: jest.fn().mockReturnThis(),
     };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    onMessage = undefined;
+    redisMock = createRedisMockClient();
+    redisMock.duplicate = jest.fn().mockReturnThis();
     jest
       .spyOn(ioredisOptional, "createIORedisClient")
       .mockReturnValue(redisMock as any);
@@ -222,13 +226,17 @@ describe("durable: RedisEventBus", () => {
     await bus.dispose?.();
     expect(redisMock.quit).toHaveBeenCalledTimes(1);
 
+    const ownedPublisher = createRedisMockClient();
+    const ownedSubscriber = createRedisMockClient();
+    ownedPublisher.duplicate = jest.fn().mockReturnValue(ownedSubscriber);
     const ownedBus = new RedisEventBus({
-      redis: redisMock,
+      redis: ownedPublisher,
       disposeProvidedClient: true,
     });
     await ownedBus.dispose?.();
 
-    expect(redisMock.quit).toHaveBeenCalledTimes(3);
+    expect(ownedPublisher.quit).toHaveBeenCalledTimes(1);
+    expect(ownedSubscriber.quit).toHaveBeenCalledTimes(1);
   });
 
   it("unsubscribe(channel, handler) only removes that handler until last one", async () => {

@@ -51,59 +51,6 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
     );
   });
 
-  it("throws when signal journaling store operations are missing", async () => {
-    const base = new MemoryStore();
-
-    const service = new DurableService({
-      store: createBareStore(base, {
-        getSignalState: undefined,
-        appendSignalRecord: undefined,
-        enqueueQueuedSignalRecord: undefined,
-      }),
-      tasks: [],
-    });
-
-    await base.saveExecution(sleepingExecution());
-
-    await expect(service.signal("e1", Paid, { paidAt: 1 })).rejects.toThrow(
-      "signal journaling methods",
-    );
-  });
-
-  it("throws when signal journaling cannot read pending state", async () => {
-    const base = new MemoryStore();
-
-    const service = new DurableService({
-      store: createBareStore(base, {
-        getSignalState: undefined,
-      }),
-      tasks: [],
-    });
-
-    await base.saveExecution(sleepingExecution());
-
-    await expect(service.signal("e1", Paid, { paidAt: 1 })).rejects.toThrow(
-      "signal journaling methods",
-    );
-  });
-
-  it("throws when signal journaling cannot store the pending signal", async () => {
-    const base = new MemoryStore();
-
-    const service = new DurableService({
-      store: createBareStore(base, {
-        enqueueQueuedSignalRecord: undefined,
-      }),
-      tasks: [],
-    });
-
-    await base.saveExecution(sleepingExecution());
-
-    await expect(service.signal("e1", Paid, { paidAt: 1 })).rejects.toThrow(
-      "signal journaling methods",
-    );
-  });
-
   it("processes executions directly when no queue is configured (signal resume)", async () => {
     const store = new MemoryStore();
     const task = r
