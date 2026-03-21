@@ -45,6 +45,10 @@ export const budgetLedger = r
   })
   .build();
 
+/**
+ * Creates the in-memory budget ledger used by ask-runner to enforce spending
+ * and rate-limit decisions for a given day.
+ */
 export function createBudgetLedger(
   state: BudgetLedgerState,
   dailyBudgetUsd: number,

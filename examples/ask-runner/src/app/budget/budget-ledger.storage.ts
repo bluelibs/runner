@@ -8,6 +8,10 @@ import type {
 
 const overflowIpKey = "__overflow__";
 
+/**
+ * Returns the tracked day state for `day`, creating it and pruning old days
+ * when needed.
+ */
 export function ensureLedgerDayState(
   state: BudgetLedgerState,
   day: string,
@@ -27,6 +31,10 @@ export function ensureLedgerDayState(
   return created;
 }
 
+/**
+ * Increments the count for one bucket/ip window, collapsing excess unique IPs
+ * into an overflow bucket when tracking limits are reached.
+ */
 export function incrementWindowCount(
   window: RateWindowState,
   bucket: string,
@@ -40,6 +48,9 @@ export function incrementWindowCount(
   return next;
 }
 
+/**
+ * Appends an audit entry while keeping the audit trail bounded in memory.
+ */
 export function appendBoundedAuditEntry(
   state: BudgetLedgerState,
   entry: AuditEntry,

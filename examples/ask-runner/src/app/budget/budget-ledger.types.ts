@@ -63,14 +63,26 @@ export const defaultBudgetLedgerStorageLimits: BudgetLedgerStorageLimits = {
   maxTrackedDays: 7,
 };
 
+/**
+ * Public budget-control API exposed to ask-runner resources and admin routes.
+ */
 export interface BudgetLedger {
+  /**
+   * Enforces per-minute/hour/day IP request limits and throws when exceeded.
+   */
   enforceIpLimit(input: {
     day: string;
     minuteBucket: string;
     hourBucket: string;
     ip: string;
   }): void;
+  /**
+   * Verifies that the day is still open and the projected spend fits the budget.
+   */
   ensureDayCanSpend(input: { day: string; projectedCostUsd: number }): void;
+  /**
+   * Records request usage, updates the tracked spend, and returns the new snapshot.
+   */
   recordUsage(input: {
     day: string;
     ip: string;
@@ -80,8 +92,17 @@ export interface BudgetLedger {
     usage: UsageLike | null;
     status: "ok" | "rejected";
   }): BudgetSnapshot;
+  /**
+   * Stops new spend for the day and returns the updated snapshot.
+   */
   stopForDay(day: string, reason: string): BudgetSnapshot;
+  /**
+   * Reopens spending for the day and returns the updated snapshot.
+   */
   resume(day: string): BudgetSnapshot;
+  /**
+   * Returns the current day snapshot.
+   */
   getSnapshot(day: string): BudgetSnapshot;
 }
 
