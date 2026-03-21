@@ -60,7 +60,8 @@ while all arrivals remain available in signal history.
 
 - `start(taskOrTaskId, input)` returns `executionId` immediately.
 - `startAndWait(taskOrTaskId, input)` starts, waits, and returns `{ durable: { executionId }, data }`.
-  `timeout` still means workflow runtime timeout; use `waitTimeout` to bound the caller wait.
+  `timeout` still means workflow runtime timeout; use `completionTimeout` to bound the caller wait.
+  `startAndWait(..., { timeout })` alone does not shorten how long the caller waits.
 
 ## Tagging workflows (required for discovery)
 

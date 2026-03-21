@@ -13,6 +13,11 @@ import { durableExecutionInvariantError } from "../../../errors";
  */
 export class DurableWorker {
   private readonly logger: Logger;
+  /**
+   * Tracks deliveries that crossed the queue boundary so shutdown can wait for
+   * their durable checkpoint plus ack/nack path to settle before adapters close.
+   */
+  private readonly inFlightMessages = new Set<Promise<void>>();
   private started = false;
 
   constructor(
@@ -35,52 +40,9 @@ export class DurableWorker {
     this.started = true;
     try {
       await this.queue.consume(async (message) => {
-        try {
-          await this.handleMessage(message);
-          await this.queue.ack(message.id);
-        } catch (error) {
-          let shouldRequeue = message.attempts < message.maxAttempts;
-
-          if (!shouldRequeue) {
-            const executionId = this.extractExecutionId(message.payload);
-            if (executionId) {
-              try {
-                await this.service.failExecutionDeliveryExhausted(executionId, {
-                  messageId: message.id,
-                  attempts: message.attempts,
-                  maxAttempts: message.maxAttempts,
-                  errorMessage: this.extractErrorMessage(error),
-                });
-              } catch (terminalizationError) {
-                shouldRequeue = true;
-                try {
-                  await this.logger.error(
-                    "Durable worker failed to mark exhausted delivery as terminal.",
-                    {
-                      error: terminalizationError,
-                      data: { messageId: message.id, executionId },
-                    },
-                  );
-                } catch {
-                  // Logging must not affect message acknowledgement flow.
-                }
-              }
-            }
-          }
-
-          try {
-            await this.logger.error(
-              "Durable worker failed to process message.",
-              {
-                error,
-                data: { messageId: message.id },
-              },
-            );
-          } catch {
-            // Logging must not affect message acknowledgement flow.
-          }
-          await this.queue.nack(message.id, shouldRequeue);
-        }
+        const handling = this.processMessage(message);
+        this.trackInFlightMessage(handling);
+        await handling;
       });
     } catch (error) {
       this.started = false;
@@ -91,6 +53,70 @@ export class DurableWorker {
   async stop(): Promise<void> {
     this.started = false;
     await this.queue.cancelConsumer?.();
+    // Cancelling the consumer only blocks future deliveries. A message that was
+    // already handed to the handler still owns store/queue/event-bus work.
+    await this.waitForInFlightMessages();
+  }
+
+  private async processMessage(message: QueueMessage): Promise<void> {
+    try {
+      await this.handleMessage(message);
+      await this.queue.ack(message.id);
+    } catch (error) {
+      let shouldRequeue = message.attempts < message.maxAttempts;
+
+      if (!shouldRequeue) {
+        const executionId = this.extractExecutionId(message.payload);
+        if (executionId) {
+          try {
+            await this.service.failExecutionDeliveryExhausted(executionId, {
+              messageId: message.id,
+              attempts: message.attempts,
+              maxAttempts: message.maxAttempts,
+              errorMessage: this.extractErrorMessage(error),
+            });
+          } catch (terminalizationError) {
+            shouldRequeue = true;
+            try {
+              await this.logger.error(
+                "Durable worker failed to mark exhausted delivery as terminal.",
+                {
+                  error: terminalizationError,
+                  data: { messageId: message.id, executionId },
+                },
+              );
+            } catch {
+              // Logging must not affect message acknowledgement flow.
+            }
+          }
+        }
+      }
+
+      try {
+        await this.logger.error("Durable worker failed to process message.", {
+          error,
+          data: { messageId: message.id },
+        });
+      } catch {
+        // Logging must not affect message acknowledgement flow.
+      }
+      await this.queue.nack(message.id, shouldRequeue);
+    }
+  }
+
+  private trackInFlightMessage(handling: Promise<void>): void {
+    this.inFlightMessages.add(handling);
+    void handling.finally(() => {
+      this.inFlightMessages.delete(handling);
+    });
+  }
+
+  private async waitForInFlightMessages(): Promise<void> {
+    while (this.inFlightMessages.size > 0) {
+      // Snapshot the current set so shutdown drains everything accepted so far,
+      // including overlapping deliveries that finish their ack/nack work later.
+      await Promise.all([...this.inFlightMessages]);
+    }
   }
 
   private async handleMessage(message: QueueMessage): Promise<void> {

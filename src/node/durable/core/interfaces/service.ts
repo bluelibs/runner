@@ -142,10 +142,11 @@ export interface WaitOptions {
 
 export interface StartAndWaitOptions extends ExecuteOptions {
   /**
-   * Optional caller wait timeout for `startAndWait()`.
+   * Optional caller completion timeout for `startAndWait()`.
    * Separate from `ExecuteOptions.timeout`, which bounds workflow runtime.
+   * Use this when the caller should stop waiting even if the workflow keeps running.
    */
-  waitTimeout?: number;
+  completionTimeout?: number;
   waitPollIntervalMs?: number;
 }
 

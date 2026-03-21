@@ -345,4 +345,44 @@ describe("durable: DurableWorker", () => {
     expect(queue.cancelConsumerCalls).toBe(1);
     expect(queue.handler).toBeNull();
   });
+
+  it("waits for the in-flight message to settle before stop() returns", async () => {
+    const queue = new TestQueue();
+    let releaseExecution!: () => void;
+    const executionBlocked = new Promise<void>((resolve) => {
+      releaseExecution = resolve;
+    });
+    const { service } = createService({
+      processExecution: async () => {
+        await executionBlocked;
+      },
+    });
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    const handlerPromise = queue.handler?.(
+      message({ executionId: "e1" }, "execute"),
+    );
+    expect(handlerPromise).toBeDefined();
+
+    await Promise.resolve();
+
+    let stopped = false;
+    const stopPromise = worker.stop().then(() => {
+      stopped = true;
+    });
+
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+    expect(queue.cancelConsumerCalls).toBe(1);
+
+    releaseExecution();
+
+    await stopPromise;
+    await handlerPromise;
+
+    expect(stopped).toBe(true);
+    expect(queue.ackCalls).toEqual(["m1"]);
+  });
 });

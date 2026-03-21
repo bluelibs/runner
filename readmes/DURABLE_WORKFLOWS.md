@@ -944,8 +944,9 @@ const result = await durableRuntime.startAndWait(processOrder, {
 - `startAndWait(taskOrTaskId, input)`:
   convenience wrapper for `start(...)` + `wait(executionId)`; returns
   `{ durable: { executionId }, data }`.
-  `timeout` still bounds workflow runtime; use `waitTimeout` to bound how long
-  the caller waits for completion.
+  `timeout` still bounds workflow runtime; use `completionTimeout` to bound how long
+  the caller waits for completion. `startAndWait(..., { timeout })` no longer
+  changes the caller wait duration by itself.
 
 `start()` and `startAndWait()` are the only supported durable execution APIs.
 
@@ -980,6 +981,8 @@ Whatever your workflow function returns becomes the **execution result**, persis
   ```ts
   const result = await durableRuntime.startAndWait(processOrder, {
     orderId: "order-123",
+  }, {
+    completionTimeout: 30_000,
   });
   // result = {
   //   durable: { executionId: "..." },
@@ -1776,7 +1779,8 @@ export interface IDurableService {
     task: ITask<TInput, Promise<TResult>, any, any, any, any> | string,
     input?: TInput,
     options?: ExecuteOptions & {
-      waitTimeout?: number;
+      // Caller-side wait bound. Use `timeout` for workflow runtime.
+      completionTimeout?: number;
       waitPollIntervalMs?: number;
     },
   ): Promise<{ durable: { executionId: string }; data: TResult }>;
