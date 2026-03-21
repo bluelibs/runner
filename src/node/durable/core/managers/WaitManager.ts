@@ -36,6 +36,22 @@ export class WaitManager {
     const pollEveryMs =
       options?.waitPollIntervalMs ?? this.config?.defaultPollIntervalMs ?? 500;
 
+    const buildTimeoutError = async (): Promise<DurableExecutionError> => {
+      const exec = await this.store.getExecution(executionId);
+      return new DurableExecutionError(
+        `Timeout waiting for execution ${executionId}`,
+        executionId,
+        exec?.taskId || "unknown",
+        exec?.attempt || 0,
+      );
+    };
+
+    const throwIfTimedOut = async (): Promise<void> => {
+      if (timeoutMs !== undefined && Date.now() - startedAt > timeoutMs) {
+        throw await buildTimeoutError();
+      }
+    };
+
     const check = async (): Promise<
       { done: false } | { done: true; value: TResult }
     > => {
@@ -90,16 +106,7 @@ export class WaitManager {
       while (true) {
         const result = await check();
         if (result.done) return result.value;
-
-        if (timeoutMs !== undefined && Date.now() - startedAt > timeoutMs) {
-          const exec = await this.store.getExecution(executionId);
-          throw new DurableExecutionError(
-            `Timeout waiting for execution ${executionId}`,
-            executionId,
-            exec?.taskId || "unknown",
-            exec?.attempt || 0,
-          );
-        }
+        await throwIfTimedOut();
 
         await sleepMs(pollEveryMs);
       }
@@ -162,12 +169,9 @@ export class WaitManager {
 
         const pollingFallback = async (): Promise<TResult> => {
           while (true) {
-            try {
-              const result = await check();
-              if (result.done) return result.value;
-            } catch (err) {
-              throw err;
-            }
+            const result = await check();
+            if (result.done) return result.value;
+            await throwIfTimedOut();
 
             await sleepMs(pollEveryMs);
           }
@@ -185,16 +189,6 @@ export class WaitManager {
             await finalize({ ok: false, error: err });
           }
         })();
-
-        const buildTimeoutError = async (): Promise<DurableExecutionError> => {
-          const exec = await this.store.getExecution(executionId);
-          return new DurableExecutionError(
-            `Timeout waiting for execution ${executionId}`,
-            executionId,
-            exec?.taskId || "unknown",
-            exec?.attempt || 0,
-          );
-        };
 
         if (timeoutMs !== undefined) {
           const elapsedMs = Date.now() - startedAt;

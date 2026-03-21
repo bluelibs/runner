@@ -9,6 +9,8 @@ import {
   type DurableSignalRecord,
   type DurableSignalWaiter,
   ExecutionStatus,
+  TimerStatus,
+  TimerType,
 } from "../types";
 import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.tag";
 import { isMatchError } from "../../../../tools/check";
@@ -94,6 +96,37 @@ export class SignalHandler {
     signalId: string,
   ): Promise<DurableSignalWaiter | null> {
     return await this.store.takeNextSignalWaiter(executionId, signalId);
+  }
+
+  private async resumeExecutionWithFailsafe(
+    executionId: string,
+    stepId: string,
+  ): Promise<void> {
+    if (!this.queue) {
+      await this.callbacks.processExecution(executionId);
+      return;
+    }
+
+    const timerId = `signal_resume:${executionId}:${stepId}`;
+    await this.store.createTimer({
+      id: timerId,
+      executionId,
+      type: TimerType.Retry,
+      fireAt: new Date(),
+      status: TimerStatus.Pending,
+    });
+
+    await this.queue.enqueue({
+      type: "resume",
+      payload: { executionId },
+      maxAttempts: this.maxAttempts,
+    });
+
+    try {
+      await this.store.deleteTimer(timerId);
+    } catch {
+      // Best-effort timer cleanup; replay/locking keep duplicate resumes safe.
+    }
   }
 
   async signal<TPayload>(
@@ -212,15 +245,7 @@ export class SignalHandler {
     if (!execution) return;
     if (isTerminalExecutionStatus(execution.status)) return;
 
-    if (this.queue) {
-      await this.queue.enqueue({
-        type: "resume",
-        payload: { executionId },
-        maxAttempts: this.maxAttempts,
-      });
-    } else {
-      await this.callbacks.processExecution(executionId);
-    }
+    await this.resumeExecutionWithFailsafe(executionId, delivered.auditStepId);
   }
 
   private validateSignalPayload<TPayload>(

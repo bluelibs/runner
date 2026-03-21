@@ -309,4 +309,50 @@ describe("durable: WaitManager (event bus fallback)", () => {
     ).resolves.toBe("ok");
     expect(sleepSpy).toHaveBeenCalledWith(5);
   });
+
+  it("still times out when subscribe() fails and fallback polling keeps seeing a pending execution", async () => {
+    const sleepSpy = jest.spyOn(utils, "sleepMs").mockResolvedValue(undefined);
+    const nowSpy = jest.spyOn(Date, "now");
+    try {
+      const store = new MemoryStore();
+      const bus = {
+        publish: async (_channel: string, _event: BusEvent) => undefined,
+        subscribe: async () => {
+          throw genericError.new({ message: "subscribe-failed" });
+        },
+        unsubscribe: async () => undefined,
+      } satisfies IEventBus;
+      const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
+
+      const executionId = "e-fallback-timeout";
+      await store.saveExecution({
+        id: executionId,
+        taskId: "t",
+        input: undefined,
+        status: ExecutionStatus.Pending,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      let nowMs = 1_000;
+      nowSpy.mockImplementation(() => nowMs);
+      sleepSpy.mockImplementation(async (ms) => {
+        nowMs += ms;
+      });
+
+      await expect(
+        manager.waitForResult<string>(executionId, {
+          timeout: 10,
+          waitPollIntervalMs: 5,
+        }),
+      ).rejects.toThrow("Timeout waiting for execution");
+
+      expect(sleepSpy).toHaveBeenCalledWith(5);
+    } finally {
+      sleepSpy.mockRestore();
+      nowSpy.mockRestore();
+    }
+  });
 });

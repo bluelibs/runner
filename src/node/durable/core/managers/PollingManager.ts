@@ -328,7 +328,7 @@ export class PollingManager {
       const executionId = createExecutionId();
       const execution: Execution<unknown, unknown> = {
         id: executionId,
-        taskId: task.id,
+        taskId: this.taskRegistry.getPersistenceId(task),
         input: timer.input,
         status: ExecutionStatus.Pending,
         attempt: 1,

@@ -523,7 +523,7 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
     expect(queue.enqueued).toEqual([]);
   });
 
-  it("does not try to delete timeout timers when the matched waiter has no timer id", async () => {
+  it("does not try to delete a missing timeout timer when the matched waiter has no timer id", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
     const deleteTimerSpy = jest.spyOn(store, "deleteTimer");
@@ -549,7 +549,10 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
 
     await service.signal("e1", Paid, { paidAt: 11 });
 
-    expect(deleteTimerSpy).not.toHaveBeenCalled();
+    expect(deleteTimerSpy).toHaveBeenCalledTimes(1);
+    expect(deleteTimerSpy).toHaveBeenCalledWith(
+      "signal_resume:e1:__signal:paid",
+    );
     expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
       state: "completed",
       payload: { paidAt: 11 },

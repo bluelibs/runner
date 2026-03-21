@@ -9,6 +9,7 @@ import {
   advanceTimers,
   createBufferedLogger,
   createTaskExecutor,
+  okTask,
   SpyQueue,
   sleepingExecution,
 } from "./DurableService.unit.helpers";
@@ -282,5 +283,43 @@ describe("durable: DurableService polling timer handling (unit)", () => {
     );
 
     await service.stop();
+  });
+
+  it("persists scheduled executions with the durable task persistence id", async () => {
+    const store = new MemoryStore();
+    const queue = new SpyQueue();
+    const task = okTask("t-scheduled-persistence-id");
+    const persistenceTaskId = "canonical:t-scheduled-persistence-id";
+    const service = new DurableService({
+      store,
+      queue,
+      tasks: [task],
+      taskIdResolver: () => persistenceTaskId,
+    });
+
+    const timer: Timer = {
+      id: "sched:persistence-id",
+      taskId: persistenceTaskId,
+      type: "scheduled",
+      fireAt: new Date(0),
+      status: "pending",
+    };
+    await store.createTimer(timer);
+
+    await handleTimer(service, timer);
+
+    expect(queue.enqueued).toEqual([
+      {
+        type: "execute",
+        payload: expect.objectContaining({ executionId: expect.any(String) }),
+      },
+    ]);
+
+    const executions = await store.listIncompleteExecutions();
+    expect(executions).toEqual([
+      expect.objectContaining({
+        taskId: persistenceTaskId,
+      }),
+    ]);
   });
 });

@@ -1,5 +1,10 @@
 import { defineEvent } from "../../..";
 import { DurableService } from "../../durable/core/DurableService";
+import type { IDurableQueue } from "../../durable/core/interfaces/queue";
+import type {
+  MessageHandler,
+  QueueMessage,
+} from "../../durable/core/interfaces/queue";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { signalSetup, Paid } from "./DurableService.signal.test.helpers";
 import { createSignalWaiterSortKey } from "../../durable/core/signalWaiters";
@@ -17,6 +22,27 @@ const TrimmedNote = defineEvent({
     },
   },
 });
+
+class FailFirstResumeQueue implements IDurableQueue {
+  public enqueued: Array<Pick<QueueMessage, "type" | "payload">> = [];
+  private failed = false;
+
+  async enqueue<T>(
+    message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
+  ): Promise<string> {
+    if (!this.failed) {
+      this.failed = true;
+      throw new Error("queue-down");
+    }
+
+    this.enqueued.push({ type: message.type, payload: message.payload });
+    return "m1";
+  }
+
+  async consume<T>(_handler: MessageHandler<T>): Promise<void> {}
+  async ack(_messageId: string): Promise<void> {}
+  async nack(_messageId: string, _requeue?: boolean): Promise<void> {}
+}
 
 describe("durable: DurableService - signals delivery", () => {
   it("validates and stores transformed signal payloads when a payload schema exists", async () => {
@@ -98,6 +124,60 @@ describe("durable: DurableService - signals delivery", () => {
       state: "completed",
       payload: { paidAt: 1 },
     });
+    expect(
+      (await store.getReadyTimers(new Date(Date.now() + 60_000))).some(
+        (timer) => timer.id === "signal_resume:e1:__signal:paid",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a durable retry path when signal resume enqueue fails", async () => {
+    const store = new MemoryStore();
+    const queue = new FailFirstResumeQueue();
+    const service = new DurableService({
+      store,
+      queue,
+      tasks: [],
+      polling: { enabled: false },
+    });
+
+    await store.saveExecution(sleepingExecution());
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+
+    await expect(service.signal("e1", Paid, { paidAt: 11 })).rejects.toThrow(
+      "queue-down",
+    );
+
+    expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
+      state: "completed",
+      payload: { paidAt: 11 },
+    });
+
+    const retryTimer = (
+      await store.getReadyTimers(new Date(Date.now() + 1_000))
+    ).find((timer) => timer.executionId === "e1" && timer.type === "retry");
+    expect(retryTimer).toEqual(
+      expect.objectContaining({
+        executionId: "e1",
+        type: "retry",
+      }),
+    );
+
+    await service.handleTimer(retryTimer!);
+    expect(queue.enqueued).toEqual([
+      { type: "resume", payload: { executionId: "e1" } },
+    ]);
   });
 
   it("delivers indexed waiters directly without legacy rehydration", async () => {
