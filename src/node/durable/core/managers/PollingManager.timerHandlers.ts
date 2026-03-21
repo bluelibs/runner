@@ -178,7 +178,7 @@ export async function handleExecutionTimer(params: {
     | undefined;
   maxAttempts: number;
   processExecution: (executionId: string) => Promise<void>;
-  onDurableSideEffectCommitted?: () => void;
+  onSafeToFinalizeCurrentTimer?: () => void;
 }): Promise<boolean> {
   if (!params.timer.executionId) {
     return false;
@@ -194,8 +194,13 @@ export async function handleExecutionTimer(params: {
     await params.processExecution(params.timer.executionId);
   }
 
-  params.onDurableSideEffectCommitted?.();
+  params.onSafeToFinalizeCurrentTimer?.();
   return true;
+}
+
+export interface ScheduledTimerHandleResult {
+  handled: boolean;
+  finalizeCurrentTimer: boolean;
 }
 
 export async function handleScheduledTaskTimer(params: {
@@ -209,37 +214,39 @@ export async function handleScheduledTaskTimer(params: {
     taskId: string;
   }) => Promise<string>;
   assertTimerClaimIsStillOwned: () => void;
-  onDurableSideEffectCommitted?: () => void;
-}): Promise<boolean> {
+  onSafeToFinalizeCurrentTimer?: () => void;
+}): Promise<ScheduledTimerHandleResult> {
   if (!params.timer.taskId) {
-    return false;
+    return { handled: false, finalizeCurrentTimer: false };
   }
 
   if (params.timer.scheduleId) {
     const schedule = await params.store.getSchedule(params.timer.scheduleId);
     params.assertTimerClaimIsStillOwned();
     if (!schedule || schedule.status !== "active") {
-      return false;
+      return { handled: false, finalizeCurrentTimer: true };
     }
     if (
       schedule.nextRun &&
       params.timer.fireAt.getTime() !== schedule.nextRun.getTime()
     ) {
-      return false;
+      return { handled: false, finalizeCurrentTimer: true };
     }
   }
 
   const task = params.taskRegistry.find(params.timer.taskId);
   if (!task) {
-    return false;
+    return { handled: false, finalizeCurrentTimer: false };
   }
 
   const executionId = await params.persistTaskTimerExecution({
     timer: params.timer,
     taskId: params.taskRegistry.getPersistenceId(task),
   });
-  params.onDurableSideEffectCommitted?.();
   params.assertTimerClaimIsStillOwned();
+  if (!params.timer.scheduleId) {
+    params.onSafeToFinalizeCurrentTimer?.();
+  }
   await params.kickoffExecution(executionId);
   params.assertTimerClaimIsStillOwned();
 
@@ -251,8 +258,12 @@ export async function handleScheduledTaskTimer(params: {
         lastRunAt: new Date(),
       });
       params.assertTimerClaimIsStillOwned();
+      params.onSafeToFinalizeCurrentTimer?.();
+      return { handled: true, finalizeCurrentTimer: false };
     }
+
+    return { handled: true, finalizeCurrentTimer: true };
   }
 
-  return true;
+  return { handled: true, finalizeCurrentTimer: true };
 }

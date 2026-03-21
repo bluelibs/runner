@@ -135,6 +135,8 @@ Use `./references/snippets/` when the task matches a common Runner authoring sha
 
 Prefer these snippets for starter shapes before writing custom examples.
 They are builder-first, use local ids, and aim to be runtime-complete rather than half-finished pseudocode.
+When a snippet needs failure paths, model them with typed Runner errors and prefer `throw myError.new({ ... })` in examples for cleaner TypeScript inference and one less helper frame in the stack.
+Keep `.throw(...)` documented as valid shorthand, but do not treat it as the default style for new snippets.
 
 ## Durable Workflows
 

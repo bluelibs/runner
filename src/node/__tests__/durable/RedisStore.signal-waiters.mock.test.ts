@@ -149,6 +149,24 @@ describe("durable: RedisStore signal waiters (mock)", () => {
         completedAt: new Date(),
       }),
     ).resolves.toEqual(expect.objectContaining({ payload: { paidAt: 8 } }));
+
+    redisState.set(
+      "durable:signal:e1:paid",
+      serializer.stringify({
+        executionId: "e1",
+        signalId: "paid",
+        queued: [],
+        history: [],
+      }),
+    );
+    await expect(
+      store.consumeBufferedSignalForStep({
+        executionId: "e1",
+        stepId: "__signal:paid",
+        result: { state: "completed", payload: undefined },
+        completedAt: new Date(),
+      }),
+    ).resolves.toBeNull();
   });
 
   it("commits live signal delivery atomically", async () => {

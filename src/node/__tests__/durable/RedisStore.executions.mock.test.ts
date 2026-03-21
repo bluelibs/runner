@@ -287,6 +287,48 @@ describe("durable: RedisStore executions (mock)", () => {
     );
   });
 
+  it("lists executions with status and task filters", async () => {
+    const { redisMock, store } = harness;
+    const pending = {
+      id: "exec-pending",
+      taskId: "task-a",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+    } satisfies Execution;
+    const failed = {
+      ...pending,
+      id: "exec-failed",
+      taskId: "task-b",
+      status: ExecutionStatus.Failed,
+      updatedAt: new Date("2024-01-02T00:00:00.000Z"),
+      createdAt: new Date("2024-01-02T00:00:00.000Z"),
+    } satisfies Execution;
+
+    redisMock.sscan
+      .mockResolvedValueOnce(["0", [pending.id, failed.id]])
+      .mockResolvedValueOnce(["0", [pending.id, failed.id]]);
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        [null, serializer.stringify(pending)],
+        [null, serializer.stringify(failed)],
+      ]),
+    });
+
+    await expect(store.listExecutions()).resolves.toEqual([failed, pending]);
+    await expect(
+      store.listExecutions({
+        status: [ExecutionStatus.Pending],
+        taskId: "task-a",
+      }),
+    ).resolves.toEqual([pending]);
+  });
+
   it("returns null when Redis GET returns a non-string", async () => {
     const { redisMock, store } = harness;
     redisMock.get.mockResolvedValueOnce(123 as any);

@@ -12,7 +12,6 @@ describe("durable: RedisStore signal edges", () => {
       set: jest.fn().mockResolvedValue("OK"),
       get: jest.fn(),
       keys: jest.fn().mockResolvedValue([]),
-      scan: jest.fn().mockResolvedValue(["0", []]),
       sscan: jest.fn().mockResolvedValue(["0", []]),
       sadd: jest.fn().mockResolvedValue(1),
       srem: jest.fn().mockResolvedValue(1),

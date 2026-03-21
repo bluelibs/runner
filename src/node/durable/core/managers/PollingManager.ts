@@ -124,7 +124,7 @@ export class PollingManager {
   async handleTimer(timer: Timer): Promise<void> {
     let stopClaimHeartbeat = () => {};
     let timerClaimState: TimerClaimState | null = null;
-    let durableSideEffectsCommitted = false;
+    let safeToFinalizeCurrentTimer = false;
 
     const assertTimerClaimIsStillOwned = (): void => {
       if (timerClaimState?.lossError) {
@@ -179,7 +179,7 @@ export class PollingManager {
           auditLogger: this.auditLogger,
           timer,
         });
-        durableSideEffectsCommitted = true;
+        safeToFinalizeCurrentTimer = true;
       }
 
       assertTimerClaimIsStillOwned();
@@ -196,7 +196,7 @@ export class PollingManager {
         });
 
         if (persistedSignalId) {
-          durableSideEffectsCommitted = true;
+          safeToFinalizeCurrentTimer = true;
           const execution = await this.store.getExecution(timer.executionId);
           const attempt = execution ? execution.attempt : 0;
           await this.auditLogger.log({
@@ -219,8 +219,8 @@ export class PollingManager {
           queue: this.queue,
           maxAttempts: this.maxAttempts,
           processExecution: this.callbacks.processExecution,
-          onDurableSideEffectCommitted: () => {
-            durableSideEffectsCommitted = true;
+          onSafeToFinalizeCurrentTimer: () => {
+            safeToFinalizeCurrentTimer = true;
           },
         })
       ) {
@@ -229,29 +229,30 @@ export class PollingManager {
         return;
       }
 
-      if (
-        !(await handleScheduledTaskTimer({
-          store: this.store,
-          timer,
-          taskRegistry: this.taskRegistry,
-          scheduleManager: this.scheduleManager,
-          kickoffExecution: this.callbacks.kickoffExecution,
-          persistTaskTimerExecution: (params) =>
-            this.persistTaskTimerExecution(params),
-          assertTimerClaimIsStillOwned,
-          onDurableSideEffectCommitted: () => {
-            durableSideEffectsCommitted = true;
-          },
-        }))
-      ) {
+      const scheduledTimerResult = await handleScheduledTaskTimer({
+        store: this.store,
+        timer,
+        taskRegistry: this.taskRegistry,
+        scheduleManager: this.scheduleManager,
+        kickoffExecution: this.callbacks.kickoffExecution,
+        persistTaskTimerExecution: (params) =>
+          this.persistTaskTimerExecution(params),
+        assertTimerClaimIsStillOwned,
+        onSafeToFinalizeCurrentTimer: () => {
+          safeToFinalizeCurrentTimer = true;
+        },
+      });
+      if (!scheduledTimerResult.handled) {
         await finalizeTimer();
         return;
       }
 
-      await finalizeTimer();
+      if (scheduledTimerResult.finalizeCurrentTimer) {
+        await finalizeTimer();
+      }
     } catch (error) {
       let cleanupError: unknown = null;
-      if (durableSideEffectsCommitted) {
+      if (safeToFinalizeCurrentTimer) {
         try {
           await finalizeTimer();
         } catch (finalizeError) {
@@ -269,7 +270,7 @@ export class PollingManager {
             executionId: timer.executionId,
             taskId: timer.taskId,
             scheduleId: timer.scheduleId,
-            durableSideEffectsCommitted,
+            safeToFinalizeCurrentTimer,
             cleanupError,
           },
         });
