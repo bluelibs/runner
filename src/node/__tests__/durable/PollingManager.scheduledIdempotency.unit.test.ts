@@ -51,7 +51,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
       polling: { claimTtlMs: 3_000 },
     });
 
-    jest.spyOn(store, "renewTimerClaim").mockResolvedValue(false);
+    jest.spyOn(store, "renewTimerClaim").mockImplementation(async () => false);
 
     const timer: Timer = {
       id: "sched:claim-loss",
@@ -84,5 +84,85 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     expect(executions).toHaveLength(1);
     expect(new Set(executionIds)).toEqual(new Set([executions[0]!.id]));
+  });
+
+  it("finalizes claimed scheduled timers after durable side effects even without store idempotency helpers", async () => {
+    const store = new MemoryStore();
+    Object.defineProperty(store, "createExecutionWithIdempotencyKey", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    const queue = new RecordingDelayedQueue();
+    const task = okTask("t-scheduled-no-store-idempotency");
+    const service = new DurableService({
+      store,
+      queue,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({}),
+      polling: { claimTtlMs: 3_000 },
+    });
+
+    const renewTimerClaimSpy = jest
+      .spyOn(store, "renewTimerClaim")
+      .mockResolvedValue(false as boolean);
+
+    const timer: Timer = {
+      id: "sched:no-store-idempotency",
+      taskId: task.id,
+      type: TimerType.Scheduled,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    const firstAttempt = service.handleTimer(timer);
+    await advanceTimers(1_100);
+    await advanceTimers(200);
+    await firstAttempt;
+
+    expect(renewTimerClaimSpy).toHaveBeenCalled();
+    expect(await store.getReadyTimers(new Date(0))).toEqual([]);
+    expect(await store.getExecution(`timer:${timer.id}`)).toEqual(
+      expect.objectContaining({
+        id: `timer:${timer.id}`,
+        taskId: task.id,
+        status: "pending",
+      }),
+    );
+  });
+
+  it("uses atomic claimed-timer finalization when the store supports it", async () => {
+    const store = new MemoryStore();
+    const finalizeClaimedTimerSpy = jest.spyOn(store, "finalizeClaimedTimer");
+    const queue = new RecordingDelayedQueue();
+    const task = okTask("t-scheduled-atomic-finalize");
+    const service = new DurableService({
+      store,
+      queue,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({}),
+      polling: { claimTtlMs: 3_000 },
+    });
+
+    const timer: Timer = {
+      id: "sched:atomic-finalize",
+      taskId: task.id,
+      type: TimerType.Scheduled,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    const attempt = service.handleTimer(timer);
+    await advanceTimers(1_100);
+    await advanceTimers(200);
+    await attempt;
+
+    expect(finalizeClaimedTimerSpy).toHaveBeenCalledWith(
+      timer.id,
+      expect.any(String),
+    );
+    expect(await store.getReadyTimers(new Date(0))).toEqual([]);
   });
 });

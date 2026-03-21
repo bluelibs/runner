@@ -33,6 +33,13 @@ type RecoverableExecution = {
   status: ExecutionStatus;
 };
 
+type RecoveryClaimState = {
+  lost: boolean;
+  lossError: Error;
+  waitForLoss: Promise<never>;
+  markLost: () => void;
+};
+
 /**
  * Coordinates durable orphan recovery both for manual `recover()` calls and
  * for background worker startup drains.
@@ -264,17 +271,33 @@ export class RecoveryManager {
 
     if (claimed === null) return null;
 
+    const claimState = this.createClaimState(execution.id);
     const stopHeartbeat = this.startClaimHeartbeat(
       lockResource,
       claimed.lockId,
       claimTtlMs,
+      claimState,
     );
 
     try {
       if (signal?.aborted) return null;
-      await this.executionManager.recoverExecution(execution.id);
+      const recoverExecution = this.executionManager.recoverExecution(
+        execution.id,
+      );
+      void recoverExecution.catch(() => undefined);
+      await Promise.race([recoverExecution, claimState.waitForLoss]);
+      if (claimState.lost || signal?.aborted) {
+        return null;
+      }
       return { kind: "recovered" };
     } catch (error) {
+      if (
+        error === claimState.lossError ||
+        claimState.lost ||
+        signal?.aborted
+      ) {
+        return null;
+      }
       return {
         kind: "failed",
         errorMessage: error instanceof Error ? error.message : String(error),
@@ -289,6 +312,7 @@ export class RecoveryManager {
     resource: string,
     lockId: string | "no-lock",
     ttlMs: number,
+    claimState: RecoveryClaimState = this.createDetachedClaimState(),
   ): () => void {
     if (lockId === "no-lock") return () => {};
     if (!this.store.renewLock) return () => {};
@@ -303,9 +327,16 @@ export class RecoveryManager {
         if (stopped) return;
 
         void this.store.renewLock!(resource, lockId, ttlMs)
-          .catch(() => false)
+          .then((renewed) => {
+            if (!renewed) {
+              claimState.markLost();
+            }
+          })
+          .catch(() => {
+            claimState.markLost();
+          })
           .finally(() => {
-            if (!stopped) {
+            if (!stopped && !claimState.lost) {
               scheduleHeartbeat();
             }
           });
@@ -322,5 +353,46 @@ export class RecoveryManager {
         heartbeatTimer = null;
       }
     };
+  }
+
+  private createClaimState(executionId: string): RecoveryClaimState {
+    const lossError = durableExecutionInvariantError.new({
+      message: `Recovery claim lost for execution '${executionId}' before recovery finished.`,
+    });
+    let rejectLoss!: (error: Error) => void;
+    const waitForLoss = new Promise<never>((_, reject) => {
+      rejectLoss = reject;
+    });
+    void waitForLoss.catch(() => {});
+
+    const claimState: RecoveryClaimState = {
+      lost: false,
+      lossError,
+      waitForLoss,
+      markLost: () => {
+        if (claimState.lost) {
+          return;
+        }
+        claimState.lost = true;
+        rejectLoss(lossError);
+      },
+    };
+
+    return claimState;
+  }
+
+  private createDetachedClaimState(): RecoveryClaimState {
+    const lossError = new Error("detached recovery claim lost");
+    const waitForLoss = new Promise<never>(() => undefined);
+    const claimState: RecoveryClaimState = {
+      lost: false,
+      lossError,
+      waitForLoss,
+      markLost: () => {
+        claimState.lost = true;
+      },
+    };
+
+    return claimState;
   }
 }

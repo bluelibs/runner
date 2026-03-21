@@ -1,6 +1,11 @@
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { createSignalWaiterSortKey } from "../../durable/core/signalWaiters";
 
+interface MockSignalStore {
+  signalWaiters: { get: jest.Mock };
+  takeNextSignalWaiter(executionId: string, signalId: string): Promise<unknown>;
+}
+
 describe("durable: MemoryStore signal edges", () => {
   it("returns null when consuming from an already-drained queued signal bucket", async () => {
     const store = new MemoryStore();
@@ -59,13 +64,7 @@ describe("durable: MemoryStore signal edges", () => {
   });
 
   it("returns null when waiter lookup changes between peek and delete phases", async () => {
-    const store = new MemoryStore() as unknown as {
-      signalWaiters: { get: jest.Mock };
-      takeNextSignalWaiter: (
-        executionId: string,
-        signalId: string,
-      ) => Promise<unknown>;
-    };
+    const store = new MemoryStore() as unknown as MockSignalStore;
     const waiter = {
       executionId: "e1",
       signalId: "paid",

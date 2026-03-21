@@ -193,6 +193,11 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
     }
 
     const store = new CleanupFailureStore();
+    Object.defineProperty(store, "finalizeClaimedTimer", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
     const logs: ILog[] = [];
     const logger = new Logger({
       printThreshold: null,
@@ -249,6 +254,71 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
           log.message === "Durable timer handling failed." &&
           (log.data as { cleanupError?: unknown } | undefined)
             ?.cleanupError instanceof Error,
+      ),
+    ).toBe(true);
+  });
+
+  it("logs claim-loss errors when atomic timer finalization can no longer verify ownership", async () => {
+    class ClaimLossStore extends MemoryStore {
+      override async finalizeClaimedTimer(): Promise<boolean> {
+        return false;
+      }
+    }
+
+    const store = new ClaimLossStore();
+    const logs: ILog[] = [];
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    logger.onLog((log) => {
+      logs.push(log);
+    });
+    const taskRegistry = new TaskRegistry();
+    const auditLogger = new AuditLogger({ enabled: false }, store);
+    const scheduleManager = new ScheduleManager(store, taskRegistry);
+    const pollingManager = new PollingManager(
+      "worker-1",
+      { interval: 1 },
+      store,
+      undefined,
+      3,
+      undefined,
+      taskRegistry,
+      auditLogger,
+      scheduleManager,
+      {
+        processExecution: jest.fn(async () => {}),
+        kickoffExecution: jest.fn(async () => {}),
+      },
+      logger,
+    );
+
+    await store.createTimer({
+      id: "t-claim-loss-before-finalize",
+      executionId: "e1",
+      type: TimerType.Retry,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    });
+
+    await pollingManager.handleTimer({
+      id: "t-claim-loss-before-finalize",
+      executionId: "e1",
+      type: TimerType.Retry,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    });
+
+    expect(
+      logs.some(
+        (log) =>
+          log.level === "error" &&
+          log.message === "Durable timer handling failed." &&
+          String(
+            (log.error as { message?: string } | undefined)?.message,
+          ).includes("before finalization could be committed"),
       ),
     ).toBe(true);
   });

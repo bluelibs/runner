@@ -5,7 +5,10 @@ import { WaitManager } from "../../durable/core/managers/WaitManager";
 import { NoopEventBus } from "../../durable/bus/NoopEventBus";
 import { SuspensionSignal } from "../../durable/core/interfaces/context";
 import { ExecutionStatus, type Execution } from "../../durable/core/types";
-import type { IDurableStore } from "../../durable/core/interfaces/store";
+import type {
+  IDurableStore,
+  ExpectedExecutionStatuses,
+} from "../../durable/core/interfaces/store";
 import type { ITaskExecutor } from "../../durable/core/interfaces/service";
 import type { IDurableQueue } from "../../durable/core/interfaces/queue";
 import type { ITask } from "../../../types/task";
@@ -60,6 +63,20 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
   const createStore = (overrides: Partial<IDurableStore>): IDurableStore =>
     createBareStore(new MemoryStore(), overrides);
+
+  type SaveExecutionIfStatusMock = jest.MockedFunction<
+    IDurableStore["saveExecutionIfStatus"]
+  >;
+
+  const createSaveExecutionIfStatusMock = (
+    result: boolean,
+  ): SaveExecutionIfStatusMock =>
+    jest.fn(
+      async (
+        _execution: Execution,
+        _expectedStatuses: ExpectedExecutionStatuses,
+      ) => result,
+    ) as SaveExecutionIfStatusMock;
 
   it("throws when idempotencyKey is used with a store that lacks support", async () => {
     const store = createStore({
@@ -144,7 +161,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("cancelExecution is a no-op when the execution does not exist", async () => {
-    const saveExecutionIfStatus = jest.fn(async () => false);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
@@ -177,7 +194,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       result: { ok: true },
     };
 
-    const saveExecutionIfStatus = jest.fn(async () => false);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
 
     const store = createStore({
       saveExecution: async () => {},
@@ -210,8 +227,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const sleepSpy = jest
       .spyOn(durableUtils, "sleepMs")
       .mockResolvedValue(undefined);
-    const saveExecutionIfStatus = jest
-      .fn<Promise<boolean>, [Execution, ExecutionStatus[]]>()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(false)
@@ -254,7 +270,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const sleepSpy = jest
       .spyOn(durableUtils, "sleepMs")
       .mockResolvedValue(undefined);
-    const saveExecutionIfStatus = jest.fn(async () => false);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
     const getExecution = jest.fn(async () => ({ ...exec }));
     const store = createStore({
       saveExecution: async () => {},
@@ -298,7 +314,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       cancelRequestedAt: requestedAt,
     };
 
-    const saveExecutionIfStatus = jest.fn(async () => true);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
 
     const store = createStore({
       saveExecution: async () => {},
@@ -336,8 +352,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       updatedAt: new Date(),
     };
 
-    const saveExecutionIfStatus = jest
-      .fn()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
 
@@ -359,8 +374,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("does not overwrite cancellation when cancellation happens after work completes", async () => {
-    const saveExecutionIfStatus = jest
-      .fn()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
 
@@ -417,7 +431,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("bails out early when the execution is already cancelled before attempting", async () => {
-    const saveExecutionIfStatus = jest.fn(async () => false);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
 
     let getCalls = 0;
     const store = createStore({
@@ -545,7 +559,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("bails out when the running transition loses the compare-and-save race", async () => {
-    const saveExecutionIfStatus = jest.fn(async () => false);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
     const taskExecutor: ITaskExecutor = {
       run: async () => {
         throw genericError.new({ message: "should not execute" });
@@ -579,8 +593,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("does not overwrite cancellation when cancellation happens after a suspension", async () => {
-    const saveExecutionIfStatus = jest
-      .fn()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
 
@@ -641,7 +654,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("does not overwrite cancellation when cancellation happens after a failure", async () => {
-    const saveExecutionIfStatus = jest.fn(async () => true);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
     const createTimer = jest.fn(async () => undefined);
 
     let getCalls = 0;
@@ -703,8 +716,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("fails executions when attempts are exhausted", async () => {
-    const saveExecutionIfStatus = jest
-      .fn()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true);
 
@@ -757,8 +769,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("fails executions when an attempt times out", async () => {
-    const saveExecutionIfStatus = jest
-      .fn()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true);
     const createTimer = jest.fn(async () => undefined);
@@ -819,8 +830,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
   it("does not notify completion when completion compare-and-save loses the race", async () => {
     const published: string[] = [];
-    const saveExecutionIfStatus = jest
-      .fn()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
 
@@ -867,8 +877,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("does not persist sleeping when the suspension compare-and-save loses the race", async () => {
-    const saveExecutionIfStatus = jest
-      .fn()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
 
@@ -903,8 +912,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("best-effort cleans up retry timers when retry compare-and-save loses the race", async () => {
-    const saveExecutionIfStatus = jest
-      .fn()
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
     const createTimer = jest.fn(async () => undefined);
@@ -948,7 +956,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("fails executions when queue delivery attempts are exhausted", async () => {
-    const saveExecutionIfStatus = jest.fn(async () => true);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
 
     const execution: Execution = {
       id: "e-exhausted",
@@ -982,7 +990,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     const updateCall = saveExecutionIfStatus.mock.calls[0] as unknown as
-      | [Execution, ExecutionStatus[]]
+      | [Execution, ExpectedExecutionStatuses]
       | undefined;
     expect(updateCall).toBeDefined();
     if (!updateCall) {
@@ -999,9 +1007,9 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     expect(updateCall[1]).toEqual([ExecutionStatus.Retrying]);
   });
 
-  it("does not notify failure when the failed transition loses the compare-and-save race", async () => {
+  it("throws without notifying when the failed transition keeps losing the compare-and-save race", async () => {
     const published: string[] = [];
-    const saveExecutionIfStatus = jest.fn(async () => false);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
 
     const store = createStore({
       saveExecution: async () => {},
@@ -1041,17 +1049,163 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       waitManager,
     );
 
-    await manager.failExecutionDeliveryExhausted("e-failed-race", {
-      messageId: "m-failed-race",
+    await expect(
+      manager.failExecutionDeliveryExhausted("e-failed-race", {
+        messageId: "m-failed-race",
+        attempts: 3,
+        maxAttempts: 3,
+        errorMessage: "broker rejected message",
+      }),
+    ).rejects.toThrow(
+      "Failed to transition durable execution 'e-failed-race' to failed",
+    );
+    expect(published).toEqual([]);
+  });
+
+  it("retries exhausted delivery failure transitions when the first compare-and-save loses the race", async () => {
+    const published: string[] = [];
+    let saveAttempts = 0;
+    const storeExecution: Execution = {
+      id: "e-failed-retry",
+      taskId: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Retrying,
+      attempt: 2,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => ({ ...storeExecution }),
+      saveExecutionIfStatus: jest.fn(async (execution) => {
+        saveAttempts += 1;
+        if (saveAttempts === 1) {
+          return false;
+        }
+
+        storeExecution.status = execution.status;
+        storeExecution.completedAt = execution.completedAt;
+        storeExecution.updatedAt = execution.updatedAt;
+        storeExecution.error = execution.error;
+        return true;
+      }),
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const taskRegistry = new TaskRegistry();
+    taskRegistry.register(task);
+    const auditLogger = new AuditLogger({ enabled: false }, store);
+    const waitManager = new WaitManager(store);
+    const manager = new ExecutionManager(
+      {
+        store,
+        taskExecutor: createFixedTaskExecutor(undefined),
+        eventBus: {
+          publish: async (channel) => {
+            published.push(channel);
+          },
+          subscribe: async () => undefined,
+          unsubscribe: async () => undefined,
+        },
+      },
+      taskRegistry,
+      auditLogger,
+      waitManager,
+    );
+
+    await manager.failExecutionDeliveryExhausted(storeExecution.id, {
+      messageId: "m-failed-retry",
       attempts: 3,
       maxAttempts: 3,
       errorMessage: "broker rejected message",
     });
-    expect(published).toEqual([]);
+
+    expect(saveAttempts).toBe(2);
+    expect(storeExecution.status).toBe(ExecutionStatus.Failed);
+    expect(published).toEqual([`execution:${storeExecution.id}`]);
+  });
+
+  it("throws when exhausted delivery cannot transition the execution after repeated races", async () => {
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => ({
+        id: "e-failed-stuck",
+        taskId: TaskId.T,
+        input: undefined,
+        status: ExecutionStatus.Retrying,
+        attempt: 2,
+        maxAttempts: 3,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      saveExecutionIfStatus: jest.fn(async () => false),
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await expect(
+      manager.failExecutionDeliveryExhausted("e-failed-stuck", {
+        messageId: "m-failed-stuck",
+        attempts: 3,
+        maxAttempts: 3,
+        errorMessage: "broker rejected message",
+      }),
+    ).rejects.toThrow(
+      "Failed to transition durable execution 'e-failed-stuck' to failed",
+    );
+  });
+
+  it("returns quietly when exhausted delivery loses repeated races but the execution is gone by the final recheck", async () => {
+    let reads = 0;
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => {
+        reads += 1;
+        if (reads > 5) {
+          return null;
+        }
+
+        return {
+          id: "e-failed-missing-after-races",
+          taskId: TaskId.T,
+          input: undefined,
+          status: ExecutionStatus.Retrying,
+          attempt: 2,
+          maxAttempts: 3,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      },
+      saveExecutionIfStatus: jest.fn(async () => false),
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await expect(
+      manager.failExecutionDeliveryExhausted("e-failed-missing-after-races", {
+        messageId: "m-failed-missing",
+        attempts: 3,
+        maxAttempts: 3,
+        errorMessage: "broker rejected message",
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("ignores exhausted delivery notifications for missing executions", async () => {
-    const saveExecutionIfStatus = jest.fn(async () => false);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
 
     const store = createStore({
       saveExecution: async () => {},
@@ -1079,7 +1233,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("ignores exhausted delivery notifications for terminal executions", async () => {
-    const saveExecutionIfStatus = jest.fn(async () => false);
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
 
     const execution: Execution = {
       id: "e-terminal",

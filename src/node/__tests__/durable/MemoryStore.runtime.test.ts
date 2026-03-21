@@ -31,7 +31,7 @@ async function saveExecution(
 }
 
 describe("durable: MemoryStore runtime surfaces", () => {
-  it("supports timers, schedules, locks, and audit pagination", async () => {
+  it("lists incomplete and stuck executions", async () => {
     const store = new MemoryStore();
     const now = new Date();
 
@@ -66,12 +66,17 @@ describe("durable: MemoryStore runtime surfaces", () => {
       completedAt: now,
     });
 
-    expect((await store.listIncompleteExecutions()).map((e) => e.id)).toEqual([
-      "e1",
+    await expect(store.listIncompleteExecutions()).resolves.toEqual([
+      expect.objectContaining({ id: "e1" }),
     ]);
-    expect((await store.listStuckExecutions()).map((e) => e.id)).toEqual([
-      "e3",
+    await expect(store.listStuckExecutions()).resolves.toEqual([
+      expect.objectContaining({ id: "e3" }),
     ]);
+  });
+
+  it("paginates audit entries", async () => {
+    const store = new MemoryStore();
+    const now = new Date();
 
     await store.appendAuditEntry({
       id: "a1",
@@ -93,6 +98,11 @@ describe("durable: MemoryStore runtime surfaces", () => {
     expect(paged.map((e) => (e.kind === "note" ? e.message : "x"))).toEqual([
       "second",
     ]);
+  });
+
+  it("handles timer lifecycle and exclusive claims", async () => {
+    const store = new MemoryStore();
+    const now = new Date();
 
     await store.createTimer({
       id: "t1",
@@ -131,6 +141,15 @@ describe("durable: MemoryStore runtime surfaces", () => {
       false,
     );
 
+    await expect(store.finalizeClaimedTimer("t1", "worker-2")).resolves.toBe(
+      false,
+    );
+  });
+
+  it("supports schedule CRUD helpers", async () => {
+    const store = new MemoryStore();
+    const now = new Date();
+
     await store.createSchedule({
       id: "s1",
       taskId: "t1",
@@ -158,7 +177,10 @@ describe("durable: MemoryStore runtime surfaces", () => {
     await store.updateSchedule("missing", { status: "paused" });
     await store.updateSchedule("s1", { status: "paused" });
     await store.deleteSchedule("s2");
+  });
 
+  it("acquires and releases locks", async () => {
+    const store = new MemoryStore();
     const lockId = await store.acquireLock("res", 1000);
     expect(lockId).not.toBeNull();
     expect(await store.acquireLock("res", 1000)).toBeNull();

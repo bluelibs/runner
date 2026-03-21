@@ -92,6 +92,24 @@ export class SignalHandler {
     return await this.store.peekNextSignalWaiter(executionId, signalId);
   }
 
+  private async deleteSignalWaiter(
+    executionId: string,
+    signalId: string,
+    stepId: string,
+  ): Promise<void> {
+    await this.store.deleteSignalWaiter(executionId, signalId, stepId);
+  }
+
+  private async runBestEffortCleanup(
+    cleanupTask: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await cleanupTask();
+    } catch {
+      // The durable write already happened; cleanup must stay best-effort.
+    }
+  }
+
   private async resumeExecutionWithFailsafe(
     executionId: string,
     stepId: string,
@@ -121,6 +139,72 @@ export class SignalHandler {
     } catch {
       // Best-effort timer cleanup; replay/locking keep duplicate resumes safe.
     }
+  }
+
+  private async finalizeDeliveredSignal(params: {
+    executionId: string;
+    signalId: string;
+    stepId: string;
+    signalRecord: DurableSignalRecord;
+    timerId?: string;
+  }): Promise<void> {
+    await this.runBestEffortCleanup(() =>
+      this.store.appendSignalRecord(
+        params.executionId,
+        params.signalId,
+        params.signalRecord,
+      ),
+    );
+    await this.runBestEffortCleanup(() =>
+      this.deleteSignalWaiter(
+        params.executionId,
+        params.signalId,
+        params.stepId,
+      ),
+    );
+
+    if (params.timerId) {
+      await this.runBestEffortCleanup(() =>
+        this.store.deleteTimer(params.timerId!),
+      );
+    }
+  }
+
+  private async commitDeliveredSignal(params: {
+    executionId: string;
+    signalId: string;
+    stepId: string;
+    completedSignalState: Record<string, unknown>;
+    signalRecord: DurableSignalRecord;
+    timerId?: string;
+  }): Promise<boolean> {
+    const stepResult = {
+      executionId: params.executionId,
+      stepId: params.stepId,
+      result: params.completedSignalState,
+      completedAt: new Date(),
+    };
+
+    if (this.store.commitSignalDelivery) {
+      return await this.store.commitSignalDelivery({
+        executionId: params.executionId,
+        signalId: params.signalId,
+        stepId: params.stepId,
+        stepResult,
+        signalRecord: params.signalRecord,
+        timerId: params.timerId,
+      });
+    }
+
+    await this.store.saveStepResult(stepResult);
+    await this.finalizeDeliveredSignal({
+      executionId: params.executionId,
+      signalId: params.signalId,
+      stepId: params.stepId,
+      signalRecord: params.signalRecord,
+      timerId: params.timerId,
+    });
+    return true;
   }
 
   async signal<TPayload>(
@@ -172,11 +256,7 @@ export class SignalHandler {
           waiter.stepId,
         );
         if (!waitingStep) {
-          await this.store.deleteSignalWaiter(
-            executionId,
-            signalId,
-            waiter.stepId,
-          );
+          await this.deleteSignalWaiter(executionId, signalId, waiter.stepId);
           continue;
         }
 
@@ -186,16 +266,9 @@ export class SignalHandler {
           result: waitingStep.result,
         });
         if (waiterState.kind === "stale") {
-          await this.store.deleteSignalWaiter(
-            executionId,
-            signalId,
-            waiter.stepId,
-          );
+          await this.deleteSignalWaiter(executionId, signalId, waiter.stepId);
           continue;
         }
-
-        completedStepId = waiter.stepId;
-        shouldResume = true;
 
         const completedSignalState = shouldPersistStableSignalId(
           waiter.stepId,
@@ -207,26 +280,19 @@ export class SignalHandler {
               payload: validatedPayload,
             }
           : { state: "completed" as const, payload: validatedPayload };
-        await this.store.saveStepResult({
+        const committed = await this.commitDeliveredSignal({
           executionId,
+          signalId,
           stepId: waiter.stepId,
-          result: completedSignalState,
-          completedAt: new Date(),
-        });
-        await this.store.appendSignalRecord(
-          executionId,
-          signalId,
+          completedSignalState,
           signalRecord,
-        );
-        await this.store.deleteSignalWaiter(
-          executionId,
-          signalId,
-          waiter.stepId,
-        );
-
-        if (waiterState.timerId ?? waiter.timerId) {
-          await this.store.deleteTimer(waiterState.timerId ?? waiter.timerId!);
+          timerId: waiterState.timerId ?? waiter.timerId,
+        });
+        if (!committed) {
+          continue;
         }
+        completedStepId = waiter.stepId;
+        shouldResume = true;
         break;
       }
 

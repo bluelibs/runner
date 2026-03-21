@@ -207,9 +207,10 @@ describe("durable: DurableService — scheduling (unit)", () => {
 
     expect(schedule?.type).toBe("cron");
     expect(schedule?.pattern).toBe("*/5 * * * *");
-    expect(afterTimer?.fireAt.getTime()).toBeGreaterThan(
-      beforeTimer?.fireAt.getTime() ?? 0,
+    expect(afterTimer?.fireAt.getTime()).not.toBe(
+      beforeTimer?.fireAt.getTime(),
     );
+    expect(afterTimer?.fireAt.getTime()).toBe(schedule?.nextRun?.getTime());
   });
 
   it("allows clearing scheduled input and no-ops when updating a missing schedule", async () => {

@@ -41,7 +41,7 @@ describe("durable: WaitManager (event bus fallback errors)", () => {
       let calls = 0;
       jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
         calls += 1;
-        if (calls === 3) {
+        if (calls === 4) {
           throw genericError.new({ message: "getExecution-failed" });
         }
         return await originalGet(id);
@@ -50,11 +50,15 @@ describe("durable: WaitManager (event bus fallback errors)", () => {
       const waiting = manager.waitForResult<string>(executionId, {
         waitPollIntervalMs: 1,
       });
+      const waitingExpectation = await expect(waiting).rejects.toThrow(
+        "getExecution-failed",
+      );
 
-      for (let i = 0; i < 10 && calls < 3; i += 1) {
+      for (let i = 0; i < 10 && calls < 4; i += 1) {
+        await jest.advanceTimersByTimeAsync(1);
         await Promise.resolve();
       }
-      await expect(waiting).rejects.toThrow("getExecution-failed");
+      await waitingExpectation;
     } finally {
       jest.useRealTimers();
     }

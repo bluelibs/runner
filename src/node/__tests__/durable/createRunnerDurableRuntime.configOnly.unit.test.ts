@@ -151,4 +151,84 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
       concurrency: 3,
     });
   });
+
+  it("resolves legacy source task ids when only the canonical store id is registered", async () => {
+    const { initDurableService } = mockInitDurableService();
+    const legacyTask = { id: "legacy.task.id" };
+    const canonicalTaskId = "app.tasks.legacy.task.id";
+    const runnerStore = {
+      tasks: new Map([[canonicalTaskId, { task: legacyTask }]]),
+      findIdByDefinition: jest.fn(() => canonicalTaskId),
+    } as any;
+
+    jest.doMock("../../durable/core/DurableService", () => ({
+      initDurableService,
+    }));
+    jest.doMock("../../durable/core/DurableWorker", () => ({
+      initDurableWorker: jest.fn(),
+    }));
+
+    let createRunnerDurableRuntime!: typeof import("../../durable/core/createRunnerDurableRuntime").createRunnerDurableRuntime;
+    jest.isolateModules(() => {
+      ({
+        createRunnerDurableRuntime,
+      } = require("../../durable/core/createRunnerDurableRuntime"));
+    });
+
+    await createRunnerDurableRuntime(
+      {
+        store: {} as any,
+        worker: false,
+      },
+      {
+        ...deps,
+        runnerStore,
+      },
+    );
+
+    const taskResolver = initDurableService.mock.calls[0]?.[0].taskResolver;
+    expect(taskResolver?.(canonicalTaskId)).toBe(legacyTask);
+    expect(taskResolver?.("legacy.task.id")).toBe(legacyTask);
+    expect(taskResolver?.("missing.task")).toBeUndefined();
+  });
+
+  it("returns undefined for ambiguous legacy task ids", async () => {
+    const { initDurableService } = mockInitDurableService();
+    const sharedTaskId = "legacy.task.id";
+    const runnerStore = {
+      tasks: new Map([
+        ["app.tasks.first", { task: { id: sharedTaskId } }],
+        ["app.tasks.second", { task: { id: sharedTaskId } }],
+      ]),
+      findIdByDefinition: jest.fn((task: { id: string }) => task.id),
+    } as any;
+
+    jest.doMock("../../durable/core/DurableService", () => ({
+      initDurableService,
+    }));
+    jest.doMock("../../durable/core/DurableWorker", () => ({
+      initDurableWorker: jest.fn(),
+    }));
+
+    let createRunnerDurableRuntime!: typeof import("../../durable/core/createRunnerDurableRuntime").createRunnerDurableRuntime;
+    jest.isolateModules(() => {
+      ({
+        createRunnerDurableRuntime,
+      } = require("../../durable/core/createRunnerDurableRuntime"));
+    });
+
+    await createRunnerDurableRuntime(
+      {
+        store: {} as any,
+        worker: false,
+      },
+      {
+        ...deps,
+        runnerStore,
+      },
+    );
+
+    const taskResolver = initDurableService.mock.calls[0]?.[0].taskResolver;
+    expect(taskResolver?.(sharedTaskId)).toBeUndefined();
+  });
 });

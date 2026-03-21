@@ -32,6 +32,31 @@ export interface RunnerDurableDeps {
   logger: Logger;
 }
 
+function resolveRunnerTask(
+  runnerStore: Store,
+  taskId: string,
+): ITask<any, Promise<any>, any, any, any, any> | undefined {
+  const registeredTask = runnerStore.tasks.get(taskId)?.task;
+  if (registeredTask) {
+    return registeredTask;
+  }
+
+  let legacyMatch: ITask<any, Promise<any>, any, any, any, any> | undefined;
+  for (const entry of runnerStore.tasks.values()) {
+    if (entry.task.id !== taskId) {
+      continue;
+    }
+
+    if (legacyMatch && legacyMatch !== entry.task) {
+      return undefined;
+    }
+
+    legacyMatch = entry.task;
+  }
+
+  return legacyMatch;
+}
+
 export async function createRunnerDurableRuntime(
   config: RunnerDurableRuntimeConfig,
   deps: RunnerDurableDeps,
@@ -96,8 +121,7 @@ export async function createRunnerDurableRuntime(
       },
     },
     taskResolver: (taskId) => {
-      const storeTask = deps.runnerStore.tasks.get(taskId);
-      return storeTask?.task;
+      return resolveRunnerTask(deps.runnerStore, taskId);
     },
     taskIdResolver: (task) => deps.runnerStore.findIdByDefinition(task),
     contextProvider: (durableContext, fn) =>

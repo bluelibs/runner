@@ -52,9 +52,28 @@ export interface ExecutionManagerConfig {
 type ExecutionLockState = {
   lost: boolean;
   lossError: Error | null;
+  lockId: string | "no-lock" | undefined;
+  lockResource: string | undefined;
+  lockTtlMs: number | undefined;
   triggerLoss: (error: Error) => void;
   waitForLoss: Promise<never>;
 };
+
+type ExecutionAttemptGuards = {
+  assertLockOwnership: () => void;
+  raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
+  canPersistOutcome: () => Promise<boolean>;
+  isCancelled: () => Promise<boolean>;
+};
+
+type ExecutionErrorInfo = {
+  message: string;
+  stack?: string;
+};
+
+type TaskAttemptOutcome =
+  | { kind: "completed"; result: unknown }
+  | { kind: "already-finalized" };
 
 /**
  * Runs durable executions (the "workflow engine" for attempts).
@@ -342,6 +361,9 @@ export class ExecutionManager {
     if (acquiredLock === null) return;
 
     const executionLockState = this.createExecutionLockState();
+    executionLockState.lockId = acquiredLock.lockId;
+    executionLockState.lockResource = lockResource;
+    executionLockState.lockTtlMs = lockTtlMs;
     const stopLockHeartbeat = this.startLockHeartbeat({
       lockResource,
       lockId: acquiredLock.lockId,
@@ -383,6 +405,9 @@ export class ExecutionManager {
     return {
       lost: false,
       lossError: null,
+      lockId: undefined,
+      lockResource: undefined,
+      lockTtlMs: undefined,
       triggerLoss: (error) => {
         if (didLoseLock || rejectLoss === null) return;
         didLoseLock = true;
@@ -390,6 +415,56 @@ export class ExecutionManager {
       },
       waitForLoss,
     };
+  }
+
+  private markExecutionLockLost(
+    executionLockState: ExecutionLockState,
+    lockResource: string,
+  ): Error {
+    const lossError = durableExecutionInvariantError.new({
+      message: `Execution lock lost for '${lockResource}' while the attempt was still running.`,
+    });
+    executionLockState.lost = true;
+    executionLockState.lossError = lossError;
+    executionLockState.triggerLoss(lossError);
+    return lossError;
+  }
+
+  private async assertStoreLockOwnership(
+    executionLockState: ExecutionLockState,
+  ): Promise<void> {
+    const lockId = executionLockState.lockId;
+    const lockResource = executionLockState.lockResource;
+    const lockTtlMs = executionLockState.lockTtlMs;
+
+    if (
+      executionLockState.lost ||
+      lockId === undefined ||
+      lockResource === undefined ||
+      lockTtlMs === undefined ||
+      lockId === "no-lock" ||
+      !this.config.store.renewLock
+    ) {
+      if (executionLockState.lost) {
+        throw executionLockState.lossError;
+      }
+      return;
+    }
+
+    try {
+      const renewed = await this.config.store.renewLock(
+        lockResource,
+        lockId,
+        lockTtlMs,
+      );
+      if (renewed) {
+        return;
+      }
+    } catch {
+      // Failing closed avoids persisting an outcome after ownership may be lost.
+    }
+
+    throw this.markExecutionLockLost(executionLockState, lockResource);
   }
 
   async failExecutionDeliveryExhausted(
@@ -401,20 +476,57 @@ export class ExecutionManager {
       errorMessage: string;
     },
   ): Promise<void> {
-    const execution = await this.config.store.getExecution(executionId);
-    if (!execution) return;
-    if (this.isExecutionTerminal(execution.status)) return;
-
     const message =
       `Queue delivery attempts exhausted for execution ${executionId} ` +
       `(message ${details.messageId}, attempts ${details.attempts}/${details.maxAttempts}): ` +
       details.errorMessage;
+    const maxTransitionAttempts = 5;
 
-    await this.transitionExecutionToFailed({
-      execution,
-      from: execution.status,
-      reason: "delivery_attempts_exhausted",
-      error: { message },
+    for (
+      let transitionAttempt = 1;
+      transitionAttempt <= maxTransitionAttempts;
+      transitionAttempt += 1
+    ) {
+      const execution = await this.config.store.getExecution(executionId);
+      if (!execution) return;
+      if (this.isExecutionTerminal(execution.status)) return;
+
+      const completedAt = new Date();
+      const failedExecution: Execution = {
+        ...execution,
+        status: ExecutionStatus.Failed,
+        error: { message },
+        completedAt,
+        updatedAt: completedAt,
+      };
+      const failed = await this.config.store.saveExecutionIfStatus(
+        failedExecution,
+        [execution.status],
+      );
+      if (!failed) {
+        if (transitionAttempt < maxTransitionAttempts) {
+          await sleepMs(Math.min(2 ** (transitionAttempt - 1), 25));
+        }
+        continue;
+      }
+
+      await this.logExecutionStatusChange({
+        execution,
+        from: execution.status,
+        to: ExecutionStatus.Failed,
+        reason: "delivery_attempts_exhausted",
+      });
+      await this.notifyExecutionFinished(failedExecution);
+      return;
+    }
+
+    const latestExecution = await this.config.store.getExecution(executionId);
+    if (!latestExecution || this.isExecutionTerminal(latestExecution.status)) {
+      return;
+    }
+
+    durableExecutionInvariantError.throw({
+      message: `Failed to transition durable execution '${executionId}' to failed after ${maxTransitionAttempts} attempts while handling exhausted queue delivery.`,
     });
   }
 
@@ -442,21 +554,12 @@ export class ExecutionManager {
         )
           .then((renewed) => {
             if (!renewed) {
-              const lossError = durableExecutionInvariantError.new({
-                message: `Execution lock lost for '${params.lockResource}' while the attempt was still running.`,
-              });
-              params.lockState.lost = true;
-              params.lockState.lossError = lossError;
-              params.lockState.triggerLoss(lossError);
+              this.markExecutionLockLost(params.lockState, params.lockResource);
             }
           })
           .catch(() => {
-            const lossError = durableExecutionInvariantError.new({
-              message: `Execution lock lost for '${params.lockResource}' while the attempt was still running.`,
-            });
-            params.lockState.lost = true;
-            params.lockState.lossError = lossError;
-            params.lockState.triggerLoss(lossError);
+            // A transient renew failure should not abandon the attempt outright;
+            // outcome writes still re-check ownership against the store.
           })
           .finally(() => {
             if (!stopped) {
@@ -523,69 +626,110 @@ export class ExecutionManager {
     }
   }
 
-  private async runExecutionAttempt(
-    execution: Execution<unknown, unknown>,
-    task: ITask<unknown, Promise<unknown>, any, any, any, any>,
+  private async logExecutionStatusChange(params: {
+    execution: Execution<unknown, unknown>;
+    from: ExecutionStatus | null;
+    to: ExecutionStatus;
+    reason: string;
+  }): Promise<void> {
+    await this.auditLogger.log({
+      kind: DurableAuditEntryKind.ExecutionStatusChanged,
+      executionId: params.execution.id,
+      taskId: params.execution.taskId,
+      attempt: params.execution.attempt,
+      from: params.from,
+      to: params.to,
+      reason: params.reason,
+    });
+  }
+
+  private createExecutionAttemptGuards(
+    executionId: string,
     executionLockState: ExecutionLockState,
-  ): Promise<void> {
+  ): ExecutionAttemptGuards {
     const assertLockOwnership = (): void => {
       if (executionLockState.lost) {
         durableExecutionInvariantError.throw({
-          message: `Execution lock lost for '${execution.id}' while the attempt was still running.`,
+          message: `Execution lock lost for '${executionId}' while the attempt was still running.`,
         });
       }
     };
-    const raceWithLockLoss = async <T>(promise: Promise<T>): Promise<T> =>
-      await Promise.race([promise, executionLockState.waitForLoss]);
 
-    const isCancelled = async (): Promise<boolean> => {
-      const current = await this.config.store.getExecution(execution.id);
-      return current?.status === ExecutionStatus.Cancelled;
+    return {
+      assertLockOwnership,
+      raceWithLockLoss: async <T>(promise: Promise<T>): Promise<T> =>
+        await Promise.race([promise, executionLockState.waitForLoss]),
+      canPersistOutcome: async (): Promise<boolean> => {
+        try {
+          assertLockOwnership();
+          await this.assertStoreLockOwnership(executionLockState);
+          return true;
+        } catch (error) {
+          if (
+            error === executionLockState.lossError ||
+            executionLockState.lost
+          ) {
+            return false;
+          }
+          throw error;
+        }
+      },
+      isCancelled: async (): Promise<boolean> => {
+        const current = await this.config.store.getExecution(executionId);
+        return current?.status === ExecutionStatus.Cancelled;
+      },
     };
+  }
 
-    assertLockOwnership();
-
-    if (await isCancelled()) return;
-
+  private assertTaskExecutorConfigured(): void {
     if (!this.config.taskExecutor) {
       durableExecutionInvariantError.throw({
         message:
           "DurableService cannot run executions without `taskExecutor` in config.",
       });
     }
+  }
 
-    let runningExecution = execution;
-    if (execution.status !== ExecutionStatus.Running) {
-      const now = new Date();
-      const nextRunningExecution: Execution = {
-        ...execution,
-        status: ExecutionStatus.Running,
-        result: undefined,
-        error: undefined,
-        completedAt: undefined,
-        updatedAt: now,
-      };
-      const started = await this.config.store.saveExecutionIfStatus(
-        nextRunningExecution,
-        [execution.status],
-      );
-      if (!started) {
-        return;
-      }
-
-      runningExecution = nextRunningExecution;
-      await this.auditLogger.log({
-        kind: DurableAuditEntryKind.ExecutionStatusChanged,
-        executionId: execution.id,
-        taskId: execution.taskId,
-        attempt: execution.attempt,
-        from: execution.status,
-        to: ExecutionStatus.Running,
-        reason: "start_attempt",
-      });
+  private async transitionExecutionToRunning(
+    execution: Execution<unknown, unknown>,
+  ): Promise<Execution<unknown, unknown> | null> {
+    if (execution.status === ExecutionStatus.Running) {
+      return execution;
     }
 
-    const context = new DurableContext(
+    const now = new Date();
+    const runningExecution: Execution = {
+      ...execution,
+      status: ExecutionStatus.Running,
+      result: undefined,
+      error: undefined,
+      completedAt: undefined,
+      updatedAt: now,
+    };
+    const started = await this.config.store.saveExecutionIfStatus(
+      runningExecution,
+      [execution.status],
+    );
+    if (!started) {
+      return null;
+    }
+
+    await this.logExecutionStatusChange({
+      execution,
+      from: execution.status,
+      to: ExecutionStatus.Running,
+      reason: "start_attempt",
+    });
+
+    return runningExecution;
+  }
+
+  private createExecutionContext(
+    runningExecution: Execution<unknown, unknown>,
+    task: ITask<unknown, Promise<unknown>, any, any, any, any>,
+    assertLockOwnership: () => void,
+  ): DurableContext {
+    return new DurableContext(
       this.config.store,
       this.eventBus,
       runningExecution.id,
@@ -599,184 +743,293 @@ export class ExecutionManager {
         assertLockOwnership,
       },
     );
-    const failExecution = async (
-      reason: "failed" | "timed_out",
-      error: {
-        message: string;
-        stack?: string;
-      },
-    ): Promise<void> => {
+  }
+
+  private async runTaskAttempt(params: {
+    task: ITask<unknown, Promise<unknown>, any, any, any, any>;
+    input: unknown;
+    context: DurableContext;
+    execution: Execution<unknown, unknown>;
+    raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
+    canPersistOutcome: () => Promise<boolean>;
+  }): Promise<TaskAttemptOutcome> {
+    const contextProvider = this.config.contextProvider ?? ((_ctx, fn) => fn());
+    const taskPromise = Promise.resolve(
+      contextProvider(params.context, () =>
+        this.config.taskExecutor!.run(params.task, params.input),
+      ),
+    );
+
+    if (!params.execution.timeout) {
+      return {
+        kind: "completed",
+        result: await params.raceWithLockLoss(taskPromise),
+      };
+    }
+
+    const timeoutMessage = `Execution ${params.execution.id} timed out`;
+    const elapsed = Date.now() - params.execution.createdAt.getTime();
+    const remainingTimeout = Math.max(0, params.execution.timeout - elapsed);
+
+    if (remainingTimeout === 0 && params.execution.timeout > 0) {
+      if (!(await params.canPersistOutcome())) {
+        return { kind: "already-finalized" };
+      }
       await this.transitionExecutionToFailed({
-        execution: runningExecution,
+        execution: params.execution,
         from: ExecutionStatus.Running,
-        reason,
-        error,
+        reason: "timed_out",
+        error: { message: timeoutMessage },
       });
+      return { kind: "already-finalized" };
+    }
+
+    return {
+      kind: "completed",
+      result: await params.raceWithLockLoss(
+        withTimeout(taskPromise, remainingTimeout, timeoutMessage),
+      ),
     };
+  }
+
+  private async completeExecutionAttempt(
+    runningExecution: Execution<unknown, unknown>,
+    result: unknown,
+    canPersistOutcome?: () => Promise<boolean>,
+  ): Promise<void> {
+    if (canPersistOutcome && !(await canPersistOutcome())) {
+      return;
+    }
+
+    const finishedExecution: Execution = {
+      ...runningExecution,
+      status: ExecutionStatus.Completed,
+      result,
+      error: undefined,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const completed = await this.config.store.saveExecutionIfStatus(
+      finishedExecution,
+      [ExecutionStatus.Running],
+    );
+    if (!completed) {
+      return;
+    }
+
+    await this.logExecutionStatusChange({
+      execution: runningExecution,
+      from: ExecutionStatus.Running,
+      to: ExecutionStatus.Completed,
+      reason: "completed",
+    });
+    await this.notifyExecutionFinished(finishedExecution);
+  }
+
+  private async suspendExecutionAttempt(
+    runningExecution: Execution<unknown, unknown>,
+    reason: string,
+    canPersistOutcome?: () => Promise<boolean>,
+  ): Promise<void> {
+    if (canPersistOutcome && !(await canPersistOutcome())) {
+      return;
+    }
+
+    const sleepingExecution: Execution = {
+      ...runningExecution,
+      status: ExecutionStatus.Sleeping,
+      updatedAt: new Date(),
+    };
+    const suspended = await this.config.store.saveExecutionIfStatus(
+      sleepingExecution,
+      [ExecutionStatus.Running],
+    );
+    if (!suspended) {
+      return;
+    }
+
+    await this.logExecutionStatusChange({
+      execution: runningExecution,
+      from: ExecutionStatus.Running,
+      to: ExecutionStatus.Sleeping,
+      reason: `suspend:${reason}`,
+    });
+  }
+
+  private toExecutionErrorInfo(error: unknown): ExecutionErrorInfo {
+    return {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    };
+  }
+
+  private isCompensationFailure(error: unknown): boolean {
+    return (
+      error instanceof Error && error.message.startsWith("Compensation failed")
+    );
+  }
+
+  private async scheduleExecutionRetry(params: {
+    runningExecution: Execution<unknown, unknown>;
+    error: ExecutionErrorInfo;
+    canPersistOutcome?: () => Promise<boolean>;
+  }): Promise<void> {
+    if (params.canPersistOutcome && !(await params.canPersistOutcome())) {
+      return;
+    }
+
+    const delayMs = Math.pow(2, params.runningExecution.attempt) * 1000;
+    const fireAt = new Date(Date.now() + delayMs);
+    const retryTimerId = `retry:${params.runningExecution.id}:${params.runningExecution.attempt}`;
+
+    await this.config.store.createTimer({
+      id: retryTimerId,
+      executionId: params.runningExecution.id,
+      type: TimerType.Retry,
+      fireAt,
+      status: TimerStatus.Pending,
+    });
+
+    const retryingExecution: Execution = {
+      ...params.runningExecution,
+      status: ExecutionStatus.Retrying,
+      attempt: params.runningExecution.attempt + 1,
+      error: params.error,
+      updatedAt: new Date(),
+    };
+    const scheduledRetry = await this.config.store.saveExecutionIfStatus(
+      retryingExecution,
+      [ExecutionStatus.Running],
+    );
+    if (!scheduledRetry) {
+      try {
+        await this.config.store.deleteTimer(retryTimerId);
+      } catch {
+        // Best-effort cleanup; ignore.
+      }
+      return;
+    }
+
+    await this.logExecutionStatusChange({
+      execution: params.runningExecution,
+      from: ExecutionStatus.Running,
+      to: ExecutionStatus.Retrying,
+      reason: "retry_scheduled",
+    });
+  }
+
+  private async handleExecutionAttemptError(params: {
+    error: unknown;
+    runningExecution: Execution<unknown, unknown>;
+    guards: ExecutionAttemptGuards;
+    executionLockState: ExecutionLockState;
+  }): Promise<void> {
+    if (
+      params.error === params.executionLockState.lossError ||
+      params.executionLockState.lost
+    ) {
+      return;
+    }
+
+    if (params.error instanceof SuspensionSignal) {
+      if (await params.guards.isCancelled()) {
+        return;
+      }
+      await this.suspendExecutionAttempt(
+        params.runningExecution,
+        params.error.reason,
+        params.guards.canPersistOutcome,
+      );
+      return;
+    }
+
+    if (this.isCompensationFailure(params.error)) {
+      return;
+    }
+
+    if (await params.guards.isCancelled()) {
+      return;
+    }
+
+    const errorInfo = this.toExecutionErrorInfo(params.error);
+    const timedOut = isTimeoutExceededError(params.error);
+    const exhaustedAttempts =
+      params.runningExecution.attempt >= params.runningExecution.maxAttempts;
+
+    if (timedOut || exhaustedAttempts) {
+      if (!(await params.guards.canPersistOutcome())) {
+        return;
+      }
+      await this.transitionExecutionToFailed({
+        execution: params.runningExecution,
+        from: ExecutionStatus.Running,
+        reason: timedOut ? "timed_out" : "failed",
+        error: errorInfo,
+      });
+      return;
+    }
+
+    await this.scheduleExecutionRetry({
+      runningExecution: params.runningExecution,
+      error: errorInfo,
+      canPersistOutcome: params.guards.canPersistOutcome,
+    });
+  }
+
+  private async runExecutionAttempt(
+    execution: Execution<unknown, unknown>,
+    task: ITask<unknown, Promise<unknown>, any, any, any, any>,
+    executionLockState: ExecutionLockState,
+  ): Promise<void> {
+    const guards = this.createExecutionAttemptGuards(
+      execution.id,
+      executionLockState,
+    );
+    guards.assertLockOwnership();
+
+    if (await guards.isCancelled()) return;
+
+    this.assertTaskExecutorConfigured();
+
+    const runningExecution =
+      (await this.transitionExecutionToRunning(execution)) ?? null;
+    if (!runningExecution) {
+      return;
+    }
+
+    const context = this.createExecutionContext(
+      runningExecution,
+      task,
+      guards.assertLockOwnership,
+    );
 
     try {
-      const contextProvider =
-        this.config.contextProvider ?? ((_ctx, fn) => fn());
-      const promise = Promise.resolve(
-        contextProvider(context, () =>
-          this.config.taskExecutor!.run(task, runningExecution.input),
-        ),
-      );
-      const timeoutMessage = `Execution ${runningExecution.id} timed out`;
-
-      let result: unknown;
-      if (runningExecution.timeout) {
-        const now = Date.now();
-        const elapsed = now - runningExecution.createdAt.getTime();
-        const remainingTimeout = Math.max(
-          0,
-          runningExecution.timeout - elapsed,
-        );
-
-        if (remainingTimeout === 0 && runningExecution.timeout > 0) {
-          await failExecution("timed_out", {
-            message: timeoutMessage,
-          });
-          return;
-        }
-
-        result = await raceWithLockLoss(
-          withTimeout(promise, remainingTimeout, timeoutMessage),
-        );
-      } else {
-        result = await raceWithLockLoss(promise);
+      const outcome = await this.runTaskAttempt({
+        task,
+        input: runningExecution.input,
+        context,
+        execution: runningExecution,
+        raceWithLockLoss: guards.raceWithLockLoss,
+        canPersistOutcome: guards.canPersistOutcome,
+      });
+      if (outcome.kind === "already-finalized") {
+        return;
       }
-
-      assertLockOwnership();
 
       // Cancellation wins over completion.
-      if (await isCancelled()) return;
+      if (await guards.isCancelled()) return;
 
-      const finishedExecution: Execution = {
-        ...runningExecution,
-        status: ExecutionStatus.Completed,
-        result,
-        error: undefined,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      };
-      const completed = await this.config.store.saveExecutionIfStatus(
-        finishedExecution,
-        [ExecutionStatus.Running],
+      await this.completeExecutionAttempt(
+        runningExecution,
+        outcome.result,
+        guards.canPersistOutcome,
       );
-      if (!completed) {
-        return;
-      }
-      await this.auditLogger.log({
-        kind: DurableAuditEntryKind.ExecutionStatusChanged,
-        executionId: runningExecution.id,
-        taskId: runningExecution.taskId,
-        attempt: runningExecution.attempt,
-        from: ExecutionStatus.Running,
-        to: ExecutionStatus.Completed,
-        reason: "completed",
-      });
-      await this.notifyExecutionFinished(finishedExecution);
     } catch (error) {
-      if (error === executionLockState.lossError) {
-        return;
-      }
-      if (executionLockState.lost) {
-        return;
-      }
-
-      if (error instanceof SuspensionSignal) {
-        assertLockOwnership();
-        if (await isCancelled()) return;
-        const sleepingExecution: Execution = {
-          ...runningExecution,
-          status: ExecutionStatus.Sleeping,
-          updatedAt: new Date(),
-        };
-        const suspended = await this.config.store.saveExecutionIfStatus(
-          sleepingExecution,
-          [ExecutionStatus.Running],
-        );
-        if (!suspended) {
-          return;
-        }
-        await this.auditLogger.log({
-          kind: DurableAuditEntryKind.ExecutionStatusChanged,
-          executionId: runningExecution.id,
-          taskId: runningExecution.taskId,
-          attempt: runningExecution.attempt,
-          from: ExecutionStatus.Running,
-          to: ExecutionStatus.Sleeping,
-          reason: `suspend:${error.reason}`,
-        });
-        return;
-      }
-
-      if (
-        error instanceof Error &&
-        error.message.startsWith("Compensation failed")
-      ) {
-        return;
-      }
-
-      // Cancellation wins over failure/retry scheduling.
-      if (await isCancelled()) return;
-
-      const errorInfo = {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      };
-      const timedOut = isTimeoutExceededError(error);
-
-      if (
-        timedOut ||
-        runningExecution.attempt >= runningExecution.maxAttempts
-      ) {
-        assertLockOwnership();
-        await failExecution(timedOut ? "timed_out" : "failed", errorInfo);
-        return;
-      }
-
-      const delayMs = Math.pow(2, runningExecution.attempt) * 1000;
-      const fireAt = new Date(Date.now() + delayMs);
-      const retryTimerId = `retry:${runningExecution.id}:${runningExecution.attempt}`;
-
-      assertLockOwnership();
-      await this.config.store.createTimer({
-        id: retryTimerId,
-        executionId: runningExecution.id,
-        type: TimerType.Retry,
-        fireAt,
-        status: TimerStatus.Pending,
-      });
-
-      const retryingExecution: Execution = {
-        ...runningExecution,
-        status: ExecutionStatus.Retrying,
-        attempt: runningExecution.attempt + 1,
-        error: errorInfo,
-        updatedAt: new Date(),
-      };
-      const scheduledRetry = await this.config.store.saveExecutionIfStatus(
-        retryingExecution,
-        [ExecutionStatus.Running],
-      );
-      if (!scheduledRetry) {
-        try {
-          await this.config.store.deleteTimer(retryTimerId);
-        } catch {
-          // Best-effort cleanup; ignore.
-        }
-        return;
-      }
-      await this.auditLogger.log({
-        kind: DurableAuditEntryKind.ExecutionStatusChanged,
-        executionId: runningExecution.id,
-        taskId: runningExecution.taskId,
-        attempt: runningExecution.attempt,
-        from: ExecutionStatus.Running,
-        to: ExecutionStatus.Retrying,
-        reason: "retry_scheduled",
+      await this.handleExecutionAttemptError({
+        error,
+        runningExecution,
+        guards,
+        executionLockState,
       });
     }
   }
@@ -836,11 +1089,8 @@ export class ExecutionManager {
     if (!failed) {
       return;
     }
-    await this.auditLogger.log({
-      kind: DurableAuditEntryKind.ExecutionStatusChanged,
-      executionId: params.execution.id,
-      taskId: params.execution.taskId,
-      attempt: params.execution.attempt,
+    await this.logExecutionStatusChange({
+      execution: params.execution,
       from: params.from,
       to: ExecutionStatus.Failed,
       reason: params.reason,

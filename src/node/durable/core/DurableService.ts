@@ -408,16 +408,45 @@ export async function initDurableService(
   config: DurableServiceConfig,
 ): Promise<DurableService> {
   const service = new DurableService(config);
-  if (config.store.init) await config.store.init();
-  if (config.queue?.init) await config.queue.init();
-  if (config.eventBus?.init) await config.eventBus.init();
-  if (config.polling?.enabled !== false) {
-    service.start();
+  let storeInitialized = false;
+  let queueInitialized = false;
+  let eventBusInitialized = false;
+
+  try {
+    if (config.store.init) {
+      await config.store.init();
+      storeInitialized = true;
+    }
+    if (config.queue?.init) {
+      await config.queue.init();
+      queueInitialized = true;
+    }
+    if (config.eventBus?.init) {
+      await config.eventBus.init();
+      eventBusInitialized = true;
+    }
+    if (config.recovery?.enabledOnInit === true) {
+      service.startRecoveryOnInit();
+    }
+    if (config.polling?.enabled !== false) {
+      service.start();
+    }
+    return service;
+  } catch (error) {
+    await service.stop().catch(() => undefined);
+
+    if (eventBusInitialized && config.eventBus?.dispose) {
+      await config.eventBus.dispose().catch(() => undefined);
+    }
+    if (queueInitialized && config.queue?.dispose) {
+      await config.queue.dispose().catch(() => undefined);
+    }
+    if (storeInitialized && config.store.dispose) {
+      await config.store.dispose().catch(() => undefined);
+    }
+
+    throw error;
   }
-  if (config.recovery?.enabledOnInit === true) {
-    service.startRecoveryOnInit();
-  }
-  return service;
 }
 
 export async function disposeDurableService(

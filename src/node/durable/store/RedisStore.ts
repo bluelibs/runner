@@ -15,6 +15,7 @@ import {
 import type {
   IDurableStore,
   ListExecutionsOptions,
+  ExpectedExecutionStatuses,
 } from "../core/interfaces/store";
 import { Serializer } from "../../../serializer";
 import {
@@ -369,7 +370,7 @@ export class RedisStore implements IDurableStore {
 
   async saveExecutionIfStatus(
     execution: Execution,
-    expectedStatuses: ExecutionStatus[],
+    expectedStatuses: ExpectedExecutionStatuses,
   ): Promise<boolean> {
     const { isActive, isStuck } = this.statusFlags(execution.status);
     const outcome = await this.redis.eval(
@@ -847,6 +848,88 @@ export class RedisStore implements IDurableStore {
     return payload ? (serializer.parse(payload) as DurableSignalWaiter) : null;
   }
 
+  async commitSignalDelivery(params: {
+    executionId: string;
+    signalId: string;
+    stepId: string;
+    stepResult: StepResult;
+    signalRecord: DurableSignalRecord;
+    timerId?: string;
+  }): Promise<boolean> {
+    const script = `
+      local stepPayload = redis.call("hget", KEYS[2], ARGV[1])
+      if not stepPayload then
+        return 0
+      end
+
+      local okStep, step = pcall(cjson.decode, stepPayload)
+      if not okStep or type(step) ~= "table" or type(step.result) ~= "table" then
+        return 0
+      end
+      if step.result.state ~= "waiting" then
+        return 0
+      end
+      if step.result.signalId ~= cjson.null and step.result.signalId ~= nil and step.result.signalId ~= ARGV[2] then
+        return 0
+      end
+
+      local member = redis.call("hget", KEYS[5], ARGV[1])
+      if not member then
+        return 0
+      end
+
+      local currentSignalState = redis.call("get", KEYS[1])
+      local okState, state = pcall(cjson.decode, currentSignalState or ARGV[4])
+      if not okState then
+        return "__error__:Corrupted durable signal state"
+      end
+      local okRecord, record = pcall(cjson.decode, ARGV[5])
+      if not okRecord then
+        return "__error__:Invalid durable signal record payload"
+      end
+      local okCompletedStep, completedStep = pcall(cjson.decode, ARGV[3])
+      if not okCompletedStep then
+        return "__error__:Invalid signal delivery step result payload"
+      end
+
+      table.insert(state.history, record)
+      redis.call("set", KEYS[1], cjson.encode(state))
+      redis.call("hset", KEYS[2], ARGV[1], cjson.encode(completedStep))
+      redis.call("zrem", KEYS[3], member)
+      redis.call("hdel", KEYS[4], member)
+      redis.call("hdel", KEYS[5], ARGV[1])
+
+      if ARGV[6] ~= "" then
+        redis.call("hdel", KEYS[6], ARGV[6])
+        redis.call("zrem", KEYS[7], ARGV[6])
+      end
+
+      return 1
+    `;
+
+    const result = await this.redis.eval(
+      script,
+      7,
+      this.signalKey(params.executionId, params.signalId),
+      this.stepBucketKey(params.executionId),
+      this.signalWaiterOrderKey(params.executionId, params.signalId),
+      this.signalWaiterPayloadKey(params.executionId, params.signalId),
+      this.signalWaiterStepKey(params.executionId, params.signalId),
+      this.k("timers"),
+      this.k("timers_schedule"),
+      params.stepId,
+      params.signalId,
+      serializer.stringify(params.stepResult),
+      serializer.stringify(
+        createRedisSignalState(params.executionId, params.signalId),
+      ),
+      serializer.stringify(params.signalRecord),
+      params.timerId ?? "",
+    );
+    this.assertEvalResultNotError(result);
+    return Number(result) === 1;
+  }
+
   async takeNextSignalWaiter(
     executionId: string,
     signalId: string,
@@ -1026,6 +1109,45 @@ export class RedisStore implements IDurableStore {
     `;
 
     const result = await this.redis.eval(script, 1, key, workerId, `${ttlMs}`);
+    return Number(result) === 1;
+  }
+
+  async finalizeClaimedTimer(
+    timerId: string,
+    workerId: string,
+  ): Promise<boolean> {
+    const script = `
+      if redis.call("get", KEYS[3]) ~= ARGV[2] then
+        return 0
+      end
+
+      local current = redis.call("hget", KEYS[1], ARGV[1])
+      if current then
+        local okTimer, timer = pcall(cjson.decode, current)
+        if not okTimer then
+          return "__error__:Corrupted durable timer payload"
+        end
+        timer.status = ARGV[3]
+        redis.call("hset", KEYS[1], ARGV[1], cjson.encode(timer))
+      end
+
+      redis.call("hdel", KEYS[1], ARGV[1])
+      redis.call("zrem", KEYS[2], ARGV[1])
+      redis.call("del", KEYS[3])
+      return 1
+    `;
+
+    const result = await this.redis.eval(
+      script,
+      3,
+      this.k("timers"),
+      this.k("timers_schedule"),
+      this.k(`timer:claim:${timerId}`),
+      timerId,
+      workerId,
+      TimerStatus.Fired,
+    );
+    this.assertEvalResultNotError(result);
     return Number(result) === 1;
   }
 

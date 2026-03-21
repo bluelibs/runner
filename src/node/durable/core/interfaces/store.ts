@@ -18,6 +18,14 @@ export interface ListExecutionsOptions {
   offset?: number;
 }
 
+/**
+ * Non-empty list of allowed source statuses for compare-and-set execution updates.
+ */
+export type ExpectedExecutionStatuses = readonly [
+  ExecutionStatus,
+  ...ExecutionStatus[],
+];
+
 export interface IDurableStore {
   saveExecution(execution: Execution): Promise<void>;
   /**
@@ -26,7 +34,7 @@ export interface IDurableStore {
    */
   saveExecutionIfStatus(
     execution: Execution,
-    expectedStatuses: ExecutionStatus[],
+    expectedStatuses: ExpectedExecutionStatuses,
   ): Promise<boolean>;
   getExecution(id: string): Promise<Execution | null>;
   updateExecution(id: string, updates: Partial<Execution>): Promise<void>;
@@ -130,6 +138,20 @@ export interface IDurableStore {
     executionId: string,
     signalId: string,
   ): Promise<DurableSignalWaiter | null>;
+  /**
+   * Atomically completes a live signal waiter by persisting the supplied step
+   * result, journaling the delivered signal, deleting the waiter, and cleaning
+   * up the optional timeout timer. Returns false when the waiter/step no longer
+   * matches an active waiting signal and the caller should re-check state.
+   */
+  commitSignalDelivery?(params: {
+    executionId: string;
+    signalId: string;
+    stepId: string;
+    stepResult: StepResult;
+    signalRecord: DurableSignalRecord;
+    timerId?: string;
+  }): Promise<boolean>;
   takeNextSignalWaiter(
     executionId: string,
     signalId: string,
@@ -164,6 +186,11 @@ export interface IDurableStore {
     workerId: string,
     ttlMs: number,
   ): Promise<boolean>;
+  /**
+   * Atomically finalizes a claimed timer only if `workerId` still owns the
+   * timer-claim lease. Returns false when ownership was already lost.
+   */
+  finalizeClaimedTimer?(timerId: string, workerId: string): Promise<boolean>;
   deleteTimer(timerId: string): Promise<void>;
 
   createSchedule(schedule: Schedule): Promise<void>;

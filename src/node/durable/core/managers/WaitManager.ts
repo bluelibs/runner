@@ -102,15 +102,12 @@ export class WaitManager {
       return { done: false };
     };
 
-    const pollingFallback = async (): Promise<TResult> => {
-      while (true) {
-        const result = await check();
-        if (result.done) return result.value;
-        await throwIfTimedOut();
-
-        await sleepMs(pollEveryMs);
-      }
-    };
+    const pollingFallback = async (): Promise<TResult> =>
+      await this.pollUntilFinished({
+        check,
+        throwIfTimedOut,
+        pollEveryMs,
+      });
 
     // Initial check
     const initialResult = await check();
@@ -164,16 +161,6 @@ export class WaitManager {
             resolve(out.value);
           } else {
             reject(out.error);
-          }
-        };
-
-        const pollingFallback = async (): Promise<TResult> => {
-          while (true) {
-            const result = await check();
-            if (result.done) return result.value;
-            await throwIfTimedOut();
-
-            await sleepMs(pollEveryMs);
           }
         };
 
@@ -278,5 +265,19 @@ export class WaitManager {
     }
 
     return pollingFallback();
+  }
+
+  private async pollUntilFinished<TResult>(params: {
+    check: () => Promise<{ done: false } | { done: true; value: TResult }>;
+    throwIfTimedOut: () => Promise<void>;
+    pollEveryMs: number;
+  }): Promise<TResult> {
+    while (true) {
+      const result = await params.check();
+      if (result.done) return result.value;
+      await params.throwIfTimedOut();
+
+      await sleepMs(params.pollEveryMs);
+    }
   }
 }

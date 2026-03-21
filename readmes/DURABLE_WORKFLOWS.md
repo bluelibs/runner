@@ -733,9 +733,10 @@ To implement a custom store (e.g., for SQL), you only need to satisfy the `IDura
 
 The current durable contract has a small required core and a larger optional operator/tooling surface:
 
-- Required: execution persistence, step persistence, timers, schedules, signal journaling (`getSignalState`, `appendSignalRecord`, `enqueueQueuedSignalRecord`, `consumeQueuedSignalRecord`), and signal waiter ordering (`upsertSignalWaiter`, `takeNextSignalWaiter`, `deleteSignalWaiter`).
+- Required: execution persistence, step persistence, timers, schedules, signal journaling (`getSignalState`, `appendSignalRecord`, `bufferSignalRecord`, `enqueueQueuedSignalRecord`, `consumeQueuedSignalRecord`, `consumeBufferedSignalForStep`), and signal waiter ordering (`upsertSignalWaiter`, `peekNextSignalWaiter`, `takeNextSignalWaiter`, `deleteSignalWaiter`).
 - Optional: operator/dashboard helpers such as `listExecutions`, `listStepResults`, `appendAuditEntry`, `listAuditEntries`, `retryRollback`, `skipStep`, `forceFail`, `editStepResult`, and `listStuckExecutions`.
-- Required ordering note: `takeNextSignalWaiter` must return the earliest waiter for a given execution/signal pair using the same deterministic ordering as the built-in stores.
+- Required ordering note: `peekNextSignalWaiter` must expose the earliest waiter for a given execution/signal pair without consuming it, and `takeNextSignalWaiter` must return and consume that same earliest waiter using the same deterministic ordering as the built-in stores.
+- Required buffering note: `bufferSignalRecord` should persist an incoming signal into both the signal history and the replay buffer, while `consumeBufferedSignalForStep` should atomically claim and return the buffered payload for a completed wait step.
 
 **Minimum Viable Store (Pseudo-SQL):**
 

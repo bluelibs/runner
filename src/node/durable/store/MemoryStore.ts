@@ -14,10 +14,12 @@ import {
 import type {
   IDurableStore,
   ListExecutionsOptions,
+  ExpectedExecutionStatuses,
 } from "../core/interfaces/store";
 import type { DurableAuditEntry } from "../core/audit";
 import { randomUUID } from "node:crypto";
 import { getSignalIdFromStepId } from "../core/signalWaiters";
+import { parseSignalState } from "../core/utils";
 import { durableExecutionInvariantError } from "../../../errors";
 import { Semaphore } from "../../../models/Semaphore";
 
@@ -58,9 +60,8 @@ const cloneSignalState = (
   history: signalState.history.map(cloneSignalRecord),
 });
 
-const cloneSignalWaiter = (
-  waiter: DurableSignalWaiter,
-): DurableSignalWaiter => ({ ...waiter });
+const cloneSignalWaiter = (waiter: DurableSignalWaiter): DurableSignalWaiter =>
+  structuredClone(waiter);
 
 function getSignalIdFromStepResult(result: StepResult): string {
   const state = result.result;
@@ -141,7 +142,7 @@ export class MemoryStore implements IDurableStore {
 
   async saveExecutionIfStatus(
     execution: Execution,
-    expectedStatuses: ExecutionStatus[],
+    expectedStatuses: ExpectedExecutionStatuses,
   ): Promise<boolean> {
     const current = this.executions.get(execution.id);
     if (!current) return false;
@@ -437,6 +438,33 @@ export class MemoryStore implements IDurableStore {
     return signalWaiters;
   }
 
+  private pruneEmptySignalWaiterBuckets(
+    executionId: string,
+    signalId: string,
+  ): void {
+    const executionWaiters = this.signalWaiters.get(executionId)!;
+    const signalWaiters = executionWaiters.get(signalId);
+    if (signalWaiters && signalWaiters.size === 0) {
+      executionWaiters.delete(signalId);
+    }
+
+    if (executionWaiters.size === 0) {
+      this.signalWaiters.delete(executionId);
+    }
+  }
+
+  private deleteSignalWaiterUnsafe(
+    executionId: string,
+    signalId: string,
+    stepId: string,
+  ): void {
+    const signalWaiters = this.signalWaiters.get(executionId)?.get(signalId);
+    if (!signalWaiters) return;
+
+    signalWaiters.delete(stepId);
+    this.pruneEmptySignalWaiterBuckets(executionId, signalId);
+  }
+
   async upsertSignalWaiter(waiter: DurableSignalWaiter): Promise<void> {
     await this.withSignalStatePermit(() => {
       const signalWaiters = this.getOrCreateSignalWaiters(
@@ -476,6 +504,57 @@ export class MemoryStore implements IDurableStore {
     );
   }
 
+  async commitSignalDelivery(params: {
+    executionId: string;
+    signalId: string;
+    stepId: string;
+    stepResult: StepResult;
+    signalRecord: DurableSignalRecord;
+    timerId?: string;
+  }): Promise<boolean> {
+    return this.withSignalStatePermit(() => {
+      const currentStep = this.stepResults
+        .get(params.executionId)
+        ?.get(params.stepId);
+      if (!currentStep) {
+        return false;
+      }
+
+      const signalState = parseSignalState(currentStep.result);
+      if (
+        signalState?.state !== "waiting" ||
+        (signalState.signalId !== undefined &&
+          signalState.signalId !== params.signalId)
+      ) {
+        return false;
+      }
+
+      const signalWaiters = this.signalWaiters
+        .get(params.executionId)
+        ?.get(params.signalId);
+      if (!signalWaiters?.has(params.stepId)) {
+        return false;
+      }
+
+      this.setStepResult(params.stepResult);
+      this.getOrCreateSignalState(
+        params.executionId,
+        params.signalId,
+      ).history.push(cloneSignalRecord(params.signalRecord));
+      this.deleteSignalWaiterUnsafe(
+        params.executionId,
+        params.signalId,
+        params.stepId,
+      );
+
+      if (params.timerId) {
+        this.timers.delete(params.timerId);
+      }
+
+      return true;
+    });
+  }
+
   async takeNextSignalWaiter(
     executionId: string,
     signalId: string,
@@ -486,13 +565,7 @@ export class MemoryStore implements IDurableStore {
 
       const signalWaiters = this.signalWaiters.get(executionId)?.get(signalId);
       if (!signalWaiters) return null;
-      signalWaiters.delete(nextWaiter.stepId);
-      if (signalWaiters.size === 0) {
-        this.signalWaiters.get(executionId)?.delete(signalId);
-        if (this.signalWaiters.get(executionId)?.size === 0) {
-          this.signalWaiters.delete(executionId);
-        }
-      }
+      this.deleteSignalWaiterUnsafe(executionId, signalId, nextWaiter.stepId);
 
       return cloneSignalWaiter(nextWaiter);
     });
@@ -504,17 +577,7 @@ export class MemoryStore implements IDurableStore {
     stepId: string,
   ): Promise<void> {
     await this.withSignalStatePermit(() => {
-      const executionWaiters = this.signalWaiters.get(executionId);
-      const signalWaiters = executionWaiters?.get(signalId);
-      if (!signalWaiters) return;
-
-      signalWaiters.delete(stepId);
-      if (signalWaiters.size === 0) {
-        executionWaiters!.delete(signalId);
-      }
-      if (executionWaiters && executionWaiters.size === 0) {
-        this.signalWaiters.delete(executionId);
-      }
+      this.deleteSignalWaiterUnsafe(executionId, signalId, stepId);
     });
   }
 
@@ -570,6 +633,30 @@ export class MemoryStore implements IDurableStore {
     if (!existing) return false;
     if (existing.id !== workerId) return false;
     this.locks.set(claimKey, { id: workerId, expires: now + ttlMs });
+    return true;
+  }
+
+  async finalizeClaimedTimer(
+    timerId: string,
+    workerId: string,
+  ): Promise<boolean> {
+    const claimKey = `timer:claim:${timerId}`;
+    const now = Date.now();
+    this.pruneExpiredLocks(now);
+    const existing = this.locks.get(claimKey);
+    if (!existing || existing.id !== workerId || existing.expires <= now) {
+      return false;
+    }
+
+    const timer = this.timers.get(timerId);
+    if (timer) {
+      this.timers.set(timerId, {
+        ...timer,
+        status: TimerStatus.Fired,
+      });
+    }
+    this.timers.delete(timerId);
+    this.locks.delete(claimKey);
     return true;
   }
 

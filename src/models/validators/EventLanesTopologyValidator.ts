@@ -24,6 +24,14 @@ type EventLanesConfigLike = {
 
 const EVENT_LANES_RESOURCE_ID = "eventLanes";
 
+/**
+ * Validates that shared-queue consumers take every lane bound to each queue.
+ *
+ * @param ctx - Validator context with access to the resource registry.
+ * @throws `eventLaneSharedQueuePartialConsumeError` when a profile consumes
+ * only part of a shared queue's bound lanes.
+ * @returns void
+ */
 export function validateSharedQueueConsumeTopology(
   ctx: ValidatorContext,
 ): void {
@@ -123,7 +131,10 @@ function describeQueueSource(
       candidate.queue !== undefined &&
       toQueueIdentity(ctx, candidate.queue) === queueIdentity,
   );
-  const queue = binding!.queue!;
+  const queue = binding?.queue;
+  if (!queue) {
+    return "unknown queue";
+  }
 
   if (isResource(queue)) {
     return ctx.findIdByDefinition(queue);

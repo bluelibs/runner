@@ -460,7 +460,7 @@ describe("durable: DurableService — execution (unit)", () => {
     }
   });
 
-  it("stops short of completion when lock renewal rejects during heartbeat", async () => {
+  it("still completes when a heartbeat renewal fails transiently", async () => {
     jest.useFakeTimers();
 
     try {
@@ -490,7 +490,7 @@ describe("durable: DurableService — execution (unit)", () => {
       await expect(processing).resolves.toBeUndefined();
       expect(renewLockSpy).toHaveBeenCalled();
       expect((await store.getExecution("e-renew-reject"))?.status).toBe(
-        "running",
+        "completed",
       );
     } finally {
       jest.useRealTimers();

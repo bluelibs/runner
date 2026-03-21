@@ -227,6 +227,96 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
     }
   });
 
+  it("keeps the attempt alive when a heartbeat renew fails transiently", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const store = new MemoryStore();
+      jest
+        .spyOn(store, "renewLock")
+        .mockRejectedValueOnce(new Error("transient-renew-failure"))
+        .mockResolvedValue(true);
+      const task = okTask("t-lock-transient-renew");
+      const service = new DurableService({
+        store,
+        taskExecutor: createTaskExecutor({
+          [task.id]: async () =>
+            await new Promise((resolve) => {
+              setTimeout(() => resolve("ok"), 12_000);
+            }),
+        }),
+        tasks: [task],
+      });
+
+      await store.saveExecution(
+        pendingExecution({ id: "e-lock-transient-renew", taskId: task.id }),
+      );
+
+      const processing = service.processExecution("e-lock-transient-renew");
+      await flushMicrotasks();
+      await advanceTimers(12_500);
+      await processing;
+
+      expect((await store.getExecution("e-lock-transient-renew"))?.status).toBe(
+        "completed",
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not persist completion after a pre-save ownership recheck fails", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-lock-recheck-complete");
+    jest.spyOn(store, "renewLock").mockResolvedValue(false);
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({
+        [task.id]: async () => "ok",
+      }),
+      tasks: [task],
+    });
+
+    await store.saveExecution(
+      pendingExecution({ id: "e-lock-recheck-complete", taskId: task.id }),
+    );
+
+    await service.processExecution("e-lock-recheck-complete");
+
+    expect((await store.getExecution("e-lock-recheck-complete"))?.status).toBe(
+      "running",
+    );
+  });
+
+  it("does not schedule a retry after a pre-save ownership recheck fails", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-lock-recheck-retry");
+    jest.spyOn(store, "renewLock").mockResolvedValue(false);
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({
+        [task.id]: async () => {
+          throw new Error("boom");
+        },
+      }),
+      tasks: [task],
+      execution: { maxAttempts: 2 },
+    });
+
+    await store.saveExecution(
+      pendingExecution({ id: "e-lock-recheck-retry", taskId: task.id }),
+    );
+
+    await service.processExecution("e-lock-recheck-retry");
+
+    expect((await store.getExecution("e-lock-recheck-retry"))?.status).toBe(
+      "running",
+    );
+    expect(await store.getReadyTimers(new Date(Date.now() + 60_000))).toEqual(
+      [],
+    );
+  });
+
   it("ignores duplicate lock-loss notifications", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
