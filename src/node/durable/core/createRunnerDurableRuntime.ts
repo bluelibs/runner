@@ -65,6 +65,8 @@ export async function createRunnerDurableRuntime(
     : runnerEmitter;
 
   const contextStorage = new AsyncLocalStorage<IDurableContext>();
+  const autoRecoveryEnabled =
+    config.recovery?.enabledOnInit ?? config.worker === true;
 
   const service = await initDurableService({
     ...config,
@@ -72,6 +74,10 @@ export async function createRunnerDurableRuntime(
     audit: {
       ...config.audit,
       emitter: auditEmitter,
+    },
+    recovery: {
+      ...config.recovery,
+      enabledOnInit: autoRecoveryEnabled,
     },
     taskExecutor: {
       run: async <TInput, TResult>(

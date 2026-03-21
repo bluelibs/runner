@@ -4,7 +4,7 @@ import type { IDurableStore } from "./store";
 import type { IDurableQueue } from "./queue";
 import type { IEventBus } from "./bus";
 import type { IDurableContext } from "./context";
-import type { Schedule } from "../types";
+import type { ExecutionStatus, Schedule } from "../types";
 import type { DurableAuditEmitter } from "../audit";
 import type { Logger } from "../../../../models/Logger";
 
@@ -101,6 +101,14 @@ export interface DurableServiceConfig {
     /** Time-to-live for timer claims in milliseconds. Default: 30000. */
     claimTtlMs?: number;
   };
+  recovery?: {
+    /** Automatically starts background orphan recovery on service init. */
+    enabledOnInit?: boolean;
+    /** Maximum number of concurrent recovery attempts per drain. Default: 10. */
+    concurrency?: number;
+    /** Time-to-live for per-execution recovery claims in milliseconds. Default: 30000. */
+    claimTtlMs?: number;
+  };
   execution?: {
     maxAttempts?: number;
     timeout?: number;
@@ -146,6 +154,42 @@ export interface DurableStartAndWaitResult<TResult = unknown> {
     executionId: string;
   };
   data: TResult;
+}
+
+export interface RecoverRecoveredReportType {
+  executionId: string;
+  status: ExecutionStatus;
+}
+
+export type RecoverSkippedReasonType =
+  | "pending_timer"
+  | "claimed_elsewhere"
+  | "not_recoverable";
+
+export interface RecoverSkippedReportType {
+  executionId: string;
+  status: ExecutionStatus;
+  reason: RecoverSkippedReasonType;
+}
+
+export interface RecoverFailureReportType {
+  executionId: string;
+  status: ExecutionStatus;
+  errorMessage: string;
+}
+
+/**
+ * Summary returned by `recover()` so callers can decide whether startup should
+ * continue, warn, or fail based on partial recovery outcomes.
+ */
+export interface RecoverReportType {
+  scannedCount: number;
+  recoveredCount: number;
+  skippedCount: number;
+  failedCount: number;
+  recovered: RecoverRecoveredReportType[];
+  skipped: RecoverSkippedReportType[];
+  failures: RecoverFailureReportType[];
 }
 
 export interface IDurableService {
@@ -210,7 +254,11 @@ export interface IDurableService {
     options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
 
-  recover(): Promise<void>;
+  /**
+   * Recover incomplete executions and report which ones were resumed, skipped,
+   * or failed during recovery.
+   */
+  recover(): Promise<RecoverReportType>;
 
   /**
    * Starts the durable polling loop (timers/schedules processing).

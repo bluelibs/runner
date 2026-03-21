@@ -15,7 +15,7 @@ import {
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { genericError } from "../../../errors";
 import { Logger, type ILog } from "../../../models/Logger";
-import { sleepingExecution } from "./DurableService.unit.helpers";
+import { okTask, sleepingExecution } from "./DurableService.unit.helpers";
 
 class ThrowingQueue implements IDurableQueue {
   async enqueue<T>(
@@ -135,5 +135,121 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
         }),
       ]),
     );
+  });
+
+  it("replaces the original scheduled timer with a kickoff failsafe after execution creation", async () => {
+    const store = new MemoryStore();
+    const queue = new ThrowingQueue();
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    const task = okTask("t-scheduled-queue-down");
+    const service = new DurableService({
+      store,
+      queue,
+      tasks: [task],
+      logger,
+    });
+
+    const timer: Timer = {
+      id: "t-scheduled-queue-down",
+      taskId: task.id,
+      type: TimerType.Scheduled,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    await service.handleTimer(timer);
+
+    const [execution] = await store.listIncompleteExecutions();
+    expect(execution).toBeDefined();
+    expect(
+      (await futureTimers(store)).some(
+        (readyTimer) => readyTimer.id === timer.id,
+      ),
+    ).toBe(false);
+    expect(await futureTimers(store)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `kickoff:${execution!.id}`,
+          executionId: execution!.id,
+        }),
+      ]),
+    );
+  });
+
+  it("logs cleanup failures after irreversible timer work has already happened", async () => {
+    class CleanupFailureStore extends MemoryStore {
+      override async deleteTimer(timerId: string): Promise<void> {
+        if (timerId === "t-cleanup-failure") {
+          throw genericError.new({ message: "delete-timer-failed" });
+        }
+
+        await super.deleteTimer(timerId);
+      }
+    }
+
+    const store = new CleanupFailureStore();
+    const logs: ILog[] = [];
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    logger.onLog((log) => {
+      logs.push(log);
+    });
+    const taskRegistry = new TaskRegistry();
+    const auditLogger = new AuditLogger({ enabled: false }, store);
+    const scheduleManager = new ScheduleManager(store, taskRegistry);
+    const pollingManager = new PollingManager(
+      "worker-1",
+      { interval: 1 },
+      store,
+      undefined,
+      3,
+      undefined,
+      taskRegistry,
+      auditLogger,
+      scheduleManager,
+      {
+        processExecution: jest.fn(async () => {
+          throw genericError.new({ message: "resume-failed" });
+        }),
+        kickoffExecution: jest.fn(async () => {}),
+      },
+      logger,
+    );
+
+    await store.createTimer({
+      id: "t-cleanup-failure",
+      executionId: "e1",
+      stepId: "sleep:1",
+      type: TimerType.Sleep,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    });
+
+    await pollingManager.handleTimer({
+      id: "t-cleanup-failure",
+      executionId: "e1",
+      stepId: "sleep:1",
+      type: TimerType.Sleep,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    });
+
+    expect(
+      logs.some(
+        (log) =>
+          log.level === "error" &&
+          log.message === "Durable timer handling failed." &&
+          (log.data as { cleanupError?: unknown } | undefined)
+            ?.cleanupError instanceof Error,
+      ),
+    ).toBe(true);
   });
 });

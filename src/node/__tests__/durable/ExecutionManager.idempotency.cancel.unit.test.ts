@@ -9,6 +9,7 @@ import type { IDurableStore } from "../../durable/core/interfaces/store";
 import type { ITaskExecutor } from "../../durable/core/interfaces/service";
 import type { IDurableQueue } from "../../durable/core/interfaces/queue";
 import type { ITask } from "../../../types/task";
+import * as durableUtils from "../../durable/core/utils";
 import { genericError } from "../../../errors";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { createBareStore } from "./DurableService.unit.helpers";
@@ -192,6 +193,94 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
     await expect(manager.cancelExecution(exec.id)).resolves.toBeUndefined();
     expect(saveExecutionIfStatus).not.toHaveBeenCalled();
+  });
+
+  it("cancelExecution backs off between conflicting retries", async () => {
+    const exec: Execution = {
+      id: "e-cancel-retries",
+      taskId: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const sleepSpy = jest
+      .spyOn(durableUtils, "sleepMs")
+      .mockResolvedValue(undefined);
+    const saveExecutionIfStatus = jest
+      .fn<Promise<boolean>, [Execution, ExecutionStatus[]]>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => ({ ...exec }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    try {
+      await expect(manager.cancelExecution(exec.id)).resolves.toBeUndefined();
+      expect(saveExecutionIfStatus).toHaveBeenCalledTimes(4);
+      expect(sleepSpy.mock.calls.map(([ms]) => ms)).toEqual([1, 2, 4]);
+    } finally {
+      sleepSpy.mockRestore();
+    }
+  });
+
+  it("cancelExecution throws after exhausting conflicting retries", async () => {
+    const exec: Execution = {
+      id: "e-cancel-exhausted",
+      taskId: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const sleepSpy = jest
+      .spyOn(durableUtils, "sleepMs")
+      .mockResolvedValue(undefined);
+    const saveExecutionIfStatus = jest.fn(async () => false);
+    const getExecution = jest.fn(async () => ({ ...exec }));
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    try {
+      await expect(manager.cancelExecution(exec.id)).rejects.toThrow(
+        "Failed to cancel durable execution",
+      );
+      expect(saveExecutionIfStatus).toHaveBeenCalledTimes(10);
+      expect(getExecution).toHaveBeenCalledTimes(11);
+      expect(sleepSpy.mock.calls.map(([ms]) => ms)).toEqual([
+        1, 2, 4, 8, 16, 25, 25, 25, 25,
+      ]);
+    } finally {
+      sleepSpy.mockRestore();
+    }
   });
 
   it("cancelExecution preserves existing cancelRequestedAt and defaults the reason", async () => {

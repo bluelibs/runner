@@ -17,6 +17,9 @@ import type {
 } from "../core/interfaces/store";
 import type { DurableAuditEntry } from "../core/audit";
 import { randomUUID } from "node:crypto";
+import { getSignalIdFromStepId } from "../core/signalWaiters";
+import { durableExecutionInvariantError } from "../../../errors";
+import { Semaphore } from "../../../models/Semaphore";
 
 const createEmptySignalState = (
   executionId: string,
@@ -59,6 +62,27 @@ const cloneSignalWaiter = (
   waiter: DurableSignalWaiter,
 ): DurableSignalWaiter => ({ ...waiter });
 
+function getSignalIdFromStepResult(result: StepResult): string {
+  const state = result.result;
+  if (
+    typeof state === "object" &&
+    state !== null &&
+    "signalId" in state &&
+    typeof state.signalId === "string"
+  ) {
+    return state.signalId;
+  }
+
+  const signalId = getSignalIdFromStepId(result.stepId);
+  if (signalId) {
+    return signalId;
+  }
+
+  return durableExecutionInvariantError.throw({
+    message: `Unable to resolve signal id for buffered step '${result.stepId}' on execution '${result.executionId}'.`,
+  });
+}
+
 export class MemoryStore implements IDurableStore {
   private executions = new Map<string, Execution>();
   private executionIdByIdempotencyKey = new Map<string, string>();
@@ -68,10 +92,17 @@ export class MemoryStore implements IDurableStore {
     string,
     Map<string, Map<string, DurableSignalWaiter>>
   >();
+  // Keep signal queue/history/waiter transitions serialized so the in-memory
+  // store matches the atomic durability contract expected from other stores.
+  private readonly signalStateSemaphore = new Semaphore(1);
   private auditEntries = new Map<string, DurableAuditEntry[]>();
   private timers = new Map<string, Timer>();
   private schedules = new Map<string, Schedule>();
   private locks = new Map<string, { id: string; expires: number }>();
+
+  private withSignalStatePermit<T>(fn: () => T | Promise<T>): Promise<T> {
+    return this.signalStateSemaphore.withPermit(async () => await fn());
+  }
 
   private pruneExpiredLocks(now: number): void {
     for (const [resource, lock] of this.locks.entries()) {
@@ -267,13 +298,18 @@ export class MemoryStore implements IDurableStore {
     return r ? { ...r } : null;
   }
 
-  async saveStepResult(result: StepResult): Promise<void> {
+  private setStepResult(result: StepResult): void {
     let results = this.stepResults.get(result.executionId);
     if (!results) {
       results = new Map();
       this.stepResults.set(result.executionId, results);
     }
+
     results.set(result.stepId, { ...result });
+  }
+
+  async saveStepResult(result: StepResult): Promise<void> {
+    this.setStepResult(result);
   }
 
   private getOrCreateSignalState(
@@ -299,10 +335,12 @@ export class MemoryStore implements IDurableStore {
     executionId: string,
     signalId: string,
   ): Promise<DurableSignalState | null> {
-    const signalState = this.signalStates.get(executionId)?.get(signalId);
-    if (!signalState) return null;
+    return this.withSignalStatePermit(() => {
+      const signalState = this.signalStates.get(executionId)?.get(signalId);
+      if (!signalState) return null;
 
-    return cloneSignalState(signalState);
+      return cloneSignalState(signalState);
+    });
   }
 
   async appendSignalRecord(
@@ -310,8 +348,22 @@ export class MemoryStore implements IDurableStore {
     signalId: string,
     record: DurableSignalRecord,
   ): Promise<void> {
-    const signalState = this.getOrCreateSignalState(executionId, signalId);
-    signalState.history.push(cloneSignalRecord(record));
+    await this.withSignalStatePermit(() => {
+      const signalState = this.getOrCreateSignalState(executionId, signalId);
+      signalState.history.push(cloneSignalRecord(record));
+    });
+  }
+
+  async bufferSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableQueuedSignalRecord,
+  ): Promise<void> {
+    await this.withSignalStatePermit(() => {
+      const signalState = this.getOrCreateSignalState(executionId, signalId);
+      signalState.history.push(cloneSignalRecord(record));
+      signalState.queued.push(cloneQueuedSignalRecord(record));
+    });
   }
 
   async enqueueQueuedSignalRecord(
@@ -319,19 +371,51 @@ export class MemoryStore implements IDurableStore {
     signalId: string,
     record: DurableQueuedSignalRecord,
   ): Promise<void> {
-    const signalState = this.getOrCreateSignalState(executionId, signalId);
-    signalState.queued.push(cloneQueuedSignalRecord(record));
+    await this.withSignalStatePermit(() => {
+      const signalState = this.getOrCreateSignalState(executionId, signalId);
+      signalState.queued.push(cloneQueuedSignalRecord(record));
+    });
   }
 
   async consumeQueuedSignalRecord(
     executionId: string,
     signalId: string,
   ): Promise<DurableSignalRecord | null> {
-    const signalState = this.signalStates.get(executionId)?.get(signalId);
-    const record = signalState?.queued.shift();
-    if (!record) return null;
+    return this.withSignalStatePermit(() => {
+      const signalState = this.signalStates.get(executionId)?.get(signalId);
+      const record = signalState?.queued.shift();
+      if (!record) return null;
 
-    return cloneSignalRecord(record);
+      return cloneSignalRecord(record);
+    });
+  }
+
+  async consumeBufferedSignalForStep(
+    stepResult: StepResult,
+  ): Promise<DurableSignalRecord | null> {
+    return this.withSignalStatePermit(() => {
+      const signalId = getSignalIdFromStepResult(stepResult);
+      const signalState = this.signalStates
+        .get(stepResult.executionId)
+        ?.get(signalId);
+      const record = signalState?.queued.shift();
+      if (!record) {
+        return null;
+      }
+
+      const nextResult =
+        typeof stepResult.result === "object" && stepResult.result !== null
+          ? {
+              ...stepResult.result,
+              payload: cloneSignalPayload(record.payload),
+            }
+          : stepResult.result;
+      this.setStepResult({
+        ...stepResult,
+        result: nextResult,
+      });
+      return cloneSignalRecord(record);
+    });
   }
 
   private getOrCreateSignalWaiters(
@@ -354,17 +438,19 @@ export class MemoryStore implements IDurableStore {
   }
 
   async upsertSignalWaiter(waiter: DurableSignalWaiter): Promise<void> {
-    const signalWaiters = this.getOrCreateSignalWaiters(
-      waiter.executionId,
-      waiter.signalId,
-    );
-    signalWaiters.set(waiter.stepId, cloneSignalWaiter(waiter));
+    await this.withSignalStatePermit(() => {
+      const signalWaiters = this.getOrCreateSignalWaiters(
+        waiter.executionId,
+        waiter.signalId,
+      );
+      signalWaiters.set(waiter.stepId, cloneSignalWaiter(waiter));
+    });
   }
 
-  async takeNextSignalWaiter(
+  private peekNextSignalWaiterUnsafe(
     executionId: string,
     signalId: string,
-  ): Promise<DurableSignalWaiter | null> {
+  ): DurableSignalWaiter | null {
     const signalWaiters = this.signalWaiters.get(executionId)?.get(signalId);
     if (!signalWaiters || signalWaiters.size === 0) return null;
 
@@ -378,17 +464,38 @@ export class MemoryStore implements IDurableStore {
       }
     }
 
-    if (!nextWaiter) return null;
+    return nextWaiter ? cloneSignalWaiter(nextWaiter) : null;
+  }
 
-    signalWaiters.delete(nextWaiter.stepId);
-    if (signalWaiters.size === 0) {
-      this.signalWaiters.get(executionId)?.delete(signalId);
-      if (this.signalWaiters.get(executionId)?.size === 0) {
-        this.signalWaiters.delete(executionId);
+  async peekNextSignalWaiter(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalWaiter | null> {
+    return this.withSignalStatePermit(() =>
+      this.peekNextSignalWaiterUnsafe(executionId, signalId),
+    );
+  }
+
+  async takeNextSignalWaiter(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalWaiter | null> {
+    return this.withSignalStatePermit(() => {
+      const nextWaiter = this.peekNextSignalWaiterUnsafe(executionId, signalId);
+      if (!nextWaiter) return null;
+
+      const signalWaiters = this.signalWaiters.get(executionId)?.get(signalId);
+      if (!signalWaiters) return null;
+      signalWaiters.delete(nextWaiter.stepId);
+      if (signalWaiters.size === 0) {
+        this.signalWaiters.get(executionId)?.delete(signalId);
+        if (this.signalWaiters.get(executionId)?.size === 0) {
+          this.signalWaiters.delete(executionId);
+        }
       }
-    }
 
-    return cloneSignalWaiter(nextWaiter);
+      return cloneSignalWaiter(nextWaiter);
+    });
   }
 
   async deleteSignalWaiter(
@@ -396,17 +503,19 @@ export class MemoryStore implements IDurableStore {
     signalId: string,
     stepId: string,
   ): Promise<void> {
-    const executionWaiters = this.signalWaiters.get(executionId);
-    const signalWaiters = executionWaiters?.get(signalId);
-    if (!signalWaiters) return;
+    await this.withSignalStatePermit(() => {
+      const executionWaiters = this.signalWaiters.get(executionId);
+      const signalWaiters = executionWaiters?.get(signalId);
+      if (!signalWaiters) return;
 
-    signalWaiters.delete(stepId);
-    if (signalWaiters.size === 0) {
-      executionWaiters!.delete(signalId);
-    }
-    if (executionWaiters && executionWaiters.size === 0) {
-      this.signalWaiters.delete(executionId);
-    }
+      signalWaiters.delete(stepId);
+      if (signalWaiters.size === 0) {
+        executionWaiters!.delete(signalId);
+      }
+      if (executionWaiters && executionWaiters.size === 0) {
+        this.signalWaiters.delete(executionId);
+      }
+    });
   }
 
   async createTimer(timer: Timer): Promise<void> {

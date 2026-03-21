@@ -129,6 +129,7 @@ export class PollingManager {
   async handleTimer(timer: Timer): Promise<void> {
     let stopClaimHeartbeat = () => {};
     let timerClaimState: TimerClaimState | null = null;
+    let finalizeTimerOnError = false;
 
     const assertTimerClaimIsStillOwned = (): void => {
       if (timerClaimState?.lossError) {
@@ -137,9 +138,7 @@ export class PollingManager {
     };
 
     const finalizeTimer = async (): Promise<void> => {
-      assertTimerClaimIsStillOwned();
       await this.store.markTimerFired(timer.id);
-      assertTimerClaimIsStillOwned();
       await this.store.deleteTimer(timer.id);
     };
 
@@ -172,6 +171,7 @@ export class PollingManager {
           result: { state: "completed" },
           completedAt: new Date(),
         });
+        finalizeTimerOnError = true;
         const execution = await this.store.getExecution(timer.executionId);
         const attempt = execution ? execution.attempt : 0;
         await this.auditLogger.log({
@@ -264,6 +264,7 @@ export class PollingManager {
         });
 
         if (persistedSignalId) {
+          finalizeTimerOnError = true;
           const execution = await this.store.getExecution(timer.executionId);
           const attempt = execution ? execution.attempt : 0;
           await this.auditLogger.log({
@@ -291,6 +292,8 @@ export class PollingManager {
           await this.callbacks.processExecution(timer.executionId);
         }
 
+        finalizeTimerOnError = true;
+        assertTimerClaimIsStillOwned();
         await finalizeTimer();
         return;
       }
@@ -325,20 +328,12 @@ export class PollingManager {
         return;
       }
 
-      const executionId = createExecutionId();
-      const execution: Execution<unknown, unknown> = {
-        id: executionId,
-        taskId: this.taskRegistry.getPersistenceId(task),
-        input: timer.input,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: this.maxAttempts,
-        timeout: this.defaultTimeout,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await this.store.saveExecution(execution);
+      const persistedTaskId = this.taskRegistry.getPersistenceId(task);
+      const executionId = await this.persistTaskTimerExecution({
+        timer,
+        taskId: persistedTaskId,
+      });
+      finalizeTimerOnError = true;
       assertTimerClaimIsStillOwned();
       await this.callbacks.kickoffExecution(executionId);
       assertTimerClaimIsStillOwned();
@@ -356,6 +351,15 @@ export class PollingManager {
 
       await finalizeTimer();
     } catch (error) {
+      let cleanupError: unknown = null;
+      if (finalizeTimerOnError) {
+        try {
+          await finalizeTimer();
+        } catch (finalizeError) {
+          cleanupError = finalizeError;
+        }
+      }
+
       // Keep the timer pending so it can be retried by the poller.
       try {
         await this.logger.error("Durable timer handling failed.", {
@@ -366,6 +370,8 @@ export class PollingManager {
             executionId: timer.executionId,
             taskId: timer.taskId,
             scheduleId: timer.scheduleId,
+            finalizeTimerOnError,
+            cleanupError,
           },
         });
       } catch {
@@ -374,6 +380,38 @@ export class PollingManager {
     } finally {
       stopClaimHeartbeat();
     }
+  }
+
+  private async persistTaskTimerExecution(params: {
+    timer: Timer;
+    taskId: string;
+  }): Promise<string> {
+    const executionId = createExecutionId();
+    const execution: Execution<unknown, unknown> = {
+      id: executionId,
+      taskId: params.taskId,
+      input: params.timer.input,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: this.maxAttempts,
+      timeout: this.defaultTimeout,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    if (this.store.createExecutionWithIdempotencyKey) {
+      // A claimed timer may be retried after partial progress, so its durable
+      // execution must stay stable across retries to avoid duplicate runs.
+      const created = await this.store.createExecutionWithIdempotencyKey({
+        execution,
+        taskId: params.taskId,
+        idempotencyKey: `timer:${params.timer.id}`,
+      });
+      return created.executionId;
+    }
+
+    await this.store.saveExecution(execution);
+    return executionId;
   }
 
   private startTimerClaimHeartbeat(

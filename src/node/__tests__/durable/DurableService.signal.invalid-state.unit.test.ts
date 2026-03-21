@@ -105,7 +105,7 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
     );
   });
 
-  it("throws when signal() finds a waiter but the waiting step disappeared", async () => {
+  it("drops stale waiters when signal() finds a waiter but the waiting step disappeared", async () => {
     const { store, service } = await signalSetup();
 
     await store.upsertSignalWaiter?.({
@@ -115,12 +115,21 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
     });
 
-    await expect(service.signal("e1", Paid, { paidAt: 1 })).rejects.toThrow(
-      "Invalid signal step state",
-    );
+    await expect(
+      service.signal("e1", Paid, { paidAt: 1 }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.peekNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
+    await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [expect.objectContaining({ payload: { paidAt: 1 } })],
+      history: [expect.objectContaining({ payload: { paidAt: 1 } })],
+    });
   });
 
-  it("throws when signal() finds a waiter whose state points at a different signal", async () => {
+  it("drops stale waiters when signal() finds a waiter whose state points at a different signal", async () => {
     const { store, service } = await signalSetup();
 
     await store.upsertSignalWaiter?.({
@@ -136,9 +145,18 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       completedAt: new Date(),
     });
 
-    await expect(service.signal("e1", Paid, { paidAt: 1 })).rejects.toThrow(
-      "Invalid signal step state",
-    );
+    await expect(
+      service.signal("e1", Paid, { paidAt: 1 }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.peekNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
+    await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [expect.objectContaining({ payload: { paidAt: 1 } })],
+      history: [expect.objectContaining({ payload: { paidAt: 1 } })],
+    });
   });
 
   it("buffers signals for waiting steps that were persisted without a waiter index", async () => {
@@ -162,7 +180,7 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
     });
   });
 
-  it("throws when signal() finds an indexed waiter with a non-waiting step state", async () => {
+  it("drops stale indexed waiters when signal() finds a non-waiting step state", async () => {
     const { store, service } = await signalSetup();
 
     await store.upsertSignalWaiter?.({
@@ -178,12 +196,21 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       completedAt: new Date(),
     });
 
-    await expect(service.signal("e1", Paid, { paidAt: 2 })).rejects.toThrow(
-      "Invalid signal waiter state",
-    );
+    await expect(
+      service.signal("e1", Paid, { paidAt: 2 }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.peekNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
+    await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [expect.objectContaining({ payload: { paidAt: 2 } })],
+      history: [expect.objectContaining({ payload: { paidAt: 2 } })],
+    });
   });
 
-  it("throws when signal() finds an indexed waiter with an unparseable step state", async () => {
+  it("drops stale indexed waiters when signal() finds an unparseable step state", async () => {
     const { store, service } = await signalSetup();
 
     await store.upsertSignalWaiter?.({
@@ -199,9 +226,18 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       completedAt: new Date(),
     });
 
-    await expect(service.signal("e1", Paid, { paidAt: 3 })).rejects.toThrow(
-      "Invalid signal step state",
-    );
+    await expect(
+      service.signal("e1", Paid, { paidAt: 3 }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.peekNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
+    await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [expect.objectContaining({ payload: { paidAt: 3 } })],
+      history: [expect.objectContaining({ payload: { paidAt: 3 } })],
+    });
   });
 
   it("throws when signal() payload does not satisfy payloadSchema", async () => {
@@ -310,7 +346,7 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
     );
   });
 
-  it("signal throws on invalid signal step state payloads", async () => {
+  it("signal buffers when an indexed waiter points at an invalid signal step state payload", async () => {
     const { store, queue, service } = await signalSetup();
 
     await store.saveStepResult({
@@ -332,13 +368,22 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       sortKey: createSignalWaiterSortKey("paid", "__signal:paid:1"),
     });
 
-    await expect(service.signal("e1", Paid, { paidAt: 2 })).rejects.toThrow(
-      "Invalid signal step state",
-    );
+    await expect(
+      service.signal("e1", Paid, { paidAt: 2 }),
+    ).resolves.toBeUndefined();
     expect(queue!.enqueued).toEqual([]);
+    await expect(
+      store.peekNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
+    await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [expect.objectContaining({ payload: { paidAt: 2 } })],
+      history: [expect.objectContaining({ payload: { paidAt: 2 } })],
+    });
   });
 
-  it("signal throws when a matching waiting signal step carries a different signalId", async () => {
+  it("signal buffers when a matching waiting signal step carries a different signalId", async () => {
     const { store, service } = await signalSetup();
 
     await store.saveStepResult({
@@ -354,12 +399,21 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       sortKey: createSignalWaiterSortKey("paid", "__signal:paid:1"),
     });
 
-    await expect(service.signal("e1", Paid, { paidAt: 2 })).rejects.toThrow(
-      "Invalid signal step state",
-    );
+    await expect(
+      service.signal("e1", Paid, { paidAt: 2 }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.peekNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
+    await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [expect.objectContaining({ payload: { paidAt: 2 } })],
+      history: [expect.objectContaining({ payload: { paidAt: 2 } })],
+    });
   });
 
-  it("signal throws on invalid base signal payloads", async () => {
+  it("skips an invalid base signal waiter and delivers to the next valid waiter", async () => {
     const { store, queue, service } = await signalSetup();
 
     await store.saveStepResult({
@@ -387,13 +441,24 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       sortKey: createSignalWaiterSortKey("paid", "__signal:paid:1"),
     });
 
-    await expect(service.signal("e1", Paid, { paidAt: 2 })).rejects.toThrow(
-      "Invalid signal step state",
-    );
-    expect(queue!.enqueued).toEqual([]);
+    await expect(
+      service.signal("e1", Paid, { paidAt: 2 }),
+    ).resolves.toBeUndefined();
+    expect(queue!.enqueued).toEqual([
+      { type: "resume", payload: { executionId: "e1" } },
+    ]);
+    expect(
+      (await store.getStepResult("e1", "__signal:paid:1"))?.result,
+    ).toEqual({
+      state: "completed",
+      payload: { paidAt: 2 },
+    });
+    await expect(
+      store.peekNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
   });
 
-  it("signal throws on invalid base signal primitive payloads", async () => {
+  it("skips an invalid primitive base signal waiter and delivers to the next valid waiter", async () => {
     const { store, queue, service } = await signalSetup();
 
     await store.saveStepResult({
@@ -421,10 +486,21 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       sortKey: createSignalWaiterSortKey("paid", "__signal:paid:1"),
     });
 
-    await expect(service.signal("e1", Paid, { paidAt: 456 })).rejects.toThrow(
-      "Invalid signal step state",
-    );
-    expect(queue!.enqueued).toEqual([]);
+    await expect(
+      service.signal("e1", Paid, { paidAt: 456 }),
+    ).resolves.toBeUndefined();
+    expect(queue!.enqueued).toEqual([
+      { type: "resume", payload: { executionId: "e1" } },
+    ]);
+    expect(
+      (await store.getStepResult("e1", "__signal:paid:1"))?.result,
+    ).toEqual({
+      state: "completed",
+      payload: { paidAt: 456 },
+    });
+    await expect(
+      store.peekNextSignalWaiter?.("e1", "paid"),
+    ).resolves.toBeNull();
   });
 
   it("buffers when invalid base signal payloads were persisted without a waiter index", async () => {

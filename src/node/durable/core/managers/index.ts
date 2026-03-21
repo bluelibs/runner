@@ -12,3 +12,4 @@ export {
   type PollingConfig,
   type PollingManagerCallbacks,
 } from "./PollingManager";
+export { RecoveryManager, type RecoveryManagerConfig } from "./RecoveryManager";

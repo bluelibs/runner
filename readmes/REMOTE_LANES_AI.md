@@ -55,6 +55,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - `retryDelayMs` adds a delay before requeue retries.
 - Final failure settles with `nack(false)`: dead-letter behavior is broker/queue-policy owned (Runner does not manually publish to DLQ).
 - Multiple lanes can share one queue, but each lane can only have one binding.
+- If the active profile consumes from a shared queue, it must consume every lane bound to that queue; partial shared-queue consumption fails fast at startup because queue delivery is nondeterministic across competing consumers.
 
 Built-in queue adapters:
 

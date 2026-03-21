@@ -87,6 +87,15 @@ export interface IDurableStore {
     record: DurableSignalRecord,
   ): Promise<void>;
   /**
+   * Atomically appends a signal record to both the signal history and the
+   * queued FIFO used for replay when no waiter is currently ready to consume it.
+   */
+  bufferSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableQueuedSignalRecord,
+  ): Promise<void>;
+  /**
    * Appends a queued signal record in FIFO order.
    *
    * Queued signal records are append-only because repeated identical signals
@@ -102,10 +111,25 @@ export interface IDurableStore {
     signalId: string,
   ): Promise<DurableSignalRecord | null>;
   /**
+   * Atomically consumes the next buffered signal record for the signal implied
+   * by `stepResult` and persists the supplied completed step result.
+   */
+  consumeBufferedSignalForStep(
+    stepResult: StepResult,
+  ): Promise<DurableSignalRecord | null>;
+  /**
    * Signal waiter indexing is part of the core durable contract.
    * `waitForSignal()` and live signal delivery rely on deterministic waiter ordering.
    */
   upsertSignalWaiter(waiter: DurableSignalWaiter): Promise<void>;
+  /**
+   * Returns the next signal waiter without removing it so callers can validate
+   * and durably commit the completion before deleting the waiter.
+   */
+  peekNextSignalWaiter(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalWaiter | null>;
   takeNextSignalWaiter(
     executionId: string,
     signalId: string,

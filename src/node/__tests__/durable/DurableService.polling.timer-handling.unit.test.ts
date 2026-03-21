@@ -106,7 +106,7 @@ describe("durable: DurableService polling timer handling (unit)", () => {
     }
   });
 
-  it("keeps timers pending when the timer claim is lost mid-handler", async () => {
+  it("finalizes timers after resume work was already issued before the claim is lost", async () => {
     jest.useFakeTimers();
 
     try {
@@ -139,7 +139,7 @@ describe("durable: DurableService polling timer handling (unit)", () => {
         (await store.getReadyTimers(new Date(Date.now() + 60_000))).some(
           (readyTimer) => readyTimer.id === timer.id,
         ),
-      ).toBe(true);
+      ).toBe(false);
       expect(logs).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

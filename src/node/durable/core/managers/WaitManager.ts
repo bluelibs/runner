@@ -47,7 +47,7 @@ export class WaitManager {
     };
 
     const throwIfTimedOut = async (): Promise<void> => {
-      if (timeoutMs !== undefined && Date.now() - startedAt > timeoutMs) {
+      if (timeoutMs !== undefined && Date.now() - startedAt >= timeoutMs) {
         throw await buildTimeoutError();
       }
     };
@@ -224,6 +224,9 @@ export class WaitManager {
               await finalize({ ok: true, value: result.value });
               return;
             }
+            await throwIfTimedOut();
+            /* istanbul ignore next -- another completion path may settle the wait during the timeout microtask turn */
+            if (done) return;
           } catch (err) {
             await finalize({ ok: false, error: err });
             return;

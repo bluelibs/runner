@@ -630,6 +630,25 @@ export const eventLaneQueueReferenceInvalidError = error<
   )
   .build();
 
+export const eventLaneSharedQueuePartialConsumeError = error<
+  {
+    resourceId?: string;
+    profile: string;
+    queueSource: string;
+    consumedLaneIds: readonly string[];
+    queueLaneIds: readonly string[];
+  } & DefaultErrorType
+>("eventLanes-sharedQueuePartialConsume")
+  .format(
+    ({ profile, queueSource, consumedLaneIds, queueLaneIds }) =>
+      `Event lanes profile "${profile}" consumes only lanes [${consumedLaneIds.join(", ")}] from shared queue "${queueSource}", but that queue is bound to lanes [${queueLaneIds.join(", ")}]. Shared queues must be consumed for all bound lanes by the active profile.`,
+  )
+  .remediation(
+    ({ profile, queueSource }) =>
+      `Either make profile "${profile}" consume every lane bound to queue "${queueSource}", or split those lanes onto separate queues so each consumer profile owns a deterministic queue.`,
+  )
+  .build();
+
 export const eventLaneAssignmentConflictError = error<
   {
     eventId: string;

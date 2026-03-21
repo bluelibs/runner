@@ -1,4 +1,6 @@
 import type { ITask } from "../../../../types/task";
+import { check, Match } from "../../../../tools/check";
+import { durableExecutionInvariantError } from "../../../../errors";
 
 /**
  * In-memory durable task registry.
@@ -26,8 +28,23 @@ export class TaskRegistry {
   register<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
   ): void {
-    this.tasks.set(task.id, task);
     const persistenceId = this.getPersistenceId(task);
+    try {
+      check(persistenceId, Match.NonEmptyString);
+    } catch {
+      durableExecutionInvariantError.throw({
+        message: `Task '${task.id}' resolved to an empty durable persistence id.`,
+      });
+    }
+
+    const existing = this.tasks.get(persistenceId);
+    if (existing && existing.id !== task.id) {
+      durableExecutionInvariantError.throw({
+        message: `Durable persistence id '${persistenceId}' is already registered for task '${existing.id}' and cannot be reused by '${task.id}'.`,
+      });
+    }
+
+    this.tasks.set(task.id, task);
     if (persistenceId !== task.id) {
       this.tasks.set(persistenceId, task);
     }

@@ -39,10 +39,7 @@ export function enforceEventLaneAuthReadiness(options: {
   config: EventLanesResourceConfig;
 }): void {
   const { mode, context, config } = options;
-  const laneById = new Map<string, IEventLaneDefinition>();
-  for (const route of context.eventRouteByEventId.values()) {
-    laneById.set(route.lane.id, route.lane);
-  }
+  const laneById = collectAuthRelevantEventLanes(context);
 
   for (const laneId of laneById.keys()) {
     const bindingAuth = resolveEventLaneBindingAuth({
@@ -68,6 +65,27 @@ export function enforceEventLaneAuthReadiness(options: {
       assertRemoteLaneVerifierConfigured(laneId, bindingAuth);
     }
   }
+}
+
+function collectAuthRelevantEventLanes(
+  context: EventLanesResourceContext,
+): Map<string, IEventLaneDefinition> {
+  const laneById = new Map<string, IEventLaneDefinition>();
+
+  for (const route of context.eventRouteByEventId.values()) {
+    laneById.set(route.lane.id, route.lane);
+  }
+
+  for (const laneIds of context.activeBindingsByQueue.values()) {
+    for (const laneId of laneIds) {
+      const lane = context.bindingsByLaneId.get(laneId)?.lane;
+      if (lane) {
+        laneById.set(laneId, lane);
+      }
+    }
+  }
+
+  return laneById;
 }
 
 export function verifyEventLaneMessageToken(options: {

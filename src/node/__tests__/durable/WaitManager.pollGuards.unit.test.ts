@@ -22,6 +22,22 @@ async function savePendingExecution(
   });
 }
 
+async function waitForCalls(
+  getCalls: () => number,
+  expectedCalls: number,
+): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (getCalls() >= expectedCalls) {
+      return;
+    }
+    await flushMicrotasks();
+  }
+
+  throw genericError.new({
+    message: `Expected at least ${expectedCalls} getExecution() calls, received ${getCalls()}.`,
+  });
+}
+
 describe("durable: WaitManager (poll guards)", () => {
   it("returns after an in-flight poll check when another path already settled the wait", async () => {
     jest.useFakeTimers();
@@ -50,9 +66,7 @@ describe("durable: WaitManager (poll guards)", () => {
         waitPollIntervalMs: 10,
       });
 
-      while (calls < 4) {
-        await flushMicrotasks();
-      }
+      await waitForCalls(() => calls, 4);
 
       await store.updateExecution(executionId, {
         status: ExecutionStatus.Completed,
@@ -112,5 +126,83 @@ describe("durable: WaitManager (poll guards)", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it("returns from pollOnce after timeout checks when another path finishes in the same turn", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+    const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 1 });
+    const executionId = "e-poll-done-after-timeout-check";
+    await savePendingExecution(store, executionId);
+
+    let releasePreflight!: (execution: {
+      id: string;
+      taskId: string;
+      input: undefined;
+      status: "completed";
+      attempt: number;
+      maxAttempts: number;
+      createdAt: Date;
+      updatedAt: Date;
+      completedAt: Date;
+      result: string;
+    }) => void;
+    const preflightExecution = new Promise<{
+      id: string;
+      taskId: string;
+      input: undefined;
+      status: "completed";
+      attempt: number;
+      maxAttempts: number;
+      createdAt: Date;
+      updatedAt: Date;
+      completedAt: Date;
+      result: string;
+    }>((resolve) => {
+      releasePreflight = resolve;
+    });
+    let calls = 0;
+    jest.spyOn(store, "getExecution").mockImplementation(async () => {
+      calls += 1;
+
+      if (calls === 2) {
+        return await preflightExecution;
+      }
+
+      if (calls === 4) {
+        queueMicrotask(() => {
+          releasePreflight({
+            id: executionId,
+            taskId: "t",
+            input: undefined,
+            status: ExecutionStatus.Completed,
+            attempt: 1,
+            maxAttempts: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            completedAt: new Date(),
+            result: "ok",
+          });
+        });
+      }
+
+      return {
+        id: executionId,
+        taskId: "t",
+        input: undefined,
+        status: ExecutionStatus.Pending,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    });
+
+    await expect(
+      manager.waitForResult<string>(executionId, {
+        timeout: 100,
+        waitPollIntervalMs: 1,
+      }),
+    ).resolves.toBe("ok");
   });
 });

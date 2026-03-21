@@ -13,6 +13,7 @@ import type {
   EnsureScheduleOptions,
   ExecuteOptions,
   IDurableService,
+  RecoverReportType,
   ScheduleOptions,
   StartAndWaitOptions,
 } from "./interfaces/service";
@@ -348,7 +349,7 @@ export class DurableResource implements IDurableResource {
     return this.service.removeSchedule(scheduleId);
   }
 
-  recover(): Promise<void> {
+  recover(): Promise<RecoverReportType> {
     return this.service.recover();
   }
 

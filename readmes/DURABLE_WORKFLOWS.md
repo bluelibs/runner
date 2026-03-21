@@ -1,4 +1,4 @@
-# Durable Workflows (Node-only) — Architecture v2
+# Durable Workflows (Node-only)
 
 ← [Back to main README](../README.md)
 
@@ -122,7 +122,7 @@ The concrete durable backend:
 
 - Executes Runner tasks via DI (`taskRunner.run(...)`).
 - Provides a **per-resource** durable context, accessed via `durable.use()`.
-- Optionally embeds a worker (`worker: true`) to consume the queue in that process.
+- Optionally embeds a worker (`worker: true`) to consume the queue, poll timers, and automatically recover orphaned executions in that process.
 
 ### 1) Define a durable task (steps + sleep + signal)
 
@@ -416,7 +416,7 @@ const durableRegistration = durable.with({
 **How it scales:**
 
 - Increase worker replicas: each one consumes from the queue, so throughput scales with workers.
-- Crash/redeploy safety: a worker can die at any time; the next worker resumes from the last checkpoint.
+- Crash/redeploy safety: a worker can die at any time; workers automatically scan and recover orphaned executions from the last checkpoint on startup.
 - Multi-worker correctness: executions/steps are coordinated through the store, not through in-memory state.
 
 **Timers, sleeps, and schedules (important):**
@@ -934,7 +934,7 @@ const result = await durableRuntime.startAndWait(processOrder, {
 3. **`durableContext.sleep(ms)`** creates a timer record, suspends execution, resumes when timer fires
 4. **`durableContext.waitForSignal(signal)`** records a durable wait checkpoint and suspends execution
 5. **`durable.signal(executionId, signal, payload)`** completes the signal checkpoint and resumes the execution
-6. If process crashes, **`durableService.recover()`** resumes incomplete executions from their last checkpoint
+6. If a worker crashes, another worker can recover and replay the execution from its last checkpoint
 
 ### `start()` vs `startAndWait()` (clear contract)
 
@@ -1747,6 +1747,11 @@ export interface DurableServiceConfig {
     enabled?: boolean; // Default: true
     interval?: number; // Default: 1000ms
   };
+  recovery?: {
+    enabledOnInit?: boolean; // Default: worker === true
+    concurrency?: number; // Default: 10
+    claimTtlMs?: number; // Default: 30000ms
+  };
   execution?: {
     maxAttempts?: number; // Default: 3
     timeout?: number; // Default: no timeout
@@ -1821,9 +1826,10 @@ export interface IDurableService {
   ): Promise<string>;
 
   /**
-   * Recover incomplete executions on startup.
+   * Manually run an orphan-recovery drain and get a structured report.
+   * Worker-backed runtimes already do this automatically on init by default.
    */
-  recover(): Promise<void>;
+  recover(): Promise<RecoverReportType>;
 
   /**
    * Start timer polling (called automatically on init).
@@ -1915,7 +1921,7 @@ const durableRegistration = durable.with({
     deadLetter: "durable-dlq",
     prefetch: 10,
   },
-  worker: true, // starts a queue consumer in this process
+  worker: true, // starts queue consumption + timer polling + automatic orphan recovery
   // polling.enabled defaults to true; keep it on for timers/schedules
 });
 ```
@@ -2088,7 +2094,7 @@ import { resources } from "@bluelibs/runner/node";
 
 const durable = resources.memoryWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
-  worker: true, // single-process: also consumes the queue if configured
+  worker: true, // single-process: queue consumer + timer poller + startup recovery
 });
 
 const processOrder = r
@@ -2100,22 +2106,9 @@ const processOrder = r
   })
   .build();
 
-const recoverDurable = r
-  .resource("durable-recover")
-  .dependencies({ durable })
-  .init(async (_cfg, { durable }) => {
-    await durable.recover();
-  })
-  .build();
-
 const app = r
   .resource("app")
-  .register([
-    resources.durable,
-    durableRegistration,
-    processOrder,
-    recoverDurable,
-  ])
+  .register([resources.durable, durableRegistration, processOrder])
   .build();
 await run(app);
 ```
@@ -2198,29 +2191,24 @@ const client = createHttpClient({ baseUrl: "http://worker:7070/__runner" });
 await client.task("start-process-order-workflow", { orderId: "123" });
 ```
 
-## Recovery on Startup
+## Manual Recovery Report
 
 ```typescript
-const recoverDurable = r
-  .resource("durable-recover")
-  .dependencies({ durable })
-  .init(async (_cfg, { durable }) => {
-    await durable.recover();
-  })
-  .build();
+const report = await durable.recover();
 
-const app = r
-  .resource("app")
-  .register([resources.durable, durableRegistration, processOrder, recoverDurable])
-  .build();
+console.log(report);
 ```
 
-The recovery process:
+Worker-backed durable runtimes already participate in startup recovery automatically when `worker: true`.
+Use manual `recover()` when you want an explicit remediation pass or a structured report in tests/operator tooling.
+
+The recovery drain:
 
 1. Load all incomplete executions (status `pending`, `running`, `sleeping`, or `retrying`)
-2. For each, re-execute the task within a new DurableContext
-3. The task replays through cached steps automatically
-4. Execution continues from where it left off
+2. Skip executions that already have the correct pending timer wake-up
+3. Claim each remaining execution individually so multiple workers can scan safely in parallel
+4. Re-execute the task within a new DurableContext
+5. Replay through cached steps automatically and continue from the last durable checkpoint
 
 ---
 
@@ -2231,7 +2219,11 @@ backends while keeping the `run()` semantics you use in production.
 
 ```ts
 import { r, run } from "@bluelibs/runner";
-import { createDurableTestSetup, resources, waitUntil } from "@bluelibs/runner/node";
+import {
+  createDurableTestSetup,
+  resources,
+  waitUntil,
+} from "@bluelibs/runner/node";
 
 const { durable, durableRegistration, store } = createDurableTestSetup();
 const Paid = r.event<{ paidAt: number }>("paid").build();

@@ -5,11 +5,12 @@ import type {
   EnsureScheduleOptions,
   ExecuteOptions,
   IDurableService,
+  RecoverReportType,
   ScheduleOptions,
   StartAndWaitOptions,
   WaitOptions,
 } from "./interfaces/service";
-import { ExecutionStatus, type Schedule } from "./types";
+import type { Schedule } from "./types";
 import type { IEventDefinition } from "../../../types/event";
 import type { ITask } from "../../../types/task";
 import { createExecutionId } from "./utils";
@@ -22,6 +23,7 @@ import {
   SignalHandler,
   ExecutionManager,
   PollingManager,
+  RecoveryManager,
 } from "./managers";
 import { durableExecutionInvariantError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
@@ -53,8 +55,10 @@ export class DurableService implements IDurableService {
   private readonly signalHandler: SignalHandler;
   private readonly executionManager: ExecutionManager;
   private readonly pollingManager: PollingManager;
+  private readonly recoveryManager: RecoveryManager;
   private readonly logger: Logger;
   private readonly stopHandlers: Array<() => Promise<void>> = [];
+  private recoveryStopRegistered = false;
 
   /** Unique worker ID for distributed timer coordination */
   private readonly workerId: string;
@@ -155,9 +159,16 @@ export class DurableService implements IDurableService {
       this.scheduleManager,
       {
         processExecution: (id) => this.executionManager.processExecution(id),
-        kickoffExecution: (id) => this.executionManager.kickoffExecution(id),
+        kickoffExecution: (id) => this.executionManager.recoverExecution(id),
       },
       this.logger,
+    );
+
+    this.recoveryManager = new RecoveryManager(
+      config.store,
+      this.executionManager,
+      this.logger,
+      config.recovery,
     );
   }
 
@@ -261,32 +272,57 @@ export class DurableService implements IDurableService {
     return this.scheduleManager.ensureSchedule(task, input, options);
   }
 
-  async recover(): Promise<void> {
-    const incomplete = await this.config.store.listIncompleteExecutions();
-    for (const exec of incomplete) {
-      if (
-        exec.status === ExecutionStatus.Pending ||
-        exec.status === ExecutionStatus.Running ||
-        exec.status === ExecutionStatus.Retrying ||
-        exec.status === ExecutionStatus.Sleeping
-      ) {
-        await this.executionManager.kickoffExecution(exec.id);
-      }
-    }
+  async recover(): Promise<RecoverReportType> {
+    return this.recoveryManager.recover();
   }
 
   async stop(): Promise<void> {
+    let firstError: unknown = null;
+
     while (this.stopHandlers.length > 0) {
       const stop = this.stopHandlers.pop()!;
-      await stop();
+      try {
+        await stop();
+      } catch (error) {
+        firstError ??= error;
+        try {
+          await this.logger.error("Durable stop handler failed.", { error });
+        } catch {
+          // Logging must not mask shutdown.
+        }
+      }
     }
-    await this.pollingManager.stop();
+
+    try {
+      await this.pollingManager.stop();
+    } catch (error) {
+      firstError ??= error;
+      try {
+        await this.logger.error("Durable polling shutdown failed.", { error });
+      } catch {
+        // Logging must not mask shutdown.
+      }
+    }
+
+    if (firstError) {
+      throw firstError;
+    }
   }
 
   /** @internal - used by Runner runtime wiring to stop embedded workers */
   registerWorker(worker: DurableWorker): void {
     this.stopHandlers.push(async () => {
       await worker.stop();
+    });
+  }
+
+  /** @internal - used by service/runtime init to auto-start background recovery */
+  startRecoveryOnInit(): void {
+    this.recoveryManager.startBackgroundRecovery();
+    if (this.recoveryStopRegistered) return;
+    this.recoveryStopRegistered = true;
+    this.stopHandlers.push(async () => {
+      await this.recoveryManager.stopBackgroundRecovery();
     });
   }
 
@@ -377,6 +413,9 @@ export async function initDurableService(
   if (config.eventBus?.init) await config.eventBus.init();
   if (config.polling?.enabled !== false) {
     service.start();
+  }
+  if (config.recovery?.enabledOnInit === true) {
+    service.startRecoveryOnInit();
   }
   return service;
 }

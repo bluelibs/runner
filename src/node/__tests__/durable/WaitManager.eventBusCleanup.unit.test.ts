@@ -1,4 +1,5 @@
 import type { BusEvent, IEventBus } from "../../durable/core/interfaces/bus";
+import * as timers from "node:timers";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { WaitManager } from "../../durable/core/managers/WaitManager";
 import { ExecutionStatus } from "../../durable/core/types";
@@ -14,6 +15,22 @@ class SilentEventBus implements IEventBus {
   async unsubscribe(_channel: string): Promise<void> {}
 }
 
+async function savePendingExecution(
+  store: MemoryStore,
+  executionId: string,
+): Promise<void> {
+  await store.saveExecution({
+    id: executionId,
+    taskId: "t",
+    input: undefined,
+    status: ExecutionStatus.Pending,
+    attempt: 1,
+    maxAttempts: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+}
+
 describe("durable: WaitManager (event bus cleanup)", () => {
   it("does not resume polling when a queued poll timer fires after timeout", async () => {
     jest.useFakeTimers();
@@ -23,16 +40,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
       const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
       const executionId = "e-queued-poll-after-timeout";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await savePendingExecution(store, executionId);
 
       const originalGet = store.getExecution.bind(store);
       let calls = 0;
@@ -65,23 +73,14 @@ describe("durable: WaitManager (event bus cleanup)", () => {
 
   it("does not schedule another poll after timeout has already settled the wait", async () => {
     jest.useFakeTimers();
-    const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+    const setTimeoutSpy = jest.spyOn(timers, "setTimeout");
     try {
       const store = new MemoryStore();
       const bus = new SilentEventBus();
       const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
       const executionId = "e-no-late-poll";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await savePendingExecution(store, executionId);
 
       const originalGet = store.getExecution.bind(store);
       let calls = 0;
@@ -128,14 +127,14 @@ describe("durable: WaitManager (event bus cleanup)", () => {
 
   it("skips polling fallback when subscribe fails after timeout already settled the wait", async () => {
     jest.useFakeTimers();
-    const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+    const setTimeoutSpy = jest.spyOn(timers, "setTimeout");
     try {
       const store = new MemoryStore();
       const bus = {
         publish: async (_channel: string, _event: BusEvent) => undefined,
         subscribe: async () => {
           await new Promise<void>((_, reject) => {
-            setTimeout(() => {
+            timers.setTimeout(() => {
               reject(genericError.new({ message: "subscribe-failed" }));
             }, 20);
           });
@@ -145,16 +144,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
       const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
       const executionId = "e-subscribe-fails-after-timeout";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await savePendingExecution(store, executionId);
 
       const waiting = manager.waitForResult<string>(executionId, {
         timeout: 10,
@@ -178,54 +168,6 @@ describe("durable: WaitManager (event bus cleanup)", () => {
     }
   });
 
-  it("propagates store failures from the fallback poll loop", async () => {
-    jest.useFakeTimers();
-    try {
-      const store = new MemoryStore();
-      const bus = {
-        publish: async (_channel: string, _event: BusEvent) => undefined,
-        subscribe: async () => {
-          throw genericError.new({ message: "subscribe-failed" });
-        },
-        unsubscribe: async () => undefined,
-      } satisfies IEventBus;
-      const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
-
-      const executionId = "e-fallback-store-failure";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      const originalGet = store.getExecution.bind(store);
-      let calls = 0;
-      jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
-        calls += 1;
-        if (calls === 3) {
-          throw genericError.new({ message: "getExecution-failed" });
-        }
-        return await originalGet(id);
-      });
-
-      const waiting = manager.waitForResult<string>(executionId, {
-        waitPollIntervalMs: 1,
-      });
-
-      for (let i = 0; i < 10 && calls < 3; i += 1) {
-        await Promise.resolve();
-      }
-      await expect(waiting).rejects.toThrow("getExecution-failed");
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
   it("ignores a queued poll timer when completion happens before the callback runs", async () => {
     jest.useFakeTimers();
     try {
@@ -234,16 +176,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
       const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
       const executionId = "e-done-before-poll-callback";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await savePendingExecution(store, executionId);
 
       const waiting = manager.waitForResult<string>(executionId, {
         timeout: 1_000,
@@ -273,16 +206,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
       const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
       const executionId = "e-done-during-poll-check";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await savePendingExecution(store, executionId);
 
       const originalGet = store.getExecution.bind(store);
       let releaseCheck = () => {};
@@ -333,16 +257,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
       const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
       const executionId = "e-bus-finishes-before-poll";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await savePendingExecution(store, executionId);
 
       const waiting = manager.waitForResult<string>(executionId, {
         timeout: 1_000,

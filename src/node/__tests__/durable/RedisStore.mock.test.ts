@@ -1256,6 +1256,158 @@ describe("durable: RedisStore", () => {
     );
   });
 
+  it("buffers signal records atomically into history and queue", async () => {
+    const redisState = new Map<string, string>();
+    redisMock.get.mockImplementation(async (key: unknown) => {
+      if (typeof key !== "string") return null;
+      return redisState.get(key) ?? null;
+    });
+    redisMock.eval.mockImplementation(
+      async (
+        scriptUnknown: unknown,
+        _keyCountUnknown: unknown,
+        keyUnknown: unknown,
+        defaultStateUnknown?: unknown,
+        recordUnknown?: unknown,
+      ) => {
+        const script = String(scriptUnknown);
+        if (
+          !script.includes("table.insert(state.history, record)") ||
+          !script.includes("table.insert(state.queued, record)")
+        ) {
+          return 1;
+        }
+
+        const key = String(keyUnknown);
+        const state = redisState.has(key)
+          ? (serializer.parse(redisState.get(key)!) as {
+              history: unknown[];
+              queued: unknown[];
+            })
+          : (serializer.parse(String(defaultStateUnknown)) as {
+              history: unknown[];
+              queued: unknown[];
+            });
+        const record = serializer.parse(String(recordUnknown));
+        state.history.push(record);
+        state.queued.push(record);
+        redisState.set(key, serializer.stringify(state));
+        return "OK";
+      },
+    );
+
+    const record = {
+      id: "sig-buffer",
+      payload: { paidAt: 7 },
+      receivedAt: new Date("2024-01-01T00:00:00.000Z"),
+    };
+
+    await expect(store.bufferSignalRecord("e1", "paid", record)).resolves.toBe(
+      undefined,
+    );
+    await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid",
+      queued: [record],
+      history: [record],
+    });
+  });
+
+  it("consumes buffered signal records atomically with step completion", async () => {
+    const redisState = new Map<string, string>();
+    const stepResults = new Map<string, string>();
+    redisState.set(
+      "durable:signal:e1:paid",
+      serializer.stringify({
+        executionId: "e1",
+        signalId: "paid",
+        queued: [
+          {
+            id: "sig-buffer",
+            payload: { paidAt: 8 },
+            receivedAt: new Date("2024-01-01T00:00:00.000Z"),
+          },
+        ],
+        history: [],
+      }),
+    );
+    redisMock.hget.mockImplementation(
+      async (bucket: unknown, stepId: unknown) => {
+        return stepResults.get(`${String(bucket)}:${String(stepId)}`) ?? null;
+      },
+    );
+    redisMock.eval.mockImplementation(
+      async (
+        scriptUnknown: unknown,
+        _keyCountUnknown: unknown,
+        signalKeyUnknown: unknown,
+        stepBucketUnknown?: unknown,
+        stepIdUnknown?: unknown,
+        stepPayloadUnknown?: unknown,
+      ) => {
+        const script = String(scriptUnknown);
+        if (!script.includes("stepResult.result.payload = record.payload")) {
+          return 1;
+        }
+
+        const signalKey = String(signalKeyUnknown);
+        const state = serializer.parse(redisState.get(signalKey)!) as {
+          queued: Array<{ payload: unknown }>;
+          history: unknown[];
+        };
+        const record = state.queued.shift() ?? null;
+        redisState.set(signalKey, serializer.stringify(state));
+        if (!record) {
+          return null;
+        }
+
+        const stepResult = serializer.parse(String(stepPayloadUnknown)) as {
+          result: Record<string, unknown>;
+        };
+        stepResult.result.payload = record.payload;
+        stepResults.set(
+          `${String(stepBucketUnknown)}:${String(stepIdUnknown)}`,
+          serializer.stringify(stepResult),
+        );
+        return serializer.stringify(record);
+      },
+    );
+
+    await expect(
+      store.consumeBufferedSignalForStep({
+        executionId: "e1",
+        stepId: "__signal:paid",
+        result: { state: "completed", payload: undefined },
+        completedAt: new Date(),
+      }),
+    ).resolves.toEqual(expect.objectContaining({ payload: { paidAt: 8 } }));
+    await expect(store.getStepResult("e1", "__signal:paid")).resolves.toEqual(
+      expect.objectContaining({
+        result: { state: "completed", payload: { paidAt: 8 } },
+      }),
+    );
+  });
+
+  it("peeks signal waiters without removing them", async () => {
+    const waiter = {
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    };
+
+    redisMock.eval.mockResolvedValueOnce(serializer.stringify(waiter));
+    await expect(store.peekNextSignalWaiter("e1", "paid")).resolves.toEqual(
+      waiter,
+    );
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("zrange", KEYS[1], 0, 0)[1]'),
+      2,
+      "durable:signal_waiters:e1:paid:order",
+      "durable:signal_waiters:e1:paid:payloads",
+    );
+  });
+
   it("manages schedules", async () => {
     const sched: Schedule = {
       id: "s1",

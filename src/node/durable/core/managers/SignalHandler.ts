@@ -46,31 +46,25 @@ const isValidationSchema = <TPayload>(
   "parse" in value &&
   typeof value.parse === "function";
 
-function validateSignalWaiterState(params: {
+function inspectSignalWaiterState(params: {
   signalId: string;
   stepId: string;
   result: unknown;
-}): { timerId?: string } {
+}): { kind: "stale" } | { kind: "waiting"; timerId?: string } {
   const state = parseSignalState(params.result);
   if (!state) {
-    return durableExecutionInvariantError.throw({
-      message: `Invalid signal step state for '${params.signalId}' at '${params.stepId}'`,
-    });
+    return { kind: "stale" };
   }
 
   if (state.signalId !== undefined && state.signalId !== params.signalId) {
-    return durableExecutionInvariantError.throw({
-      message: `Invalid signal step state for '${params.signalId}' at '${params.stepId}'`,
-    });
+    return { kind: "stale" };
   }
 
   if (state.state !== "waiting") {
-    return durableExecutionInvariantError.throw({
-      message: `Invalid signal waiter state for '${params.signalId}' at '${params.stepId}'`,
-    });
+    return { kind: "stale" };
   }
 
-  return { timerId: state.timerId };
+  return { kind: "waiting", timerId: state.timerId };
 }
 
 /**
@@ -91,11 +85,11 @@ export class SignalHandler {
     private readonly callbacks: SignalHandlerCallbacks,
   ) {}
 
-  private async takeWaitingSignalWaiter(
+  private async peekWaitingSignalWaiter(
     executionId: string,
     signalId: string,
   ): Promise<DurableSignalWaiter | null> {
-    return await this.store.takeNextSignalWaiter(executionId, signalId);
+    return await this.store.peekNextSignalWaiter(executionId, signalId);
   }
 
   private async resumeExecutionWithFailsafe(
@@ -164,50 +158,80 @@ export class SignalHandler {
       let completedStepId: string | null = null;
       let shouldResume = false;
 
-      const waiter = await this.takeWaitingSignalWaiter(executionId, signalId);
-      if (waiter) {
+      while (true) {
+        const waiter = await this.peekWaitingSignalWaiter(
+          executionId,
+          signalId,
+        );
+        if (!waiter) {
+          break;
+        }
+
         const waitingStep = await this.store.getStepResult(
           executionId,
           waiter.stepId,
         );
         if (!waitingStep) {
-          return durableExecutionInvariantError.throw({
-            message: `Invalid signal step state for '${signalId}' at '${waiter.stepId}'`,
-          });
+          await this.store.deleteSignalWaiter(
+            executionId,
+            signalId,
+            waiter.stepId,
+          );
+          continue;
         }
 
-        const { timerId } = validateSignalWaiterState({
+        const waiterState = inspectSignalWaiterState({
           signalId,
           stepId: waiter.stepId,
           result: waitingStep.result,
         });
+        if (waiterState.kind === "stale") {
+          await this.store.deleteSignalWaiter(
+            executionId,
+            signalId,
+            waiter.stepId,
+          );
+          continue;
+        }
 
         completedStepId = waiter.stepId;
         shouldResume = true;
-        if (timerId ?? waiter.timerId) {
-          await this.store.deleteTimer(timerId ?? waiter.timerId!);
-        }
-      }
 
-      if (completedStepId) {
         const completedSignalState = shouldPersistStableSignalId(
-          completedStepId,
+          waiter.stepId,
           signalId,
         )
-          ? { state: "completed" as const, signalId, payload: validatedPayload }
+          ? {
+              state: "completed" as const,
+              signalId,
+              payload: validatedPayload,
+            }
           : { state: "completed" as const, payload: validatedPayload };
         await this.store.saveStepResult({
           executionId,
-          stepId: completedStepId,
+          stepId: waiter.stepId,
           result: completedSignalState,
           completedAt: new Date(),
         });
+        await this.store.appendSignalRecord(
+          executionId,
+          signalId,
+          signalRecord,
+        );
+        await this.store.deleteSignalWaiter(
+          executionId,
+          signalId,
+          waiter.stepId,
+        );
+
+        if (waiterState.timerId ?? waiter.timerId) {
+          await this.store.deleteTimer(waiterState.timerId ?? waiter.timerId!);
+        }
+        break;
       }
 
-      await this.store.appendSignalRecord(executionId, signalId, signalRecord);
-
       if (!shouldResume) {
-        await this.store.enqueueQueuedSignalRecord(
+        await this.store.bufferSignalRecord(
           executionId,
           signalId,
           signalRecord,

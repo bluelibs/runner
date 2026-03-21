@@ -258,7 +258,9 @@ export class ExecutionManager {
   }
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
-    while (true) {
+    const maxAttempts = 10;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const execution = await this.config.store.getExecution(executionId);
       if (!execution) return;
       if (this.isExecutionTerminal(execution.status)) return;
@@ -278,6 +280,9 @@ export class ExecutionManager {
         [execution.status],
       );
       if (!cancelled) {
+        if (attempt < maxAttempts) {
+          await sleepMs(Math.min(2 ** (attempt - 1), 25));
+        }
         continue;
       }
 
@@ -293,6 +298,15 @@ export class ExecutionManager {
       await this.notifyExecutionFinished(cancelledExecution);
       return;
     }
+
+    const latestExecution = await this.config.store.getExecution(executionId);
+    if (!latestExecution || this.isExecutionTerminal(latestExecution.status)) {
+      return;
+    }
+
+    durableExecutionInvariantError.throw({
+      message: `Failed to cancel durable execution '${executionId}' after ${maxAttempts} attempts due to concurrent state changes.`,
+    });
   }
 
   async startAndWait(
@@ -475,6 +489,14 @@ export class ExecutionManager {
     }
 
     await this.processExecution(executionId);
+  }
+
+  /**
+   * Recovery should reuse the same queue-mode failsafe as normal starts so a
+   * broker outage does not strand recovered executions without a retry path.
+   */
+  async recoverExecution(executionId: string): Promise<void> {
+    await this.kickoffWithFailsafe(executionId);
   }
 
   async notifyExecutionFinished(execution: Execution): Promise<void> {

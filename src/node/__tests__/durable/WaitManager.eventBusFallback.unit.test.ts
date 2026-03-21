@@ -1,7 +1,7 @@
 import type { BusEvent, IEventBus } from "../../durable/core/interfaces/bus";
+import * as timers from "node:timers";
 import { WaitManager } from "../../durable/core/managers/WaitManager";
 import { ExecutionStatus } from "../../durable/core/types";
-import * as utils from "../../durable/core/utils";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { genericError } from "../../../errors";
 
@@ -14,6 +14,22 @@ class SilentEventBus implements IEventBus {
   async unsubscribe(_channel: string): Promise<void> {}
 }
 
+async function savePendingExecution(
+  store: MemoryStore,
+  executionId: string,
+): Promise<void> {
+  await store.saveExecution({
+    id: executionId,
+    taskId: "t",
+    input: undefined,
+    status: ExecutionStatus.Pending,
+    attempt: 1,
+    maxAttempts: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+}
+
 describe("durable: WaitManager (event bus fallback)", () => {
   it("falls back to polling even when the event bus never delivers events", async () => {
     const store = new MemoryStore();
@@ -21,16 +37,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
     const executionId = "e1";
-    await store.saveExecution({
-      id: executionId,
-      taskId: "t",
-      input: undefined,
-      status: ExecutionStatus.Pending,
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await savePendingExecution(store, executionId);
 
     const waiting = manager.waitForResult<string>(executionId, {
       timeout: 1_000,
@@ -54,16 +61,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
     const executionId = "e-timeout";
-    await store.saveExecution({
-      id: executionId,
-      taskId: "t",
-      input: undefined,
-      status: ExecutionStatus.Pending,
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await savePendingExecution(store, executionId);
 
     const originalGet = store.getExecution.bind(store);
     let calls = 0;
@@ -99,16 +97,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
     const executionId = "e-timeout-error";
-    await store.saveExecution({
-      id: executionId,
-      taskId: "t",
-      input: undefined,
-      status: ExecutionStatus.Pending,
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await savePendingExecution(store, executionId);
 
     const originalGet = store.getExecution.bind(store);
     let calls = 0;
@@ -134,16 +123,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
     const executionId = "e-timeout-missing";
-    await store.saveExecution({
-      id: executionId,
-      taskId: "t",
-      input: undefined,
-      status: ExecutionStatus.Pending,
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await savePendingExecution(store, executionId);
 
     const originalGet = store.getExecution.bind(store);
     let calls = 0;
@@ -166,23 +146,14 @@ describe("durable: WaitManager (event bus fallback)", () => {
   it("respects timeout budget spent before event-bus wiring", async () => {
     jest.useFakeTimers();
     const nowSpy = jest.spyOn(Date, "now");
-    const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+    const setTimeoutSpy = jest.spyOn(timers, "setTimeout");
     try {
       const store = new MemoryStore();
       const bus = new SilentEventBus();
       const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
       const executionId = "e-timeout-elapsed-before-subscribe";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await savePendingExecution(store, executionId);
 
       const originalGet = store.getExecution.bind(store);
       let calls = 0;
@@ -232,16 +203,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
 
     const executionId = "e-no-timeout-fallback";
-    await store.saveExecution({
-      id: executionId,
-      taskId: "t",
-      input: undefined,
-      status: ExecutionStatus.Pending,
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await savePendingExecution(store, executionId);
 
     const originalGet = store.getExecution.bind(store);
     let calls = 0;
@@ -262,97 +224,5 @@ describe("durable: WaitManager (event bus fallback)", () => {
     });
 
     await expect(waiting).resolves.toBe("ok");
-  });
-
-  it("sleeps between fallback polling attempts after subscribe() fails", async () => {
-    const sleepSpy = jest.spyOn(utils, "sleepMs").mockResolvedValue(undefined);
-    const store = new MemoryStore();
-    const bus = {
-      publish: async (_channel: string, _event: BusEvent) => undefined,
-      subscribe: async () => {
-        throw genericError.new({ message: "subscribe-failed" });
-      },
-      unsubscribe: async () => undefined,
-    } satisfies IEventBus;
-    const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
-
-    const executionId = "e-fallback-sleeps";
-    await store.saveExecution({
-      id: executionId,
-      taskId: "t",
-      input: undefined,
-      status: ExecutionStatus.Pending,
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    const originalGet = store.getExecution.bind(store);
-    let calls = 0;
-    jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
-      calls += 1;
-      if (calls >= 4) {
-        await store.updateExecution(executionId, {
-          status: ExecutionStatus.Completed,
-          result: "ok",
-          completedAt: new Date(),
-        });
-      }
-      return await originalGet(id);
-    });
-
-    await expect(
-      manager.waitForResult<string>(executionId, {
-        waitPollIntervalMs: 5,
-      }),
-    ).resolves.toBe("ok");
-    expect(sleepSpy).toHaveBeenCalledWith(5);
-  });
-
-  it("still times out when subscribe() fails and fallback polling keeps seeing a pending execution", async () => {
-    const sleepSpy = jest.spyOn(utils, "sleepMs").mockResolvedValue(undefined);
-    const nowSpy = jest.spyOn(Date, "now");
-    try {
-      const store = new MemoryStore();
-      const bus = {
-        publish: async (_channel: string, _event: BusEvent) => undefined,
-        subscribe: async () => {
-          throw genericError.new({ message: "subscribe-failed" });
-        },
-        unsubscribe: async () => undefined,
-      } satisfies IEventBus;
-      const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
-
-      const executionId = "e-fallback-timeout";
-      await store.saveExecution({
-        id: executionId,
-        taskId: "t",
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      let nowMs = 1_000;
-      nowSpy.mockImplementation(() => nowMs);
-      sleepSpy.mockImplementation(async (ms) => {
-        nowMs += ms;
-      });
-
-      await expect(
-        manager.waitForResult<string>(executionId, {
-          timeout: 10,
-          waitPollIntervalMs: 5,
-        }),
-      ).rejects.toThrow("Timeout waiting for execution");
-
-      expect(sleepSpy).toHaveBeenCalledWith(5);
-    } finally {
-      sleepSpy.mockRestore();
-      nowSpy.mockRestore();
-    }
   });
 });

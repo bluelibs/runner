@@ -118,13 +118,14 @@ describe("durable: describe()", () => {
       .mockImplementationOnce(() => {
         throw "clone-failed";
       });
-
-    await expect(durableRuntime.describe(task)).rejects.toThrow(
-      /Original error: clone-failed/,
-    );
-
-    structuredCloneSpy.mockRestore();
-    await runtime.dispose();
+    try {
+      await expect(durableRuntime.describe(task)).rejects.toThrow(
+        /Original error: clone-failed/,
+      );
+    } finally {
+      structuredCloneSpy.mockRestore();
+      await runtime.dispose();
+    }
   });
 
   it("keeps the original message when structuredClone throws an Error", async () => {
@@ -158,13 +159,14 @@ describe("durable: describe()", () => {
       .mockImplementationOnce(() => {
         throw new Error("clone-failed-error");
       });
-
-    await expect(durableRuntime.describe(task)).rejects.toThrow(
-      /Original error: clone-failed-error/,
-    );
-
-    structuredCloneSpy.mockRestore();
-    await runtime.dispose();
+    try {
+      await expect(durableRuntime.describe(task)).rejects.toThrow(
+        /Original error: clone-failed-error/,
+      );
+    } finally {
+      structuredCloneSpy.mockRestore();
+      await runtime.dispose();
+    }
   });
 
   it("surfaces non-Error structuredClone failures from describe dependency snapshots", async () => {
@@ -182,17 +184,18 @@ describe("durable: describe()", () => {
       .mockImplementation(() => {
         throw "clone-failed-private";
       });
-
-    expect(() =>
-      (durableRuntime as any).createDescribeDependencies(
-        "task-id",
-        { other: { value: 1 } },
-        {},
-      ),
-    ).toThrow(/clone-failed-private/);
-
-    structuredCloneSpy.mockRestore();
-    await runtime.dispose();
+    try {
+      expect(() =>
+        (durableRuntime as any).createDescribeDependencies(
+          "task-id",
+          { other: { value: 1 } },
+          {},
+        ),
+      ).toThrow(/clone-failed-private/);
+    } finally {
+      structuredCloneSpy.mockRestore();
+      await runtime.dispose();
+    }
   });
 
   it("throws when describing an unregistered task id", async () => {

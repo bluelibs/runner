@@ -96,6 +96,42 @@ describe("eventLanes auth in network mode", () => {
     });
   });
 
+  it("fails fast for consume-only lanes even when the lane has no applyTo assignments", async () => {
+    const keys = createAsymmetricKeys();
+    const lane = r
+      .eventLane("tests-event-lanes-auth-network-consume-only")
+      .build();
+    const topology = {
+      profiles: {
+        worker: { consume: [{ lane }] },
+      },
+      bindings: [
+        {
+          lane,
+          queue: new MemoryEventLaneQueue(),
+          auth: {
+            mode: "jwt_asymmetric" as const,
+            privateKey: keys.privateKey,
+          },
+        },
+      ],
+    } as const;
+    const app = defineResource({
+      id: "tests-event-lanes-auth-network-consume-only-app",
+      register: [
+        eventLanesResource.with({
+          profile: "worker",
+          topology,
+          mode: "network",
+        }),
+      ],
+    });
+
+    await expect(run(app)).rejects.toMatchObject({
+      name: "remoteLanes-auth-verifierMissing",
+    });
+  });
+
   it("allows consumer-only profile to start with public-key verifier only", async () => {
     const keys = createAsymmetricKeys();
     const event = defineEvent({

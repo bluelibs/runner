@@ -8,6 +8,7 @@ import {
 } from "../../errors";
 import { globalTags } from "../../globals/globalTags";
 import type { ValidatorContext } from "./ValidatorContext";
+import { validateSharedQueueConsumeTopology } from "./EventLanesTopologyValidator";
 
 const EVENT_LANES_RESOURCE_ID = "eventLanes";
 
@@ -40,6 +41,7 @@ type EventLanesConfigLike = {
 export function validateEventConstraints(ctx: ValidatorContext): void {
   validateTransactionalEvents(ctx);
   validateDeprecatedEventLaneTags(ctx);
+  validateSharedQueueConsumeTopology(ctx);
   validateDeprecatedEventLaneHookTags(
     ctx,
     validateEventLaneTopologyPolicies(ctx),

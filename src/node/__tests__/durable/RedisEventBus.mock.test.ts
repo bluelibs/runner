@@ -2,6 +2,7 @@ import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
 import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
 import { genericError } from "../../../errors";
+import { flushMicrotasks } from "./DurableService.unit.helpers";
 
 describe("durable: RedisEventBus", () => {
   let redisMock: any;
@@ -61,7 +62,7 @@ describe("durable: RedisEventBus", () => {
     const event = { type: "t", payload: {}, timestamp: new Date() };
     onMessage?.("durable:bus:chan", serializer.stringify(event));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(received).toEqual({ ok: true, timestampIsDate: true });
   });
 
@@ -77,7 +78,7 @@ describe("durable: RedisEventBus", () => {
     const event = { type: "t", payload: {}, timestamp: new Date() };
     onMessage?.("durable:bus:chan", serializer.stringify(event));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
   });
 
@@ -95,7 +96,7 @@ describe("durable: RedisEventBus", () => {
       onMessage?.("durable:bus:chan", serializer.stringify(event)),
     ).not.toThrow();
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
   });
 
@@ -115,7 +116,7 @@ describe("durable: RedisEventBus", () => {
     });
     onMessage?.("durable:bus:chan", message);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(received).toBeInstanceOf(Date);
     expect(received?.toISOString()).toBe("2020-01-01T00:00:00.000Z");
   });
@@ -139,7 +140,7 @@ describe("durable: RedisEventBus", () => {
       JSON.stringify({ type: "t", payload: {}, timestamp: 0 }),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(timestamps).toHaveLength(2);
     expect(timestamps[0].toISOString()).toBe("2020-01-01T00:00:00.000Z");
     expect(timestamps[1].toISOString()).toBe("1970-01-01T00:00:00.000Z");
@@ -160,7 +161,7 @@ describe("durable: RedisEventBus", () => {
       }),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -209,7 +210,7 @@ describe("durable: RedisEventBus", () => {
       JSON.stringify({ type: "t", payload: {}, timestamp: {} }),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(handler).not.toHaveBeenCalled();
   });
 

@@ -2,7 +2,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { DurableContext } from "../../durable/core/DurableContext";
 import { DurableResource } from "../../durable/core/DurableResource";
 import type { IDurableContext } from "../../durable/core/interfaces/context";
-import type { IDurableService } from "../../durable/core/interfaces/service";
+import type {
+  IDurableService,
+  RecoverReportType,
+} from "../../durable/core/interfaces/service";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { defineEvent, r } from "../../..";
@@ -21,6 +24,16 @@ function createMockService(
     ? <T>(val: T) => jest.fn().mockResolvedValue(val)
     : <T>(val: T) => jest.fn(async () => val);
 
+  const recoverReport: RecoverReportType = {
+    scannedCount: 0,
+    recoveredCount: 0,
+    skippedCount: 0,
+    failedCount: 0,
+    recovered: [],
+    skipped: [],
+    failures: [],
+  };
+
   return {
     start: mockFn("e1"),
     wait: mockFn("ok"),
@@ -33,7 +46,7 @@ function createMockService(
     listSchedules: mockFn([]),
     updateSchedule: mockFn(undefined),
     removeSchedule: mockFn(undefined),
-    recover: mockFn(undefined),
+    recover: mockFn(recoverReport),
     signal: mockFn(undefined),
     stop: mockFn(undefined),
     // Cast is necessary because generic methods like wait<TResult>() can't be
@@ -277,7 +290,16 @@ describe("durable: DurableResource", () => {
     await durable.removeSchedule("s1");
     expect(service.removeSchedule).toHaveBeenCalledWith("s1");
 
-    await durable.recover();
+    const recoverReport = await durable.recover();
+    expect(recoverReport).toEqual({
+      scannedCount: 0,
+      recoveredCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      recovered: [],
+      skipped: [],
+      failures: [],
+    });
     expect(service.recover).toHaveBeenCalledWith();
 
     await durable.signal("e1", signalDef, { a: 1 });

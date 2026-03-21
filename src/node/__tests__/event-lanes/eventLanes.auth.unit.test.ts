@@ -19,6 +19,7 @@ function expectRunnerErrorId(fn: () => unknown, errorId: string): void {
 describe("eventLanes auth helpers", () => {
   it("resolves binding auth map and fallback lookup", () => {
     const lane = { id: "lane-auth" } as any;
+    const resolvedAuth = { secret: "resolved-secret" };
     const config = {
       profile: "p",
       topology: {
@@ -27,7 +28,7 @@ describe("eventLanes auth helpers", () => {
       },
     } as any;
     const context = {
-      bindingsByLaneId: new Map(),
+      bindingsByLaneId: new Map([[lane.id, { lane, auth: resolvedAuth }]]),
       eventRouteByEventId: new Map(),
     } as any;
 
@@ -35,6 +36,13 @@ describe("eventLanes auth helpers", () => {
     expect(map.get(lane.id)).toEqual({ secret: "s1" });
     expect(
       resolveEventLaneBindingAuth({ laneId: lane.id, context, config }),
+    ).toEqual(resolvedAuth);
+    expect(
+      resolveEventLaneBindingAuth({
+        laneId: lane.id,
+        context: { ...context, bindingsByLaneId: new Map() },
+        config,
+      }),
     ).toEqual({ secret: "s1" });
   });
 
@@ -64,6 +72,75 @@ describe("eventLanes auth helpers", () => {
     expect(() =>
       enforceEventLaneAuthReadiness({
         mode: "local-simulated",
+        context,
+        config,
+      }),
+    ).not.toThrow();
+  });
+
+  it("enforces verifier readiness for consume-only lanes without applyTo routes", () => {
+    const lane = { id: "lane-consume-only" } as any;
+    const context = {
+      eventRouteByEventId: new Map(),
+      activeBindingsByQueue: new Map([[{}, new Set([lane.id])]]),
+      bindingsByLaneId: new Map([
+        [
+          lane.id,
+          {
+            lane,
+            auth: {
+              mode: "jwt_asymmetric",
+              privateKey: "private-only",
+            },
+          },
+        ],
+      ]),
+    } as any;
+    const config = {
+      profile: "p",
+      topology: {
+        profiles: { p: { consume: [{ lane: lane }] } },
+        bindings: [
+          {
+            lane,
+            queue: {},
+            auth: {
+              mode: "jwt_asymmetric",
+              privateKey: "private-only",
+            },
+          },
+        ],
+      },
+    } as any;
+
+    expectRunnerErrorId(
+      () =>
+        enforceEventLaneAuthReadiness({
+          mode: "network",
+          context,
+          config,
+        }),
+      "remoteLanes-auth-verifierMissing",
+    );
+  });
+
+  it("ignores malformed active lane entries that cannot resolve to a binding lane", () => {
+    const context = {
+      eventRouteByEventId: new Map(),
+      activeBindingsByQueue: new Map([[{}, new Set(["missing-lane"])]]),
+      bindingsByLaneId: new Map(),
+    } as any;
+    const config = {
+      profile: "p",
+      topology: {
+        profiles: { p: { consume: [] } },
+        bindings: [],
+      },
+    } as any;
+
+    expect(() =>
+      enforceEventLaneAuthReadiness({
+        mode: "network",
         context,
         config,
       }),

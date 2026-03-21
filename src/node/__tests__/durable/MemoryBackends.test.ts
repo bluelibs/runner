@@ -6,6 +6,14 @@ import { MemoryStore } from "../../durable/store/MemoryStore";
 import { genericError } from "../../../errors";
 import { Logger, type ILog } from "../../../models/Logger";
 
+async function flushQueueTurns(turns: number = 6): Promise<void> {
+  for (let index = 0; index < turns; index += 1) {
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+  }
+}
+
 describe("durable: memory backends", () => {
   describe("MemoryStore", () => {
     let store: MemoryStore;
@@ -124,7 +132,7 @@ describe("durable: memory backends", () => {
         await queue.ack(msg.id);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushQueueTurns();
 
       expect(receivedPayload).toEqual({ x: 1 });
     });
@@ -135,7 +143,7 @@ describe("durable: memory backends", () => {
         payload: { y: 2 },
         maxAttempts: 1,
       });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushQueueTurns();
 
       let received: unknown;
       await queue.consume(async (msg) => {
@@ -143,7 +151,7 @@ describe("durable: memory backends", () => {
         await queue.ack(msg.id);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushQueueTurns();
       expect(received).toEqual({ y: 2 });
     });
 
@@ -155,7 +163,7 @@ describe("durable: memory backends", () => {
 
       await queue.ack("missing");
       await queue.nack("missing");
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushQueueTurns();
     });
 
     it("requeues on nack when requested", async () => {
@@ -171,7 +179,7 @@ describe("durable: memory backends", () => {
         await queue.ack(msg.id);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await flushQueueTurns();
       expect(attempts).toEqual([1, 2]);
     });
 
@@ -184,7 +192,7 @@ describe("durable: memory backends", () => {
         await queue.nack(msg.id, false);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await flushQueueTurns();
       expect(calls).toBe(1);
     });
 
@@ -197,7 +205,7 @@ describe("durable: memory backends", () => {
         await queue.nack(msg.id, true);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await flushQueueTurns();
       expect(calls).toBe(1);
     });
 
@@ -213,7 +221,7 @@ describe("durable: memory backends", () => {
         await queue.ack(msg.id);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await flushQueueTurns();
       expect(calls).toBe(2);
     });
 
@@ -226,7 +234,7 @@ describe("durable: memory backends", () => {
         throw genericError.new({ message: "handler-crash-no-requeue" });
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await flushQueueTurns();
       expect(calls).toBe(1);
     });
 
@@ -239,7 +247,7 @@ describe("durable: memory backends", () => {
         await queue.ack(msg.id);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await flushQueueTurns();
       expect(handler).not.toHaveBeenCalled();
     });
   });

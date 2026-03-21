@@ -22,7 +22,11 @@ import {
   type DurableAuditEntry,
 } from "../core/audit";
 import { createIORedisClient } from "../optionalDeps/ioredis";
-import { durableStoreShapeError } from "../../../errors";
+import {
+  durableExecutionInvariantError,
+  durableStoreShapeError,
+} from "../../../errors";
+import { getSignalIdFromStepId } from "../core/signalWaiters";
 
 const serializer = new Serializer();
 
@@ -70,6 +74,27 @@ const createRedisSignalState = (
   queued: [],
   history: [],
 });
+
+const getSignalIdFromStepResult = (result: StepResult): string => {
+  const state = result.result;
+  if (
+    typeof state === "object" &&
+    state !== null &&
+    "signalId" in state &&
+    typeof state.signalId === "string"
+  ) {
+    return state.signalId;
+  }
+
+  const signalId = getSignalIdFromStepId(result.stepId);
+  if (signalId) {
+    return signalId;
+  }
+
+  return durableExecutionInvariantError.throw({
+    message: `Unable to resolve signal id for buffered step '${result.stepId}' on execution '${result.executionId}'.`,
+  });
+};
 
 export class RedisStore implements IDurableStore {
   private redis: RedisClient;
@@ -622,6 +647,38 @@ export class RedisStore implements IDurableStore {
     this.assertEvalResultNotError(outcome);
   }
 
+  async bufferSignalRecord(
+    executionId: string,
+    signalId: string,
+    record: DurableQueuedSignalRecord,
+  ): Promise<void> {
+    const script = `
+      local current = redis.call("get", KEYS[1])
+      local okState, state = pcall(cjson.decode, current or ARGV[1])
+      if not okState then
+        return "__error__:Corrupted durable signal state"
+      end
+      local okRecord, record = pcall(cjson.decode, ARGV[2])
+      if not okRecord then
+        return "__error__:Invalid durable queued signal payload"
+      end
+
+      table.insert(state.history, record)
+      table.insert(state.queued, record)
+      redis.call("set", KEYS[1], cjson.encode(state))
+      return "OK"
+    `;
+
+    const outcome = await this.redis.eval(
+      script,
+      1,
+      this.signalKey(executionId, signalId),
+      serializer.stringify(createRedisSignalState(executionId, signalId)),
+      serializer.stringify(record),
+    );
+    this.assertEvalResultNotError(outcome);
+  }
+
   async enqueueQueuedSignalRecord(
     executionId: string,
     signalId: string,
@@ -688,6 +745,56 @@ export class RedisStore implements IDurableStore {
     return payload ? (serializer.parse(payload) as DurableSignalRecord) : null;
   }
 
+  async consumeBufferedSignalForStep(
+    stepResult: StepResult,
+  ): Promise<DurableSignalRecord | null> {
+    const signalId = getSignalIdFromStepResult(stepResult);
+    const stepPayload = serializer.stringify(stepResult);
+    const script = `
+      local current = redis.call("get", KEYS[1])
+      if not current then
+        return nil
+      end
+
+      local okState, state = pcall(cjson.decode, current)
+      if not okState then
+        return "__error__:Corrupted durable signal state"
+      end
+      local record = table.remove(state.queued, 1)
+      if not record then
+        return nil
+      end
+
+      redis.call("set", KEYS[1], cjson.encode(state))
+      local okStepResult, stepResult = pcall(cjson.decode, ARGV[2])
+      if not okStepResult then
+        return "__error__:Invalid buffered signal step result payload"
+      end
+      if type(stepResult) ~= "table" then
+        return "__error__:Invalid buffered signal step result payload"
+      end
+      if type(stepResult.result) ~= "table" then
+        return "__error__:Invalid buffered signal completion state"
+      end
+      stepResult.result.payload = record.payload
+      redis.call("hset", KEYS[2], ARGV[1], cjson.encode(stepResult))
+      return cjson.encode(record)
+    `;
+
+    const outcome = await this.redis.eval(
+      script,
+      2,
+      this.signalKey(stepResult.executionId, signalId),
+      this.stepBucketKey(stepResult.executionId),
+      stepResult.stepId,
+      stepPayload,
+    );
+    this.assertEvalResultNotError(outcome);
+    const payload = this.parseRedisString(outcome);
+
+    return payload ? (serializer.parse(payload) as DurableSignalRecord) : null;
+  }
+
   async upsertSignalWaiter(waiter: DurableSignalWaiter): Promise<void> {
     const member = `${waiter.sortKey}\n${waiter.stepId}`;
     const payload = serializer.stringify(waiter);
@@ -713,6 +820,31 @@ export class RedisStore implements IDurableStore {
       member,
       payload,
     );
+  }
+
+  async peekNextSignalWaiter(
+    executionId: string,
+    signalId: string,
+  ): Promise<DurableSignalWaiter | null> {
+    const script = `
+      local member = redis.call("zrange", KEYS[1], 0, 0)[1]
+      if not member then
+        return nil
+      end
+
+      return redis.call("hget", KEYS[2], member)
+    `;
+
+    const outcome = await this.redis.eval(
+      script,
+      2,
+      this.signalWaiterOrderKey(executionId, signalId),
+      this.signalWaiterPayloadKey(executionId, signalId),
+    );
+    this.assertEvalResultNotError(outcome);
+    const payload = this.parseRedisString(outcome);
+
+    return payload ? (serializer.parse(payload) as DurableSignalWaiter) : null;
   }
 
   async takeNextSignalWaiter(

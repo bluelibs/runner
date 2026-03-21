@@ -2,8 +2,10 @@ import {
   eventLaneConsumeDuplicateLaneError,
   eventLaneHookPolicyConflictError,
   eventLaneHookPolicyHookReferenceInvalidError,
+  eventLaneSharedQueuePartialConsumeError,
 } from "../../../errors";
 import { globalTags } from "../../../globals/globalTags";
+import { defineResource } from "../../../define";
 import { validateEventConstraints } from "../../../models/validators";
 import type { ValidatorContext } from "../../../models/validators/ValidatorContext";
 import { r } from "../../..";
@@ -293,5 +295,175 @@ describe("EventValidator coverage", () => {
         }),
       ),
     ).not.toThrow();
+  });
+
+  it("fails fast when a profile consumes only part of a shared queue lane set", () => {
+    const laneA = r
+      .eventLane("tests-event-validator-shared-queue-lane-a")
+      .build();
+    const laneB = r
+      .eventLane("tests-event-validator-shared-queue-lane-b")
+      .build();
+    const sharedQueue = { kind: "queue" };
+
+    expect(() =>
+      validateEventConstraints(
+        createContext({
+          resources: [
+            {
+              resource: { id: "app.eventLanes" },
+              config: {
+                topology: {
+                  profiles: {
+                    worker: {
+                      consume: [{ lane: laneA }],
+                    },
+                  },
+                  bindings: [
+                    { lane: laneA, queue: sharedQueue },
+                    { lane: laneB, queue: sharedQueue },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      ),
+    ).toThrow(
+      eventLaneSharedQueuePartialConsumeError.new({
+        resourceId: "app.eventLanes",
+        profile: "worker",
+        queueSource: "binding.queue",
+        consumedLaneIds: [laneA.id],
+        queueLaneIds: [laneA.id, laneB.id],
+      }).message,
+    );
+  });
+
+  it("allows a profile to consume every lane bound to a shared queue", () => {
+    const laneA = r
+      .eventLane("tests-event-validator-shared-queue-allowed-lane-a")
+      .build();
+    const laneB = r
+      .eventLane("tests-event-validator-shared-queue-allowed-lane-b")
+      .build();
+    const sharedQueue = { kind: "queue" };
+
+    expect(() =>
+      validateEventConstraints(
+        createContext({
+          resources: [
+            {
+              resource: { id: "app.eventLanes" },
+              config: {
+                topology: {
+                  profiles: {
+                    worker: {
+                      consume: [{ lane: laneA }, { lane: laneB }],
+                    },
+                  },
+                  bindings: [
+                    { lane: laneA, queue: sharedQueue },
+                    { lane: laneB, queue: sharedQueue },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("uses the resource id when a shared queue is provided by a queue resource", () => {
+    const laneA = r
+      .eventLane("tests-event-validator-resource-queue-lane-a")
+      .build();
+    const laneB = r
+      .eventLane("tests-event-validator-resource-queue-lane-b")
+      .build();
+    const queueResource = defineResource({
+      id: "sharedQueueResource",
+      init: async () => null,
+    });
+
+    expect(() =>
+      validateEventConstraints(
+        createContext({
+          resources: [
+            {
+              resource: { id: "app.eventLanes" },
+              config: {
+                topology: {
+                  profiles: {
+                    worker: {
+                      consume: [{ lane: laneA }],
+                    },
+                  },
+                  bindings: [
+                    { lane: laneA, queue: queueResource },
+                    { lane: laneB, queue: queueResource },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      ),
+    ).toThrow(
+      eventLaneSharedQueuePartialConsumeError.new({
+        resourceId: "app.eventLanes",
+        profile: "worker",
+        queueSource: queueResource.id,
+        consumedLaneIds: [laneA.id],
+        queueLaneIds: [laneA.id, laneB.id],
+      }).message,
+    );
+  });
+
+  it("uses the queue constructor name when a shared queue instance is class-backed", () => {
+    const laneA = r
+      .eventLane("tests-event-validator-class-queue-lane-a")
+      .build();
+    const laneB = r
+      .eventLane("tests-event-validator-class-queue-lane-b")
+      .build();
+
+    class NamedQueue {}
+
+    const sharedQueue = new NamedQueue();
+
+    expect(() =>
+      validateEventConstraints(
+        createContext({
+          resources: [
+            {
+              resource: { id: "app.eventLanes" },
+              config: {
+                topology: {
+                  profiles: {
+                    worker: {
+                      consume: [{ lane: laneA }],
+                    },
+                  },
+                  bindings: [
+                    { lane: laneA, queue: sharedQueue },
+                    { lane: laneB, queue: sharedQueue },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      ),
+    ).toThrow(
+      eventLaneSharedQueuePartialConsumeError.new({
+        resourceId: "app.eventLanes",
+        profile: "worker",
+        queueSource: "NamedQueue",
+        consumedLaneIds: [laneA.id],
+        queueLaneIds: [laneA.id, laneB.id],
+      }).message,
+    );
   });
 });

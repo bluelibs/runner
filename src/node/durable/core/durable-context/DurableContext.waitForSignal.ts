@@ -192,28 +192,20 @@ export async function waitForSignalDurably<TPayload>(params: {
         throw new SuspensionSignal("yield");
       }
 
-      const queuedSignal = await params.store.consumeQueuedSignalRecord(
-        params.executionId,
-        signalId,
-      );
+      const completedSignalState = shouldPersistStableSignalId(stepId, signalId)
+        ? {
+            state: "completed" as const,
+            signalId,
+            payload: undefined as unknown,
+          }
+        : { state: "completed" as const, payload: undefined as unknown };
+      const queuedSignal = await params.store.consumeBufferedSignalForStep({
+        executionId: params.executionId,
+        stepId,
+        result: completedSignalState,
+        completedAt: new Date(),
+      });
       if (queuedSignal) {
-        const completedSignalState = shouldPersistStableSignalId(
-          stepId,
-          signalId,
-        )
-          ? {
-              state: "completed" as const,
-              signalId,
-              payload: queuedSignal.payload,
-            }
-          : { state: "completed" as const, payload: queuedSignal.payload };
-        await params.store.saveStepResult({
-          executionId: params.executionId,
-          stepId,
-          result: completedSignalState,
-          completedAt: new Date(),
-        });
-
         return resolveCompleted(queuedSignal.payload as TPayload);
       }
 

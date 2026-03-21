@@ -760,7 +760,7 @@ describe("durable: DurableService — execution (unit)", () => {
     ).rejects.toBeInstanceOf(DurableExecutionError);
   });
 
-  it("recovers only running executions when a queue is configured", async () => {
+  it("reports recovered queue-mode executions when no suspension timers are pending", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
     const task = okTask("t-ok");
@@ -791,12 +791,26 @@ describe("durable: DurableService — execution (unit)", () => {
       result: "ok",
     });
 
-    await service.recover();
+    const report = await service.recover();
     expect(queue.enqueued).toEqual([
       { type: "execute", payload: { executionId: "p" } },
       { type: "execute", payload: { executionId: "r" } },
       { type: "execute", payload: { executionId: "s" } },
       { type: "execute", payload: { executionId: "x" } },
     ]);
+    expect(report).toEqual({
+      scannedCount: 4,
+      recoveredCount: 4,
+      skippedCount: 0,
+      failedCount: 0,
+      recovered: [
+        { executionId: "p", status: "pending" },
+        { executionId: "r", status: "running" },
+        { executionId: "s", status: "sleeping" },
+        { executionId: "x", status: "retrying" },
+      ],
+      skipped: [],
+      failures: [],
+    });
   });
 });

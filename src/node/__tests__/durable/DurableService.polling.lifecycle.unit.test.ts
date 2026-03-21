@@ -7,6 +7,7 @@ import {
 import type { IDurableQueue } from "../../durable/core/interfaces/queue";
 import type { Schedule, Timer } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { waitUntil } from "../../durable/test-utils";
 import { createTaskExecutor, okTask } from "./DurableService.unit.helpers";
 import { genericError } from "../../../errors";
 
@@ -27,6 +28,38 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     await service.stop();
 
     expect(workerStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("drains shutdown handlers before surfacing the first stop failure", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const firstWorkerStop = jest.fn(async () => {
+      throw genericError.new({ message: "worker-stop-failed" });
+    });
+    const secondWorkerStop = jest.fn(async () => {});
+    const pollingStop = jest.fn(async () => {});
+    (
+      service as unknown as {
+        pollingManager: { stop: () => Promise<void> };
+      }
+    ).pollingManager.stop = pollingStop;
+
+    (
+      service as unknown as {
+        registerWorker: (worker: { stop: () => Promise<void> }) => void;
+      }
+    ).registerWorker({ stop: firstWorkerStop });
+    (
+      service as unknown as {
+        registerWorker: (worker: { stop: () => Promise<void> }) => void;
+      }
+    ).registerWorker({ stop: secondWorkerStop });
+
+    await expect(service.stop()).rejects.toThrow("worker-stop-failed");
+
+    expect(firstWorkerStop).toHaveBeenCalledTimes(1);
+    expect(secondWorkerStop).toHaveBeenCalledTimes(1);
+    expect(pollingStop).toHaveBeenCalledTimes(1);
   });
 
   it("polls timers and handles schedule timers end-to-end", async () => {
@@ -62,7 +95,10 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     };
     await store.createTimer(timer);
 
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await waitUntil(
+      async () => (await store.getSchedule("s1"))?.nextRun instanceof Date,
+      { timeoutMs: 250, intervalMs: 1 },
+    );
 
     const updatedSchedule = await store.getSchedule("s1");
     expect(updatedSchedule?.lastRun).toBeInstanceOf(Date);
@@ -85,7 +121,13 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
       status: "pending",
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await waitUntil(
+      async () =>
+        (await store.getReadyTimers(new Date(Date.now() + 60_000))).some(
+          (timer) => timer.id === "t1",
+        ),
+      { timeoutMs: 250, intervalMs: 1 },
+    );
 
     const timers = await store.getReadyTimers(new Date(Date.now() + 60_000));
     expect(timers.some((timer) => timer.id === "t1")).toBe(true);
@@ -103,7 +145,10 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
 
   it("covers the stop race where polling exits before scheduling another wake-up", async () => {
     let resolveFirst!: (timers: Timer[]) => void;
-    let didCallGetReadyTimers = false;
+    let markFirstPollReached!: () => void;
+    const firstPollReached = new Promise<void>((resolve) => {
+      markFirstPollReached = resolve;
+    });
 
     class BlockingStore extends MemoryStore {
       private callCount = 0;
@@ -112,7 +157,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
         this.callCount += 1;
         if (this.callCount === 1) {
           return await new Promise<Timer[]>((resolve) => {
-            didCallGetReadyTimers = true;
+            markFirstPollReached();
             resolveFirst = resolve;
           });
         }
@@ -131,17 +176,13 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     });
 
     service.start();
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await firstPollReached;
     await service.stop();
 
-    if (!didCallGetReadyTimers) {
-      throw genericError.new({
-        message: "Expected getReadyTimers to have been called",
-      });
-    }
-
     resolveFirst([]);
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
   });
 
   it("initializes and disposes adapters via initDurableService/disposeDurableService", async () => {
