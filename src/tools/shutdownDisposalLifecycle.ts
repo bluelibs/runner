@@ -16,6 +16,7 @@ type LifecycleStore = {
   cooldown(options?: { shouldStop?: () => boolean }): Promise<void>;
   beginDrained(): void;
   waitForDrain(timeoutMs: number): Promise<boolean>;
+  abortInFlightTaskSignals(reason: string): void;
   resolveRegisteredDefinition<TDefinition extends RegisterableItem>(
     definition: TDefinition,
   ): TDefinition;
@@ -117,6 +118,12 @@ export async function runShutdownDisposalLifecycle(
     effectiveDrainBudgetMs,
     drainWaitResult,
   });
+
+  if (effectiveDrainBudgetMs > 0 && drainWarning.shouldWarn) {
+    input.store.abortInFlightTaskSignals(
+      "Runtime shutdown drain budget expired",
+    );
+  }
 
   if (drainWarning.shouldWarn) {
     try {

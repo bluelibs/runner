@@ -139,7 +139,8 @@ export async function persistTaskTimerExecution(params: {
   maxAttempts: number;
   defaultTimeout: number | undefined;
 }): Promise<string> {
-  const executionId = `timer:${params.timer.id}`;
+  const timerExecutionKey = getTaskTimerExecutionKey(params.timer);
+  const executionId = `timer:${timerExecutionKey}`;
   const execution: Execution<unknown, unknown> = {
     id: executionId,
     taskId: params.taskId,
@@ -156,13 +157,23 @@ export async function persistTaskTimerExecution(params: {
     const created = await params.store.createExecutionWithIdempotencyKey({
       execution,
       taskId: params.taskId,
-      idempotencyKey: `timer:${params.timer.id}`,
+      idempotencyKey: `timer:${timerExecutionKey}`,
     });
     return created.executionId;
   }
 
   await params.store.saveExecution(execution);
   return executionId;
+}
+
+function getTaskTimerExecutionKey(timer: Timer): string {
+  if (!timer.scheduleId) {
+    return timer.id;
+  }
+
+  // Retries for the same fired occurrence must dedupe, while later ticks of the
+  // recurring schedule need fresh execution identities.
+  return `${timer.id}:${timer.fireAt.getTime()}`;
 }
 
 export async function handleExecutionTimer(params: {

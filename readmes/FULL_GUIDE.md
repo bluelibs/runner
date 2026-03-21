@@ -3534,6 +3534,8 @@ Practical effect for HTTP resources:
 - In `coolingDown`, stop ingress quickly and assemble any shutdown-specific admission allowances.
 - In `disposing`, stop accepting new requests and apply the final shutdown admission policy.
 - Let already in-flight request work finish during the drain budget window.
+- If the drain budget expires first, Runner aborts its active task signals before continuing into `drained`.
+  These are the task-local cooperative `AbortSignal`s Runner created for currently in-flight task trees, not arbitrary external caller signals.
 - In `drained`, business admissions are fully closed; resource cleanup/disposal starts.
 
 ```mermaid

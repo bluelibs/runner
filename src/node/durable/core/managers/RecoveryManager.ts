@@ -83,8 +83,12 @@ export class RecoveryManager {
       });
   }
 
-  async stopBackgroundRecovery(): Promise<void> {
+  cooldownBackgroundRecovery(): void {
     this.backgroundRecoveryController?.abort();
+  }
+
+  async stopBackgroundRecovery(): Promise<void> {
+    this.cooldownBackgroundRecovery();
     await this.backgroundRecoveryPromise;
   }
 

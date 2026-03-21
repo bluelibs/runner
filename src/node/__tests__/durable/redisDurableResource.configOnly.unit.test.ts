@@ -244,4 +244,76 @@ describe("durable: redisDurableResource (config-only)", () => {
 
     expect(disposeDurableService).not.toHaveBeenCalled();
   });
+
+  it("cooldown delegates to durable service when runtimeConfig is available", async () => {
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime: jest.fn(async () => ({ service: {} })),
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+    jest.doMock("../../durable/store/RedisStore", () => ({
+      RedisStore: class {
+        constructor(public readonly cfg: unknown) {}
+      },
+    }));
+    jest.doMock("../../durable/bus/RedisEventBus", () => ({
+      RedisEventBus: class {
+        constructor(public readonly cfg: unknown) {}
+      },
+    }));
+
+    let redisDurableResource!: typeof import("../../durable/resources/redisDurableResource").redisDurableResource;
+    jest.isolateModules(() => {
+      ({
+        redisDurableResource,
+      } = require("../../durable/resources/redisDurableResource"));
+    });
+
+    const cooldown = jest.fn(async () => {});
+    await redisDurableResource.cooldown!(
+      { service: { cooldown } } as any,
+      {} as any,
+      {} as any,
+      { runtimeConfig: {} } as any,
+    );
+
+    expect(cooldown).toHaveBeenCalledTimes(1);
+  });
+
+  it("cooldown is a no-op if init never stored runtimeConfig", async () => {
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime: jest.fn(async () => ({ service: {} })),
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+    jest.doMock("../../durable/store/RedisStore", () => ({
+      RedisStore: class {
+        constructor(public readonly cfg: unknown) {}
+      },
+    }));
+    jest.doMock("../../durable/bus/RedisEventBus", () => ({
+      RedisEventBus: class {
+        constructor(public readonly cfg: unknown) {}
+      },
+    }));
+
+    let redisDurableResource!: typeof import("../../durable/resources/redisDurableResource").redisDurableResource;
+    jest.isolateModules(() => {
+      ({
+        redisDurableResource,
+      } = require("../../durable/resources/redisDurableResource"));
+    });
+
+    const cooldown = jest.fn(async () => {});
+    await redisDurableResource.cooldown!(
+      { service: { cooldown } } as any,
+      {} as any,
+      {} as any,
+      { runtimeConfig: null } as any,
+    );
+
+    expect(cooldown).not.toHaveBeenCalled();
+  });
 });

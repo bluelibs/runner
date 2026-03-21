@@ -14,6 +14,7 @@ import type { TaskCallOptions } from "../../types/utilities";
 import { composeReverseLayers } from "./composeLayers";
 import {
   getTaskAbortSignalLink,
+  retainActiveTaskAbortController,
   setTaskCallerSignal,
 } from "../runtime/taskCancellation";
 import { throwCancellationErrorFromSignal } from "../../tools/abortSignals";
@@ -88,12 +89,17 @@ export class TaskMiddlewareComposer {
     const journaledRunner = runner;
     return ((input: TInput, options?: TaskCallOptions) => {
       const journal = options?.journal ?? new ExecutionJournalImpl();
+      const cleanupTrackedTaskAbortController = retainActiveTaskAbortController(
+        journal,
+        (controller) => this.store.trackTaskAbortController(controller),
+      );
       const cleanupCallerSignal = setTaskCallerSignal(journal, options?.signal);
       const executionSource =
         options?.source ?? runtimeSource.runtime("runtime-internal-taskRunner");
-      return journaledRunner(input, journal, executionSource).finally(
-        cleanupCallerSignal,
-      );
+      return journaledRunner(input, journal, executionSource).finally(() => {
+        cleanupCallerSignal();
+        cleanupTrackedTaskAbortController();
+      });
     }) as (
       input: TInput,
       options?: TaskCallOptions,

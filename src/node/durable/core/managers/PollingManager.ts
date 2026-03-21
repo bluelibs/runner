@@ -43,6 +43,7 @@ export interface PollingManagerCallbacks {
  * In production topologies you typically enable polling on worker nodes only.
  */
 export class PollingManager {
+  private readonly inFlightTimers = new Set<Promise<void>>();
   private isRunning = false;
   private pollingTimer: ReturnType<typeof setTimeout> | null = null;
   private pollingWake: (() => void) | null = null;
@@ -77,7 +78,7 @@ export class PollingManager {
     void this.poll();
   }
 
-  async stop(): Promise<void> {
+  async cooldown(): Promise<void> {
     this.isRunning = false;
     if (this.pollingTimer) {
       clearTimeout(this.pollingTimer);
@@ -90,13 +91,22 @@ export class PollingManager {
     }
   }
 
+  async stop(): Promise<void> {
+    await this.cooldown();
+    await this.waitForInFlightTimers();
+  }
+
   private async poll(): Promise<void> {
     const intervalMs = this.config.interval ?? 1000;
 
     while (this.isRunning) {
       try {
         const ready = await this.store.getReadyTimers();
-        await Promise.allSettled(ready.map((timer) => this.handleTimer(timer)));
+        await Promise.allSettled(
+          ready.map((timer) =>
+            this.trackInFlightTimer(this.handleTimer(timer)),
+          ),
+        );
       } catch (error) {
         try {
           await this.logger.error("Durable polling loop failed.", { error });
@@ -308,5 +318,19 @@ export class PollingManager {
       claimTtlMs,
       claimState,
     });
+  }
+
+  private trackInFlightTimer(handling: Promise<void>): Promise<void> {
+    this.inFlightTimers.add(handling);
+    void handling.finally(() => {
+      this.inFlightTimers.delete(handling);
+    });
+    return handling;
+  }
+
+  private async waitForInFlightTimers(): Promise<void> {
+    while (this.inFlightTimers.size > 0) {
+      await Promise.allSettled([...this.inFlightTimers]);
+    }
   }
 }

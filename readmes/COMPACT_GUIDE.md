@@ -201,6 +201,8 @@ Lifecycle order:
   - enter `disposing`
   - emit `events.disposing`
   - drain in-flight work within the remaining shutdown budget
+  - abort Runner-owned active task signals if that drain budget expires before work finishes
+    these are the task-local cooperative `AbortSignal`s Runner creates and tracks for in-flight task trees, not arbitrary caller-owned signals
   - emit `events.drained`
   - run `dispose()` in reverse dependency order
 
@@ -269,6 +271,7 @@ Resources model shared services and state. They are Runner's primary composition
   During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, Runner keeps that broader admission policy open for the extra bounded window after `cooldown()` completes.
   Once `disposing` begins, fresh admissions narrow to the cooling resource itself, any additional resource definitions returned from `cooldown()`, and in-flight continuations.
   `runtime.dispose({ force: true })` skips `cooldown()` entirely.
+  Durable workflow resources use the same split: `cooldown()` stops worker, polling, and recovery intake for that runtime instance, while `dispose()` waits for already-admitted execution attempts to settle before persistence and transport adapters are closed.
 - `dispose(value, config, deps, context)` performs final teardown after drain.
   With `runtime.dispose({ force: true })`, this becomes the first resource lifecycle phase reached during shutdown.
 - `health(value, config, deps, context)` is an optional probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.

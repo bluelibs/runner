@@ -32,6 +32,10 @@ export class LifecycleAdmissionController {
   private inFlightTaskCount = 0;
   private inFlightEventCount = 0;
   private readonly activeInternalSources = new Map<string, number>();
+  private readonly activeTaskAbortControllers = new Map<
+    AbortController,
+    number
+  >();
   private readonly shutdownAllowedResourcePaths = new Set<string>();
   private readonly drainWaiters = new Set<DrainWaiter>();
 
@@ -156,6 +160,29 @@ export class LifecycleAdmissionController {
     execute: () => Promise<T>,
   ): Promise<T> {
     return this.trackInternalSource(source, execute);
+  }
+
+  public trackTaskAbortController(controller: AbortController): () => void {
+    const current = this.activeTaskAbortControllers.get(controller) ?? 0;
+    this.activeTaskAbortControllers.set(controller, current + 1);
+
+    return () => {
+      const remaining = this.activeTaskAbortControllers.get(controller);
+      if (!remaining || remaining <= 1) {
+        this.activeTaskAbortControllers.delete(controller);
+        return;
+      }
+
+      this.activeTaskAbortControllers.set(controller, remaining - 1);
+    };
+  }
+
+  public abortInFlightTaskSignals(reason: string): void {
+    for (const controller of this.activeTaskAbortControllers.keys()) {
+      if (!controller.signal.aborted) {
+        controller.abort(reason);
+      }
+    }
   }
 
   public async waitForDrain(timeoutMs: number): Promise<boolean> {

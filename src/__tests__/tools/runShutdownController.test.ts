@@ -25,6 +25,7 @@ function createController() {
       cooldown: jest.fn(async () => undefined),
       beginDrained: jest.fn(),
       waitForDrain: jest.fn(async () => true),
+      abortInFlightTaskSignals: jest.fn(),
       resolveRegisteredDefinition: jest.fn((definition) => definition),
       dispose: jest.fn(async () => undefined),
     },

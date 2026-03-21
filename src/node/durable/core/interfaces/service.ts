@@ -194,6 +194,12 @@ export interface RecoverReportType {
 }
 
 export interface IDurableService {
+  /**
+   * Stops this runtime instance from admitting new durable work while leaving
+   * adapters alive so already-owned executions can finish settling.
+   */
+  cooldown(): Promise<void>;
+
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,

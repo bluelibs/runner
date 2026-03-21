@@ -48,6 +48,8 @@ export { DurableExecutionError } from "./utils";
  * `durable.use()` to read the per-execution `DurableContext`.
  */
 export class DurableService implements IDurableService {
+  private lifecycleState: "running" | "cooldown" | "disposing" | "disposed" =
+    "running";
   private readonly taskRegistry: TaskRegistry;
   private readonly auditLogger: AuditLogger;
   private readonly waitManager: WaitManager;
@@ -57,6 +59,7 @@ export class DurableService implements IDurableService {
   private readonly pollingManager: PollingManager;
   private readonly recoveryManager: RecoveryManager;
   private readonly logger: Logger;
+  private readonly cooldownHandlers: Array<() => Promise<void> | void> = [];
   private readonly stopHandlers: Array<() => Promise<void>> = [];
   private recoveryStopRegistered = false;
 
@@ -186,6 +189,50 @@ export class DurableService implements IDurableService {
     return this.taskRegistry.find(taskId);
   }
 
+  async cooldown(): Promise<void> {
+    if (
+      this.lifecycleState === "cooldown" ||
+      this.lifecycleState === "disposing" ||
+      this.lifecycleState === "disposed"
+    ) {
+      return;
+    }
+
+    this.lifecycleState = "cooldown";
+    let firstError: unknown = null;
+
+    while (this.cooldownHandlers.length > 0) {
+      const cooldown = this.cooldownHandlers.pop()!;
+      try {
+        await cooldown();
+      } catch (error) {
+        firstError ??= error;
+        try {
+          await this.logger.error("Durable cooldown handler failed.", {
+            error,
+          });
+        } catch {
+          // Logging must not mask shutdown.
+        }
+      }
+    }
+
+    try {
+      await this.pollingManager.cooldown();
+    } catch (error) {
+      firstError ??= error;
+      try {
+        await this.logger.error("Durable polling cooldown failed.", { error });
+      } catch {
+        // Logging must not mask shutdown.
+      }
+    }
+
+    if (firstError) {
+      throw firstError;
+    }
+  }
+
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
@@ -203,10 +250,12 @@ export class DurableService implements IDurableService {
     options?: ExecuteOptions,
   ): Promise<string> | void {
     if (task === undefined) {
+      this.assertCanAdmitDurableWork("DurableService.start()");
       this.pollingManager.start();
       return;
     }
 
+    this.assertCanAdmitDurableWork("DurableService.start(task)");
     return this.executionManager.start(task, input, options);
   }
 
@@ -229,6 +278,7 @@ export class DurableService implements IDurableService {
     input?: unknown,
     options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<unknown>> {
+    this.assertCanAdmitDurableWork("DurableService.startAndWait()");
     return this.executionManager.startAndWait(task, input, options);
   }
 
@@ -251,6 +301,7 @@ export class DurableService implements IDurableService {
     input: unknown,
     options: ScheduleOptions,
   ): Promise<string> {
+    this.assertCanAdmitDurableWork("DurableService.schedule()");
     return this.scheduleManager.schedule(task, input, options);
   }
 
@@ -269,14 +320,21 @@ export class DurableService implements IDurableService {
     input: unknown,
     options: EnsureScheduleOptions & { id: string },
   ): Promise<string> {
+    this.assertCanAdmitDurableWork("DurableService.ensureSchedule()");
     return this.scheduleManager.ensureSchedule(task, input, options);
   }
 
   async recover(): Promise<RecoverReportType> {
+    this.assertCanAdmitDurableWork("DurableService.recover()");
     return this.recoveryManager.recover();
   }
 
   async stop(): Promise<void> {
+    if (this.lifecycleState === "disposed") {
+      return;
+    }
+    await this.cooldown();
+    this.lifecycleState = "disposing";
     let firstError: unknown = null;
 
     while (this.stopHandlers.length > 0) {
@@ -304,6 +362,7 @@ export class DurableService implements IDurableService {
       }
     }
 
+    this.lifecycleState = "disposed";
     if (firstError) {
       throw firstError;
     }
@@ -311,6 +370,9 @@ export class DurableService implements IDurableService {
 
   /** @internal - used by Runner runtime wiring to stop embedded workers */
   registerWorker(worker: DurableWorker): void {
+    this.cooldownHandlers.push(async () => {
+      await worker.cooldown();
+    });
     this.stopHandlers.push(async () => {
       await worker.stop();
     });
@@ -321,6 +383,9 @@ export class DurableService implements IDurableService {
     this.recoveryManager.startBackgroundRecovery();
     if (this.recoveryStopRegistered) return;
     this.recoveryStopRegistered = true;
+    this.cooldownHandlers.push(() => {
+      this.recoveryManager.cooldownBackgroundRecovery();
+    });
     this.stopHandlers.push(async () => {
       await this.recoveryManager.stopBackgroundRecovery();
     });
@@ -358,6 +423,7 @@ export class DurableService implements IDurableService {
     signal: IEventDefinition<TPayload>,
     payload: TPayload,
   ): Promise<void> {
+    this.assertCanAdmitDurableWork("DurableService.signal()");
     await this.signalHandler.signal(executionId, signal, payload);
   }
 
@@ -401,6 +467,18 @@ export class DurableService implements IDurableService {
   /** @internal - exposed for unit testing (delegates to pollingManager) */
   async handleTimer(timer: import("./types").Timer): Promise<void> {
     return this.pollingManager.handleTimer(timer);
+  }
+
+  private assertCanAdmitDurableWork(methodName: string): void {
+    if (this.lifecycleState === "running") {
+      return;
+    }
+
+    durableExecutionInvariantError.throw({
+      message:
+        `${methodName} cannot admit new durable work because this durable runtime is shutting down. ` +
+        "Wait for shutdown to complete or create a fresh runtime instance.",
+    });
   }
 }
 

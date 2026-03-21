@@ -2,7 +2,9 @@ import { ExecutionJournalImpl } from "../../models/ExecutionJournal";
 import { journal as journalFactory } from "../../index";
 import { defineResource, defineTask } from "../../define";
 import {
+  getOrCreateTaskAbortController,
   getTaskAbortSignalLink,
+  retainActiveTaskAbortController,
   setTaskCallerSignal,
 } from "../../models/runtime/taskCancellation";
 import { run } from "../../run";
@@ -90,6 +92,129 @@ describe("ExecutionJournal", () => {
   });
 
   describe("Journal Forwarding", () => {
+    it("registers a forwarded journal abort controller lazily and reuses it across nested frames", () => {
+      const executionJournal = journalFactory.create();
+      const trackedControllers: AbortController[] = [];
+      let unregisterCalls = 0;
+
+      const releaseOuter = retainActiveTaskAbortController(
+        executionJournal,
+        (controller) => {
+          trackedControllers.push(controller);
+          return () => {
+            unregisterCalls += 1;
+          };
+        },
+      );
+      const releaseInner = retainActiveTaskAbortController(
+        executionJournal,
+        (controller) => {
+          trackedControllers.push(controller);
+          return () => {
+            unregisterCalls += 1;
+          };
+        },
+      );
+
+      expect(trackedControllers).toHaveLength(0);
+
+      const controller = getOrCreateTaskAbortController(executionJournal);
+      expect(trackedControllers).toEqual([controller]);
+
+      releaseInner();
+      expect(unregisterCalls).toBe(0);
+
+      releaseOuter();
+      expect(unregisterCalls).toBe(1);
+
+      const releaseReused = retainActiveTaskAbortController(
+        executionJournal,
+        (controller) => {
+          trackedControllers.push(controller);
+          return () => {
+            unregisterCalls += 1;
+          };
+        },
+      );
+
+      expect(trackedControllers).toEqual([controller, controller]);
+      expect(trackedControllers[0]).toBe(trackedControllers[1]);
+
+      releaseReused();
+      expect(unregisterCalls).toBe(2);
+
+      expect(() => releaseReused()).not.toThrow();
+    });
+
+    it("registers immediately when the journal already owns a task abort controller", () => {
+      const executionJournal = journalFactory.create();
+      const controller = getOrCreateTaskAbortController(executionJournal);
+      const trackedControllers: AbortController[] = [];
+      let unregisterCalls = 0;
+
+      const release = retainActiveTaskAbortController(
+        executionJournal,
+        (trackedController) => {
+          trackedControllers.push(trackedController);
+          return () => {
+            unregisterCalls += 1;
+          };
+        },
+      );
+
+      expect(trackedControllers).toEqual([controller]);
+
+      release();
+      expect(unregisterCalls).toBe(1);
+    });
+
+    it("does not register when retained tracking is already released before the controller exists", () => {
+      const executionJournal = journalFactory.create();
+      const trackedControllers: AbortController[] = [];
+
+      const release = retainActiveTaskAbortController(
+        executionJournal,
+        (controller) => {
+          trackedControllers.push(controller);
+          return () => undefined;
+        },
+      );
+
+      release();
+      getOrCreateTaskAbortController(executionJournal);
+
+      expect(trackedControllers).toHaveLength(0);
+    });
+
+    it("re-registers a reused journal with the latest runtime tracker", () => {
+      const executionJournal = journalFactory.create();
+      const controller = getOrCreateTaskAbortController(executionJournal);
+      const runtimeATracked: AbortController[] = [];
+      const runtimeBTracked: AbortController[] = [];
+
+      const releaseA = retainActiveTaskAbortController(
+        executionJournal,
+        (trackedController) => {
+          runtimeATracked.push(trackedController);
+          return () => undefined;
+        },
+      );
+      releaseA();
+
+      const releaseB = retainActiveTaskAbortController(
+        executionJournal,
+        (trackedController) => {
+          runtimeBTracked.push(trackedController);
+          return () => undefined;
+        },
+      );
+
+      expect(runtimeATracked).toEqual([controller]);
+      expect(runtimeBTracked).toEqual([controller]);
+
+      releaseB();
+    });
+
     it("treats caller-signal cleanup as idempotent", () => {
       const executionJournal = journalFactory.create();
       const controller = new AbortController();

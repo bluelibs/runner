@@ -29,6 +29,9 @@ export const durableResource = r
       logger,
     });
   })
+  .cooldown(async (durable) => {
+    await durable.service.cooldown();
+  })
   .dispose(async (durable, config) =>
     disposeDurableService(durable.service, config),
   )

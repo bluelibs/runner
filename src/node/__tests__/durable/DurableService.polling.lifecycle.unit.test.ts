@@ -10,29 +10,261 @@ import { MemoryStore } from "../../durable/store/MemoryStore";
 import { waitUntil } from "../../durable/test-utils";
 import { createTaskExecutor, okTask } from "./DurableService.unit.helpers";
 import { genericError } from "../../../errors";
+import { Logger } from "../../../models/Logger";
 
 describe("durable: DurableService polling lifecycle (unit)", () => {
+  function createSilentLogger(): Logger {
+    return new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+  }
+
+  it("runs cooldown handlers before final stop handlers and polling shutdown", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const callOrder: string[] = [];
+
+    (
+      service as unknown as {
+        cooldownHandlers: Array<() => Promise<void>>;
+        stopHandlers: Array<() => Promise<void>>;
+        pollingManager: {
+          cooldown: () => Promise<void>;
+          stop: () => Promise<void>;
+        };
+      }
+    ).cooldownHandlers.push(async () => {
+      callOrder.push("handler:cooldown");
+    });
+    (
+      service as unknown as {
+        cooldownHandlers: Array<() => Promise<void>>;
+        stopHandlers: Array<() => Promise<void>>;
+        pollingManager: {
+          cooldown: () => Promise<void>;
+          stop: () => Promise<void>;
+        };
+      }
+    ).stopHandlers.push(async () => {
+      callOrder.push("handler:stop");
+    });
+    (
+      service as unknown as {
+        pollingManager: {
+          cooldown: () => Promise<void>;
+          stop: () => Promise<void>;
+        };
+      }
+    ).pollingManager.cooldown = jest.fn(async () => {
+      callOrder.push("polling:cooldown");
+    });
+    (
+      service as unknown as {
+        pollingManager: {
+          cooldown: () => Promise<void>;
+          stop: () => Promise<void>;
+        };
+      }
+    ).pollingManager.stop = jest.fn(async () => {
+      callOrder.push("polling:stop");
+    });
+
+    await service.stop();
+
+    expect(callOrder).toEqual([
+      "handler:cooldown",
+      "polling:cooldown",
+      "handler:stop",
+      "polling:stop",
+    ]);
+  });
+
+  it("treats repeated cooldown() calls as idempotent", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const cooldownHandler = jest.fn(async () => {});
+    const pollingCooldown = jest.fn(async () => {});
+
+    (
+      service as unknown as {
+        cooldownHandlers: Array<() => Promise<void>>;
+        pollingManager: { cooldown: () => Promise<void> };
+      }
+    ).cooldownHandlers.push(cooldownHandler);
+    (
+      service as unknown as {
+        pollingManager: { cooldown: () => Promise<void> };
+      }
+    ).pollingManager.cooldown = pollingCooldown;
+
+    await service.cooldown();
+    await service.cooldown();
+
+    expect(cooldownHandler).toHaveBeenCalledTimes(1);
+    expect(pollingCooldown).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces the first cooldown failure after draining cooldown handlers", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({
+      store,
+      tasks: [],
+      logger: createSilentLogger(),
+    });
+    const firstCooldown = jest.fn(async () => {
+      throw genericError.new({ message: "cooldown-handler-failed" });
+    });
+    const secondCooldown = jest.fn(async () => {});
+    const pollingCooldown = jest.fn(async () => {
+      throw genericError.new({ message: "polling-cooldown-failed" });
+    });
+
+    (
+      service as unknown as {
+        cooldownHandlers: Array<() => Promise<void>>;
+        pollingManager: { cooldown: () => Promise<void> };
+      }
+    ).cooldownHandlers.push(firstCooldown, secondCooldown);
+    (
+      service as unknown as {
+        pollingManager: { cooldown: () => Promise<void> };
+      }
+    ).pollingManager.cooldown = pollingCooldown;
+
+    await expect(service.cooldown()).rejects.toThrow("cooldown-handler-failed");
+    expect(firstCooldown).toHaveBeenCalledTimes(1);
+    expect(secondCooldown).toHaveBeenCalledTimes(1);
+    expect(pollingCooldown).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces polling cooldown failures when handlers succeeded", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({
+      store,
+      tasks: [],
+      logger: createSilentLogger(),
+    });
+    const cooldownHandler = jest.fn(async () => {});
+    const pollingCooldown = jest.fn(async () => {
+      throw genericError.new({ message: "polling-cooldown-failed" });
+    });
+
+    (
+      service as unknown as {
+        cooldownHandlers: Array<() => Promise<void>>;
+        pollingManager: { cooldown: () => Promise<void> };
+      }
+    ).cooldownHandlers.push(cooldownHandler);
+    (
+      service as unknown as {
+        pollingManager: { cooldown: () => Promise<void> };
+      }
+    ).pollingManager.cooldown = pollingCooldown;
+
+    await expect(service.cooldown()).rejects.toThrow("polling-cooldown-failed");
+    expect(cooldownHandler).toHaveBeenCalledTimes(1);
+    expect(pollingCooldown).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects new durable admissions after cooldown begins", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-cooldown-guard");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    await service.cooldown();
+
+    await expect(async () => service.start(task)).rejects.toThrow(
+      "shutting down",
+    );
+    await expect(service.startAndWait(task)).rejects.toThrow("shutting down");
+    await expect(
+      service.schedule(task, undefined, { interval: 10 }),
+    ).rejects.toThrow("shutting down");
+    await expect(
+      service.ensureSchedule(task, undefined, { id: "s1", interval: 10 }),
+    ).rejects.toThrow("shutting down");
+    await expect(
+      service.signal("e1", { id: "sig" } as any, undefined),
+    ).rejects.toThrow("shutting down");
+    await expect(service.recover()).rejects.toThrow("shutting down");
+  });
+
   it("stops registered worker consumers before finishing service shutdown", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
+    const workerCooldown = jest.fn(async () => {});
     const workerStop = jest.fn(async () => {});
 
     (
       service as unknown as {
-        registerWorker: (worker: { stop: () => Promise<void> }) => void;
+        registerWorker: (worker: {
+          cooldown: () => Promise<void>;
+          stop: () => Promise<void>;
+        }) => void;
       }
     ).registerWorker({
+      cooldown: workerCooldown,
       stop: workerStop,
     });
 
     await service.stop();
 
+    expect(workerCooldown).toHaveBeenCalledTimes(1);
     expect(workerStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs worker cooldown during service cooldown", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const workerCooldown = jest.fn(async () => {});
+    const workerStop = jest.fn(async () => {});
+
+    (
+      service as unknown as {
+        registerWorker: (worker: {
+          cooldown: () => Promise<void>;
+          stop: () => Promise<void>;
+        }) => void;
+      }
+    ).registerWorker({
+      cooldown: workerCooldown,
+      stop: workerStop,
+    });
+
+    await service.cooldown();
+
+    expect(workerCooldown).toHaveBeenCalledTimes(1);
+    expect(workerStop).not.toHaveBeenCalled();
+  });
+
+  it("treats repeated stop() calls after disposal as a no-op", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const pollingStop = jest.fn(async () => {});
+
+    (
+      service as unknown as {
+        pollingManager: { stop: () => Promise<void> };
+      }
+    ).pollingManager.stop = pollingStop;
+
+    await service.stop();
+    await service.stop();
+
+    expect(pollingStop).toHaveBeenCalledTimes(1);
   });
 
   it("drains shutdown handlers before surfacing the first stop failure", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
+    const firstWorkerCooldown = jest.fn(async () => {});
+    const secondWorkerCooldown = jest.fn(async () => {});
     const firstWorkerStop = jest.fn(async () => {
       throw genericError.new({ message: "worker-stop-failed" });
     });
@@ -46,17 +278,31 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
 
     (
       service as unknown as {
-        registerWorker: (worker: { stop: () => Promise<void> }) => void;
+        registerWorker: (worker: {
+          cooldown: () => Promise<void>;
+          stop: () => Promise<void>;
+        }) => void;
       }
-    ).registerWorker({ stop: firstWorkerStop });
+    ).registerWorker({
+      cooldown: firstWorkerCooldown,
+      stop: firstWorkerStop,
+    });
     (
       service as unknown as {
-        registerWorker: (worker: { stop: () => Promise<void> }) => void;
+        registerWorker: (worker: {
+          cooldown: () => Promise<void>;
+          stop: () => Promise<void>;
+        }) => void;
       }
-    ).registerWorker({ stop: secondWorkerStop });
+    ).registerWorker({
+      cooldown: secondWorkerCooldown,
+      stop: secondWorkerStop,
+    });
 
     await expect(service.stop()).rejects.toThrow("worker-stop-failed");
 
+    expect(firstWorkerCooldown).toHaveBeenCalledTimes(1);
+    expect(secondWorkerCooldown).toHaveBeenCalledTimes(1);
     expect(firstWorkerStop).toHaveBeenCalledTimes(1);
     expect(secondWorkerStop).toHaveBeenCalledTimes(1);
     expect(pollingStop).toHaveBeenCalledTimes(1);
@@ -183,6 +429,80 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
+  });
+
+  it("waits for in-flight timer handling during service stop", async () => {
+    let resolveTimer!: () => void;
+    const timerBlocked = new Promise<void>((resolve) => {
+      resolveTimer = resolve;
+    });
+    let markTimerStarted!: () => void;
+    const timerStarted = new Promise<void>((resolve) => {
+      markTimerStarted = resolve;
+    });
+    class BlockingStore extends MemoryStore {
+      private delivered = false;
+
+      override async getReadyTimers(): Promise<Timer[]> {
+        if (this.delivered) {
+          return [];
+        }
+
+        this.delivered = true;
+        markTimerStarted();
+        return [
+          {
+            id: "t-blocked",
+            type: "retry",
+            fireAt: new Date(Date.now() - 10),
+            status: "pending",
+          } as Timer,
+        ];
+      }
+    }
+
+    const store = new BlockingStore();
+
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      polling: { interval: 5 },
+    });
+    const originalHandleTimer = (
+      service as unknown as {
+        pollingManager: { handleTimer: (timer: Timer) => Promise<void> };
+      }
+    ).pollingManager.handleTimer.bind(
+      (
+        service as unknown as {
+          pollingManager: { handleTimer: (timer: Timer) => Promise<void> };
+        }
+      ).pollingManager,
+    );
+    (
+      service as unknown as {
+        pollingManager: { handleTimer: (timer: Timer) => Promise<void> };
+      }
+    ).pollingManager.handleTimer = jest.fn(async (timer: Timer) => {
+      await timerBlocked;
+      await originalHandleTimer(timer);
+    });
+
+    service.start();
+    await timerStarted;
+    await Promise.resolve();
+
+    let stopped = false;
+    const stopPromise = service.stop().then(() => {
+      stopped = true;
+    });
+
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+
+    resolveTimer();
+    await stopPromise;
+    expect(stopped).toBe(true);
   });
 
   it("initializes and disposes adapters via initDurableService/disposeDurableService", async () => {

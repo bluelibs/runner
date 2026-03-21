@@ -171,6 +171,82 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     expect(readyTimerIds.filter((id) => id === timer.id)).toEqual([timer.id]);
   });
 
+  it("creates a fresh execution for each successful recurring fire", async () => {
+    const store = new MemoryStore();
+    Object.defineProperty(store, "claimTimer", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(store, "renewTimerClaim", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(store, "finalizeClaimedTimer", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    const task = okTask("t-recurring-distinct-executions");
+    const executionsStarted: string[] = [];
+    const service = new DurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({
+        [task.id]: async () => {
+          executionsStarted.push("ran");
+          return "ok";
+        },
+      }),
+    });
+
+    const schedule = {
+      id: "s-recurring-distinct-executions",
+      taskId: task.id,
+      type: "interval" as const,
+      pattern: "1000",
+      input: undefined,
+      status: ScheduleStatus.Active,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      nextRun: new Date(0),
+    };
+    await store.createSchedule(schedule);
+
+    const firstTimer: Timer = {
+      id: "sched:s-recurring-distinct-executions",
+      scheduleId: schedule.id,
+      taskId: task.id,
+      type: TimerType.Scheduled,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(firstTimer);
+
+    await service.handleTimer(firstTimer);
+
+    const secondTimer = (
+      await store.getReadyTimers(new Date(Date.now() + 60_000))
+    ).find((timer) => timer.id === firstTimer.id);
+    expect(secondTimer).toBeDefined();
+    expect(secondTimer?.fireAt.getTime()).toBeGreaterThan(
+      firstTimer.fireAt.getTime(),
+    );
+
+    await service.handleTimer(secondTimer!);
+
+    const completedExecutions = await store.listExecutions({
+      taskId: task.id,
+    });
+
+    expect(executionsStarted).toHaveLength(2);
+    expect(completedExecutions).toHaveLength(2);
+    expect(
+      new Set(completedExecutions.map((execution) => execution.id)).size,
+    ).toBe(2);
+  });
+
   it("finalizes claimed scheduled timers after durable side effects even without store idempotency helpers", async () => {
     const store = new MemoryStore();
     Object.defineProperty(store, "createExecutionWithIdempotencyKey", {

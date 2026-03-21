@@ -109,6 +109,10 @@ export const redisDurableResource = r
       logger: durableLogger,
     });
   })
+  .cooldown(async (durable, _config, _deps, resourceContext) => {
+    if (!resourceContext.runtimeConfig) return;
+    await durable.service.cooldown();
+  })
   .dispose(async (durable, _config, _deps, resourceContext) => {
     if (!resourceContext.runtimeConfig) return;
     await disposeDurableService(durable.service, resourceContext.runtimeConfig);

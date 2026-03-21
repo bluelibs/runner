@@ -137,4 +137,56 @@ describe("durable: memoryDurableResource (config-only)", () => {
 
     expect(disposeDurableService).not.toHaveBeenCalled();
   });
+
+  it("cooldown delegates to durable service when runtimeConfig is available", async () => {
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime: jest.fn(async () => ({ service: {} })),
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let memoryDurableResource!: typeof import("../../durable/resources/memoryDurableResource").memoryDurableResource;
+    jest.isolateModules(() => {
+      ({
+        memoryDurableResource,
+      } = require("../../durable/resources/memoryDurableResource"));
+    });
+
+    const cooldown = jest.fn(async () => {});
+    await memoryDurableResource.cooldown!(
+      { service: { cooldown } } as any,
+      {} as any,
+      {} as any,
+      { runtimeConfig: {} } as any,
+    );
+
+    expect(cooldown).toHaveBeenCalledTimes(1);
+  });
+
+  it("cooldown is a no-op if init never stored runtimeConfig", async () => {
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime: jest.fn(async () => ({ service: {} })),
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let memoryDurableResource!: typeof import("../../durable/resources/memoryDurableResource").memoryDurableResource;
+    jest.isolateModules(() => {
+      ({
+        memoryDurableResource,
+      } = require("../../durable/resources/memoryDurableResource"));
+    });
+
+    const cooldown = jest.fn(async () => {});
+    await memoryDurableResource.cooldown!(
+      { service: { cooldown } } as any,
+      {} as any,
+      {} as any,
+      { runtimeConfig: null } as any,
+    );
+
+    expect(cooldown).not.toHaveBeenCalled();
+  });
 });

@@ -33,6 +33,9 @@ function createLifecycleInput(options?: {
       calls.push("waitForDrain");
       return true;
     }),
+    abortInFlightTaskSignals: jest.fn((reason: string) => {
+      calls.push(`abort:${reason}`);
+    }),
     resolveRegisteredDefinition,
   };
 
@@ -229,6 +232,88 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       "beginDisposing",
       "disposeAll",
     ]);
+  });
+
+  it("aborts in-flight task signals before drained hooks when drain wait times out", async () => {
+    const context = createLifecycleInput();
+
+    context.store.waitForDrain.mockImplementation(async () => {
+      context.calls.push("waitForDrain");
+      return false;
+    });
+
+    await runShutdownDisposalLifecycle(context.input);
+
+    expect(context.calls).toEqual([
+      "beginCoolingDown",
+      "cooldown",
+      "beginDisposing",
+      `emit:${globalEvents.disposing.id}`,
+      "waitForDrain",
+      "abort:Runtime shutdown drain budget expired",
+      "beginDrained",
+      `emit:${globalEvents.drained.id}`,
+      "disposeAll",
+    ]);
+  });
+
+  it("continues disposal when warning emission fails after aborting in-flight task signals", async () => {
+    const context = createLifecycleInput();
+
+    context.store.waitForDrain.mockImplementation(async () => {
+      context.calls.push("waitForDrain");
+      return false;
+    });
+    context.input.runLogger = {
+      warn: jest.fn(async () => {
+        throw new Error("warn failed");
+      }),
+    } as any;
+
+    await runShutdownDisposalLifecycle(context.input);
+
+    expect(context.calls).toEqual([
+      "beginCoolingDown",
+      "cooldown",
+      "beginDisposing",
+      `emit:${globalEvents.disposing.id}`,
+      "waitForDrain",
+      "abort:Runtime shutdown drain budget expired",
+      "beginDrained",
+      `emit:${globalEvents.drained.id}`,
+      "disposeAll",
+    ]);
+  });
+
+  it("does not abort in-flight task signals when no effective drain budget remains", async () => {
+    jest.useFakeTimers();
+
+    const context = createLifecycleInput({
+      dispose: {
+        totalBudgetMs: 20,
+        drainingBudgetMs: 50,
+      },
+    });
+
+    context.store.cooldown.mockImplementation(async () => {
+      context.calls.push("cooldown");
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+
+    const shutdownPromise = runShutdownDisposalLifecycle(context.input);
+    await jest.advanceTimersByTimeAsync(30);
+    await shutdownPromise;
+
+    expect(context.calls).toEqual([
+      "beginCoolingDown",
+      "cooldown",
+      "beginDisposing",
+      `emit:${globalEvents.disposing.id}`,
+      "beginDrained",
+      `emit:${globalEvents.drained.id}`,
+      "disposeAll",
+    ]);
+    expect(context.store.abortInFlightTaskSignals).not.toHaveBeenCalled();
   });
 
   it("ignores late force requests after cooldownWindowMs already finished", async () => {

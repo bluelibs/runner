@@ -204,4 +204,29 @@ describe("LifecycleAdmissionController", () => {
     releaseTask?.();
     await pendingTask;
   });
+
+  it("reference-counts tracked task abort controllers", () => {
+    const controller = new LifecycleAdmissionController();
+    const abortController = new AbortController();
+    const alreadyAbortedController = new AbortController();
+    alreadyAbortedController.abort("already done");
+
+    const releaseA = controller.trackTaskAbortController(abortController);
+    const releaseB = controller.trackTaskAbortController(abortController);
+    const releaseC = controller.trackTaskAbortController(
+      alreadyAbortedController,
+    );
+
+    releaseA();
+    expect(abortController.signal.aborted).toBe(false);
+
+    controller.abortInFlightTaskSignals("shutdown");
+    expect(abortController.signal.aborted).toBe(true);
+    expect(abortController.signal.reason).toBe("shutdown");
+    expect(alreadyAbortedController.signal.reason).toBe("already done");
+
+    releaseB();
+    releaseC();
+    expect(() => releaseB()).not.toThrow();
+  });
 });

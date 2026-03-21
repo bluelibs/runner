@@ -17,6 +17,7 @@ function createBaseStore() {
     onUnhandledError: jest.fn(),
     getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     getExecutionContextStore: () => new ExecutionContextStore(null),
+    trackTaskAbortController: () => () => undefined,
   };
 }
 

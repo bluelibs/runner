@@ -1,6 +1,12 @@
-import { defineHook, defineResource, defineTask } from "../../define";
+import {
+  defineHook,
+  defineResource,
+  defineTask,
+  defineTaskMiddleware,
+} from "../../define";
 import { globalEvents } from "../../globals/globalEvents";
 import { Logger } from "../../models/Logger";
+import { getOrCreateTaskAbortController } from "../../models/runtime/taskCancellation";
 import { getPlatform } from "../../platform";
 import { run } from "../../run";
 
@@ -121,6 +127,65 @@ describe("run shutdown drain warning", () => {
     } finally {
       exitSpy.mockRestore();
     }
+  });
+
+  it("aborts in-flight task signals when the drain budget expires", async () => {
+    let taskSignal: AbortSignal | undefined;
+    let releaseTaskStarted: (() => void) | undefined;
+    const taskStarted = new Promise<void>((resolve) => {
+      releaseTaskStarted = resolve;
+    });
+    const captureAbortSignalMiddleware = defineTaskMiddleware({
+      id: "tests-shutdown-drain-warning-abort-signal-capture-middleware",
+      async run({ next, journal, task }) {
+        taskSignal = getOrCreateTaskAbortController(journal).signal;
+        return next(task.input);
+      },
+    });
+
+    const neverTask = defineTask({
+      id: "tests-shutdown-drain-warning-abort-in-flight-task",
+      middleware: [captureAbortSignalMiddleware],
+      async run(_input, _deps, context) {
+        releaseTaskStarted?.();
+        return await new Promise<never>((_resolve, reject) => {
+          context?.signal?.addEventListener(
+            "abort",
+            () => reject(context.signal?.reason),
+            { once: true },
+          );
+        });
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-shutdown-drain-warning-abort-in-flight-app",
+      register: [captureAbortSignalMiddleware, neverTask],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      dispose: {
+        drainingBudgetMs: 20,
+      },
+    });
+
+    const inFlightTask = runtime.runTask(neverTask);
+    await taskStarted;
+
+    await runtime.dispose();
+
+    expect(taskSignal?.aborted).toBe(true);
+    expect(String(taskSignal?.reason)).toContain(
+      "Runtime shutdown drain budget expired",
+    );
+    await expect(inFlightTask).rejects.toContain(
+      "Runtime shutdown drain budget expired",
+    );
   });
 
   it("does not warn when in-flight work drains within budget", async () => {

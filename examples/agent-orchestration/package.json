@@ -1,0 +1,23 @@
+{
+  "name": "@runner-examples/agent-orchestration",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runner durable workflow example for agent orchestration with a revision loop",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "npm run build && node dist/start.js",
+    "bench": "npm run build && node dist/benchmark.js",
+    "check": "npm run start",
+    "test": "npm run build && node --test dist/index.test.js dist/stress.test.js dist/redis-runtime.test.js",
+    "coverage": "npm run build && node --test --experimental-test-coverage --test-coverage-include=dist/app.js --test-coverage-include=dist/index.js --test-coverage-include=dist/signals.js --test-coverage-include=dist/stress.js --test-coverage-include=dist/workflow.js --test-coverage-exclude=dist/*.test.js --test-coverage-lines=100 --test-coverage-functions=100 --test-coverage-branches=100 dist/index.test.js dist/stress.test.js dist/redis-runtime.test.js",
+    "qa": "npm run coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "@bluelibs/runner": "file:../../"
+  }
+}

@@ -50,9 +50,13 @@ export class DurableWorker {
     }
   }
 
-  async stop(): Promise<void> {
+  async cooldown(): Promise<void> {
     this.started = false;
     await this.queue.cancelConsumer?.();
+  }
+
+  async stop(): Promise<void> {
+    await this.cooldown();
     // Cancelling the consumer only blocks future deliveries. A message that was
     // already handed to the handler still owns store/queue/event-bus work.
     await this.waitForInFlightMessages();

@@ -56,7 +56,7 @@ export const appConfig = r
         ["MAXIMUM_DAILY_BUDGET", "ASK_RUNNER_DAILY_BUDGET_USD"],
         5,
       ),
-      trustProxy: booleanEnv(env, "ASK_RUNNER_TRUST_PROXY", false),
+      trustProxy: booleanEnv(env, "ASK_RUNNER_TRUST_PROXY", true),
       rateLimitPerMinute: integerEnv(env, "ASK_RUNNER_RATE_LIMIT_PER_MINUTE", 5),
       rateLimitPerHour: integerEnv(env, "ASK_RUNNER_RATE_LIMIT_PER_HOUR", 60),
       rateLimitPerDay: integerEnv(env, "ASK_RUNNER_RATE_LIMIT_PER_DAY", 100),
