@@ -9,19 +9,25 @@
 ## Table of Contents
 
 - [Start Here](#start-here)
+- [Why You'd Want This (In One Minute)](#why-youd-want-this-in-one-minute)
+- [Built-In Resilience (Peace-of-Mind Checklist)](#built-in-resilience-peace-of-mind-checklist)
+- [Core Insight](#core-insight)
 - [Quickstart](#quickstart)
 - [Tagging Workflows for Discovery](#tagging-workflows-for-discovery-required)
-- [Why You'd Want This (In One Minute)](#why-youd-want-this-in-one-minute)
-- [Core Insight](#core-insight)
+- [Production Architecture (Redis + RabbitMQ)](#production-architecture-redis--rabbitmq)
 - [Abstract Interfaces](#abstract-interfaces)
+- [Adapting to Your Flow: Custom Backends](#adapting-to-your-flow-custom-backends)
+- [Component Architecture](#component-architecture)
 - [API Design](#api-design)
+- [Execution Flow](#execution-flow)
 - [Safety & Semantics](#safety--semantics)
 - [Signals (wait for external events)](#signals-wait-for-external-events)
-- [Testing Utilities](#testing-utilities)
 - [Compensation / Rollback Pattern](#compensation--rollback-pattern)
 - [Branching with durableContext.switch()](#branching-with-durablecontextswitch)
 - [Describing a Flow (Static Shape Export)](#describing-a-flow-static-shape-export)
 - [Scheduling & Cron Jobs](#scheduling--cron-jobs)
+- [Testing Utilities](#testing-utilities)
+- [Operator & Observability](#operator--observability)
 - [Gotchas & Troubleshooting](#gotchas--troubleshooting)
 
 ## Start Here
@@ -29,6 +35,79 @@
 - If you want the short version: `readmes/DURABLE_WORKFLOWS_AI.md`
 - If you're new to Runner concepts (tasks/resources/events/middleware): `readmes/COMPACT_GUIDE.md`
 - Platform note (why this is Node-only): `readmes/MULTI_PLATFORM.md`
+- Recommended first read for this doc:
+  1. `Why You'd Want This`
+  2. `Core Insight`
+  3. `Quickstart`
+  4. `Production Architecture`
+  5. everything below that as reference / advanced usage
+
+## Why You'd Want This (In One Minute)
+
+- Your workflow needs to span time: minutes, hours, days (payments, shipping, approvals).
+- You want deterministic retries without duplicating side-effects (charge twice, email twice, etc.).
+- You want horizontal scaling without "who owns this in-memory timeout?" problems.
+- You want explicit, type-safe "outside world pokes the workflow" via signals.
+
+## Built-In Resilience (Peace-of-Mind Checklist)
+
+Before you even get into the API surface, it helps to know what Durable Workflows are already trying to protect you from:
+
+- **Replay-safe steps** keep side-effects from running twice after retries, worker crashes, deploys, or duplicate queue deliveries.
+- **Durable sleeps and signal waits** survive process restarts because wake-up state lives in the durable store, not in-memory timers.
+- **Recovery on startup** can re-drive incomplete executions instead of leaving them stranded after a crash.
+- **Horizontal-worker safety** comes from persisted execution state plus execution locking, so another worker can safely continue the run.
+- **Signal buffering** keeps early-arriving signals queued until the workflow is actually waiting for them.
+- **Transactional idempotent starts** protect `start(..., { idempotencyKey })` from pointing future callers at half-created executions.
+- **Compare-and-save status transitions** reduce races where stale workers could otherwise overwrite newer terminal states.
+- **Polling fallback paths** backstop event-bus misses, queue hiccups, or notification failures. Fast paths make it quick; the store makes it correct.
+- **Canonical task identity + persisted step state** help replays stay stable across isolation boundaries and runtime recovery.
+
+This does not remove the need for good workflow design, but it does mean the runtime is deliberately paranoid on your behalf. The goal is simple: when the surrounding infrastructure gets messy, your workflow should stay boring.
+
+## Core Insight
+
+The key insight (Temporal/Inngest-style) is that workflows are just functions with checkpoints. We provide a `DurableContext` that gives tasks:
+
+1. **`step(id, fn)`** - Execute a function once, cache the result, return cached on replay
+2. **`sleep(ms)`** - Durable sleep that survives process restarts
+3. **`waitForSignal(signal)`** - Suspend until an external signal is delivered (eg. payment confirmation)
+
+Two important workflow shapes you should know immediately:
+
+- **Compensation / rollback step**: `durableContext.step("reserve").up(...).down(...)`
+- **Replay-safe branching**: `durableContext.switch("route", value, branches, defaultBranch)`
+
+The most important mental model is this:
+
+- a workflow does **not** resume the JavaScript instruction pointer
+- on wake-up, it **re-runs from the top**
+- completed durable steps are loaded from the store and returned immediately
+- side effects belong inside `durableContext.step(...)`
+
+That is how process restarts, deployments, retries, and horizontal worker scaling stay safe.
+
+Minimal example:
+
+```ts
+const reservation = await durableContext
+  .step("reserve-inventory")
+  .up(async () => inventory.reserve(items))
+  .down(async (res) => inventory.release(res.reservationId));
+
+const route = await durableContext.switch(
+  "route-order",
+  order.tier,
+  [
+    {
+      id: "priority",
+      match: (tier) => tier === "priority",
+      run: async () => "express",
+    },
+  ],
+  { id: "default", run: async () => "standard" },
+);
+```
 
 ## Quickstart
 
@@ -95,7 +174,58 @@ const app = r
   .register([resources.durable, durableRegistration, approveOrder])
   .build();
 
-await run(app, { logs: { printThreshold: null } });
+const runtime = await run(app, { logs: { printThreshold: null } });
+const durableRuntime = runtime.getResourceValue(durable);
+```
+
+### 2) Start an execution (store the executionId)
+
+```ts
+const executionId = await durableRuntime.start(approveOrder, {
+  orderId: "order-123",
+});
+// store executionId on the order record so your webhook can resume the workflow later
+```
+
+### Reading status later (no double-sync required)
+
+If you store the `executionId` in your main database (eg. `orders.durable_execution_id`), you can fetch live workflow status on-demand from the durable store.
+This avoids mirroring every durable transition into Postgres.
+
+```ts
+import { DurableOperator, RedisStore } from "@bluelibs/runner/node";
+
+const durableStorePrefix = process.env.DURABLE_STORE_PREFIX!; // same value used by your durable runtime config
+
+// Read-only store client for status lookups (same redis url + prefix)
+const store = new RedisStore({
+  redis: process.env.REDIS_URL!,
+  prefix: durableStorePrefix,
+});
+
+// Minimal: just the execution row (status/result/error)
+const execution = await store.getExecution(executionId);
+
+// Rich: execution + steps + audit (dashboard-like view)
+const operator = new DurableOperator(store);
+const detail = await operator.getExecutionDetail(executionId);
+```
+
+Keep the durable store prefix in one shared config module and reuse it for both workflow runtime wiring and read-only status lookups.
+
+If you already have the durable resource instance (dependency injection), you can use the operator API directly:
+
+```ts
+const detail = await durableRuntime.operator.getExecutionDetail(executionId);
+```
+
+### 3) Resume from the outside (webhook / callback)
+
+```ts
+await durableRuntime.signal(executionId, Approved, {
+  approvedBy: "admin@company.com",
+});
+const result = await durableRuntime.wait(executionId, { timeout: 30_000 });
 ```
 
 ## Tagging Workflows for Discovery (Required)
@@ -162,6 +292,16 @@ and allow any signal id. When `signals` is provided, only those local signal ids
 may be used by `durableContext.waitForSignal(...)` and `durable.signal(...)` for
 that workflow. Signal ids must be unique within the workflow declaration.
 
+## Production Architecture (Redis + RabbitMQ)
+
+The typical production split is:
+
+- **API nodes** call `start()` / `signal()` / `wait()`
+- **worker nodes** consume queue messages and execute/replay workflows
+- **Redis store** is the source of truth
+- **Redis pub/sub** is the fast notification path
+- **RabbitMQ** is the work distribution layer
+
 ### Starting Durable Workflows From Resource Dependencies (HTTP route)
 
 Tagged workflow tasks are discoverable metadata only. Execution is explicit:
@@ -209,7 +349,7 @@ const api = r
 await run(api);
 ```
 
-### Production wiring (Redis + RabbitMQ)
+### Production wiring
 
 For production, swap the in-memory backends:
 
@@ -238,11 +378,6 @@ const durableRegistration = durable.with({
   polling: { enabled: false },
 });
 ```
-
-In a typical deployment:
-
-- API nodes call `start()` / `signal()` / `wait()`.
-- Worker nodes run the durable resource with `worker: true`.
 
 ### Scaling in production (recommended topology)
 
@@ -295,71 +430,85 @@ In multi-process setups you typically either:
 If you enable polling in multiple processes without atomic claiming, you may get duplicate resume attempts.
 This is still designed to be safe (at-least-once), but it can increase load/noise.
 
-### 2) Start an execution (store the executionId)
+### Backend roles in production
 
-```ts
-const executionId = await d.start(approveOrder, {
-  orderId: "order-123",
-});
-// store executionId on the order record so your webhook can resume the workflow later
-```
+When you use `resources.redisWorkflow`, the backend responsibilities are split intentionally:
 
-### Reading status later (no double-sync required)
+- **Redis store** is the durable source of truth.
+- **Redis pub/sub** is the fast notification path for waiters and completion listeners.
+- **RabbitMQ** is the work distribution layer for workers.
 
-If you store the `executionId` in your main database (eg. `orders.durable_execution_id`), you can fetch live workflow status on-demand from the durable store.
-This avoids mirroring every durable transition into Postgres.
+This distinction matters:
 
-```ts
-import { DurableOperator, RedisStore } from "@bluelibs/runner/node";
+- correctness comes from replaying Redis-backed state
+- low-latency execution handoff comes from RabbitMQ
+- low-latency client waiting comes from Redis pub/sub
 
-const durableStorePrefix = process.env.DURABLE_STORE_PREFIX!; // same value used by your durable runtime config
+If RabbitMQ duplicates or drops a delivery hint, or Redis pub/sub misses a notification, correctness still comes from what is already persisted in Redis.
 
-// Read-only store client for status lookups (same redis url + prefix)
-const store = new RedisStore({
-  redis: process.env.REDIS_URL!,
-  prefix: durableStorePrefix,
-});
+### Redis storage layout (practical view)
 
-// Minimal: just the execution row (status/result/error)
-const execution = await store.getExecution(executionId);
+`RedisStore` persists the workflow state in a few buckets of data:
 
-// Rich: execution + steps + audit (dashboard-like view)
-const operator = new DurableOperator(store);
-const detail = await operator.getExecutionDetail(executionId);
-```
+- **Execution records**: one record per `executionId`, holding task id, input, status, attempt counters, timeout, result/error, and timestamps.
+- **Execution indexes**: sets for all executions, active executions, and stuck executions so operators and recovery loops can find relevant work quickly.
+- **Step results**: one hash per execution keyed by `stepId`. This is what lets replay skip already-completed `durableContext.step(...)` calls.
+- **Signal state**: one record per `executionId + signalId`, storing both retained signal history and a FIFO queue of unmatched arrivals for later `waitForSignal(...)` consumption.
+- **Signal waiters**: ordered waiter records so the earliest waiting durable signal step is resumed first.
+- **Timers**: persisted sleep, retry, signal-timeout, and schedule wakeups, plus their fire times.
+- **Schedules**: the recurring/one-shot schedule definitions and their active timer linkage.
+- **Audit entries**: optional per-execution timeline entries used by dashboards and operator tooling.
+- **Idempotency mappings**: optional `taskId + idempotencyKey -> executionId` records used to dedupe starts.
 
-Keep the durable store prefix in one shared config module and reuse it for both workflow runtime wiring and read-only status lookups.
+The implementation uses Runner's serializer for persistence, so `Date` values and other supported built-ins round-trip correctly instead of degrading into plain JSON strings.
 
-If you already have the durable resource instance (dependency injection), you can use the operator API directly:
+### RabbitMQ message semantics
 
-```ts
-const detail = await durable.operator.getExecutionDetail(executionId);
-```
+RabbitMQ does **not** hold the workflow state. It carries worker delivery hints.
 
-### 3) Resume from the outside (webhook / callback)
+At a high level, queue messages contain:
 
-```ts
-await d.signal(executionId, Approved, { approvedBy: "admin@company.com" });
-const result = await d.wait(executionId, { timeout: 30_000 });
-```
+- a message id
+- a message type such as `execute` or `resume`
+- the target `executionId`
+- delivery attempt metadata
 
-## Why You'd Want This (In One Minute)
+Workers must treat each queue message as a prompt to **load the execution from Redis and continue from there**. They do not trust the queue as the source of truth.
 
-- Your workflow needs to span time: minutes, hours, days (payments, shipping, approvals).
-- You want deterministic retries without duplicating side-effects (charge twice, email twice, etc.).
-- You want horizontal scaling without "who owns this in-memory timeout?" problems.
-- You want explicit, type-safe "outside world pokes the workflow" via signals.
+That gives the system the desired behavior:
 
-## Core Insight
+- duplicate queue deliveries are safe because replay reads step state from Redis
+- lost queue deliveries are recoverable because timers/recovery loops can rediscover incomplete executions
+- horizontal scaling works because workers coordinate through persisted state, not in-memory process state
 
-The key insight (Temporal/Inngest-style) is that workflows are just functions with checkpoints. We provide a `DurableContext` that gives tasks:
+### End-to-end flow with Redis + RabbitMQ
 
-1. **`step(id, fn)`** - Execute a function once, cache the result, return cached on replay
-2. **`sleep(ms)`** - Durable sleep that survives process restarts
-3. **`emit(event, data)`** - Publish a best-effort notification, de-duplicated via `step()` (not guaranteed delivery)
-4. **`waitForSignal(signal)`** - Suspend until an external signal is delivered (eg. payment confirmation)
+This is the practical production path:
 
-**Scalability Model:** Multiple worker instances can process executions concurrently. Work is distributed via a durable queue (RabbitMQ quorum queues by default), with state stored in Redis.
+1. `durable.start(task, input)` writes a new execution record to Redis.
+2. The service enqueues an `execute` message to RabbitMQ with the `executionId`.
+3. A worker consumes the message, loads the execution from Redis, and runs the workflow.
+4. Each completed `durableContext.step("...")` writes its result to Redis.
+5. If the workflow hits `sleep(...)` or `waitForSignal(...)`, it persists the waiting state and stops cleanly.
+6. When a timer fires or a signal arrives, Redis is updated first.
+7. The service enqueues a `resume` message, or recovery/polling rediscovers the execution if the queue path failed.
+8. A worker replays the workflow from the top and fast-forwards using the saved Redis step results.
+
+The important mental model is: **resume** means "replay from the start and skip what Redis says already happened."
+
+### Failure model and recovery
+
+The production backend is designed around Redis-backed replay, not around perfect queue delivery.
+
+- **Queue publish fails**: the execution is still in Redis, and queue mode arms a failsafe timer so polling can kick the execution again later.
+- **Queue delivery is duplicated**: workers reload execution state from Redis, so completed steps remain memoized and do not redefine correctness.
+- **Redis pub/sub notification is missed**: `wait()` / `startAndWait()` may fall back to store-based waiting, but durable state is still intact.
+- **Worker crashes mid-execution**: another worker can pick up the execution and replay from the last persisted checkpoint.
+- **Multiple workers race**: store-backed locks and persisted step results coordinate attempts so correctness does not depend on a single process' memory.
+
+### Production topology diagram
+
+Multiple worker instances can process executions concurrently. Work is distributed via a durable queue (RabbitMQ quorum queues by default), with state stored in Redis.
 
 ```mermaid
 graph TB
@@ -411,6 +560,10 @@ The **Store** is the absolute source of truth. It persists execution state, step
 export interface IDurableStore {
   // Executions (The primary workflow records)
   saveExecution(execution: Execution): Promise<void>;
+  saveExecutionIfStatus(
+    execution: Execution,
+    expectedStatuses: ExecutionStatus[],
+  ): Promise<boolean>;
   getExecution(id: string): Promise<Execution | null>;
   updateExecution(id: string, updates: Partial<Execution>): Promise<void>;
   listIncompleteExecutions(): Promise<Execution[]>;
@@ -444,19 +597,17 @@ export interface IDurableStore {
   ): Promise<boolean>;
 
   // Optional: Idempotency (dedupe start calls)
-  getExecutionIdByIdempotencyKey?(params: {
+  createExecutionWithIdempotencyKey?(params: {
+    execution: Execution;
     taskId: string;
     idempotencyKey: string;
-  }): Promise<string | null>;
-  setExecutionIdByIdempotencyKey?(params: {
-    taskId: string;
-    idempotencyKey: string;
-    executionId: string;
-  }): Promise<boolean>;
+  }):
+    | Promise<{ created: true; executionId: string }>
+    | Promise<{ created: false; executionId: string }>;
 
   // Optional: Dashboard & Operator API
   listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
-  listStepResults?(executionId: string): Promise<StepResult[]>;
+  listStepResults(executionId: string): Promise<StepResult[]>;
   retryRollback?(executionId: string): Promise<void>;
   skipStep?(executionId: string, stepId: string): Promise<void>;
   forceFail?(
@@ -765,8 +916,8 @@ const app = r
 const runtime = await run(app);
 
 // 5. Execute durably
-const d = runtime.getResourceValue(durable);
-const result = await d.startAndWait(processOrder, {
+const durableRuntime = runtime.getResourceValue(durable);
+const result = await durableRuntime.startAndWait(processOrder, {
   orderId: "order-123",
   customerId: "cust-456",
 });
@@ -806,15 +957,17 @@ It is **not** the injected dependency callable from `.dependencies({ someTask })
 
 ```ts
 // ✅ built task object
-const executionIdA = await d.start(approveOrder, { orderId: "o1" });
+const executionIdA = await durableRuntime.start(approveOrder, {
+  orderId: "o1",
+});
 
 // ✅ task id string
-const executionIdB = await d.start(approveOrder.id, {
+const executionIdB = await durableRuntime.start(approveOrder.id, {
   orderId: "o2",
 });
 
 // ❌ injected callable dependency (different type)
-// await d.start(deps.approveOrder, { orderId: "o3" });
+// await durableRuntime.start(deps.approveOrder, { orderId: "o3" });
 ```
 
 ### What Happens with the Return Value
@@ -824,7 +977,9 @@ Whatever your workflow function returns becomes the **execution result**, persis
 - **`startAndWait(task, input)`** — starts the workflow **and** waits for it to finish, returning `{ durable: { executionId }, data }`:
 
   ```ts
-  const result = await d.startAndWait(processOrder, { orderId: "order-123" });
+  const result = await durableRuntime.startAndWait(processOrder, {
+    orderId: "order-123",
+  });
   // result = {
   //   durable: { executionId: "..." },
   //   data: { success: true, orderId: "order-123", trackingId: "TRK-789" }
@@ -834,12 +989,14 @@ Whatever your workflow function returns becomes the **execution result**, persis
 - **`start(task, input)`** + **`wait(executionId)`** — start and wait separately (useful when a webhook or external event resumes the workflow later):
 
   ```ts
-  const executionId = await d.start(approveOrder, {
+  const executionId = await durableRuntime.start(approveOrder, {
     orderId: "order-123",
   });
   // ... later (eg. in a webhook handler) ...
-  await d.signal(executionId, Approved, { approvedBy: "admin@co.com" });
-  const result = await d.wait(executionId, { timeout: 30_000 });
+  await durableRuntime.signal(executionId, Approved, {
+    approvedBy: "admin@co.com",
+  });
+  const result = await durableRuntime.wait(executionId, { timeout: 30_000 });
   // result = { status: "approved", approvedBy: "admin@co.com" }
   ```
 
@@ -1004,9 +1161,9 @@ From an API webhook / callback handler:
 
 ```typescript
 // Store the workflow `executionId` in your domain data when you start it.
-// You can get it immediately via `await d.start(task, input)`.
-const d = runtime.getResourceValue(durable);
-await d.signal(executionId, Paid, { paidAt: Date.now() });
+// You can get it immediately via `await durableRuntime.start(task, input)`.
+const durableRuntime = runtime.getResourceValue(durable);
+await durableRuntime.signal(executionId, Paid, { paidAt: Date.now() });
 ```
 
 ### Whichever comes first: signal or timeout
@@ -1179,7 +1336,7 @@ interface SwitchBranch<TValue, TResult> {
 
 ## Describing a Flow (Static Shape Export)
 
-Use `durable.describe(...)` to capture the **structure** of a durable workflow without executing it. It returns a serializable `DurableFlowShape` object that you can use for:
+Use `durable.describe(...)` to capture the **structure** of a durable workflow in recording mode. It returns a serializable `DurableFlowShape` object that you can use for:
 
 - Documentation generation
 - Visual workflow diagrams
@@ -1188,7 +1345,7 @@ Use `durable.describe(...)` to capture the **structure** of a durable workflow w
 
 ### From an existing task (recommended)
 
-Call `describe()` on your durable dependency, then pass your task directly — it shims `durable.use()` and records every `durableContext.*` operation:
+Call `describe()` on your durable dependency, then pass your task directly. It runs the task body in a recording mode that shims `durable.use()`, snapshots non-durable dependencies with `structuredClone(...)`, and records every `durableContext.*` operation:
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
@@ -1223,6 +1380,8 @@ If your task is tagged with `tags.durableWorkflow.with({ defaults: {...} })`,
 Passing `describe(task, input)` always wins and replaces tag defaults.
 
 That's it. No refactoring — just call `durable.describe(task)` and get the shape.
+
+Important: `describe()` still executes the task body's control flow. Keep describe-safe logic around durable primitives, and avoid arbitrary side effects inside the task body itself. Non-durable dependencies must be structured-cloneable or `describe()` will fail fast.
 
 ### Output shape
 
@@ -1728,9 +1887,11 @@ src/node/durable/
 
 ---
 
-## Production Setup with Redis + RabbitMQ
+## Production Backend Appendix (Redis + RabbitMQ)
 
-For production, use Redis for state/pub-sub and RabbitMQ with quorum queues for durable work distribution.
+This appendix is the lower-level backend wiring reference for Redis store/pub-sub and RabbitMQ queue configuration.
+
+If you want the conceptual overview first, read [Production Architecture (Redis + RabbitMQ)](#production-architecture-redis--rabbitmq) above.
 
 Install required Node dependencies:
 
@@ -1741,55 +1902,33 @@ npm install ioredis amqplib
 ### Quick Start - Production Configuration
 
 ```typescript
-import {
-  RedisStore,
-  RedisEventBus,
-  RabbitMQQueue,
-  resources,
-} from "@bluelibs/runner/node";
-
-// State storage with Redis
-const store = new RedisStore({
-  redis: process.env.REDIS_URL || "redis://localhost:6379",
-  prefix: "durable:",
-});
-
-// Pub/Sub with Redis
-const eventBus = new RedisEventBus({
-  redis: process.env.REDIS_URL || "redis://localhost:6379",
-  prefix: "durable:bus:",
-});
-
-// Work distribution with RabbitMQ quorum queues
-const queue = new RabbitMQQueue({
-  url: process.env.RABBITMQ_URL || "amqp://localhost",
-  queue: {
-    name: "durable-executions",
-    quorum: true, // Use quorum queue for durability
-    deadLetter: "durable-dlq", // Dead letter queue for failed messages
-  },
-  prefetch: 10, // Process up to 10 messages concurrently
-});
+import { resources } from "@bluelibs/runner/node";
 
 // Create durable resource definition + registration
 const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
-  store,
-  eventBus,
-  queue,
+  redis: { url: process.env.REDIS_URL || "redis://localhost:6379" },
+  queue: {
+    url: process.env.RABBITMQ_URL || "amqp://localhost",
+    name: "durable-executions",
+    quorum: true,
+    deadLetter: "durable-dlq",
+    prefetch: 10,
+  },
   worker: true, // starts a queue consumer in this process
   // polling.enabled defaults to true; keep it on for timers/schedules
 });
 ```
+
+Under the hood, `resources.redisWorkflow` creates the concrete `RedisStore`, `RedisEventBus`, and `RabbitMQQueue` instances for you.
 
 If you want API-only nodes to call `start()` / `signal()` / `wait()` **without running the timer poller**, disable polling:
 
 ```ts
 const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
-  store,
-  eventBus,
-  queue,
+  redis: { url: process.env.REDIS_URL || "redis://localhost:6379" },
+  queue: { url: process.env.RABBITMQ_URL || "amqp://localhost" },
   worker: false,
   polling: { enabled: false },
 });
@@ -2252,7 +2391,7 @@ There are two different "idempotency" problems:
 - `start(task, input, { idempotencyKey })` supports a store-backed **"start-or-get"** mode.
 - It returns the same `executionId` for the same `{ taskId, idempotencyKey }` pair, even if multiple callers race.
 - Important: subsequent calls return the existing `executionId` and do **not** overwrite the originally stored `input`.
-- Store support: `MemoryStore` and `RedisStore` implement this. Custom stores must implement `getExecutionIdByIdempotencyKey` / `setExecutionIdByIdempotencyKey`.
+- Store support: `MemoryStore` and `RedisStore` implement this. Custom stores must implement `createExecutionWithIdempotencyKey(...)` so the dedupe claim and execution creation happen atomically.
 - You should still persist the returned `executionId` in your domain model for observability and to make webhook handling trivial.
 
 2. **Schedule-level deduplication (create schedule only once)**

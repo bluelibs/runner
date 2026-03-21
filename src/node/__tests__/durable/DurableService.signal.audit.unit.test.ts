@@ -18,7 +18,6 @@ describe("durable: DurableService - signals audit", () => {
       queued: [
         expect.objectContaining({
           payload: { paidAt: 1 },
-          serializedPayload: JSON.stringify({ paidAt: 1 }),
         }),
       ],
       history: [expect.objectContaining({ payload: { paidAt: 1 } })],

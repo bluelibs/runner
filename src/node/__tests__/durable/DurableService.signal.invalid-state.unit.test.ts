@@ -233,10 +233,9 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
     expect(await store.getSignalState!("e1", "error-paid")).toBeNull();
   });
 
-  it("signals still work when the store does not implement listStepResults()", async () => {
+  it("signals still work when timer claiming is unavailable", async () => {
     const { base, queue, service } = await signalSetup({
       storeOverrides: {
-        listStepResults: undefined,
         claimTimer: undefined,
       },
     });
@@ -266,7 +265,7 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
     ]);
   });
 
-  it("cleans up base signal timeout timers without listStepResults() support", async () => {
+  it("cleans up base signal timeout timers", async () => {
     const base = new MemoryStore();
     const queue = new SpyQueue();
     const service = new DurableService({
@@ -456,7 +455,7 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
     });
   });
 
-  it("signal buffers indexed payloads when listStepResults() is unavailable", async () => {
+  it("signal buffers indexed payloads when no waiter index exists", async () => {
     const base = new MemoryStore();
     const service = new DurableService({
       store: createBareStore(base, {
@@ -517,7 +516,6 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
         queued: [
           expect.objectContaining({
             payload: { paidAt: 9 },
-            serializedPayload: '{"paidAt":9}',
           }),
         ],
       }),

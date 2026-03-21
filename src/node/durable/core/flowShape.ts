@@ -176,7 +176,7 @@ class FlowRecorder implements IDurableContext {
 }
 
 /**
- * Recording step builder that captures `.up()` / `.down()` calls without executing.
+ * Recording step builder that captures `.up()` / `.down()` calls without running them.
  */
 class FlowStepRecorder<T> implements IStepBuilder<T> {
   private hasDown = false;
@@ -217,7 +217,7 @@ class FlowStepRecorder<T> implements IStepBuilder<T> {
 }
 
 /**
- * Record a durable workflow flow-shape without executing it.
+ * Record a durable workflow flow-shape from a recording descriptor.
  *
  * This runs the descriptor against a recording `IDurableContext` that captures
  * `durableContext.*` calls into a serializable shape.

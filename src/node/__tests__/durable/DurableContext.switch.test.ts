@@ -14,6 +14,7 @@ describe("durable: DurableContext.switch", () => {
     options: {
       auditEnabled?: boolean;
       auditEmitter?: DurableAuditEmitter;
+      assertLockOwnership?: () => void;
     } = {},
   ) => {
     const bus = new MemoryEventBus();
@@ -174,6 +175,59 @@ describe("durable: DurableContext.switch", () => {
         { id: "a", match: () => true, run: async () => 1 },
       ]),
     ).rejects.toThrow("Execution cancelled");
+  });
+
+  it("re-checks cancellation before persisting the selected branch result", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.switch("route", "x", [
+        {
+          id: "a",
+          match: () => true,
+          run: async () => {
+            await store.updateExecution("e1", {
+              status: ExecutionStatus.Cancelled,
+              error: { message: "cancelled while switching" },
+              updatedAt: new Date(),
+            });
+            return "ok";
+          },
+        },
+      ]),
+    ).rejects.toThrow("cancelled while switching");
+
+    expect(await store.getStepResult("e1", "route")).toBeNull();
+  });
+
+  it("re-checks lock ownership before persisting the selected branch result", async () => {
+    const store = new MemoryStore();
+    const assertLockOwnership = jest.fn(() => {
+      if (assertLockOwnership.mock.calls.length === 2) {
+        throw new Error("lock-lost");
+      }
+    });
+    const { ctx } = createContext("e1", 1, store, { assertLockOwnership });
+
+    await expect(
+      ctx.switch("route", "x", [
+        { id: "a", match: () => true, run: async () => "ok" },
+      ]),
+    ).rejects.toThrow("lock-lost");
+
+    expect(await store.getStepResult("e1", "route")).toBeNull();
   });
 
   it("emits a SwitchEvaluated audit entry when audit is enabled", async () => {

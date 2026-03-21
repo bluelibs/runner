@@ -97,12 +97,6 @@ export async function waitForSignalDurably<TPayload>(params: {
     fn: async () => {
       let stepId: string;
       if (params.options?.stepId) {
-        if (!params.store.listStepResults) {
-          durableExecutionInvariantError.throw({
-            message:
-              "waitForSignal({ stepId }) requires a store that implements listStepResults()",
-          });
-        }
         stepId = `__signal:${params.options.stepId}`;
       } else {
         params.assertOrWarnImplicitInternalStepId("waitForSignal");

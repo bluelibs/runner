@@ -84,6 +84,13 @@ export interface DurableServiceConfig {
   taskResolver?: (
     taskId: string,
   ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
+  /**
+   * Resolves the durable persistence id for a task definition.
+   * In Runner environments this should be the canonical runtime task id.
+   */
+  taskIdResolver?: (
+    task: ITask<any, Promise<any>, any, any, any, any>,
+  ) => string | undefined;
   audit?: {
     enabled?: boolean;
     emitter?: DurableAuditEmitter;
@@ -227,7 +234,7 @@ export interface IDurableService {
    * Missing or terminal executions reject new signals.
    * Live executions retain signal history at the execution level and queue
    * unawaited signals per `signalId` for `waitForSignal()` to consume in FIFO
-   * order before suspending again. Duplicate queued payloads are de-duplicated.
+   * order before suspending again.
    */
   signal<TPayload>(
     executionId: string,

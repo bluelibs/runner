@@ -140,7 +140,7 @@ export function createBufferedLogger(): { logger: Logger; logs: ILog[] } {
 /**
  * Creates a minimal IDurableStore by delegating to `base` (MemoryStore),
  * intentionally omitting optional methods like `acquireLock`, `releaseLock`,
- * `listStepResults`, and `appendAuditEntry`.
+ * and `appendAuditEntry`.
  *
  * Pass `overrides` to add back specific optional methods.
  */
@@ -150,9 +150,11 @@ export function createBareStore(
 ): IDurableStore {
   return {
     saveExecution: base.saveExecution.bind(base),
+    saveExecutionIfStatus: base.saveExecutionIfStatus.bind(base),
     getExecution: base.getExecution.bind(base),
     updateExecution: base.updateExecution.bind(base),
     listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
+    listStepResults: base.listStepResults.bind(base),
     getStepResult: base.getStepResult.bind(base),
     saveStepResult: base.saveStepResult.bind(base),
     getSignalState: base.getSignalState.bind(base),

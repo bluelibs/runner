@@ -71,7 +71,10 @@ export class DurableService implements IDurableService {
     this.workerId = config.workerId ?? createExecutionId();
 
     // Initialize task registry
-    this.taskRegistry = new TaskRegistry(config.taskResolver);
+    this.taskRegistry = new TaskRegistry(
+      config.taskResolver,
+      config.taskIdResolver,
+    );
 
     // Register initial tasks
     if (config.tasks) {

@@ -33,9 +33,7 @@ export class DurableOperator {
   }> {
     const execution = await this.store.getExecution(executionId);
 
-    const steps = this.store.listStepResults
-      ? await this.store.listStepResults(executionId)
-      : [];
+    const steps = await this.store.listStepResults(executionId);
 
     const audit = this.store.listAuditEntries
       ? await this.store.listAuditEntries(executionId)

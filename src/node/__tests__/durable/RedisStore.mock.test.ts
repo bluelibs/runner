@@ -53,54 +53,130 @@ describe("durable: RedisStore", () => {
     jest.restoreAllMocks();
   });
 
-  it("supports execution idempotency key mapping (get/set)", async () => {
-    redisMock.get.mockResolvedValueOnce("exec-1");
+  it("creates idempotent executions transactionally", async () => {
+    redisMock.eval
+      .mockResolvedValueOnce("__created__")
+      .mockResolvedValueOnce("exec-1");
+
+    const execution: Execution = {
+      id: "exec-1",
+      taskId: "t",
+      input: undefined,
+      status: "pending",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
 
     await expect(
-      store.getExecutionIdByIdempotencyKey({
+      store.createExecutionWithIdempotencyKey({
+        execution,
         taskId: "t",
         idempotencyKey: "k",
       }),
-    ).resolves.toBe("exec-1");
+    ).resolves.toEqual({
+      created: true,
+      executionId: "exec-1",
+    });
 
-    redisMock.get.mockResolvedValueOnce(123 as any);
     await expect(
-      store.getExecutionIdByIdempotencyKey({
+      store.createExecutionWithIdempotencyKey({
+        execution: {
+          ...execution,
+          id: "exec-2",
+        },
         taskId: "t",
         idempotencyKey: "k",
       }),
-    ).resolves.toBeNull();
+    ).resolves.toEqual({
+      created: false,
+      executionId: "exec-1",
+    });
+  });
 
-    redisMock.set.mockResolvedValueOnce("OK");
+  it("only replaces executions when the expected status still matches", async () => {
+    const execution: Execution = {
+      id: "exec-cas",
+      taskId: "t",
+      input: undefined,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    redisMock.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+
     await expect(
-      store.setExecutionIdByIdempotencyKey({
-        taskId: "t",
-        idempotencyKey: "k",
-        executionId: "exec-2",
-      }),
+      store.saveExecutionIfStatus(
+        {
+          ...execution,
+          status: "completed",
+          result: "ok",
+        },
+        ["running"],
+      ),
     ).resolves.toBe(true);
 
-    redisMock.set.mockResolvedValueOnce(null);
     await expect(
-      store.setExecutionIdByIdempotencyKey({
-        taskId: "t",
-        idempotencyKey: "k",
-        executionId: "exec-3",
-      }),
+      store.saveExecutionIfStatus(execution, ["pending"]),
     ).resolves.toBe(false);
   });
 
   it("URI-encodes idempotency mapping keys", async () => {
-    redisMock.get.mockResolvedValueOnce(null);
+    redisMock.eval.mockResolvedValueOnce("__created__");
 
-    await store.getExecutionIdByIdempotencyKey({
+    await store.createExecutionWithIdempotencyKey({
+      execution: {
+        id: "exec-encoded",
+        taskId: "task/with spaces",
+        input: undefined,
+        status: "pending",
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
       taskId: "task/with spaces",
       idempotencyKey: "key:with?chars",
     });
 
-    expect(redisMock.get).toHaveBeenCalledWith(
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      5,
       "durable:idem:task%2Fwith%20spaces:key%3Awith%3Fchars",
+      "durable:exec:exec-encoded",
+      "durable:all_executions",
+      "durable:active_executions",
+      "durable:stuck_executions",
+      expect.any(String),
+      "exec-encoded",
+      "1",
+      "0",
     );
+  });
+
+  it("throws when Redis returns an invalid idempotent create response", async () => {
+    redisMock.eval.mockResolvedValueOnce(123 as any);
+
+    await expect(
+      store.createExecutionWithIdempotencyKey({
+        execution: {
+          id: "exec-invalid",
+          taskId: "t",
+          input: undefined,
+          status: "pending",
+          attempt: 1,
+          maxAttempts: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        taskId: "t",
+        idempotencyKey: "k",
+      }),
+    ).rejects.toThrow("Unexpected Redis idempotent execution create response");
   });
 
   it("saves and fetches execution", async () => {
@@ -849,33 +925,21 @@ describe("durable: RedisStore", () => {
           return "OK";
         }
 
-        if (
-          script.includes("queuedRecord.serializedPayload") &&
-          script.includes('return "deduped"')
-        ) {
+        if (script.includes("table.insert(state.queued, record)")) {
           const state = storedState
             ? (serializer.parse(storedState) as {
                 history: unknown[];
-                queued: Array<{ serializedPayload: string }>;
+                queued: Array<Record<string, unknown>>;
               })
             : (serializer.parse(String(defaultStateUnknown)) as {
                 history: unknown[];
-                queued: Array<{ serializedPayload: string }>;
+                queued: Array<Record<string, unknown>>;
               });
-          const record = serializer.parse(String(recordUnknown)) as {
-            serializedPayload: string;
-          };
-          if (
-            state.queued.some(
-              (queuedRecord) =>
-                queuedRecord.serializedPayload === record.serializedPayload,
-            )
-          ) {
-            return "deduped";
-          }
-          state.queued.push(record);
+          state.queued.push(
+            serializer.parse(String(recordUnknown)) as Record<string, unknown>,
+          );
           redisState.set(key, serializer.stringify(state));
-          return "enqueued";
+          return "OK";
         }
 
         if (script.includes("table.remove(state.queued, 1)")) {
@@ -887,8 +951,7 @@ describe("durable: RedisStore", () => {
           const record = state.queued.shift() ?? null;
           redisState.set(key, serializer.stringify(state));
           if (!record) return null;
-          const { serializedPayload: _ignored, ...strippedRecord } = record;
-          return serializer.stringify(strippedRecord);
+          return serializer.stringify(record);
         }
 
         return 1;
@@ -902,7 +965,6 @@ describe("durable: RedisStore", () => {
     };
     const queuedRecord = {
       ...record,
-      serializedPayload: JSON.stringify(record.payload),
     };
 
     await expect(
@@ -911,7 +973,7 @@ describe("durable: RedisStore", () => {
 
     await expect(
       store.enqueueQueuedSignalRecord("e1", "empty-first", queuedRecord),
-    ).resolves.toBe("enqueued");
+    ).resolves.toBeUndefined();
     await expect(store.getSignalState("e1", "empty-first")).resolves.toEqual({
       executionId: "e1",
       signalId: "empty-first",
@@ -922,7 +984,7 @@ describe("durable: RedisStore", () => {
     await store.appendSignalRecord("e1", "paid/with spaces", record);
     await expect(
       store.enqueueQueuedSignalRecord("e1", "paid/with spaces", queuedRecord),
-    ).resolves.toBe("enqueued");
+    ).resolves.toBeUndefined();
 
     await expect(
       store.getSignalState("e1", "paid/with spaces"),
@@ -947,16 +1009,24 @@ describe("durable: RedisStore", () => {
     );
     await expect(
       store.enqueueQueuedSignalRecord("e1", "paid/with spaces", queuedRecord),
-    ).resolves.toBe("enqueued");
+    ).resolves.toBeUndefined();
     await expect(
       store.enqueueQueuedSignalRecord("e1", "paid/with spaces", queuedRecord),
-    ).resolves.toBe("deduped");
+    ).resolves.toBeUndefined();
+    await expect(
+      store.getSignalState("e1", "paid/with spaces"),
+    ).resolves.toEqual({
+      executionId: "e1",
+      signalId: "paid/with spaces",
+      queued: [queuedRecord, queuedRecord],
+      history: [record],
+    });
     await expect(
       store.consumeQueuedSignalRecord("e1", "missing-signal"),
     ).resolves.toBeNull();
   });
 
-  it("dedupes queued redis signal records with the same serialized payload", async () => {
+  it("keeps duplicate queued redis signal records in FIFO order", async () => {
     const redisState = new Map<string, string>();
 
     redisMock.get.mockImplementation(async (key: unknown) => {
@@ -980,7 +1050,7 @@ describe("durable: RedisStore", () => {
         recordUnknown?: unknown,
       ) => {
         const script = String(scriptUnknown);
-        if (!script.includes("queuedRecord.serializedPayload")) {
+        if (!script.includes("table.insert(state.queued, record)")) {
           return 1;
         }
 
@@ -989,28 +1059,17 @@ describe("durable: RedisStore", () => {
         const state = storedState
           ? (serializer.parse(storedState) as {
               history: unknown[];
-              queued: Array<{ serializedPayload: string }>;
+              queued: Array<Record<string, unknown>>;
             })
           : (serializer.parse(String(defaultStateUnknown)) as {
               history: unknown[];
-              queued: Array<{ serializedPayload: string }>;
+              queued: Array<Record<string, unknown>>;
             });
-        const record = serializer.parse(String(recordUnknown)) as {
-          serializedPayload: string;
-        };
-
-        if (
-          state.queued.some(
-            (queuedRecord) =>
-              queuedRecord.serializedPayload === record.serializedPayload,
-          )
-        ) {
-          return "deduped";
-        }
-
-        state.queued.push(record);
+        state.queued.push(
+          serializer.parse(String(recordUnknown)) as Record<string, unknown>,
+        );
         redisState.set(key, serializer.stringify(state));
-        return "enqueued";
+        return "OK";
       },
     );
 
@@ -1018,19 +1077,18 @@ describe("durable: RedisStore", () => {
       id: "sig-1",
       payload: { paidAt: 1 },
       receivedAt: new Date("2024-01-01T00:00:00.000Z"),
-      serializedPayload: JSON.stringify({ paidAt: 1 }),
     };
 
     await expect(
       store.enqueueQueuedSignalRecord("e1", "paid", queuedRecord),
-    ).resolves.toBe("enqueued");
+    ).resolves.toBeUndefined();
     await expect(
       store.enqueueQueuedSignalRecord("e1", "paid", {
         ...queuedRecord,
         id: "sig-2",
       }),
-    ).resolves.toBe("deduped");
-    expect((await store.getSignalState("e1", "paid"))?.queued).toHaveLength(1);
+    ).resolves.toBeUndefined();
+    expect((await store.getSignalState("e1", "paid"))?.queued).toHaveLength(2);
   });
 
   it("filters non-string hash entries when listing step results", async () => {

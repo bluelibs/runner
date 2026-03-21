@@ -20,27 +20,35 @@ export interface ListExecutionsOptions {
 
 export interface IDurableStore {
   saveExecution(execution: Execution): Promise<void>;
+  /**
+   * Atomically replaces an execution when its current status still matches one
+   * of the expected statuses.
+   */
+  saveExecutionIfStatus(
+    execution: Execution,
+    expectedStatuses: ExecutionStatus[],
+  ): Promise<boolean>;
   getExecution(id: string): Promise<Execution | null>;
   updateExecution(id: string, updates: Partial<Execution>): Promise<void>;
   listIncompleteExecutions(): Promise<Execution[]>;
 
   /**
-   * Optional execution-level idempotency mapping.
-   * If supported, allows `start(..., { idempotencyKey })` to dedupe workflow starts.
+   * Optional transactional execution-level idempotency helper.
+   * If supported, allows `start(..., { idempotencyKey })` to atomically create
+   * the execution and claim the dedupe mapping in one store operation.
    */
-  getExecutionIdByIdempotencyKey?(params: {
+  createExecutionWithIdempotencyKey?(params: {
+    execution: Execution;
     taskId: string;
     idempotencyKey: string;
-  }): Promise<string | null>;
-  setExecutionIdByIdempotencyKey?(params: {
-    taskId: string;
-    idempotencyKey: string;
-    executionId: string;
-  }): Promise<boolean>;
+  }): Promise<
+    | { created: true; executionId: string }
+    | { created: false; executionId: string }
+  >;
 
   // Enhanced querying for operator tooling
   listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
-  listStepResults?(executionId: string): Promise<StepResult[]>;
+  listStepResults(executionId: string): Promise<StepResult[]>;
   appendAuditEntry?(entry: DurableAuditEntry): Promise<void>;
   listAuditEntries?(
     executionId: string,
@@ -78,11 +86,17 @@ export interface IDurableStore {
     signalId: string,
     record: DurableSignalRecord,
   ): Promise<void>;
+  /**
+   * Appends a queued signal record in FIFO order.
+   *
+   * Queued signal records are append-only because repeated identical signals
+   * must remain observable and replayable.
+   */
   enqueueQueuedSignalRecord(
     executionId: string,
     signalId: string,
     record: DurableQueuedSignalRecord,
-  ): Promise<"enqueued" | "deduped">;
+  ): Promise<void>;
   consumeQueuedSignalRecord(
     executionId: string,
     signalId: string,

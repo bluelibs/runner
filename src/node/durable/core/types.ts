@@ -57,12 +57,7 @@ export interface DurableSignalRecord<TPayload = unknown> {
  */
 export interface DurableQueuedSignalRecord<
   TPayload = unknown,
-> extends DurableSignalRecord<TPayload> {
-  /**
-   * Serialized payload form used for queue dedupe decisions.
-   */
-  serializedPayload: string;
-}
+> extends DurableSignalRecord<TPayload> {}
 
 /**
  * Persisted signal journal state for one execution + signal id pair.

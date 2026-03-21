@@ -177,6 +177,19 @@ describe("durable: DurableResource", () => {
     );
   });
 
+  it("formats clone errors consistently for Error and non-Error values", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage);
+
+    expect((durable as any).getCloneErrorMessage(new Error("boom"))).toBe(
+      "boom",
+    );
+    expect((durable as any).getCloneErrorMessage("boom-string")).toBe(
+      "boom-string",
+    );
+  });
+
   it("proxies durable methods to the underlying service and exposes a scoped use()", async () => {
     const service = createMockService(true);
 

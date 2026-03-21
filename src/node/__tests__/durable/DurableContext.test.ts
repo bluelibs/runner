@@ -330,7 +330,6 @@ describe("durable: DurableContext", () => {
       id: "sig-1",
       payload: { paidAt: 7 },
       receivedAt: new Date(),
-      serializedPayload: JSON.stringify({ paidAt: 7 }),
     };
 
     await store.appendSignalRecord!("e1", Paid.id, {
@@ -356,7 +355,6 @@ describe("durable: DurableContext", () => {
       id: "sig-explicit",
       payload: { paidAt: 9 },
       receivedAt: new Date(),
-      serializedPayload: JSON.stringify({ paidAt: 9 }),
     };
     await store.appendSignalRecord!("e1", Paid.id, {
       id: queuedRecord.id,
@@ -614,7 +612,7 @@ describe("durable: DurableContext", () => {
     );
   });
 
-  it("fails fast when waitForSignal() uses stepId but the store cannot list steps", async () => {
+  it("allows explicit signal step ids when the store implements the durable contract", async () => {
     const base = new MemoryStore();
 
     const storeNoList: IDurableStore = createBareStore(base);
@@ -623,7 +621,15 @@ describe("durable: DurableContext", () => {
 
     await expect(
       ctx.waitForSignal(Paid, { stepId: "stable-paid" }),
-    ).rejects.toThrow("listStepResults");
+    ).rejects.toBeInstanceOf(SuspensionSignal);
+    expect(await base.getStepResult("e1", "__signal:stable-paid")).toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          state: "waiting",
+          signalId: Paid.id,
+        }),
+      }),
+    );
   });
 
   it("throws when waitForSignal() cannot acquire the signal lock", async () => {

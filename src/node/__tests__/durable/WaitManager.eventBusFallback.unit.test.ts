@@ -1,6 +1,7 @@
 import type { BusEvent, IEventBus } from "../../durable/core/interfaces/bus";
 import { WaitManager } from "../../durable/core/managers/WaitManager";
 import { ExecutionStatus } from "../../durable/core/types";
+import * as utils from "../../durable/core/utils";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { genericError } from "../../../errors";
 
@@ -261,5 +262,51 @@ describe("durable: WaitManager (event bus fallback)", () => {
     });
 
     await expect(waiting).resolves.toBe("ok");
+  });
+
+  it("sleeps between fallback polling attempts after subscribe() fails", async () => {
+    const sleepSpy = jest.spyOn(utils, "sleepMs").mockResolvedValue(undefined);
+    const store = new MemoryStore();
+    const bus = {
+      publish: async (_channel: string, _event: BusEvent) => undefined,
+      subscribe: async () => {
+        throw genericError.new({ message: "subscribe-failed" });
+      },
+      unsubscribe: async () => undefined,
+    } satisfies IEventBus;
+    const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
+
+    const executionId = "e-fallback-sleeps";
+    await store.saveExecution({
+      id: executionId,
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const originalGet = store.getExecution.bind(store);
+    let calls = 0;
+    jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
+      calls += 1;
+      if (calls >= 4) {
+        await store.updateExecution(executionId, {
+          status: ExecutionStatus.Completed,
+          result: "ok",
+          completedAt: new Date(),
+        });
+      }
+      return await originalGet(id);
+    });
+
+    await expect(
+      manager.waitForResult<string>(executionId, {
+        waitPollIntervalMs: 5,
+      }),
+    ).resolves.toBe("ok");
+    expect(sleepSpy).toHaveBeenCalledWith(5);
   });
 });

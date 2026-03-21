@@ -155,11 +155,9 @@ describe("durable: DurableService - signals delivery", () => {
     });
   });
 
-  it("buffers indexed legacy waiters when listStepResults() is unavailable", async () => {
+  it("buffers indexed waits when no waiter index exists yet", async () => {
     const base = new MemoryStore();
-    const store = createBareStore(base, {
-      listStepResults: undefined,
-    });
+    const store = createBareStore(base);
     const service = new DurableService({
       store,
       tasks: [],
@@ -217,11 +215,9 @@ describe("durable: DurableService - signals delivery", () => {
     );
   });
 
-  it("buffers when no indexed waiter exists, even without listStepResults()", async () => {
+  it("buffers when no indexed waiter exists", async () => {
     const base = new MemoryStore();
-    const store = createBareStore(base, {
-      listStepResults: undefined,
-    });
+    const store = createBareStore(base);
     const service = new DurableService({
       store,
       tasks: [],
@@ -245,7 +241,7 @@ describe("durable: DurableService - signals delivery", () => {
     });
   });
 
-  it("skips unrelated legacy waiters that belong to a different signal", async () => {
+  it("skips unrelated waiters that belong to a different signal", async () => {
     const { store, service } = await signalSetup();
 
     await store.saveStepResult({
@@ -278,7 +274,7 @@ describe("durable: DurableService - signals delivery", () => {
     );
   });
 
-  it("queues a signal when no legacy waiters are available and waiter indexing is unsupported", async () => {
+  it("queues a signal when no waiter exists", async () => {
     const base = new MemoryStore();
     const store = createBareStore(base);
     const service = new DurableService({
@@ -325,37 +321,6 @@ describe("durable: DurableService - signals delivery", () => {
       state: "completed",
       payload: { paidAt: 7 },
     });
-  });
-
-  it("signals work without listStepResults() support (fallback scan path)", async () => {
-    const { base, queue, service } = await signalSetup({
-      storeOverrides: {
-        listStepResults: undefined,
-      },
-    });
-
-    await base.saveStepResult({
-      executionId: "e1",
-      stepId: "__signal:paid",
-      result: { state: "waiting" },
-      completedAt: new Date(),
-    });
-
-    await base.upsertSignalWaiter({
-      executionId: "e1",
-      signalId: "paid",
-      stepId: "__signal:paid",
-      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
-    });
-    await service.signal("e1", Paid, { paidAt: 42 });
-
-    expect((await base.getStepResult("e1", "__signal:paid"))?.result).toEqual({
-      state: "completed",
-      payload: { paidAt: 42 },
-    });
-    expect(queue!.enqueued).toEqual([
-      { type: "resume", payload: { executionId: "e1" } },
-    ]);
   });
 
   it("accepts typed signal ids in signal()", async () => {

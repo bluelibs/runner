@@ -80,55 +80,30 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     ).rejects.toThrow("does not support execution idempotency keys");
   });
 
-  it("fails fast when idempotency lock cannot be acquired", async () => {
+  it("returns the existing execution when the idempotency key is already claimed", async () => {
     const store = createStore({
-      saveExecution: async () => {},
-      getExecution: async () => null,
+      saveExecution: async () => {
+        throw genericError.new({ message: "should not save execution" });
+      },
+      getExecution: async () => {
+        throw genericError.new({ message: "should not load execution" });
+      },
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getExecutionIdByIdempotencyKey: async () => null,
-      setExecutionIdByIdempotencyKey: async () => true,
-      acquireLock: async () => null,
-      releaseLock: async () => {},
+      createExecutionWithIdempotencyKey: async () => ({
+        created: false as const,
+        executionId: "existing",
+      }),
     });
 
     const manager = createManager({
       store,
-      queue: { enqueue: async () => "id" } as any,
+      taskExecutor: {
+        run: async () => {
+          throw genericError.new({ message: "should not execute" });
+        },
+      },
     });
-
-    await expect(
-      manager.start(task, undefined, {
-        idempotencyKey: IdempotencyKey.K,
-      }),
-    ).rejects.toThrow("Failed to acquire idempotency lock");
-  });
-
-  it("returns the raced mapping when setExecutionIdByIdempotencyKey fails", async () => {
-    let getCalls = 0;
-
-    const store = createStore({
-      saveExecution: async () => {
-        throw genericError.new({ message: "should not create execution" });
-      },
-      getExecution: async () => null,
-      updateExecution: async () => {},
-      listIncompleteExecutions: async () => [],
-      getExecutionIdByIdempotencyKey: async () => {
-        getCalls += 1;
-        if (getCalls === 1) return null;
-        return "existing";
-      },
-      setExecutionIdByIdempotencyKey: async () => false,
-    });
-
-    const taskExecutor: ITaskExecutor = {
-      run: async () => {
-        throw genericError.new({ message: "should not execute" });
-      },
-    };
-
-    const manager = createManager({ store, taskExecutor });
 
     await expect(
       manager.start(task, undefined, {
@@ -137,37 +112,42 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     ).resolves.toBe("existing");
   });
 
-  it("throws if setExecutionIdByIdempotencyKey fails without an existing mapping", async () => {
+  it("does not persist twice after an atomic idempotent create succeeds", async () => {
     const store = createStore({
       saveExecution: async () => {
-        throw genericError.new({ message: "should not create execution" });
+        throw genericError.new({
+          message: "should not save execution separately",
+        });
       },
       getExecution: async () => null,
       updateExecution: async () => {},
       listIncompleteExecutions: async () => [],
-      getExecutionIdByIdempotencyKey: async () => null,
-      setExecutionIdByIdempotencyKey: async () => false,
+      createExecutionWithIdempotencyKey: async ({ execution }) => ({
+        created: true as const,
+        executionId: execution.id,
+      }),
     });
-
-    const taskExecutor: ITaskExecutor = {
-      run: async () => {
-        throw genericError.new({ message: "should not execute" });
-      },
+    const queue: IDurableQueue = {
+      enqueue: async () => "queued",
+      consume: async () => undefined,
+      ack: async () => undefined,
+      nack: async () => undefined,
     };
-
-    const manager = createManager({ store, taskExecutor });
+    const manager = createManager({ store, queue });
 
     await expect(
       manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
-    ).rejects.toThrow("Failed to set idempotency mapping");
+    ).resolves.toEqual(expect.any(String));
   });
 
   it("cancelExecution is a no-op when the execution does not exist", async () => {
+    const saveExecutionIfStatus = jest.fn(async () => false);
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
+      saveExecutionIfStatus,
       updateExecution: async () => {
         throw genericError.new({ message: "should not update" });
       },
@@ -179,6 +159,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
     await expect(manager.cancelExecution("missing")).resolves.toBeUndefined();
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
   });
 
   it("cancelExecution is a no-op when execution is already terminal", async () => {
@@ -195,12 +176,13 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       result: { ok: true },
     };
 
-    const updateExecution = jest.fn(async () => undefined);
+    const saveExecutionIfStatus = jest.fn(async () => false);
 
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => exec,
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -209,7 +191,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
     await expect(manager.cancelExecution(exec.id)).resolves.toBeUndefined();
-    expect(updateExecution).not.toHaveBeenCalled();
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
   });
 
   it("cancelExecution preserves existing cancelRequestedAt and defaults the reason", async () => {
@@ -227,12 +209,13 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       cancelRequestedAt: requestedAt,
     };
 
-    const updateExecution = jest.fn(async () => undefined);
+    const saveExecutionIfStatus = jest.fn(async () => true);
 
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => exec,
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -242,18 +225,55 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
     await manager.cancelExecution(exec.id);
 
-    expect(updateExecution).toHaveBeenCalledWith(
-      exec.id,
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         status: ExecutionStatus.Cancelled,
         cancelRequestedAt: requestedAt,
         error: { message: "Execution cancelled" },
       }),
+      [ExecutionStatus.Running],
     );
   });
 
+  it("retries cancellation when compare-and-save loses the first race", async () => {
+    const exec: Execution = {
+      id: "e-cancel-retry",
+      taskId: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const saveExecutionIfStatus = jest
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => exec,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await expect(manager.cancelExecution(exec.id)).resolves.toBeUndefined();
+    expect(saveExecutionIfStatus).toHaveBeenCalledTimes(2);
+  });
+
   it("does not overwrite cancellation when cancellation happens after work completes", async () => {
-    const updateExecution = jest.fn(async () => undefined);
+    const saveExecutionIfStatus = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
 
     let getCalls = 0;
     const store = createStore({
@@ -262,9 +282,9 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         getCalls += 1;
 
         // 1) processExecution initial load
-        // 2) runExecutionAttempt isCancelled() at start
-        // 3) runExecutionAttempt isCancelled() after the task resolves
-        if (getCalls === 1 || getCalls === 2) {
+        // 2) processExecution reload after lock
+        // 3) runExecutionAttempt isCancelled() at start
+        if (getCalls <= 3) {
           return {
             id: "e1",
             taskId: TaskId.T,
@@ -290,7 +310,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
           completedAt: new Date(),
         } satisfies Execution;
       },
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -299,25 +320,22 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution("e1");
 
-    expect(updateExecution).toHaveBeenCalledWith(
-      "e1",
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
       expect.objectContaining({ status: ExecutionStatus.Running }),
+      [ExecutionStatus.Pending],
     );
-    expect(updateExecution).not.toHaveBeenCalledWith(
-      "e1",
-      expect.objectContaining({ status: ExecutionStatus.Completed }),
-    );
+    expect(saveExecutionIfStatus).toHaveBeenCalledTimes(1);
   });
 
   it("bails out early when the execution is already cancelled before attempting", async () => {
-    const updateExecution = jest.fn(async () => undefined);
+    const saveExecutionIfStatus = jest.fn(async () => false);
 
     let getCalls = 0;
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => {
         getCalls += 1;
-        if (getCalls === 1) {
+        if (getCalls <= 2) {
           return {
             id: "e0",
             taskId: TaskId.T,
@@ -342,7 +360,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
           completedAt: new Date(),
         } satisfies Execution;
       },
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -351,11 +370,130 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution("e0");
 
-    expect(updateExecution).not.toHaveBeenCalled();
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
+  });
+
+  it("bails out when the execution disappears after the lock is acquired", async () => {
+    const taskExecutor: ITaskExecutor = {
+      run: async () => {
+        throw genericError.new({ message: "should not execute" });
+      },
+    };
+
+    let getCalls = 0;
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => {
+        getCalls += 1;
+        if (getCalls === 1) {
+          return {
+            id: "e-missing-after-lock",
+            taskId: TaskId.T,
+            input: undefined,
+            status: ExecutionStatus.Pending,
+            attempt: 1,
+            maxAttempts: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } satisfies Execution;
+        }
+        return null;
+      },
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({ store, taskExecutor });
+    await expect(
+      manager.processExecution("e-missing-after-lock"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("bails out when the execution becomes terminal after the lock is acquired", async () => {
+    const taskExecutor: ITaskExecutor = {
+      run: async () => {
+        throw genericError.new({ message: "should not execute" });
+      },
+    };
+
+    let getCalls = 0;
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => {
+        getCalls += 1;
+        if (getCalls === 1) {
+          return {
+            id: "e-terminal-after-lock",
+            taskId: TaskId.T,
+            input: undefined,
+            status: ExecutionStatus.Pending,
+            attempt: 1,
+            maxAttempts: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } satisfies Execution;
+        }
+        return {
+          id: "e-terminal-after-lock",
+          taskId: TaskId.T,
+          input: undefined,
+          status: ExecutionStatus.Completed,
+          attempt: 1,
+          maxAttempts: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          completedAt: new Date(),
+        } satisfies Execution;
+      },
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({ store, taskExecutor });
+    await expect(
+      manager.processExecution("e-terminal-after-lock"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("bails out when the running transition loses the compare-and-save race", async () => {
+    const saveExecutionIfStatus = jest.fn(async () => false);
+    const taskExecutor: ITaskExecutor = {
+      run: async () => {
+        throw genericError.new({ message: "should not execute" });
+      },
+    };
+
+    let getCalls = 0;
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => {
+        getCalls += 1;
+        return {
+          id: "e-running-race",
+          taskId: TaskId.T,
+          input: undefined,
+          status: ExecutionStatus.Pending,
+          attempt: 1,
+          maxAttempts: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } satisfies Execution;
+      },
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({ store, taskExecutor });
+    await manager.processExecution("e-running-race");
+    expect(saveExecutionIfStatus).toHaveBeenCalledTimes(1);
   });
 
   it("does not overwrite cancellation when cancellation happens after a suspension", async () => {
-    const updateExecution = jest.fn(async () => undefined);
+    const saveExecutionIfStatus = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
 
     let getCalls = 0;
     const store = createStore({
@@ -364,9 +502,9 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         getCalls += 1;
 
         // 1) processExecution initial load
-        // 2) runExecutionAttempt isCancelled() at start
-        // 3) catch(SuspensionSignal) isCancelled()
-        if (getCalls === 1 || getCalls === 2) {
+        // 2) processExecution reload after lock
+        // 3) runExecutionAttempt isCancelled() at start
+        if (getCalls <= 3) {
           return {
             id: "e2",
             taskId: TaskId.T,
@@ -392,7 +530,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
           completedAt: new Date(),
         } satisfies Execution;
       },
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -405,18 +544,15 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution("e2");
 
-    expect(updateExecution).toHaveBeenCalledWith(
-      "e2",
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
       expect.objectContaining({ status: ExecutionStatus.Running }),
+      [ExecutionStatus.Pending],
     );
-    expect(updateExecution).not.toHaveBeenCalledWith(
-      "e2",
-      expect.objectContaining({ status: ExecutionStatus.Sleeping }),
-    );
+    expect(saveExecutionIfStatus).toHaveBeenCalledTimes(1);
   });
 
   it("does not overwrite cancellation when cancellation happens after a failure", async () => {
-    const updateExecution = jest.fn(async () => undefined);
+    const saveExecutionIfStatus = jest.fn(async () => true);
     const createTimer = jest.fn(async () => undefined);
 
     let getCalls = 0;
@@ -426,9 +562,9 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         getCalls += 1;
 
         // 1) processExecution initial load
-        // 2) runExecutionAttempt isCancelled() at start
-        // 3) catch(error) isCancelled()
-        if (getCalls === 1 || getCalls === 2) {
+        // 2) processExecution reload after lock
+        // 3) runExecutionAttempt isCancelled() at start
+        if (getCalls <= 3) {
           return {
             id: "e3",
             taskId: TaskId.T,
@@ -454,7 +590,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
           completedAt: new Date(),
         } satisfies Execution;
       },
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
       createTimer,
     });
@@ -468,26 +605,19 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution("e3");
 
-    expect(updateExecution).toHaveBeenCalledWith(
-      "e3",
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
       expect.objectContaining({ status: ExecutionStatus.Running }),
+      [ExecutionStatus.Pending],
     );
     expect(createTimer).not.toHaveBeenCalled();
-    expect(updateExecution).not.toHaveBeenCalledWith(
-      "e3",
-      expect.objectContaining({ status: ExecutionStatus.Retrying }),
-    );
-    expect(updateExecution).not.toHaveBeenCalledWith(
-      "e3",
-      expect.objectContaining({ status: ExecutionStatus.Failed }),
-    );
+    expect(saveExecutionIfStatus).toHaveBeenCalledTimes(1);
   });
 
-  it("updates failures with a minimal patch when attempts are exhausted", async () => {
-    const updateExecution = jest.fn(
-      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
-        undefined,
-    );
+  it("fails executions when attempts are exhausted", async () => {
+    const saveExecutionIfStatus = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true);
 
     const execution: Execution = {
       id: "e-fail-patch",
@@ -503,7 +633,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => execution,
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -516,35 +647,31 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution(execution.id);
 
-    expect(updateExecution).toHaveBeenNthCalledWith(
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
       1,
-      execution.id,
       expect.objectContaining({ status: ExecutionStatus.Running }),
+      [ExecutionStatus.Pending],
     );
 
-    const failedCall = updateExecution.mock.calls[1];
+    const failedCall = saveExecutionIfStatus.mock.calls[1];
     expect(failedCall).toBeDefined();
     if (!failedCall) {
       throw new Error("Expected failure update call to be recorded");
     }
-    const failedPatch = failedCall[1] as Record<string, unknown>;
-    expect(failedPatch.status).toBe(ExecutionStatus.Failed);
-    expect(failedPatch.error).toEqual(
+    const failedExecution = failedCall[0] as Execution;
+    expect(failedExecution.status).toBe(ExecutionStatus.Failed);
+    expect(failedExecution.error).toEqual(
       expect.objectContaining({ message: "kaboom" }),
     );
-    expect(failedPatch.completedAt).toBeInstanceOf(Date);
-    expect(Object.keys(failedPatch).sort()).toEqual([
-      "completedAt",
-      "error",
-      "status",
-    ]);
+    expect(failedExecution.completedAt).toBeInstanceOf(Date);
+    expect(failedCall[1]).toEqual([ExecutionStatus.Running]);
   });
 
-  it("fails with a minimal patch when an execution times out mid-attempt", async () => {
-    const updateExecution = jest.fn(
-      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
-        undefined,
-    );
+  it("fails executions when an attempt times out", async () => {
+    const saveExecutionIfStatus = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true);
     const createTimer = jest.fn(async () => undefined);
 
     const execution: Execution = {
@@ -562,7 +689,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => execution,
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
       createTimer,
     });
@@ -577,42 +705,161 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution(execution.id);
 
-    expect(updateExecution).toHaveBeenNthCalledWith(
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
       1,
-      execution.id,
       expect.objectContaining({ status: ExecutionStatus.Running }),
+      [ExecutionStatus.Pending],
     );
 
-    const failedCall = updateExecution.mock.calls[1];
+    const failedCall = saveExecutionIfStatus.mock.calls[1];
     expect(failedCall).toBeDefined();
     if (!failedCall) {
       throw new Error("Expected timeout failure update call to be recorded");
     }
-    const failedPatch = failedCall[1] as Record<string, unknown>;
-    expect(failedPatch.status).toBe(ExecutionStatus.Failed);
-    expect(failedPatch.error).toEqual(
+    const failedExecution = failedCall[0] as Execution;
+    expect(failedExecution.status).toBe(ExecutionStatus.Failed);
+    expect(failedExecution.error).toEqual(
       expect.objectContaining({
         message: `Execution ${execution.id} timed out`,
       }),
     );
-    expect(failedPatch.completedAt).toBeInstanceOf(Date);
-    expect(Object.keys(failedPatch).sort()).toEqual([
-      "completedAt",
-      "error",
-      "status",
-    ]);
+    expect(failedExecution.completedAt).toBeInstanceOf(Date);
     expect(createTimer).not.toHaveBeenCalled();
-    expect(updateExecution).not.toHaveBeenCalledWith(
-      execution.id,
-      expect.objectContaining({ status: ExecutionStatus.Retrying }),
+    expect(failedCall[1]).toEqual([ExecutionStatus.Running]);
+  });
+
+  it("does not notify completion when completion compare-and-save loses the race", async () => {
+    const published: string[] = [];
+    const saveExecutionIfStatus = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => ({
+        id: "e-complete-race",
+        taskId: TaskId.T,
+        input: undefined,
+        status: ExecutionStatus.Pending,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const taskRegistry = new TaskRegistry();
+    taskRegistry.register(task);
+    const auditLogger = new AuditLogger({ enabled: false }, store);
+    const waitManager = new WaitManager(store);
+    const manager = new ExecutionManager(
+      {
+        store,
+        taskExecutor: createFixedTaskExecutor("ok"),
+        eventBus: {
+          publish: async (channel) => {
+            published.push(channel);
+          },
+          subscribe: async () => undefined,
+          unsubscribe: async () => undefined,
+        },
+      },
+      taskRegistry,
+      auditLogger,
+      waitManager,
     );
+
+    await manager.processExecution("e-complete-race");
+    expect(published).toEqual([]);
+  });
+
+  it("does not persist sleeping when the suspension compare-and-save loses the race", async () => {
+    const saveExecutionIfStatus = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => ({
+        id: "e-suspend-race",
+        taskId: TaskId.T,
+        input: undefined,
+        status: ExecutionStatus.Pending,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: {
+        run: async () => {
+          throw new SuspensionSignal("yield");
+        },
+      },
+    });
+
+    await manager.processExecution("e-suspend-race");
+    expect(saveExecutionIfStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("best-effort cleans up retry timers when retry compare-and-save loses the race", async () => {
+    const saveExecutionIfStatus = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const createTimer = jest.fn(async () => undefined);
+    const deleteTimer = jest.fn(async () => {
+      throw genericError.new({ message: "cleanup-failed" });
+    });
+
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => ({
+        id: "e-retry-race",
+        taskId: TaskId.T,
+        input: undefined,
+        status: ExecutionStatus.Pending,
+        attempt: 1,
+        maxAttempts: 2,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+      createTimer,
+      deleteTimer,
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: {
+        run: async () => {
+          throw genericError.new({ message: "boom" });
+        },
+      },
+    });
+
+    await expect(
+      manager.processExecution("e-retry-race"),
+    ).resolves.toBeUndefined();
+    expect(createTimer).toHaveBeenCalledTimes(1);
+    expect(deleteTimer).toHaveBeenCalledTimes(1);
   });
 
   it("fails executions when queue delivery attempts are exhausted", async () => {
-    const updateExecution = jest.fn(
-      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
-        undefined,
-    );
+    const saveExecutionIfStatus = jest.fn(async () => true);
 
     const execution: Execution = {
       id: "e-exhausted",
@@ -628,7 +875,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => execution,
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -644,41 +892,83 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       errorMessage: "broker rejected message",
     });
 
-    const updateCall = updateExecution.mock.calls[0];
+    const updateCall = saveExecutionIfStatus.mock.calls[0] as unknown as
+      | [Execution, ExecutionStatus[]]
+      | undefined;
     expect(updateCall).toBeDefined();
     if (!updateCall) {
       throw new Error("Expected exhausted delivery update call to exist");
     }
-    const patch = updateCall[1] as Record<string, unknown>;
-    expect(updateExecution).toHaveBeenCalledTimes(1);
-    expect(updateExecution).toHaveBeenCalledWith(
-      execution.id,
-      expect.objectContaining({
-        status: ExecutionStatus.Failed,
-      }),
-    );
-    expect(patch.error).toEqual(
+    const failedExecution = updateCall[0] as Execution;
+    expect(saveExecutionIfStatus).toHaveBeenCalledTimes(1);
+    expect(failedExecution.status).toBe(ExecutionStatus.Failed);
+    expect(failedExecution.error).toEqual(
       expect.objectContaining({
         message: expect.stringContaining("m-exhausted"),
       }),
     );
-    expect(Object.keys(patch).sort()).toEqual([
-      "completedAt",
-      "error",
-      "status",
-    ]);
+    expect(updateCall[1]).toEqual([ExecutionStatus.Retrying]);
+  });
+
+  it("does not notify failure when the failed transition loses the compare-and-save race", async () => {
+    const published: string[] = [];
+    const saveExecutionIfStatus = jest.fn(async () => false);
+
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => ({
+        id: "e-failed-race",
+        taskId: TaskId.T,
+        input: undefined,
+        status: ExecutionStatus.Retrying,
+        attempt: 2,
+        maxAttempts: 3,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const taskRegistry = new TaskRegistry();
+    taskRegistry.register(task);
+    const auditLogger = new AuditLogger({ enabled: false }, store);
+    const waitManager = new WaitManager(store);
+    const manager = new ExecutionManager(
+      {
+        store,
+        taskExecutor: createFixedTaskExecutor(undefined),
+        eventBus: {
+          publish: async (channel) => {
+            published.push(channel);
+          },
+          subscribe: async () => undefined,
+          unsubscribe: async () => undefined,
+        },
+      },
+      taskRegistry,
+      auditLogger,
+      waitManager,
+    );
+
+    await manager.failExecutionDeliveryExhausted("e-failed-race", {
+      messageId: "m-failed-race",
+      attempts: 3,
+      maxAttempts: 3,
+      errorMessage: "broker rejected message",
+    });
+    expect(published).toEqual([]);
   });
 
   it("ignores exhausted delivery notifications for missing executions", async () => {
-    const updateExecution = jest.fn(
-      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
-        undefined,
-    );
+    const saveExecutionIfStatus = jest.fn(async () => false);
 
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => null,
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -696,14 +986,11 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(updateExecution).not.toHaveBeenCalled();
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
   });
 
   it("ignores exhausted delivery notifications for terminal executions", async () => {
-    const updateExecution = jest.fn(
-      async (_id: string, _updates: Partial<Execution<unknown, unknown>>) =>
-        undefined,
-    );
+    const saveExecutionIfStatus = jest.fn(async () => false);
 
     const execution: Execution = {
       id: "e-terminal",
@@ -721,7 +1008,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const store = createStore({
       saveExecution: async () => {},
       getExecution: async () => execution,
-      updateExecution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
     });
 
@@ -739,7 +1027,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(updateExecution).not.toHaveBeenCalled();
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
   });
 
   it("notifies finished executions via event bus", async () => {

@@ -79,6 +79,8 @@ export async function switchDurably<TValue, TResult>(params: {
 
   // Execute the selected branch
   const result = await selectedBranch.run(params.value);
+  // Re-check before committing so a late cancellation or lost lock cannot persist stale work.
+  await params.assertCanContinue();
   const durationMs = Date.now() - startedAt;
 
   // Persist the outcome for replay

@@ -8,6 +8,18 @@ Durable workflows are **Runner tasks with replay-safe checkpoints** (Node-only: 
 
 They're designed for flows that span time (minutes → days): approvals, payments, onboarding, shipping.
 
+## Built-in resilience
+
+The runtime already bakes in a lot of the "please don't wake me up at 3am" behavior:
+
+- replay-safe steps prevent duplicate side-effects on retry/replay
+- sleeps and signal waits survive restarts because their state is persisted
+- startup recovery can re-drive incomplete executions
+- execution locking and persisted state make horizontal workers safer
+- signals can arrive early and wait in a FIFO queue until consumed
+- idempotent starts are transactional
+- `wait()` / `startAndWait()` still have polling fallbacks if notifications are missed
+
 ## The mental model
 
 - A workflow does not "resume the instruction pointer".
@@ -22,7 +34,7 @@ Rule: side effects belong inside `durableContext.step(...)`.
 1. **Register a durable resource** (store + queue + event bus).
 2. **Write a durable task**:
    - stable `durableContext.step("...")` ids
-   - explicit `{ stepId }` for `sleep/emit/waitForSignal` in production
+   - explicit `{ stepId }` for `sleep` / `waitForSignal` in production
 3. **Start the workflow**:
    - `executionId = await service.start(taskOrTaskId, input)`
    - persist `executionId` in your domain row (eg. `orders.execution_id`)
@@ -155,6 +167,20 @@ const durableProd = resources.redisWorkflow.fork("app-durable").with({
 });
 ```
 
+Production mental model:
+
+- **Redis store** is the source of truth: execution rows, step results, timers, schedules, signal history/queues, waiter state, and optional audit.
+- **RabbitMQ** distributes `execute` / `resume` work to workers. Queue messages carry `executionId` and delivery metadata, not authoritative workflow state.
+- **Redis pub/sub** is the fast notification path for `wait()` / `startAndWait()` and related wakeups.
+
+Why this matters:
+
+- if a worker dies, the next worker reloads from Redis and replays
+- if RabbitMQ duplicates a message, replay stays safe because step results are already persisted
+- if a queue publish or pub/sub notification is missed, Redis-backed polling/recovery can still rediscover incomplete executions
+
+Rule of thumb: RabbitMQ makes it fast; Redis makes it correct.
+
 `waitForSignal()` return shapes:
 
 - `await durableContext.waitForSignal(Signal)` → `payload` (throws on timeout)
@@ -227,7 +253,7 @@ const result = await durableContext.switch(
 
 ## Describing a flow (static shape export)
 
-Use `durable.describe(...)` to export the structure of a workflow without executing it. Useful for documentation, visualization, and tooling.
+Use `durable.describe(...)` to export the structure of a workflow in recording mode. Useful for documentation, visualization, and tooling.
 
 **Easiest: pass the task directly** — no refactoring needed:
 
@@ -243,14 +269,16 @@ const shape2 = await durableRuntime.describe<{ orderId: string }>(myTask, {
 });
 ```
 
-The recorder shims `durable.use()` inside the task's `run` and records every `durableContext.*` operation.
+The recorder runs the task body in a describe-safe mode, shims `durable.use()` inside the task's `run`, snapshots non-durable dependencies with `structuredClone(...)`, and records every `durableContext.*` operation.
 
 If the task uses `tags.durableWorkflow.with({ defaults: {...} })`, `describe(task)` uses those defaults.
 `describe(task, input)` always overrides tag defaults.
 
 Notes:
 
-- The recorder captures each `durableContext.*` call as a `FlowNode`; step bodies are never executed.
+- The recorder captures each `durableContext.*` call as a `FlowNode`; durable step bodies are never executed.
+- The task body control flow still runs. Keep describe-safe logic around durable primitives, and avoid arbitrary side effects in the task body itself.
+- Non-durable dependencies must be structured-cloneable or `describe()` fails fast.
 - Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
 - `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
 - Conditional logic should be modeled with `durableContext.switch()` (not JS `if/else`) for the shape to capture it.

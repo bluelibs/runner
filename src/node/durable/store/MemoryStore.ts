@@ -85,30 +85,39 @@ export class MemoryStore implements IDurableStore {
     return `${taskId}::${idempotencyKey}`;
   }
 
-  async getExecutionIdByIdempotencyKey(params: {
+  async createExecutionWithIdempotencyKey(params: {
+    execution: Execution;
     taskId: string;
     idempotencyKey: string;
-  }): Promise<string | null> {
-    return (
-      this.executionIdByIdempotencyKey.get(
-        this.getIdempotencyMapKey(params.taskId, params.idempotencyKey),
-      ) ?? null
-    );
-  }
-
-  async setExecutionIdByIdempotencyKey(params: {
-    taskId: string;
-    idempotencyKey: string;
-    executionId: string;
-  }): Promise<boolean> {
+  }): Promise<
+    | { created: true; executionId: string }
+    | { created: false; executionId: string }
+  > {
     const key = this.getIdempotencyMapKey(params.taskId, params.idempotencyKey);
-    if (this.executionIdByIdempotencyKey.has(key)) return false;
-    this.executionIdByIdempotencyKey.set(key, params.executionId);
-    return true;
+    const existingExecutionId = this.executionIdByIdempotencyKey.get(key);
+    if (existingExecutionId) {
+      return { created: false, executionId: existingExecutionId };
+    }
+
+    this.executionIdByIdempotencyKey.set(key, params.execution.id);
+    this.executions.set(params.execution.id, { ...params.execution });
+    return { created: true, executionId: params.execution.id };
   }
 
   async saveExecution(execution: Execution): Promise<void> {
     this.executions.set(execution.id, { ...execution });
+  }
+
+  async saveExecutionIfStatus(
+    execution: Execution,
+    expectedStatuses: ExecutionStatus[],
+  ): Promise<boolean> {
+    const current = this.executions.get(execution.id);
+    if (!current) return false;
+    if (!expectedStatuses.includes(current.status)) return false;
+
+    this.executions.set(execution.id, { ...execution });
+    return true;
   }
 
   async getExecution(id: string): Promise<Execution | null> {
@@ -309,18 +318,9 @@ export class MemoryStore implements IDurableStore {
     executionId: string,
     signalId: string,
     record: DurableQueuedSignalRecord,
-  ): Promise<"enqueued" | "deduped"> {
+  ): Promise<void> {
     const signalState = this.getOrCreateSignalState(executionId, signalId);
-    const alreadyQueued = signalState.queued.some(
-      (queuedRecord) =>
-        queuedRecord.serializedPayload === record.serializedPayload,
-    );
-    if (alreadyQueued) {
-      return "deduped";
-    }
-
     signalState.queued.push(cloneQueuedSignalRecord(record));
-    return "enqueued";
   }
 
   async consumeQueuedSignalRecord(

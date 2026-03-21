@@ -62,14 +62,15 @@ export class ScheduleManager {
         }),
       fn: async () => {
         const existing = await this.store.getSchedule(scheduleId);
+        const persistedTaskId = this.taskRegistry.getPersistenceId(task);
 
         const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
         const pattern = options.cron ?? String(options.interval);
 
         if (existing) {
-          if (existing.taskId !== task.id) {
+          if (existing.taskId !== persistedTaskId) {
             durableScheduleConfigError.throw({
-              message: `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${task.id}'`,
+              message: `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${persistedTaskId}'`,
             });
           }
 
@@ -87,7 +88,7 @@ export class ScheduleManager {
 
         const schedule: Schedule = {
           id: scheduleId,
-          taskId: task.id,
+          taskId: persistedTaskId,
           input,
           pattern,
           type,
@@ -113,9 +114,10 @@ export class ScheduleManager {
     const id = options.id ?? createExecutionId();
 
     if (options.cron || options.interval !== undefined) {
+      const persistedTaskId = this.taskRegistry.getPersistenceId(task);
       const schedule: Schedule = {
         id,
-        taskId: task.id,
+        taskId: persistedTaskId,
         input,
         pattern: options.cron ?? String(options.interval),
         type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
@@ -133,7 +135,7 @@ export class ScheduleManager {
 
     await this.store.createTimer({
       id: `once:${id}`,
-      taskId: task.id,
+      taskId: this.taskRegistry.getPersistenceId(task),
       input,
       type: TimerType.Scheduled,
       fireAt,

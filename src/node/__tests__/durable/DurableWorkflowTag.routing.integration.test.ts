@@ -89,13 +89,14 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
       }),
     );
 
+    const persistedTaskId = runtime.store.findIdByDefinition(task);
     const executions = await durableRuntime.operator.listExecutions({
-      taskId: task.id,
+      taskId: persistedTaskId,
     });
     expect(executions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          taskId: task.id,
+          taskId: persistedTaskId,
           status: "completed",
           result: { value: 4 },
         }),

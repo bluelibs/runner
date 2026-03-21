@@ -3,7 +3,6 @@ import type { IDurableQueue } from "../interfaces/queue";
 import type { IEventDefinition } from "../../../../types/event";
 import type { ITask } from "../../../../types/task";
 import type { IValidationSchema } from "../../../../defs";
-import { Serializer } from "../../../../serializer";
 import type { AuditLogger } from "./AuditLogger";
 import { DurableAuditEntryKind } from "../audit";
 import {
@@ -82,8 +81,6 @@ function validateSignalWaiterState(params: {
  * - trigger execution resumption (queue message or direct processing)
  */
 export class SignalHandler {
-  private readonly serializer = new Serializer();
-
   constructor(
     private readonly store: IDurableStore,
     private readonly auditLogger: AuditLogger,
@@ -130,7 +127,6 @@ export class SignalHandler {
         payload: validatedPayload,
         receivedAt: new Date(),
       };
-      const serializedPayload = this.serializer.stringify(validatedPayload);
 
       let completedStepId: string | null = null;
       let shouldResume = false;
@@ -178,10 +174,11 @@ export class SignalHandler {
       await this.store.appendSignalRecord(executionId, signalId, signalRecord);
 
       if (!shouldResume) {
-        await this.store.enqueueQueuedSignalRecord(executionId, signalId, {
-          ...signalRecord,
-          serializedPayload,
-        });
+        await this.store.enqueueQueuedSignalRecord(
+          executionId,
+          signalId,
+          signalRecord,
+        );
       }
 
       return {

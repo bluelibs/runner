@@ -90,13 +90,14 @@ export class DurableResource implements IDurableResource {
     const resolvedInput = this.resolveDescribeInput(effectiveTask, input);
 
     return await recordFlowShape(async (recordingContext) => {
-      const depsWithRecorder = this.injectRecorderIntoDurableDeps(
+      const describeDeps = this.createDescribeDependencies(
+        effectiveTask.id,
         deps,
         recordingContext,
       );
       await effectiveTask.run(
         resolvedInput as TInput,
-        depsWithRecorder as DependencyValuesType<DependencyMapType>,
+        describeDeps as DependencyValuesType<DependencyMapType>,
       );
     });
   }
@@ -159,25 +160,35 @@ export class DurableResource implements IDurableResource {
     }
   }
 
-  private injectRecorderIntoDurableDeps(
+  private createDescribeDependencies(
+    taskId: string,
     deps: Record<string, unknown>,
     recordingContext: unknown,
   ): Record<string, unknown> {
-    const next: Record<string, unknown> = { ...deps };
+    const next: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(deps)) {
-      if (!(value instanceof DurableResource)) {
+      if (value instanceof DurableResource) {
+        next[key] = new Proxy(value, {
+          get(target, prop, receiver) {
+            if (prop === "use") {
+              return () => recordingContext;
+            }
+            return Reflect.get(target, prop, receiver);
+          },
+        });
         continue;
       }
 
-      next[key] = new Proxy(value, {
-        get(target, prop, receiver) {
-          if (prop === "use") {
-            return () => recordingContext;
-          }
-          return Reflect.get(target, prop, receiver);
-        },
-      });
+      try {
+        next[key] = structuredClone(value);
+      } catch (error) {
+        durableExecutionInvariantError.throw({
+          message:
+            `Cannot describe task "${taskId}": dependency "${key}" is not structured-cloneable. ` +
+            `Describe runs with dependency snapshots to avoid side effects. Original error: ${this.getCloneErrorMessage(error)}`,
+        });
+      }
     }
 
     return next;
@@ -199,15 +210,20 @@ export class DurableResource implements IDurableResource {
     try {
       return structuredClone(tagConfig.defaults) as TInput;
     } catch (error) {
-      const originalMessage =
-        error instanceof Error ? error.message : String(error);
-
       durableExecutionInvariantError.throw({
         message:
           `Cannot describe task "${task.id}": durableWorkflowTag.defaults could not be cloned. ` +
-          `Ensure defaults contain only structured-cloneable values. Original error: ${originalMessage}`,
+          `Ensure defaults contain only structured-cloneable values. Original error: ${this.getCloneErrorMessage(error)}`,
       });
     }
+  }
+
+  private getCloneErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return String(error);
   }
 
   start<TInput, TResult>(

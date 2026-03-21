@@ -96,27 +96,53 @@ export class RedisStore implements IDurableStore {
     return encodeURIComponent(value);
   }
 
-  async getExecutionIdByIdempotencyKey(params: {
+  async createExecutionWithIdempotencyKey(params: {
+    execution: Execution;
     taskId: string;
     idempotencyKey: string;
-  }): Promise<string | null> {
-    const key = this.k(
-      `idem:${this.encodeKeyPart(params.taskId)}:${this.encodeKeyPart(params.idempotencyKey)}`,
-    );
-    const res = await this.redis.get(key);
-    return typeof res === "string" ? res : null;
-  }
+  }): Promise<
+    | { created: true; executionId: string }
+    | { created: false; executionId: string }
+  > {
+    const { isActive, isStuck } = this.statusFlags(params.execution.status);
+    const outcome = await this.redis.eval(
+      `
+        local existingId = redis.call("get", KEYS[1])
+        if existingId then
+          return existingId
+        end
 
-  async setExecutionIdByIdempotencyKey(params: {
-    taskId: string;
-    idempotencyKey: string;
-    executionId: string;
-  }): Promise<boolean> {
-    const key = this.k(
-      `idem:${this.encodeKeyPart(params.taskId)}:${this.encodeKeyPart(params.idempotencyKey)}`,
+        redis.call("set", KEYS[1], ARGV[2])
+        redis.call("set", KEYS[2], ARGV[1])
+        ${this.saveExecutionIndexesScript()}
+        return "__created__"
+      `,
+      5,
+      this.k(
+        `idem:${this.encodeKeyPart(params.taskId)}:${this.encodeKeyPart(params.idempotencyKey)}`,
+      ),
+      this.k(`exec:${params.execution.id}`),
+      this.allExecutionsKey(),
+      this.activeExecutionsKey(),
+      this.stuckExecutionsKey(),
+      serializer.stringify(params.execution),
+      params.execution.id,
+      isActive,
+      isStuck,
     );
-    const res = await this.redis.set(key, params.executionId, "NX");
-    return res === "OK";
+
+    if (outcome === "__created__") {
+      return { created: true, executionId: params.execution.id };
+    }
+
+    const executionId = this.parseRedisString(outcome);
+    if (executionId === null) {
+      return durableStoreShapeError.throw({
+        message: "Unexpected Redis idempotent execution create response",
+      });
+    }
+
+    return { created: false, executionId };
   }
 
   private parseRedisString(value: unknown): string | null {
@@ -314,6 +340,59 @@ export class RedisStore implements IDurableStore {
       isActive,
       isStuck,
     );
+  }
+
+  async saveExecutionIfStatus(
+    execution: Execution,
+    expectedStatuses: ExecutionStatus[],
+  ): Promise<boolean> {
+    const { isActive, isStuck } = this.statusFlags(execution.status);
+    const outcome = await this.redis.eval(
+      `
+        local current = redis.call("get", KEYS[1])
+        if not current then
+          return 0
+        end
+
+        local okCurrent, currentExecution = pcall(cjson.decode, current)
+        if not okCurrent then
+          return "__error__:Corrupted durable execution payload"
+        end
+
+        local okExpected, expectedStatuses = pcall(cjson.decode, ARGV[5])
+        if not okExpected then
+          return "__error__:Invalid expected execution statuses payload"
+        end
+
+        local matches = false
+        for _, expectedStatus in ipairs(expectedStatuses) do
+          if currentExecution.status == expectedStatus then
+            matches = true
+            break
+          end
+        end
+
+        if not matches then
+          return 0
+        end
+
+        redis.call("set", KEYS[1], ARGV[1])
+        ${this.saveExecutionIndexesScript()}
+        return 1
+      `,
+      4,
+      this.k(`exec:${execution.id}`),
+      this.allExecutionsKey(),
+      this.activeExecutionsKey(),
+      this.stuckExecutionsKey(),
+      serializer.stringify(execution),
+      execution.id,
+      isActive,
+      isStuck,
+      serializer.stringify(expectedStatuses),
+    );
+    this.assertEvalResultNotError(outcome);
+    return outcome === 1;
   }
 
   async getExecution(id: string): Promise<Execution | null> {
@@ -547,7 +626,7 @@ export class RedisStore implements IDurableStore {
     executionId: string,
     signalId: string,
     record: DurableQueuedSignalRecord,
-  ): Promise<"enqueued" | "deduped"> {
+  ): Promise<void> {
     const script = `
       local current = redis.call("get", KEYS[1])
       local okState, state = pcall(cjson.decode, current or ARGV[1])
@@ -559,15 +638,9 @@ export class RedisStore implements IDurableStore {
         return "__error__:Invalid durable queued signal payload"
       end
 
-      for _, queuedRecord in ipairs(state.queued) do
-        if queuedRecord.serializedPayload == record.serializedPayload then
-          return "deduped"
-        end
-      end
-
       table.insert(state.queued, record)
       redis.call("set", KEYS[1], cjson.encode(state))
-      return "enqueued"
+      return "OK"
     `;
 
     const outcome = await this.redis.eval(
@@ -578,8 +651,6 @@ export class RedisStore implements IDurableStore {
       serializer.stringify(record),
     );
     this.assertEvalResultNotError(outcome);
-
-    return outcome === "deduped" ? "deduped" : "enqueued";
   }
 
   async consumeQueuedSignalRecord(
@@ -603,7 +674,6 @@ export class RedisStore implements IDurableStore {
         return nil
       end
 
-      record.serializedPayload = nil
       return cjson.encode(record)
     `;
 

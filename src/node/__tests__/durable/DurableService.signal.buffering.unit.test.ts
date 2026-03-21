@@ -23,7 +23,6 @@ describe("durable: DurableService - signals buffering and audit", () => {
       queued: [
         expect.objectContaining({
           payload: { paidAt: 1 },
-          serializedPayload: JSON.stringify({ paidAt: 1 }),
         }),
       ],
       history: [expect.objectContaining({ payload: { paidAt: 1 } })],
@@ -89,11 +88,11 @@ describe("durable: DurableService - signals buffering and audit", () => {
     expect(queue!.enqueued.length).toBe(0);
   });
 
-  it("signal retains later arrivals in history and queues each distinct payload", async () => {
+  it("signal retains duplicate arrivals in history and queues each copy", async () => {
     const { store, queue, service } = await signalSetup();
 
     await service.signal("e1", Paid, { paidAt: 2 });
-    await service.signal("e1", Paid, { paidAt: 3 });
+    await service.signal("e1", Paid, { paidAt: 2 });
 
     expect(await store.getStepResult("e1", "__signal:paid")).toBeNull();
     expect(await store.getStepResult("e1", "__signal:paid:1")).toBeNull();
@@ -103,19 +102,23 @@ describe("durable: DurableService - signals buffering and audit", () => {
       queued: [
         expect.objectContaining({
           payload: { paidAt: 2 },
-          serializedPayload: JSON.stringify({ paidAt: 2 }),
         }),
         expect.objectContaining({
-          payload: { paidAt: 3 },
-          serializedPayload: JSON.stringify({ paidAt: 3 }),
+          payload: { paidAt: 2 },
         }),
       ],
       history: [
         expect.objectContaining({ payload: { paidAt: 2 } }),
-        expect.objectContaining({ payload: { paidAt: 3 } }),
+        expect.objectContaining({ payload: { paidAt: 2 } }),
       ],
     });
 
+    expect(await store.consumeQueuedSignalRecord("e1", "paid")).toEqual(
+      expect.objectContaining({ payload: { paidAt: 2 } }),
+    );
+    expect(await store.consumeQueuedSignalRecord("e1", "paid")).toEqual(
+      expect.objectContaining({ payload: { paidAt: 2 } }),
+    );
     expect(queue!.enqueued.length).toBe(0);
   });
 
@@ -138,7 +141,6 @@ describe("durable: DurableService - signals buffering and audit", () => {
       queued: [
         expect.objectContaining({
           payload: { paidAt: 123 },
-          serializedPayload: JSON.stringify({ paidAt: 123 }),
         }),
       ],
       history: [expect.objectContaining({ payload: { paidAt: 123 } })],
@@ -160,7 +162,6 @@ describe("durable: DurableService - signals buffering and audit", () => {
       queued: [
         expect.objectContaining({
           payload: { paidAt: 123 },
-          serializedPayload: JSON.stringify({ paidAt: 123 }),
         }),
       ],
       history: [expect.objectContaining({ payload: { paidAt: 123 } })],
@@ -211,7 +212,7 @@ describe("durable: DurableService - signals buffering and audit", () => {
     ]);
   });
 
-  it("signal buffers indexed waits without a timeout timer when step listing is unavailable", async () => {
+  it("signal buffers indexed waits without a timeout timer when no waiter index exists", async () => {
     const { base, queue, service } = await signalSetup({
       storeOverrides: {
         claimTimer: undefined,
@@ -280,7 +281,6 @@ describe("durable: DurableService - signals buffering and audit", () => {
       queued: [
         expect.objectContaining({
           payload: { paidAt: 1 },
-          serializedPayload: JSON.stringify({ paidAt: 1 }),
         }),
       ],
       history: [expect.objectContaining({ payload: { paidAt: 1 } })],

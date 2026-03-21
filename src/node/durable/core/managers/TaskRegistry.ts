@@ -18,17 +18,28 @@ export class TaskRegistry {
     private readonly externalResolver?: (
       taskId: string,
     ) => ITask<any, Promise<any>, any, any, any, any> | undefined,
+    private readonly persistenceIdResolver?: (
+      task: ITask<any, Promise<any>, any, any, any, any>,
+    ) => string | undefined,
   ) {}
 
   register<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
   ): void {
     this.tasks.set(task.id, task);
+    const persistenceId = this.getPersistenceId(task);
+    if (persistenceId !== task.id) {
+      this.tasks.set(persistenceId, task);
+    }
   }
 
   find(
     taskId: string,
   ): ITask<any, Promise<any>, any, any, any, any> | undefined {
     return this.tasks.get(taskId) ?? this.externalResolver?.(taskId);
+  }
+
+  getPersistenceId(task: ITask<any, Promise<any>, any, any, any, any>): string {
+    return this.persistenceIdResolver?.(task) ?? task.id;
   }
 }

@@ -160,6 +160,19 @@ export class WaitManager {
           }
         };
 
+        const pollingFallback = async (): Promise<TResult> => {
+          while (true) {
+            try {
+              const result = await check();
+              if (result.done) return result.value;
+            } catch (err) {
+              throw err;
+            }
+
+            await sleepMs(pollEveryMs);
+          }
+        };
+
         // Preflight store check before wiring timers/subscriptions.
         // This reduces race windows and keeps timeout metadata checks consistent.
         void (async () => {
@@ -210,9 +223,9 @@ export class WaitManager {
         }
 
         const pollOnce = async (): Promise<void> => {
-          if (done) return;
           try {
             const result = await check();
+            if (done) return;
             if (result.done) {
               await finalize({ ok: true, value: result.value });
               return;
@@ -222,8 +235,16 @@ export class WaitManager {
             return;
           }
 
-          pollTimer = setTimeout(() => void pollOnce(), pollEveryMs);
-          pollTimer.unref();
+          const nextPollTimer = setTimeout(() => {
+            pollTimer = null;
+            if (done) {
+              return;
+            }
+            void pollOnce();
+          }, pollEveryMs);
+          nextPollTimer.unref();
+
+          pollTimer = nextPollTimer;
         };
 
         void (async () => {
@@ -232,19 +253,28 @@ export class WaitManager {
               return;
             }
             await eventBus.subscribe(channel, handler);
+            if (done) {
+              return;
+            }
             await handler({
               type: "subscribed",
               payload: null,
               timestamp: new Date(),
             });
+            if (done) {
+              return;
+            }
             await pollOnce();
           } catch {
             // Fallback to polling if subscription fails
+            if (done) {
+              return;
+            }
             if (timer) {
               clearTimeout(timer);
               timer = null;
             }
-            pollingFallback().then(resolve).catch(reject);
+            void pollingFallback().then(resolve).catch(reject);
           }
         })();
       });
