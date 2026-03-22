@@ -5,7 +5,8 @@ import { DurableAuditEntryKind } from "../audit";
 import type { AuditLogger } from "./AuditLogger";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ScheduleManager } from "./ScheduleManager";
-import { parseSignalState } from "../utils";
+import { parseExecutionWaitState, parseSignalState } from "../utils";
+import { withExecutionWaitLock } from "../executionWaiters";
 import {
   deleteSignalWaiter,
   getSignalIdFromStepId,
@@ -128,6 +129,64 @@ export async function handleSignalTimeoutTimer(params: {
       });
 
       return signalId;
+    },
+  });
+}
+
+export async function handleExecutionWaitTimeoutTimer(params: {
+  store: IDurableStore;
+  timer: Timer;
+}): Promise<boolean> {
+  if (
+    params.timer.type !== TimerType.Timeout ||
+    !params.timer.executionId ||
+    !params.timer.stepId
+  ) {
+    return false;
+  }
+
+  const currentWaitStep = await params.store.getStepResult(
+    params.timer.executionId,
+    params.timer.stepId,
+  );
+  const currentWaitState = parseExecutionWaitState(currentWaitStep?.result);
+  if (
+    currentWaitState?.state !== "waiting" ||
+    !currentWaitState.targetExecutionId
+  ) {
+    return false;
+  }
+
+  return await withExecutionWaitLock({
+    store: params.store,
+    targetExecutionId: currentWaitState.targetExecutionId,
+    fn: async () => {
+      const existing = await params.store.getStepResult(
+        params.timer.executionId!,
+        params.timer.stepId!,
+      );
+      const state = parseExecutionWaitState(existing?.result);
+      if (state?.state !== "waiting") {
+        return false;
+      }
+
+      await params.store.deleteExecutionWaiter(
+        state.targetExecutionId,
+        params.timer.executionId!,
+        params.timer.stepId!,
+      );
+
+      await params.store.saveStepResult({
+        executionId: params.timer.executionId!,
+        stepId: params.timer.stepId!,
+        result: {
+          state: "timed_out" as const,
+          targetExecutionId: state.targetExecutionId,
+        },
+        completedAt: new Date(),
+      });
+
+      return true;
     },
   });
 }

@@ -34,6 +34,7 @@ export type {
   FlowSleepNode,
   FlowSignalNode,
   FlowEmitNode,
+  FlowExecutionNode,
   FlowSwitchNode,
   FlowNoteNode,
 } from "./core/flowShape";

@@ -26,6 +26,19 @@ export interface SignalOptions {
 }
 
 /**
+ * Options for waiting on another workflow execution to complete.
+ */
+export interface WaitForExecutionOptions {
+  /** Timeout in milliseconds. If provided, returns a discriminated union with kind. */
+  timeoutMs?: number;
+  /**
+   * Explicit step ID for replay stability. When omitted, a deterministic step id
+   * is derived from the waited execution id.
+   */
+  stepId?: string;
+}
+
+/**
  * Options for emit operations.
  */
 export interface EmitOptions {
@@ -93,6 +106,31 @@ export interface IDurableContext {
     signal: IEventDefinition<TPayload>,
     options: SignalOptions,
   ): Promise<TPayload>;
+
+  /**
+   * Suspend until another durable execution reaches a terminal state.
+   *
+   * Intended for parent/child workflow orchestration when a child execution id
+   * was produced earlier inside a replay-safe `step(...)`.
+   *
+   * - completed child executions return their result
+   * - failed / cancelled / compensation_failed child executions throw
+   * - `timeoutMs` changes the return type to a timeout union
+   * - if the parent is already suspended, child completion can still resume the
+   *   wait during durable cooldown/drain before final disposal closes adapters
+   *
+   * Use `options.stepId` to keep the wait stable across refactors. When omitted,
+   * the waited execution id is used to derive a deterministic internal step id.
+   */
+  waitForExecution<TResult = unknown>(executionId: string): Promise<TResult>;
+  waitForExecution<TResult = unknown>(
+    executionId: string,
+    options: WaitForExecutionOptions & { timeoutMs: number },
+  ): Promise<{ kind: "completed"; data: TResult } | { kind: "timeout" }>;
+  waitForExecution<TResult = unknown>(
+    executionId: string,
+    options: WaitForExecutionOptions,
+  ): Promise<TResult>;
 
   emit<TPayload>(
     event: IEventDefinition<TPayload>,

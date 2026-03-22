@@ -149,6 +149,10 @@ export class RedisStoreRuntime {
     );
   }
 
+  executionWaiterKey(targetExecutionId: string): string {
+    return this.k(`execution_waiters:${this.encodeKeyPart(targetExecutionId)}`);
+  }
+
   timersKey(): string {
     return this.k("timers");
   }

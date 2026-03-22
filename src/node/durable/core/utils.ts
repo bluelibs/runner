@@ -94,6 +94,65 @@ export function parseSignalState(value: unknown): {
   return null;
 }
 
+export function parseExecutionWaitState(value: unknown): {
+  state: "waiting" | "completed" | "failed" | "cancelled" | "timed_out";
+  targetExecutionId: string;
+  timerId?: string;
+  timeoutAtMs?: number;
+  result?: unknown;
+  error?: { message: string; stack?: string };
+  taskId?: string;
+  attempt?: number;
+} | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.targetExecutionId !== "string") return null;
+
+  const state = value.state;
+  const targetExecutionId = value.targetExecutionId;
+
+  if (state === "waiting") {
+    const timeoutAtMs = value.timeoutAtMs;
+    const timerId = value.timerId;
+    if (typeof timeoutAtMs === "number" && typeof timerId === "string") {
+      return { state, targetExecutionId, timeoutAtMs, timerId };
+    }
+    return { state, targetExecutionId };
+  }
+
+  if (state === "completed") {
+    return { state, targetExecutionId, result: value.result };
+  }
+
+  if (state === "failed" || state === "cancelled") {
+    const error = value.error;
+    if (
+      !isRecord(error) ||
+      typeof error.message !== "string" ||
+      typeof value.taskId !== "string" ||
+      typeof value.attempt !== "number"
+    ) {
+      return null;
+    }
+
+    return {
+      state,
+      targetExecutionId,
+      error: {
+        message: error.message,
+        stack: typeof error.stack === "string" ? error.stack : undefined,
+      },
+      taskId: value.taskId,
+      attempt: value.attempt,
+    };
+  }
+
+  if (state === "timed_out") {
+    return { state, targetExecutionId };
+  }
+
+  return null;
+}
+
 /**
  * Returns whether a signal step id is stable enough to persist its signal id in
  * stored step state instead of relying on the generated `__signal:*` form.

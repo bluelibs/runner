@@ -5,6 +5,7 @@ import type {
   DurableQueuedSignalRecord,
   DurableSignalState,
   DurableSignalWaiter,
+  DurableExecutionWaiter,
   StepResult,
   Timer,
   Schedule,
@@ -159,6 +160,23 @@ export interface IDurableStore {
   deleteSignalWaiter(
     executionId: string,
     signalId: string,
+    stepId: string,
+  ): Promise<void>;
+
+  upsertExecutionWaiter(waiter: DurableExecutionWaiter): Promise<void>;
+  listExecutionWaiters(
+    targetExecutionId: string,
+  ): Promise<DurableExecutionWaiter[]>;
+  commitExecutionWaiterCompletion?(params: {
+    targetExecutionId: string;
+    executionId: string;
+    stepId: string;
+    stepResult: StepResult;
+    timerId?: string;
+  }): Promise<boolean>;
+  deleteExecutionWaiter(
+    targetExecutionId: string,
+    executionId: string,
     stepId: string,
   ): Promise<void>;
 

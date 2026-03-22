@@ -77,6 +77,31 @@ describe("durable: flowShape recorder", () => {
     ]);
   });
 
+  it("records waitForExecution nodes", async () => {
+    const shape = await recordFlowShape(async (ctx) => {
+      await ctx.waitForExecution("child-1", {
+        timeoutMs: 5_000,
+        stepId: "wait-child",
+      });
+      await ctx.waitForExecution("child-2");
+    });
+
+    expect(shape.nodes).toEqual([
+      {
+        kind: "waitForExecution",
+        executionId: "child-1",
+        timeoutMs: 5_000,
+        stepId: "wait-child",
+      },
+      {
+        kind: "waitForExecution",
+        executionId: "child-2",
+        timeoutMs: undefined,
+        stepId: undefined,
+      },
+    ]);
+  });
+
   it("records emit nodes", async () => {
     const OrderShipped = defineEvent<{ orderId: string }>({
       id: "app-orderShipped",

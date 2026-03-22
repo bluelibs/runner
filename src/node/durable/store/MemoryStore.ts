@@ -1,6 +1,7 @@
 import {
   type DurableSignalRecord,
   type DurableQueuedSignalRecord,
+  type DurableExecutionWaiter,
   type DurableSignalState,
   type DurableSignalWaiter,
   ExecutionStatus,
@@ -19,7 +20,7 @@ import type {
 import type { DurableAuditEntry } from "../core/audit";
 import { randomUUID } from "node:crypto";
 import { getSignalIdFromStepId } from "../core/signalWaiters";
-import { parseSignalState } from "../core/utils";
+import { parseExecutionWaitState, parseSignalState } from "../core/utils";
 import { durableExecutionInvariantError } from "../../../errors";
 import { Semaphore } from "../../../models/Semaphore";
 
@@ -63,6 +64,10 @@ const cloneSignalState = (
 const cloneSignalWaiter = (waiter: DurableSignalWaiter): DurableSignalWaiter =>
   structuredClone(waiter);
 
+const cloneExecutionWaiter = (
+  waiter: DurableExecutionWaiter,
+): DurableExecutionWaiter => structuredClone(waiter);
+
 function getSignalIdFromStepResult(result: StepResult): string {
   const state = result.result;
   if (
@@ -93,9 +98,14 @@ export class MemoryStore implements IDurableStore {
     string,
     Map<string, Map<string, DurableSignalWaiter>>
   >();
+  private executionWaiters = new Map<
+    string,
+    Map<string, DurableExecutionWaiter>
+  >();
   // Keep signal queue/history/waiter transitions serialized so the in-memory
   // store matches the atomic durability contract expected from other stores.
   private readonly signalStateSemaphore = new Semaphore(1);
+  private readonly executionWaiterSemaphore = new Semaphore(1);
   private auditEntries = new Map<string, DurableAuditEntry[]>();
   private timers = new Map<string, Timer>();
   private schedules = new Map<string, Schedule>();
@@ -103,6 +113,10 @@ export class MemoryStore implements IDurableStore {
 
   private withSignalStatePermit<T>(fn: () => T | Promise<T>): Promise<T> {
     return this.signalStateSemaphore.withPermit(async () => await fn());
+  }
+
+  private withExecutionWaiterPermit<T>(fn: () => T | Promise<T>): Promise<T> {
+    return this.executionWaiterSemaphore.withPermit(async () => await fn());
   }
 
   private pruneExpiredLocks(now: number): void {
@@ -578,6 +592,87 @@ export class MemoryStore implements IDurableStore {
   ): Promise<void> {
     await this.withSignalStatePermit(() => {
       this.deleteSignalWaiterUnsafe(executionId, signalId, stepId);
+    });
+  }
+
+  async upsertExecutionWaiter(waiter: DurableExecutionWaiter): Promise<void> {
+    await this.withExecutionWaiterPermit(() => {
+      const executionWaiters =
+        this.executionWaiters.get(waiter.targetExecutionId) ?? new Map();
+      executionWaiters.set(
+        `${waiter.executionId}:${waiter.stepId}`,
+        cloneExecutionWaiter(waiter),
+      );
+      this.executionWaiters.set(waiter.targetExecutionId, executionWaiters);
+    });
+  }
+
+  async listExecutionWaiters(
+    targetExecutionId: string,
+  ): Promise<DurableExecutionWaiter[]> {
+    return await this.withExecutionWaiterPermit(() => {
+      const waiters = this.executionWaiters.get(targetExecutionId);
+      if (!waiters) return [];
+      return Array.from(waiters.values()).map(cloneExecutionWaiter);
+    });
+  }
+
+  async commitExecutionWaiterCompletion(params: {
+    targetExecutionId: string;
+    executionId: string;
+    stepId: string;
+    stepResult: StepResult;
+    timerId?: string;
+  }): Promise<boolean> {
+    return await this.withExecutionWaiterPermit(() => {
+      const waiterKey = `${params.executionId}:${params.stepId}`;
+      const waiters = this.executionWaiters.get(params.targetExecutionId);
+      if (!waiters?.has(waiterKey)) {
+        return false;
+      }
+
+      const currentStep = this.stepResults
+        .get(params.executionId)
+        ?.get(params.stepId);
+      if (!currentStep) {
+        return false;
+      }
+
+      const waitState = parseExecutionWaitState(currentStep.result);
+      if (
+        waitState?.state !== "waiting" ||
+        waitState.targetExecutionId !== params.targetExecutionId
+      ) {
+        return false;
+      }
+
+      this.setStepResult(params.stepResult);
+      waiters.delete(waiterKey);
+      if (waiters.size === 0) {
+        this.executionWaiters.delete(params.targetExecutionId);
+      }
+
+      if (params.timerId) {
+        this.timers.delete(params.timerId);
+      }
+
+      return true;
+    });
+  }
+
+  async deleteExecutionWaiter(
+    targetExecutionId: string,
+    executionId: string,
+    stepId: string,
+  ): Promise<void> {
+    await this.withExecutionWaiterPermit(() => {
+      const waiters = this.executionWaiters.get(targetExecutionId);
+      if (!waiters) return;
+
+      waiters.delete(`${executionId}:${stepId}`);
+      if (waiters.size === 0) {
+        this.executionWaiters.delete(targetExecutionId);
+      }
     });
   }
 

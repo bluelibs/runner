@@ -167,6 +167,11 @@ export function createBareStore(
     peekNextSignalWaiter: base.peekNextSignalWaiter.bind(base),
     takeNextSignalWaiter: base.takeNextSignalWaiter.bind(base),
     deleteSignalWaiter: base.deleteSignalWaiter.bind(base),
+    upsertExecutionWaiter: base.upsertExecutionWaiter.bind(base),
+    listExecutionWaiters: base.listExecutionWaiters.bind(base),
+    commitExecutionWaiterCompletion:
+      base.commitExecutionWaiterCompletion.bind(base),
+    deleteExecutionWaiter: base.deleteExecutionWaiter.bind(base),
     createTimer: base.createTimer.bind(base),
     getReadyTimers: base.getReadyTimers.bind(base),
     markTimerFired: base.markTimerFired.bind(base),

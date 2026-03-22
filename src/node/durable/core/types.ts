@@ -86,6 +86,29 @@ export interface DurableSignalWaiter {
   timerId?: string;
 }
 
+/**
+ * Indexed durable execution waiter metadata used to resume parent workflows
+ * once another execution reaches a terminal state.
+ */
+export interface DurableExecutionWaiter {
+  /**
+   * Parent execution currently suspended in `waitForExecution()`.
+   */
+  executionId: string;
+  /**
+   * Target execution being awaited.
+   */
+  targetExecutionId: string;
+  /**
+   * Durable wait step persisted in the parent execution.
+   */
+  stepId: string;
+  /**
+   * Optional timeout timer id associated with this waiter.
+   */
+  timerId?: string;
+}
+
 export const TimerType = {
   Sleep: "sleep",
   Timeout: "timeout",

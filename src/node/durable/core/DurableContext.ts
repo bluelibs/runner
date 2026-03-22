@@ -7,6 +7,7 @@ import type {
   SleepOptions,
   StepOptions,
   SwitchBranch,
+  WaitForExecutionOptions,
 } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
 import { StepBuilder } from "./StepBuilder";
@@ -28,6 +29,7 @@ import {
 } from "./durable-context/DurableContext.steps";
 import { emitDurably } from "./durable-context/DurableContext.emit";
 import { sleepDurably } from "./durable-context/DurableContext.sleep";
+import { waitForExecutionDurably } from "./durable-context/DurableContext.waitForExecution";
 import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSignal";
 import { switchDurably } from "./durable-context/DurableContext.switch";
 import {
@@ -42,7 +44,8 @@ import {
  * made available to user code via `DurableResource.use()` (AsyncLocalStorage).
  *
  * It provides deterministic "save points" (`step()`), durable suspension primitives
- * (`sleep()`, `waitForSignal()`), and best-effort side-channel notifications (`emit()`).
+ * (`sleep()`, `waitForSignal()`, `waitForExecution()`), and best-effort
+ * side-channel notifications (`emit()`).
  * The durable store is the source of truth; this class is intentionally thin state
  * around indexes/guards to keep a single in-memory attempt deterministic.
  */
@@ -235,6 +238,31 @@ export class DurableContext implements IDurableContext {
         this.determinism.assertOrWarnImplicitInternalStepId,
       signalIndexes: this.signalIndexes,
       signal,
+      options,
+    });
+  }
+
+  async waitForExecution<TResult = unknown>(
+    executionId: string,
+  ): Promise<TResult>;
+  async waitForExecution<TResult = unknown>(
+    executionId: string,
+    options: WaitForExecutionOptions & { timeoutMs: number },
+  ): Promise<{ kind: "completed"; data: TResult } | { kind: "timeout" }>;
+  async waitForExecution<TResult = unknown>(
+    executionId: string,
+    options: WaitForExecutionOptions,
+  ): Promise<TResult>;
+  async waitForExecution<TResult = unknown>(
+    executionId: string,
+    options?: WaitForExecutionOptions,
+  ): Promise<any> {
+    return await waitForExecutionDurably<TResult>({
+      store: this.store,
+      executionId: this.executionId,
+      targetExecutionId: executionId,
+      assertCanContinue: this.assertCanContinue.bind(this),
+      assertUniqueStepId: this.determinism.assertUniqueStepId,
       options,
     });
   }

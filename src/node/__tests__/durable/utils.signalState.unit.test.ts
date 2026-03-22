@@ -1,4 +1,5 @@
 import {
+  parseExecutionWaitState,
   parseSignalState,
   shouldPersistStableSignalId,
 } from "../../durable/core/utils";
@@ -18,6 +19,75 @@ describe("durable: signal state utils", () => {
   it("returns null for non-record and unknown signal states", () => {
     expect(parseSignalState(null)).toBeNull();
     expect(parseSignalState({ state: "nope" })).toBeNull();
+  });
+
+  it("parses execution wait states and rejects malformed ones", () => {
+    expect(
+      parseExecutionWaitState({
+        state: "waiting",
+        targetExecutionId: "child",
+        timeoutAtMs: 10,
+        timerId: "timer-1",
+      }),
+    ).toEqual({
+      state: "waiting",
+      targetExecutionId: "child",
+      timeoutAtMs: 10,
+      timerId: "timer-1",
+    });
+    expect(
+      parseExecutionWaitState({
+        state: "completed",
+        targetExecutionId: "child",
+        result: { ok: true },
+      }),
+    ).toEqual({
+      state: "completed",
+      targetExecutionId: "child",
+      result: { ok: true },
+    });
+    expect(
+      parseExecutionWaitState({
+        state: "failed",
+        targetExecutionId: "child",
+        error: { message: "boom", stack: "stack" },
+        taskId: "child-task",
+        attempt: 2,
+      }),
+    ).toEqual({
+      state: "failed",
+      targetExecutionId: "child",
+      error: { message: "boom", stack: "stack" },
+      taskId: "child-task",
+      attempt: 2,
+    });
+    expect(
+      parseExecutionWaitState({
+        state: "timed_out",
+        targetExecutionId: "child",
+      }),
+    ).toEqual({
+      state: "timed_out",
+      targetExecutionId: "child",
+    });
+
+    expect(parseExecutionWaitState(null)).toBeNull();
+    expect(parseExecutionWaitState({ state: "waiting" })).toBeNull();
+    expect(
+      parseExecutionWaitState({
+        state: "failed",
+        targetExecutionId: "child",
+        error: { nope: true },
+        taskId: "child-task",
+        attempt: 2,
+      }),
+    ).toBeNull();
+    expect(
+      parseExecutionWaitState({
+        state: "unknown",
+        targetExecutionId: "child",
+      }),
+    ).toBeNull();
   });
 
   it("persists stable signal ids only for non-canonical step ids", () => {

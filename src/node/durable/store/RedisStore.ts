@@ -1,6 +1,7 @@
 import { createIORedisClient } from "../optionalDeps/ioredis";
 import type {
   DurableQueuedSignalRecord,
+  DurableExecutionWaiter,
   DurableSignalRecord,
   DurableSignalState,
   DurableSignalWaiter,
@@ -24,6 +25,7 @@ import {
 import * as executionStateOps from "./RedisStore.executionState";
 import * as executionViewOps from "./RedisStore.executionViews";
 import * as signalStateOps from "./RedisStore.signalState";
+import * as executionWaiterOps from "./RedisStore.executionWaiters";
 import * as signalWaiterOps from "./RedisStore.signalWaiters";
 import * as timerOps from "./RedisStore.timers";
 import * as schedulingOps from "./RedisStore.scheduling";
@@ -282,6 +284,45 @@ export class RedisStore implements IDurableStore {
       this.runtime,
       executionId,
       signalId,
+      stepId,
+    );
+  }
+
+  async upsertExecutionWaiter(waiter: DurableExecutionWaiter): Promise<void> {
+    await executionWaiterOps.upsertExecutionWaiter(this.runtime, waiter);
+  }
+
+  async listExecutionWaiters(
+    targetExecutionId: string,
+  ): Promise<DurableExecutionWaiter[]> {
+    return await executionWaiterOps.listExecutionWaiters(
+      this.runtime,
+      targetExecutionId,
+    );
+  }
+
+  async commitExecutionWaiterCompletion(params: {
+    targetExecutionId: string;
+    executionId: string;
+    stepId: string;
+    stepResult: StepResult;
+    timerId?: string;
+  }): Promise<boolean> {
+    return await executionWaiterOps.commitExecutionWaiterCompletion(
+      this.runtime,
+      params,
+    );
+  }
+
+  async deleteExecutionWaiter(
+    targetExecutionId: string,
+    executionId: string,
+    stepId: string,
+  ): Promise<void> {
+    await executionWaiterOps.deleteExecutionWaiter(
+      this.runtime,
+      targetExecutionId,
+      executionId,
       stepId,
     );
   }

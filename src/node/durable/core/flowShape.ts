@@ -7,6 +7,7 @@ import type {
   EmitOptions,
   StepOptions,
   IStepBuilder,
+  WaitForExecutionOptions,
 } from "./interfaces/context";
 import type { DurableStepId } from "./ids";
 
@@ -18,6 +19,7 @@ export type FlowNode =
   | FlowSleepNode
   | FlowSignalNode
   | FlowEmitNode
+  | FlowExecutionNode
   | FlowSwitchNode
   | FlowNoteNode;
 
@@ -43,6 +45,13 @@ export interface FlowSignalNode {
 export interface FlowEmitNode {
   kind: "emit";
   eventId: string;
+  stepId?: string;
+}
+
+export interface FlowExecutionNode {
+  kind: "waitForExecution";
+  executionId: string;
+  timeoutMs?: number;
   stepId?: string;
 }
 
@@ -149,6 +158,29 @@ class FlowRecorder implements IDurableContext {
       eventId: _event.id,
       stepId: options?.stepId,
     });
+  }
+
+  waitForExecution<TResult = unknown>(executionId: string): Promise<TResult>;
+  waitForExecution<TResult = unknown>(
+    executionId: string,
+    options: WaitForExecutionOptions & { timeoutMs: number },
+  ): Promise<{ kind: "completed"; data: TResult } | { kind: "timeout" }>;
+  waitForExecution<TResult = unknown>(
+    executionId: string,
+    options: WaitForExecutionOptions,
+  ): Promise<TResult>;
+  async waitForExecution<TResult = unknown>(
+    executionId: string,
+    options?: WaitForExecutionOptions,
+  ): Promise<unknown> {
+    this.nodes.push({
+      kind: "waitForExecution",
+      executionId,
+      timeoutMs: options?.timeoutMs,
+      stepId: options?.stepId,
+    });
+
+    return undefined as TResult;
   }
 
   async switch<TValue, TResult>(

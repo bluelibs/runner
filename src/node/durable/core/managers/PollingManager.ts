@@ -6,6 +6,7 @@ import type { AuditLogger } from "./AuditLogger";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ScheduleManager } from "./ScheduleManager";
 import {
+  handleExecutionWaitTimeoutTimer,
   handleExecutionTimer,
   handleScheduledTaskTimer,
   handleSignalTimeoutTimer,
@@ -182,12 +183,12 @@ export class PollingManager {
         this.workerId,
       );
       if (!released) {
-        if (currentClaimState.lossError) {
-          throw currentClaimState.lossError;
-        }
-        throw durableExecutionInvariantError.new({
-          message: `Timer claim lost for '${timer.id}' before claim release could be committed.`,
-        });
+        throw (
+          currentClaimState.lossError ??
+          durableExecutionInvariantError.new({
+            message: `Timer claim lost for '${timer.id}' before claim release could be committed.`,
+          })
+        );
       }
     };
 
@@ -220,6 +221,23 @@ export class PollingManager {
           timer,
         });
         safeToFinalizeCurrentTimer = true;
+      }
+
+      assertTimerClaimIsStillOwned();
+
+      if (
+        timer.type === TimerType.Timeout &&
+        timer.executionId &&
+        timer.stepId
+      ) {
+        if (
+          await handleExecutionWaitTimeoutTimer({
+            store: this.store,
+            timer,
+          })
+        ) {
+          safeToFinalizeCurrentTimer = true;
+        }
       }
 
       assertTimerClaimIsStillOwned();
@@ -292,10 +310,8 @@ export class PollingManager {
         return;
       }
 
-      if (scheduledTimerResult.releaseCurrentTimerClaim) {
-        await releaseTimerClaim();
-        return;
-      }
+      await releaseTimerClaim();
+      return;
     } catch (error) {
       let cleanupError: unknown = null;
       if (safeToFinalizeCurrentTimer) {

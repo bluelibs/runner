@@ -989,6 +989,7 @@ Durable workflows follow Runner's normal graceful shutdown lifecycle, but the du
 This is especially relevant for embedded and mixed topologies:
 
 - if a workflow is already sleeping on `waitForSignal(...)`, shutdown still lets outside code deliver that signal while drain is active
+- if a workflow is suspended in `waitForExecution(...)`, child completion can still resume the parent while drain is active
 - if already-draining business work needs to start a dependent workflow, that is conceptually part of the same continuation rather than fresh ingress
 - if this runtime also owned an embedded worker, `cooldown()` has already stopped local queue / timer / recovery ownership, so forward progress may depend on another worker still being alive
 - if you need API-only nodes to call `start()` / `signal()` / `wait()` without owning polling, keep that separation explicit in your topology and let worker nodes own polling/recovery
@@ -1157,6 +1158,51 @@ Return shapes:
 | `waitForSignal(signal, { stepId })`            | `payload` (throws on timeout)                          |
 | `waitForSignal(signal, { timeoutMs })`         | `{ kind: "signal", payload }` or `{ kind: "timeout" }` |
 | `waitForSignal(signal, { timeoutMs, stepId })` | `{ kind: "signal", payload }` or `{ kind: "timeout" }` |
+
+## Waiting On Child Workflows
+
+When a workflow starts another workflow, keep the start itself inside a replay-safe `step(...)`, persist the returned child `executionId`, and then suspend on `durableContext.waitForExecution(...)`.
+
+Why this shape matters:
+
+- `step("start-child", ...)` memoizes the child `executionId` in the parent
+- `waitForExecution(...)` durably suspends until that child reaches a terminal state
+- a deterministic `idempotencyKey` on `durable.start(...)` prevents duplicate child starts if the process crashes after the child is created but before the parent step result is saved
+
+Return shapes:
+
+| Call                                                      | Returns                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------- |
+| `waitForExecution(executionId)`                           | `result`                                                |
+| `waitForExecution(executionId, { stepId })`               | `result`                                                |
+| `waitForExecution(executionId, { timeoutMs })`            | `{ kind: "completed", data }` or `{ kind: "timeout" }`  |
+| `waitForExecution(executionId, { timeoutMs, stepId })`    | `{ kind: "completed", data }` or `{ kind: "timeout" }`  |
+
+Terminal child outcomes:
+
+- `completed` returns the child result
+- `failed`, `cancelled`, and `compensation_failed` throw a `DurableExecutionError`
+
+Example:
+
+```typescript
+const childExecutionId = await durableContext.step(
+  "start-payment-child",
+  async () => {
+    return await durable.start(processPayment, input, {
+      idempotencyKey: `${durableContext.executionId}:start-payment-child`,
+    });
+  },
+);
+
+const payment = await durableContext.waitForExecution(childExecutionId, {
+  stepId: "wait-payment-child",
+});
+```
+
+Shutdown note:
+
+- `waitForExecution(...)` is treated like other draining durable continuations: if the parent is already suspended and the child finishes during durable drain, the parent may still be resumed to settle that wait before final disposal.
 
 ### Example: `waitUntilPaid()`
 

@@ -1041,7 +1041,9 @@ Prefer feature-driven folders and naming by Runner item type:
 
 ## Durable Workflows
 
-Durable Workflows are normal Runner tasks with replay-safe checkpoints for long flows (approvals, payouts, onboarding). Use `DurableContext` primitives like `step(id, fn)`, `sleep(ms)`, and `waitForSignal(...)` so progress is persisted and can resume after restarts.
+Durable Workflows are normal Runner tasks with replay-safe checkpoints for long flows (approvals, payouts, onboarding). Use `DurableContext` primitives like `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` so progress is persisted and can resume after restarts.
+
+For nested workflow orchestration, start the child inside a replay-safe `step(...)`, persist the returned `executionId`, and then `waitForExecution(...)` on that id. Use a deterministic idempotency key when starting the child so a crash between child-start and parent-step persistence cannot duplicate the child execution.
 
 The store is the durable source of truth; queue/pubsub handles wake-ups and worker handoff. This gives at-least-once delivery plus effectively-once step execution.
 

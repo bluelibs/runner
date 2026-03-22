@@ -24,6 +24,8 @@ import { DurableContext } from "../DurableContext";
 import { SuspensionSignal } from "../interfaces/context";
 import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.tag";
 import { acquireStoreLock } from "../locking";
+import { withExecutionWaitLock } from "../executionWaiters";
+import { createExecutionWaitCompletionState } from "../executionWaitState";
 import {
   createExecutionId,
   isTimeoutExceededError,
@@ -603,6 +605,8 @@ export class ExecutionManager {
   }
 
   async notifyExecutionFinished(execution: Execution): Promise<void> {
+    await this.resolveExecutionWaiters(execution);
+
     try {
       await this.eventBus.publish(`execution:${execution.id}`, {
         type: "finished",
@@ -624,6 +628,74 @@ export class ExecutionManager {
         // Logging must not affect durable terminal state handling.
       }
     }
+  }
+
+  private async resolveExecutionWaiters(execution: Execution): Promise<void> {
+    await withExecutionWaitLock({
+      store: this.config.store,
+      targetExecutionId: execution.id,
+      fn: async () => {
+        const waiters = await this.config.store.listExecutionWaiters(
+          execution.id,
+        );
+        for (const waiter of waiters) {
+          const stepResult = {
+            executionId: waiter.executionId,
+            stepId: waiter.stepId,
+            result: createExecutionWaitCompletionState(execution),
+            completedAt: new Date(),
+          };
+
+          const completed = this.config.store.commitExecutionWaiterCompletion
+            ? await this.config.store.commitExecutionWaiterCompletion({
+                targetExecutionId: execution.id,
+                executionId: waiter.executionId,
+                stepId: waiter.stepId,
+                stepResult,
+                timerId: waiter.timerId,
+              })
+            : await this.completeExecutionWaiterFallback({
+                executionId: execution.id,
+                waiter,
+                stepResult,
+              });
+
+          if (!completed) {
+            continue;
+          }
+
+          await this.kickoffWithFailsafe(waiter.executionId);
+        }
+      },
+    });
+  }
+
+  private async completeExecutionWaiterFallback(params: {
+    executionId: string;
+    waiter: { executionId: string; stepId: string; timerId?: string };
+    stepResult: {
+      executionId: string;
+      stepId: string;
+      result: unknown;
+      completedAt: Date;
+    };
+  }): Promise<boolean> {
+    await this.config.store.saveStepResult(params.stepResult);
+    await this.config.store.deleteExecutionWaiter(
+      params.executionId,
+      params.waiter.executionId,
+      params.waiter.stepId,
+    );
+
+    if (params.waiter.timerId) {
+      try {
+        await this.config.store.deleteTimer(params.waiter.timerId);
+      } catch {
+        // Best-effort cleanup; replay safety comes from the step result.
+      }
+    }
+
+    return true;
   }
 
   private async logExecutionStatusChange(params: {

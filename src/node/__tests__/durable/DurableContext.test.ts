@@ -1,9 +1,11 @@
 import { defineEvent } from "../../..";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { DurableContext } from "../../durable/core/DurableContext";
+import { DurableExecutionError } from "../../durable/core/DurableService";
 import type { DurableAuditEmitter } from "../../durable/core/audit";
 import { createDurableStepId } from "../../durable/core/ids";
 import { SuspensionSignal } from "../../durable/core/interfaces/context";
+import { handleExecutionWaitTimeoutTimer } from "../../durable/core/managers/PollingManager.timerHandlers";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
@@ -838,5 +840,170 @@ describe("durable: DurableContext", () => {
     expect(() => ctx.step("A", async () => "fail")).toThrow(
       "Duplicate step ID detected",
     );
+  });
+
+  it("returns a completed child execution result immediately", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "child-completed",
+      taskId: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      result: { ok: true },
+      attempt: 2,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForExecution<{ ok: boolean }>("child-completed"),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      store.getStepResult("e1", "__execution:child-completed"),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        result: {
+          state: "completed",
+          targetExecutionId: "child-completed",
+          result: { ok: true },
+        },
+      }),
+    );
+  });
+
+  it("throws a durable execution error when the child execution failed", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "child-failed",
+      taskId: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Failed,
+      error: { message: "child boom" },
+      attempt: 3,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.waitForExecution("child-failed")).rejects.toBeInstanceOf(
+      DurableExecutionError,
+    );
+    const replayContext = new DurableContext(
+      store,
+      new MemoryEventBus(),
+      "e1",
+      1,
+    );
+    await expect(
+      replayContext.waitForExecution("child-failed"),
+    ).rejects.toMatchObject({
+      executionId: "child-failed",
+      taskId: "child-task",
+      attempt: 3,
+      message: "child boom",
+    });
+  });
+
+  it("suspends while waiting for another execution and returns timeout unions", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "child-pending",
+      taskId: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForExecution("child-pending", {
+        stepId: "child-timeout",
+        timeoutMs: 5,
+      }),
+    ).rejects.toBeInstanceOf(SuspensionSignal);
+
+    await expect(store.listExecutionWaiters("child-pending")).resolves.toEqual([
+      expect.objectContaining({
+        executionId: "e1",
+        targetExecutionId: "child-pending",
+        stepId: "__execution:child-timeout",
+      }),
+    ]);
+
+    const [timer] = await store.getReadyTimers(new Date(Date.now() + 10));
+    expect(timer).toEqual(
+      expect.objectContaining({
+        executionId: "e1",
+        stepId: "__execution:child-timeout",
+        type: "timeout",
+      }),
+    );
+
+    await expect(
+      handleExecutionWaitTimeoutTimer({
+        store,
+        timer: timer!,
+      }),
+    ).resolves.toBe(true);
+
+    const replayContext = new DurableContext(
+      store,
+      new MemoryEventBus(),
+      "e1",
+      1,
+    );
+    await expect(
+      replayContext.waitForExecution("child-pending", {
+        stepId: "child-timeout",
+        timeoutMs: 5,
+      }),
+    ).resolves.toEqual({ kind: "timeout" });
+  });
+
+  it("treats compensation_failed child executions as terminal failures", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "child-comp-failed",
+      taskId: "child-task",
+      input: undefined,
+      status: ExecutionStatus.CompensationFailed,
+      error: { message: "rollback blew up" },
+      attempt: 2,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForExecution("child-comp-failed"),
+    ).rejects.toBeInstanceOf(DurableExecutionError);
+    const replayContext = new DurableContext(
+      store,
+      new MemoryEventBus(),
+      "e1",
+      1,
+    );
+    await expect(
+      replayContext.waitForExecution("child-comp-failed"),
+    ).rejects.toMatchObject({
+      message: "rollback blew up",
+      executionId: "child-comp-failed",
+      taskId: "child-task",
+      attempt: 2,
+    });
   });
 });

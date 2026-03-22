@@ -34,7 +34,7 @@ Rule: side effects belong inside `durableContext.step(...)`.
 1. **Register a durable resource** (store + queue + event bus).
 2. **Write a durable task**:
    - stable `durableContext.step("...")` ids
-   - explicit `{ stepId }` for `sleep` / `waitForSignal` in production
+  - explicit `{ stepId }` for `sleep` / `waitForSignal` / `waitForExecution` in production
 3. **Start the workflow**:
    - `executionId = await service.start(taskOrTaskId, input)`
    - persist `executionId` in your domain row (eg. `orders.execution_id`)
@@ -186,6 +186,24 @@ Rule of thumb: RabbitMQ makes it fast; Redis makes it correct.
 
 - `await durableContext.waitForSignal(Signal)` → `payload` (throws on timeout)
 - `await durableContext.waitForSignal(Signal, { timeoutMs })` → `{ kind: "signal", payload } | { kind: "timeout" }`
+
+Nested workflow pattern:
+
+```ts
+const childExecutionId = await durableContext.step("start-child", async () => {
+  return await durable.start(childWorkflow, input, {
+    idempotencyKey: `${durableContext.executionId}:start-child`,
+  });
+});
+
+const child = await durableContext.waitForExecution(childExecutionId, {
+  stepId: "wait-child",
+});
+```
+
+- `waitForExecution(executionId)` returns the child result
+- `waitForExecution(executionId, { timeoutMs })` returns `{ kind: "completed", data } | { kind: "timeout" }`
+- child `failed`, `cancelled`, and `compensation_failed` terminal states throw
 
 ## Scheduling
 
