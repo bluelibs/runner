@@ -170,7 +170,7 @@ Important run options:
 - `lifecycleMode: "parallel"`: preserve dependency ordering, but run same-wave lifecycle hooks in parallel
 - `shutdownHooks: true`: install graceful `SIGINT` / `SIGTERM` hooks; signals during bootstrap cancel startup and roll back initialized resources
 - `signal: AbortSignal`: let an outer owner cancel bootstrap before readiness or start graceful runtime disposal after readiness without feeding ambient execution cancellation
-- `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control bounded shutdown timing
+- `dispose: { totalBudgetMs, drainingBudgetMs, abortWindowMs, cooldownWindowMs }`: control bounded shutdown timing
 - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`
 - `executionContext: true | { ... }`: enable correlation ids and inherited execution signals, with optional frame tracking and cycle detection
 - `identity: myIdentityContext`: override which registered async context Runner reads for identity-aware framework behavior
@@ -201,7 +201,7 @@ Lifecycle order:
   - enter `disposing`
   - emit `events.disposing`
   - drain in-flight work within the remaining shutdown budget
-  - abort Runner-owned active task signals if that drain budget expires before work finishes
+  - if configured, abort Runner-owned active task signals and wait `dispose.abortWindowMs` within the remaining shutdown budget
     these are the task-local cooperative `AbortSignal`s Runner creates and tracks for in-flight task trees, not arbitrary caller-owned signals
   - emit `events.drained`
   - run `dispose()` in reverse dependency order
@@ -215,6 +215,7 @@ Disposal modes:
   - this can skip `dispose.cooldownWindowMs`
   - this can skip `events.disposing`
   - this can skip drain wait
+  - this can skip `dispose.abortWindowMs`
   - this can skip `events.drained`
   - jump directly to resource `dispose()` in reverse dependency order
   - it does not preempt lifecycle work that is already in flight

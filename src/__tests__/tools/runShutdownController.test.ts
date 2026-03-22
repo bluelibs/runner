@@ -39,6 +39,7 @@ function createController() {
     dispose: {
       totalBudgetMs: 100,
       drainingBudgetMs: 50,
+      abortWindowMs: 0,
       cooldownWindowMs: 10,
     },
     shutdownHooks: true,

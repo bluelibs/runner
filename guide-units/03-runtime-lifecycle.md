@@ -95,7 +95,7 @@ Pass as the second argument to `run(app, options)`.
 | `errorBoundary`    | `boolean`                                       | Install process-level unhandled error capture. |
 | `shutdownHooks`    | `boolean`                                       | Install `SIGINT` / `SIGTERM` graceful shutdown hooks. |
 | `signal`           | `AbortSignal`                                   | Outer runtime shutdown trigger. Aborting it cancels bootstrap before readiness or starts graceful disposal after readiness, and stays separate from `context.signal`. |
-| `dispose`          | `object`                                        | Configure shutdown budgets: `totalBudgetMs`, `drainingBudgetMs`, and `cooldownWindowMs`. |
+| `dispose`          | `object`                                        | Configure shutdown budgets: `totalBudgetMs`, `drainingBudgetMs`, `abortWindowMs`, and `cooldownWindowMs`. |
 | `onUnhandledError` | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors caught by Runner. |
 | `dryRun`           | `boolean`                                       | Validate the graph without running resource lifecycle. |
 | `lazy`             | `boolean`                                       | Skip startup-unused resources until `getLazyResourceValue(...)` wakes them. |
@@ -208,7 +208,7 @@ Practical effect for HTTP resources:
 - In `coolingDown`, stop ingress quickly and assemble any shutdown-specific admission allowances.
 - In `disposing`, stop accepting new requests and apply the final shutdown admission policy.
 - Let already in-flight request work finish during the drain budget window.
-- If the drain budget expires first, Runner aborts its active task signals before continuing into `drained`.
+- If the drain budget expires first and `dispose.abortWindowMs > 0`, Runner aborts its active task signals and waits that extra bounded window before continuing into `drained`.
   These are the task-local cooperative `AbortSignal`s Runner created for currently in-flight task trees, not arbitrary external caller signals.
 - In `drained`, business admissions are fully closed; resource cleanup/disposal starts.
 
@@ -370,6 +370,7 @@ await run(app, {
   dispose: {
     totalBudgetMs: 30_000,
     drainingBudgetMs: 20_000,
+    abortWindowMs: 0,
     cooldownWindowMs: 0,
   },
 });
@@ -411,9 +412,10 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 4. transition to `disposing`
 5. `events.disposing` (awaited)
 6. drain wait (`dispose.drainingBudgetMs`, capped by remaining `dispose.totalBudgetMs`)
-7. transition to `drained`
-8. `events.drained` (lifecycle-bypassed, awaited)
-9. fully awaited resource disposal
+7. optionally abort Runner-owned active task signals and wait `dispose.abortWindowMs` (also capped by remaining `dispose.totalBudgetMs`)
+8. transition to `drained`
+9. `events.drained` (lifecycle-bypassed, awaited)
+10. fully awaited resource disposal
 
 `runtime.dispose({ force: true })` is the exception:
 
@@ -423,8 +425,9 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 4. this can skip `dispose.cooldownWindowMs`
 5. this can skip `events.disposing`
 6. this can skip drain wait
-7. this can skip `events.drained`
-8. fully awaited resource disposal
+7. this can skip `dispose.abortWindowMs`
+8. this can skip `events.drained`
+9. fully awaited resource disposal
 
 Important: `force: true` does not preempt lifecycle work that is already in flight, such as an active `cooldown()` call that has already started running.
 

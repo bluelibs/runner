@@ -52,6 +52,7 @@ describe("run shutdown drain abort", () => {
       errorBoundary: false,
       dispose: {
         drainingBudgetMs: 20,
+        abortWindowMs: 20,
       },
     });
 
@@ -66,7 +67,7 @@ describe("run shutdown drain abort", () => {
     expect(abortReasons).toEqual(["Runtime shutdown drain budget expired"]);
   });
 
-  it("does not abort in-flight task signals when drain waiting is disabled", async () => {
+  it("does not abort in-flight task signals when abort window is disabled", async () => {
     let aborted = false;
 
     const cooperativeTask = defineTask({
@@ -99,7 +100,8 @@ describe("run shutdown drain abort", () => {
       shutdownHooks: false,
       errorBoundary: false,
       dispose: {
-        drainingBudgetMs: 0,
+        drainingBudgetMs: 20,
+        abortWindowMs: 0,
       },
     });
 
@@ -171,6 +173,7 @@ describe("run shutdown drain abort", () => {
       errorBoundary: false,
       dispose: {
         drainingBudgetMs: 20,
+        abortWindowMs: 20,
       },
     });
 
@@ -247,6 +250,7 @@ describe("run shutdown drain abort", () => {
       errorBoundary: false,
       dispose: {
         drainingBudgetMs: 20,
+        abortWindowMs: 0,
       },
     });
     const runtimeB = await run(appB, {
@@ -254,6 +258,7 @@ describe("run shutdown drain abort", () => {
       errorBoundary: false,
       dispose: {
         drainingBudgetMs: 20,
+        abortWindowMs: 20,
       },
     });
 

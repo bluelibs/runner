@@ -7,6 +7,7 @@ function createLifecycleInput(options?: {
   dispose?: Partial<{
     totalBudgetMs: number;
     drainingBudgetMs: number;
+    abortWindowMs: number;
     cooldownWindowMs: number;
   }>;
 }) {
@@ -59,6 +60,7 @@ function createLifecycleInput(options?: {
       dispose: {
         totalBudgetMs: 30_000,
         drainingBudgetMs: 20_000,
+        abortWindowMs: 0,
         cooldownWindowMs: 0,
         ...(options?.dispose ?? {}),
       },
@@ -207,6 +209,39 @@ describe("runShutdownDisposalLifecycle force handling", () => {
     ]);
   });
 
+  it("switches to direct disposal when force is requested during the abort window", async () => {
+    const context = createLifecycleInput({
+      dispose: {
+        abortWindowMs: 20,
+      },
+    });
+
+    context.store.waitForDrain
+      .mockImplementationOnce(async () => {
+        context.calls.push("waitForDrain");
+        return false;
+      })
+      .mockImplementationOnce(async () => {
+        context.calls.push("waitForDrain");
+        context.forceDisposal.request();
+        return false;
+      });
+
+    await runShutdownDisposalLifecycle(context.input);
+
+    expect(context.calls).toEqual([
+      "beginCoolingDown",
+      "cooldown",
+      "beginDisposing",
+      `emit:${globalEvents.disposing.id}`,
+      "waitForDrain",
+      "abort:Runtime shutdown drain budget expired",
+      "waitForDrain",
+      "beginDisposing",
+      "disposeAll",
+    ]);
+  });
+
   it("switches to direct disposal when force is requested after events.drained", async () => {
     const context = createLifecycleInput();
 
@@ -235,7 +270,11 @@ describe("runShutdownDisposalLifecycle force handling", () => {
   });
 
   it("aborts in-flight task signals before drained hooks when drain wait times out", async () => {
-    const context = createLifecycleInput();
+    const context = createLifecycleInput({
+      dispose: {
+        abortWindowMs: 20,
+      },
+    });
 
     context.store.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
@@ -251,6 +290,40 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       `emit:${globalEvents.disposing.id}`,
       "waitForDrain",
       "abort:Runtime shutdown drain budget expired",
+      "waitForDrain",
+      "beginDrained",
+      `emit:${globalEvents.drained.id}`,
+      "disposeAll",
+    ]);
+  });
+
+  it("waits the abort window after drain timeout when configured", async () => {
+    const context = createLifecycleInput({
+      dispose: {
+        abortWindowMs: 15,
+      },
+    });
+
+    context.store.waitForDrain
+      .mockImplementationOnce(async () => {
+        context.calls.push("waitForDrain");
+        return false;
+      })
+      .mockImplementationOnce(async () => {
+        context.calls.push("waitForDrain");
+        return true;
+      });
+
+    await runShutdownDisposalLifecycle(context.input);
+
+    expect(context.calls).toEqual([
+      "beginCoolingDown",
+      "cooldown",
+      "beginDisposing",
+      `emit:${globalEvents.disposing.id}`,
+      "waitForDrain",
+      "abort:Runtime shutdown drain budget expired",
+      "waitForDrain",
       "beginDrained",
       `emit:${globalEvents.drained.id}`,
       "disposeAll",
@@ -258,7 +331,11 @@ describe("runShutdownDisposalLifecycle force handling", () => {
   });
 
   it("continues disposal when warning emission fails after aborting in-flight task signals", async () => {
-    const context = createLifecycleInput();
+    const context = createLifecycleInput({
+      dispose: {
+        abortWindowMs: 20,
+      },
+    });
 
     context.store.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
@@ -279,6 +356,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       `emit:${globalEvents.disposing.id}`,
       "waitForDrain",
       "abort:Runtime shutdown drain budget expired",
+      "waitForDrain",
       "beginDrained",
       `emit:${globalEvents.drained.id}`,
       "disposeAll",
@@ -309,6 +387,33 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       "cooldown",
       "beginDisposing",
       `emit:${globalEvents.disposing.id}`,
+      "beginDrained",
+      `emit:${globalEvents.drained.id}`,
+      "disposeAll",
+    ]);
+    expect(context.store.abortInFlightTaskSignals).not.toHaveBeenCalled();
+  });
+
+  it("does not start an abort window when drain completes gracefully", async () => {
+    const context = createLifecycleInput({
+      dispose: {
+        abortWindowMs: 20,
+      },
+    });
+
+    context.store.waitForDrain.mockImplementation(async () => {
+      context.calls.push("waitForDrain");
+      return true;
+    });
+
+    await runShutdownDisposalLifecycle(context.input);
+
+    expect(context.calls).toEqual([
+      "beginCoolingDown",
+      "cooldown",
+      "beginDisposing",
+      `emit:${globalEvents.disposing.id}`,
+      "waitForDrain",
       "beginDrained",
       `emit:${globalEvents.drained.id}`,
       "disposeAll",

@@ -163,6 +163,7 @@ describe("system.runtime", () => {
         dispose: {
           totalBudgetMs: 30_000,
           drainingBudgetMs: 20_000,
+          abortWindowMs: 0,
           cooldownWindowMs: 0,
         },
         onUnhandledError: async () => {},
