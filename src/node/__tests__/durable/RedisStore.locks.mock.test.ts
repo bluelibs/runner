@@ -56,6 +56,16 @@ describe("durable: RedisStore locks (mock)", () => {
     const { redisMock, store } = harness;
     redisMock.eval.mockResolvedValueOnce(1 as any);
     await expect(
+      store.releaseTimerClaim?.("timer-1", "worker-1"),
+    ).resolves.toBe(true);
+
+    redisMock.eval.mockResolvedValueOnce(0 as any);
+    await expect(
+      store.releaseTimerClaim?.("timer-1", "worker-2"),
+    ).resolves.toBe(false);
+
+    redisMock.eval.mockResolvedValueOnce(1 as any);
+    await expect(
       store.finalizeClaimedTimer?.("timer-1", "worker-1"),
     ).resolves.toBe(true);
 

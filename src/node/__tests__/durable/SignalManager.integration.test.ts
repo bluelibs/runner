@@ -127,4 +127,55 @@ describe("durable: signals integration", () => {
 
     await runtime.dispose();
   });
+
+  it("allows signaling sleeping executions while the service is cooling down", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+
+    const durable = durableResource.fork(
+      "durable-tests-signals-during-cooldown",
+    );
+    const durableRegistration = durable.with({
+      store,
+      eventBus: bus,
+      polling: { interval: 5 },
+    });
+
+    const task = r
+      .task("durable-test-waitForSignal-during-cooldown")
+      .dependencies({ durable })
+      .run(async (_input: undefined, { durable }) => {
+        const ctx = durable.use();
+        const payment = await ctx.waitForSignal(Paid);
+        return { ok: true, paidAt: payment.paidAt };
+      })
+      .build();
+
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
+
+    const runtime = await run(app, { logs: { printThreshold: null } });
+    const service = runtime.getResourceValue(durable);
+
+    const executionId = await service.start(task, undefined, {
+      timeout: 5_000,
+    });
+
+    await waitUntil(
+      async () =>
+        (await store.getExecution(executionId))?.status === "sleeping",
+      { timeoutMs: 1000, intervalMs: 5 },
+    );
+
+    await service.service.cooldown();
+    await service.signal(executionId, Paid, { paidAt: Date.now() });
+
+    await expect(
+      service.wait(executionId, { timeout: 5_000, waitPollIntervalMs: 5 }),
+    ).resolves.toEqual(expect.objectContaining({ ok: true }));
+
+    await runtime.dispose();
+  });
 });

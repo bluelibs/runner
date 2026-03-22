@@ -140,10 +140,38 @@ describe("durable: MemoryStore runtime surfaces", () => {
     await expect(store.renewTimerClaim("t1", "worker-2", 1000)).resolves.toBe(
       false,
     );
-
-    await expect(store.finalizeClaimedTimer("t1", "worker-2")).resolves.toBe(
+    await expect(store.releaseTimerClaim("t1", "worker-2")).resolves.toBe(
       false,
     );
+    await expect(store.releaseTimerClaim("t1", "worker-1")).resolves.toBe(true);
+    await expect(store.claimTimer("t1", "worker-2", 1000)).resolves.toBe(true);
+
+    await expect(store.finalizeClaimedTimer("t1", "worker-2")).resolves.toBe(
+      true,
+    );
+  });
+
+  it("finalizes claimed timers even if the timer row was already removed", async () => {
+    const store = new MemoryStore();
+    const now = new Date();
+
+    await store.createTimer({
+      id: "t-missing",
+      executionId: "e1",
+      stepId: "s1",
+      type: "sleep",
+      fireAt: now,
+      status: "pending",
+    });
+
+    await expect(store.claimTimer("t-missing", "worker-1", 1000)).resolves.toBe(
+      true,
+    );
+    await store.deleteTimer("t-missing");
+
+    await expect(
+      store.finalizeClaimedTimer("t-missing", "worker-1"),
+    ).resolves.toBe(true);
   });
 
   it("supports schedule CRUD helpers", async () => {

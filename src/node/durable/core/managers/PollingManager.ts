@@ -161,6 +161,36 @@ export class PollingManager {
       await this.store.deleteTimer(timer.id);
     };
 
+    const releaseTimerClaim = async (): Promise<void> => {
+      if (!timerClaimState) {
+        return;
+      }
+
+      if (!this.store.releaseTimerClaim) {
+        throw durableExecutionInvariantError.new({
+          message: `Store must implement releaseTimerClaim() when recurring timers are claimed for '${timer.id}'.`,
+        });
+      }
+
+      const currentClaimState = timerClaimState;
+      stopClaimHeartbeat();
+      stopClaimHeartbeat = () => {};
+      timerClaimState = null;
+
+      const released = await this.store.releaseTimerClaim(
+        timer.id,
+        this.workerId,
+      );
+      if (!released) {
+        if (currentClaimState.lossError) {
+          throw currentClaimState.lossError;
+        }
+        throw durableExecutionInvariantError.new({
+          message: `Timer claim lost for '${timer.id}' before claim release could be committed.`,
+        });
+      }
+    };
+
     // Distributed timer coordination. Failures must not drop timers (at-least-once).
     if (this.store.claimTimer) {
       const defaultClaimTtlMs = this.queue ? 5_000 : 30_000;
@@ -259,6 +289,12 @@ export class PollingManager {
 
       if (scheduledTimerResult.finalizeCurrentTimer) {
         await finalizeTimer();
+        return;
+      }
+
+      if (scheduledTimerResult.releaseCurrentTimerClaim) {
+        await releaseTimerClaim();
+        return;
       }
     } catch (error) {
       let cleanupError: unknown = null;

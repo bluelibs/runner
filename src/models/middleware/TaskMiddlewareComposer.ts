@@ -10,6 +10,7 @@ import type { ExecutionJournal } from "../../types/executionJournal";
 import type { TaskMiddlewareInterceptor } from "./types";
 import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
+import { runWithRuntimeCallSource } from "../RuntimeCallSourceStore";
 import type { TaskCallOptions } from "../../types/utilities";
 import { composeReverseLayers } from "./composeLayers";
 import {
@@ -347,22 +348,24 @@ export class TaskMiddlewareComposer {
           return this.lifecycleAdmissionController.trackMiddlewareExecution(
             middlewareSource,
             () =>
-              storeMiddleware.middleware.run(
-                {
-                  task: {
-                    definition: canonicalTaskDefinition,
-                    input,
+              runWithRuntimeCallSource(middlewareSource, () =>
+                storeMiddleware.middleware.run(
+                  {
+                    task: {
+                      definition: canonicalTaskDefinition,
+                      input,
+                    },
+                    next: (...args: [TInput?]) =>
+                      nextFunction(
+                        args.length > 0 ? (args[0] as TInput) : input,
+                        journal,
+                        source,
+                      ),
+                    journal,
                   },
-                  next: (...args: [TInput?]) =>
-                    nextFunction(
-                      args.length > 0 ? (args[0] as TInput) : input,
-                      journal,
-                      source,
-                    ),
-                  journal,
-                },
-                storeMiddleware.computedDependencies,
-                middleware.config,
+                  storeMiddleware.computedDependencies,
+                  middleware.config,
+                ),
               ),
           );
         };

@@ -272,7 +272,7 @@ Resources model shared services and state. They are Runner's primary composition
   During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, Runner keeps that broader admission policy open for the extra bounded window after `cooldown()` completes.
   Once `disposing` begins, fresh admissions narrow to the cooling resource itself, any additional resource definitions returned from `cooldown()`, and in-flight continuations.
   `runtime.dispose({ force: true })` skips `cooldown()` entirely.
-  Durable workflow resources use the same split: `cooldown()` stops worker, polling, and recovery intake for that runtime instance, while `dispose()` waits for already-admitted execution attempts to settle before persistence and transport adapters are closed.
+  Durable workflow resources use a similar but slightly more nuanced split: `cooldown()` stops worker, polling, and recovery ownership for that runtime instance, while `dispose()` is the hard stop that closes durable adapters. During the drain window, `signal(...)` / `wait(...)` stay available. Fresh external durable starts should be treated as closed, while starts triggered by already-draining business continuations are a topology-sensitive edge that should be modeled carefully.
 - `dispose(value, config, deps, context)` performs final teardown after drain.
   With `runtime.dispose({ force: true })`, this becomes the first resource lifecycle phase reached during shutdown.
 - `health(value, config, deps, context)` is an optional probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.

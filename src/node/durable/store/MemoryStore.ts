@@ -636,6 +636,19 @@ export class MemoryStore implements IDurableStore {
     return true;
   }
 
+  async releaseTimerClaim(timerId: string, workerId: string): Promise<boolean> {
+    const claimKey = `timer:claim:${timerId}`;
+    const now = Date.now();
+    this.pruneExpiredLocks(now);
+    const existing = this.locks.get(claimKey);
+    if (!existing || existing.id !== workerId || existing.expires <= now) {
+      return false;
+    }
+
+    this.locks.delete(claimKey);
+    return true;
+  }
+
   async finalizeClaimedTimer(
     timerId: string,
     workerId: string,

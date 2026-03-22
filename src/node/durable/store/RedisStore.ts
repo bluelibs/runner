@@ -323,6 +323,10 @@ export class RedisStore implements IDurableStore {
     );
   }
 
+  async releaseTimerClaim(timerId: string, workerId: string): Promise<boolean> {
+    return await timerOps.releaseTimerClaim(this.runtime, timerId, workerId);
+  }
+
   async finalizeClaimedTimer(
     timerId: string,
     workerId: string,

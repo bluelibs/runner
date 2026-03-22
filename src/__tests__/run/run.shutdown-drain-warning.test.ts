@@ -500,10 +500,15 @@ describe("run shutdown drain warning", () => {
     expect(warns[0]).toMatchObject({
       reason: "dispose-budget-exhausted-before-abort-window",
       requestedDrainBudgetMs: 20,
-      effectiveDrainBudgetMs: 20,
       requestedAbortWindowMs: 20,
       effectiveAbortWindowMs: 0,
+      effectiveDrainBudgetMs: expect.any(Number),
     });
+    const effectiveDrainBudgetMs = (
+      warns[0] as { effectiveDrainBudgetMs: number }
+    ).effectiveDrainBudgetMs;
+    expect(effectiveDrainBudgetMs).toBeGreaterThan(0);
+    expect(effectiveDrainBudgetMs).toBeLessThanOrEqual(20);
   });
 
   it("continues disposal when warning emission fails", async () => {

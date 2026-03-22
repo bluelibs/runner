@@ -27,7 +27,9 @@ import {
 } from "./managers";
 import { durableExecutionInvariantError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
+import { getCurrentRuntimeCallSource } from "../../../models/RuntimeCallSourceStore";
 import type { DurableWorker } from "./DurableWorker";
+import { RuntimeCallSourceKind } from "../../../types/runtimeSource";
 
 export { DurableExecutionError } from "./utils";
 
@@ -250,12 +252,12 @@ export class DurableService implements IDurableService {
     options?: ExecuteOptions,
   ): Promise<string> | void {
     if (task === undefined) {
-      this.assertCanAdmitDurableWork("DurableService.start()");
+      this.assertCanStartBackgroundProcessing("DurableService.start()");
       this.pollingManager.start();
       return;
     }
 
-    this.assertCanAdmitDurableWork("DurableService.start(task)");
+    this.assertCanStartDurableExecution("DurableService.start(task)");
     return this.executionManager.start(task, input, options);
   }
 
@@ -278,7 +280,7 @@ export class DurableService implements IDurableService {
     input?: unknown,
     options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<unknown>> {
-    this.assertCanAdmitDurableWork("DurableService.startAndWait()");
+    this.assertCanStartDurableExecution("DurableService.startAndWait()");
     return this.executionManager.startAndWait(task, input, options);
   }
 
@@ -301,7 +303,7 @@ export class DurableService implements IDurableService {
     input: unknown,
     options: ScheduleOptions,
   ): Promise<string> {
-    this.assertCanAdmitDurableWork("DurableService.schedule()");
+    this.assertCanStartBackgroundProcessing("DurableService.schedule()");
     return this.scheduleManager.schedule(task, input, options);
   }
 
@@ -320,12 +322,12 @@ export class DurableService implements IDurableService {
     input: unknown,
     options: EnsureScheduleOptions & { id: string },
   ): Promise<string> {
-    this.assertCanAdmitDurableWork("DurableService.ensureSchedule()");
+    this.assertCanStartBackgroundProcessing("DurableService.ensureSchedule()");
     return this.scheduleManager.ensureSchedule(task, input, options);
   }
 
   async recover(): Promise<RecoverReportType> {
-    this.assertCanAdmitDurableWork("DurableService.recover()");
+    this.assertCanStartBackgroundProcessing("DurableService.recover()");
     return this.recoveryManager.recover();
   }
 
@@ -423,7 +425,7 @@ export class DurableService implements IDurableService {
     signal: IEventDefinition<TPayload>,
     payload: TPayload,
   ): Promise<void> {
-    this.assertCanAdmitDurableWork("DurableService.signal()");
+    this.assertCanDeliverSignal("DurableService.signal()");
     await this.signalHandler.signal(executionId, signal, payload);
   }
 
@@ -469,7 +471,7 @@ export class DurableService implements IDurableService {
     return this.pollingManager.handleTimer(timer);
   }
 
-  private assertCanAdmitDurableWork(methodName: string): void {
+  private assertCanStartBackgroundProcessing(methodName: string): void {
     if (this.lifecycleState === "running") {
       return;
     }
@@ -479,6 +481,56 @@ export class DurableService implements IDurableService {
         `${methodName} cannot admit new durable work because this durable runtime is shutting down. ` +
         "Wait for shutdown to complete or create a fresh runtime instance.",
     });
+  }
+
+  private assertCanStartDurableExecution(methodName: string): void {
+    if (this.lifecycleState === "running") {
+      return;
+    }
+
+    if (
+      (this.lifecycleState === "cooldown" ||
+        this.lifecycleState === "disposing") &&
+      this.hasActiveInternalRuntimeContinuation()
+    ) {
+      return;
+    }
+
+    durableExecutionInvariantError.throw({
+      message:
+        `${methodName} cannot admit new durable work because this durable runtime is shutting down. ` +
+        "Wait for shutdown to complete or create a fresh runtime instance.",
+    });
+  }
+
+  private assertCanDeliverSignal(methodName: string): void {
+    if (
+      this.lifecycleState === "running" ||
+      this.lifecycleState === "cooldown" ||
+      this.lifecycleState === "disposing"
+    ) {
+      return;
+    }
+
+    durableExecutionInvariantError.throw({
+      message:
+        `${methodName} cannot interact with this durable runtime because shutdown is already disposing resources. ` +
+        "Wait for shutdown to complete or create a fresh runtime instance.",
+    });
+  }
+
+  private hasActiveInternalRuntimeContinuation(): boolean {
+    const source = getCurrentRuntimeCallSource();
+    if (!source) {
+      return false;
+    }
+
+    return (
+      source.kind === RuntimeCallSourceKind.Task ||
+      source.kind === RuntimeCallSourceKind.Hook ||
+      source.kind === RuntimeCallSourceKind.TaskMiddleware ||
+      source.kind === RuntimeCallSourceKind.ResourceMiddleware
+    );
   }
 }
 

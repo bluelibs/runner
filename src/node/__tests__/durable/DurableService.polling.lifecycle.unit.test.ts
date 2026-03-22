@@ -11,6 +11,8 @@ import { waitUntil } from "../../durable/test-utils";
 import { createTaskExecutor, okTask } from "./DurableService.unit.helpers";
 import { genericError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
+import { runWithRuntimeCallSource } from "../../../models/RuntimeCallSourceStore";
+import { runtimeSource } from "../../../types/runtimeSource";
 
 describe("durable: DurableService polling lifecycle (unit)", () => {
   function createSilentLogger(): Logger {
@@ -168,7 +170,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     expect(pollingCooldown).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects new durable admissions after cooldown begins", async () => {
+  it("keeps durable signals available but rejects starts during cooldown", async () => {
     const store = new MemoryStore();
     const task = okTask("t-cooldown-guard");
     const service = await initDurableService({
@@ -179,20 +181,144 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
 
     await service.cooldown();
 
-    await expect(async () => service.start(task)).rejects.toThrow(
-      "shutting down",
-    );
+    expect(() => service.start(task)).toThrow("shutting down");
     await expect(service.startAndWait(task)).rejects.toThrow("shutting down");
+    await expect(
+      service.signal("e1", { id: "sig" } as any, undefined),
+    ).resolves.toBeUndefined();
+  });
+
+  it("allows active task continuations to start durable work during shutdown drain", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-cooldown-continuation");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    await service.cooldown();
+    await expect(
+      runWithRuntimeCallSource(runtimeSource.task(task.id), () =>
+        service.start(task),
+      ),
+    ).resolves.toEqual(expect.any(String));
+    await expect(
+      runWithRuntimeCallSource(runtimeSource.task(task.id), () =>
+        service.startAndWait(task),
+      ),
+    ).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: "ok",
+    });
+
+    (
+      service as unknown as {
+        lifecycleState: "running" | "cooldown" | "disposing" | "disposed";
+      }
+    ).lifecycleState = "disposing";
+
+    await expect(
+      runWithRuntimeCallSource(runtimeSource.task(task.id), () =>
+        service.start(task),
+      ),
+    ).resolves.toEqual(expect.any(String));
+    await expect(
+      runWithRuntimeCallSource(runtimeSource.task(task.id), () =>
+        service.startAndWait(task),
+      ),
+    ).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: "ok",
+    });
+  });
+
+  it("allows hook and middleware continuations to start durable work during shutdown drain", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-cooldown-continuation-other-sources");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    (
+      service as unknown as {
+        lifecycleState: "running" | "cooldown" | "disposing" | "disposed";
+      }
+    ).lifecycleState = "disposing";
+
+    await expect(
+      runWithRuntimeCallSource(runtimeSource.hook("hook-source"), () =>
+        service.start(task),
+      ),
+    ).resolves.toEqual(expect.any(String));
+    await expect(
+      runWithRuntimeCallSource(
+        runtimeSource.taskMiddleware("task-middleware-source"),
+        () => service.start(task),
+      ),
+    ).resolves.toEqual(expect.any(String));
+    await expect(
+      runWithRuntimeCallSource(
+        runtimeSource.resourceMiddleware("resource-middleware-source"),
+        () => service.start(task),
+      ),
+    ).resolves.toEqual(expect.any(String));
+  });
+
+  it("rejects background durable admissions after cooldown begins", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-cooldown-background-guard");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    await service.cooldown();
+
+    expect(() => service.start()).toThrow("shutting down");
     await expect(
       service.schedule(task, undefined, { interval: 10 }),
     ).rejects.toThrow("shutting down");
     await expect(
       service.ensureSchedule(task, undefined, { id: "s1", interval: 10 }),
     ).rejects.toThrow("shutting down");
+    await expect(service.recover()).rejects.toThrow("shutting down");
+  });
+
+  it("rejects imperative durable interactions after disposal begins", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-disposing-guard");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    await service.cooldown();
+    (
+      service as unknown as {
+        lifecycleState: "running" | "cooldown" | "disposing" | "disposed";
+      }
+    ).lifecycleState = "disposing";
+
+    expect(() => service.start(task)).toThrow("shutting down");
+    await expect(service.startAndWait(task)).rejects.toThrow("shutting down");
     await expect(
       service.signal("e1", { id: "sig" } as any, undefined),
-    ).rejects.toThrow("shutting down");
-    await expect(service.recover()).rejects.toThrow("shutting down");
+    ).resolves.toBeUndefined();
+
+    (
+      service as unknown as {
+        lifecycleState: "running" | "cooldown" | "disposing" | "disposed";
+      }
+    ).lifecycleState = "disposed";
+
+    await expect(
+      service.signal("e1", { id: "sig" } as any, undefined),
+    ).rejects.toThrow("disposing resources");
   });
 
   it("stops registered worker consumers before finishing service shutdown", async () => {

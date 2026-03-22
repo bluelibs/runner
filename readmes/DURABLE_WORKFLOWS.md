@@ -937,11 +937,18 @@ const result = await durableRuntime.startAndWait(processOrder, {
 5. **`durable.signal(executionId, signal, payload)`** completes the signal checkpoint and resumes the execution
 6. If a worker crashes, another worker can recover and replay the execution from its last checkpoint
 
+During Runner shutdown, treat the durable runtime as two related pieces:
+
+- the **worker/engine side** that owns queue consumption, timer polling, and recovery
+- the **API side** that exposes `start(...)`, `signal(...)`, and `wait(...)`
+
+During drain, Runner keeps the durable service alive long enough for already-running workflows to finish crossing `waitForSignal(...)` checkpoints, but embedded worker ownership stops earlier than final adapter teardown.
+
 ### `start()` vs `startAndWait()` (clear contract)
 
-- `start(taskOrTaskId, input)`:
+- `start(task, input)`:
   returns immediately with `executionId` (`string`).
-- `startAndWait(taskOrTaskId, input)`:
+- `startAndWait(task, input)`:
   convenience wrapper for `start(...)` + `wait(executionId)`; returns
   `{ durable: { executionId }, data }`.
   `timeout` still bounds workflow runtime; use `completionTimeout` to bound how long
@@ -950,12 +957,8 @@ const result = await durableRuntime.startAndWait(processOrder, {
 
 `start()` and `startAndWait()` are the only supported durable execution APIs.
 
-`taskOrTaskId` can be:
-
-- an `ITask` (the built task object, returned by `.build()`)
-- a task id `string`
-
-It is **not** the injected dependency callable from `.dependencies({ someTask })`. That dependency is a function used to invoke the task directly, not an `ITask` reference.
+Pass the built `ITask` object returned by `.build()`.
+Do **not** pass the injected dependency callable from `.dependencies({ someTask })`. That dependency is a function used to invoke the task directly, not an `ITask` reference.
 
 ```ts
 // ✅ built task object
@@ -963,14 +966,39 @@ const executionIdA = await durableRuntime.start(approveOrder, {
   orderId: "o1",
 });
 
-// ✅ task id string
-const executionIdB = await durableRuntime.start(approveOrder.id, {
-  orderId: "o2",
-});
-
 // ❌ injected callable dependency (different type)
-// await durableRuntime.start(deps.approveOrder, { orderId: "o3" });
+// await durableRuntime.start(deps.approveOrder, { orderId: "o2" });
 ```
+
+### Graceful Shutdown Behavior
+
+Durable workflows follow Runner's normal graceful shutdown lifecycle, but the durable runtime has a more specific split during shutdown:
+
+1. `cooldown()`
+   - stops embedded worker intake for that runtime instance
+   - stops timer polling and recovery ownership for that runtime instance
+   - does **not** immediately tear down store / queue / event-bus connections
+2. drain window
+   - the runtime is still alive while Runner waits for already-admitted work to settle
+   - `signal(...)` and `wait(...)` remain available during this phase
+   - fresh external durable starts should be treated as closed once durable `cooldown()` begins
+   - a start triggered by already-draining Runner work is part of that same business continuation and may still be needed while drain is in progress
+3. `dispose()`
+   - final teardown closes durable adapters and finishes shutting the durable runtime down
+
+This is especially relevant for embedded and mixed topologies:
+
+- if a workflow is already sleeping on `waitForSignal(...)`, shutdown still lets outside code deliver that signal while drain is active
+- if already-draining business work needs to start a dependent workflow, that is conceptually part of the same continuation rather than fresh ingress
+- if this runtime also owned an embedded worker, `cooldown()` has already stopped local queue / timer / recovery ownership, so forward progress may depend on another worker still being alive
+- if you need API-only nodes to call `start()` / `signal()` / `wait()` without owning polling, keep that separation explicit in your topology and let worker nodes own polling/recovery
+
+The important mental model is:
+
+- `cooldown()` stops this runtime from **owning more background durable work**
+- `dispose()` is the hard stop that closes the durable runtime itself
+- fresh ingress and draining business continuations are not the same thing
+- the tricky edge is whether a draining continuation can still `start(...)` safely in every topology, especially when this same runtime has already stopped owning worker duties
 
 ### What Happens with the Return Value
 

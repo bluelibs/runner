@@ -135,6 +135,26 @@ export async function renewTimerClaim(
   return Number(result) === 1;
 }
 
+export async function releaseTimerClaim(
+  runtime: RedisStoreRuntime,
+  timerId: string,
+  workerId: string,
+): Promise<boolean> {
+  const result = await runtime.redis.eval(
+    `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+      else
+        return 0
+      end
+    `,
+    1,
+    runtime.timerClaimKey(timerId),
+    workerId,
+  );
+  return Number(result) === 1;
+}
+
 export async function finalizeClaimedTimer(
   runtime: RedisStoreRuntime,
   timerId: string,

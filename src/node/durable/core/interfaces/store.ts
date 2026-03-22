@@ -187,6 +187,12 @@ export interface IDurableStore {
     ttlMs: number,
   ): Promise<boolean>;
   /**
+   * Releases a timer claim without mutating the timer record itself.
+   * Used when recurring schedules re-arm the same stable timer id for their
+   * next occurrence and the old lease must not block the new fire.
+   */
+  releaseTimerClaim?(timerId: string, workerId: string): Promise<boolean>;
+  /**
    * Atomically finalizes a claimed timer only if `workerId` still owns the
    * timer-claim lease. Returns false when ownership was already lost.
    */

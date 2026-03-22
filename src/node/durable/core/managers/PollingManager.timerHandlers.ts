@@ -212,6 +212,7 @@ export async function handleExecutionTimer(params: {
 export interface ScheduledTimerHandleResult {
   handled: boolean;
   finalizeCurrentTimer: boolean;
+  releaseCurrentTimerClaim: boolean;
 }
 
 export async function handleScheduledTaskTimer(params: {
@@ -228,26 +229,42 @@ export async function handleScheduledTaskTimer(params: {
   onSafeToFinalizeCurrentTimer?: () => void;
 }): Promise<ScheduledTimerHandleResult> {
   if (!params.timer.taskId) {
-    return { handled: false, finalizeCurrentTimer: false };
+    return {
+      handled: false,
+      finalizeCurrentTimer: false,
+      releaseCurrentTimerClaim: false,
+    };
   }
 
   if (params.timer.scheduleId) {
     const schedule = await params.store.getSchedule(params.timer.scheduleId);
     params.assertTimerClaimIsStillOwned();
     if (!schedule || schedule.status !== "active") {
-      return { handled: false, finalizeCurrentTimer: true };
+      return {
+        handled: false,
+        finalizeCurrentTimer: true,
+        releaseCurrentTimerClaim: false,
+      };
     }
     if (
       schedule.nextRun &&
       params.timer.fireAt.getTime() !== schedule.nextRun.getTime()
     ) {
-      return { handled: false, finalizeCurrentTimer: true };
+      return {
+        handled: false,
+        finalizeCurrentTimer: true,
+        releaseCurrentTimerClaim: false,
+      };
     }
   }
 
   const task = params.taskRegistry.find(params.timer.taskId);
   if (!task) {
-    return { handled: false, finalizeCurrentTimer: false };
+    return {
+      handled: false,
+      finalizeCurrentTimer: false,
+      releaseCurrentTimerClaim: false,
+    };
   }
 
   const executionId = await params.persistTaskTimerExecution({
@@ -269,12 +286,23 @@ export async function handleScheduledTaskTimer(params: {
         lastRunAt: new Date(),
       });
       params.assertTimerClaimIsStillOwned();
-      params.onSafeToFinalizeCurrentTimer?.();
-      return { handled: true, finalizeCurrentTimer: false };
+      return {
+        handled: true,
+        finalizeCurrentTimer: false,
+        releaseCurrentTimerClaim: true,
+      };
     }
 
-    return { handled: true, finalizeCurrentTimer: true };
+    return {
+      handled: true,
+      finalizeCurrentTimer: true,
+      releaseCurrentTimerClaim: false,
+    };
   }
 
-  return { handled: true, finalizeCurrentTimer: true };
+  return {
+    handled: true,
+    finalizeCurrentTimer: true,
+    releaseCurrentTimerClaim: false,
+  };
 }

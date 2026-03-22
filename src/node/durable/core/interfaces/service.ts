@@ -195,11 +195,16 @@ export interface RecoverReportType {
 
 export interface IDurableService {
   /**
-   * Stops this runtime instance from admitting new durable work while leaving
-   * adapters alive so already-owned executions can finish settling.
+   * Stops background durable admissions and new durable starts for this runtime
+   * instance while still allowing signal/wait interactions needed by already-
+   * owned executions to finish settling during drain.
    */
   cooldown(): Promise<void>;
 
+  /**
+   * Starts a workflow execution.
+   * New starts are rejected once shutdown begins.
+   */
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
@@ -222,6 +227,7 @@ export interface IDurableService {
 
   /**
    * Starts a workflow and waits for completion.
+   * New start-and-wait calls are rejected once shutdown begins.
    * Returns the started execution id together with the workflow result payload.
    */
   startAndWait<TInput, TResult>(
@@ -286,7 +292,9 @@ export interface IDurableService {
 
   /**
    * Deliver a signal payload to a workflow execution.
-   * Missing or terminal executions reject new signals.
+   * Remains available during shutdown drain so draining workflows blocked in
+   * `waitForSignal()` can still be resumed before the durable service is disposed.
+   * Missing or terminal executions ignore new signals.
    * Live executions retain signal history at the execution level and queue
    * unawaited signals per `signalId` for `waitForSignal()` to consume in FIFO
    * order before suspending again.

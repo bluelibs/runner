@@ -171,6 +171,71 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     expect(readyTimerIds.filter((id) => id === timer.id)).toEqual([timer.id]);
   });
 
+  it("releases recurring timer claims once the next occurrence is re-armed", async () => {
+    const store = new MemoryStore();
+    const queue = new RecordingDelayedQueue();
+    const task = okTask("t-recurring-claim-release");
+    const service = new DurableService({
+      store,
+      queue,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({}),
+      polling: { claimTtlMs: 3_000 },
+    });
+
+    const schedule = {
+      id: "s-recurring-claim-release",
+      taskId: task.id,
+      type: "interval" as const,
+      pattern: "1000",
+      input: undefined,
+      status: ScheduleStatus.Active,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      nextRun: new Date(0),
+    };
+    await store.createSchedule(schedule);
+
+    const firstTimer: Timer = {
+      id: "sched:s-recurring-claim-release",
+      scheduleId: schedule.id,
+      taskId: task.id,
+      type: TimerType.Scheduled,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(firstTimer);
+
+    const firstAttempt = service.handleTimer(firstTimer);
+    await advanceTimers(1_100);
+    await advanceTimers(200);
+    await firstAttempt;
+    const afterFirstAttemptAt = Date.now();
+
+    const secondTimer = (
+      await store.getReadyTimers(new Date(Date.now() + 60_000))
+    ).find((timer) => timer.id === firstTimer.id);
+
+    expect(secondTimer).toBeDefined();
+    expect(secondTimer!.fireAt.getTime() - afterFirstAttemptAt).toBeLessThan(
+      3_000,
+    );
+
+    const secondAttempt = service.handleTimer(secondTimer!);
+    await advanceTimers(1_100);
+    await advanceTimers(200);
+    await secondAttempt;
+
+    const executionIds = queue.enqueued
+      .filter((message) => message.type === "execute")
+      .map(
+        (message) =>
+          (message.payload as { executionId: string | undefined }).executionId,
+      );
+
+    expect(new Set(executionIds).size).toBe(2);
+  });
+
   it("creates a fresh execution for each successful recurring fire", async () => {
     const store = new MemoryStore();
     Object.defineProperty(store, "claimTimer", {
@@ -325,5 +390,105 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
       expect.any(String),
     );
     expect(await store.getReadyTimers(new Date(0))).toEqual([]);
+  });
+
+  it("keeps recurring timers pending when claimed stores do not implement claim release", async () => {
+    const store = new MemoryStore();
+    Object.defineProperty(store, "releaseTimerClaim", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    const queue = new RecordingDelayedQueue();
+    const task = okTask("t-recurring-missing-claim-release");
+    const service = new DurableService({
+      store,
+      queue,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({}),
+      polling: { claimTtlMs: 3_000 },
+    });
+
+    const schedule = {
+      id: "s-recurring-missing-claim-release",
+      taskId: task.id,
+      type: "interval" as const,
+      pattern: "1000",
+      input: undefined,
+      status: ScheduleStatus.Active,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      nextRun: new Date(0),
+    };
+    await store.createSchedule(schedule);
+
+    const timer: Timer = {
+      id: "sched:s-recurring-missing-claim-release",
+      scheduleId: schedule.id,
+      taskId: task.id,
+      type: TimerType.Scheduled,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    const attempt = service.handleTimer(timer);
+    await advanceTimers(1_100);
+    await advanceTimers(200);
+    await attempt;
+
+    expect(
+      (await store.getReadyTimers(new Date(Date.now() + 60_000))).map(
+        (ready) => ready.id,
+      ),
+    ).toContain(timer.id);
+  });
+
+  it("keeps recurring timers pending when timer claim release reports loss", async () => {
+    const store = new MemoryStore();
+    jest.spyOn(store, "releaseTimerClaim").mockResolvedValue(false);
+    const queue = new RecordingDelayedQueue();
+    const task = okTask("t-recurring-claim-release-loss");
+    const service = new DurableService({
+      store,
+      queue,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({}),
+      polling: { claimTtlMs: 3_000 },
+    });
+
+    const schedule = {
+      id: "s-recurring-claim-release-loss",
+      taskId: task.id,
+      type: "interval" as const,
+      pattern: "1000",
+      input: undefined,
+      status: ScheduleStatus.Active,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      nextRun: new Date(0),
+    };
+    await store.createSchedule(schedule);
+
+    const timer: Timer = {
+      id: "sched:s-recurring-claim-release-loss",
+      scheduleId: schedule.id,
+      taskId: task.id,
+      type: TimerType.Scheduled,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    const attempt = service.handleTimer(timer);
+    await advanceTimers(1_100);
+    await advanceTimers(200);
+    await attempt;
+
+    expect(
+      (await store.getReadyTimers(new Date(Date.now() + 60_000))).map(
+        (ready) => ready.id,
+      ),
+    ).toContain(timer.id);
   });
 });
