@@ -7,7 +7,6 @@ import type { AuditLogger } from "./AuditLogger";
 import { DurableAuditEntryKind } from "../audit";
 import {
   type DurableSignalRecord,
-  type DurableSignalWaiter,
   ExecutionStatus,
   TimerStatus,
   TimerType,
@@ -20,6 +19,10 @@ import {
   parseSignalState,
 } from "../utils";
 import { withSignalLock } from "../signalWaiters";
+import {
+  commitDurableWaitCompletion,
+  runBestEffortCleanup,
+} from "../waiterCore";
 import {
   durableExecutionInvariantError,
   validationError,
@@ -85,31 +88,6 @@ export class SignalHandler {
     private readonly callbacks: SignalHandlerCallbacks,
   ) {}
 
-  private async peekWaitingSignalWaiter(
-    executionId: string,
-    signalId: string,
-  ): Promise<DurableSignalWaiter | null> {
-    return await this.store.peekNextSignalWaiter(executionId, signalId);
-  }
-
-  private async deleteSignalWaiter(
-    executionId: string,
-    signalId: string,
-    stepId: string,
-  ): Promise<void> {
-    await this.store.deleteSignalWaiter(executionId, signalId, stepId);
-  }
-
-  private async runBestEffortCleanup(
-    cleanupTask: () => Promise<void>,
-  ): Promise<void> {
-    try {
-      await cleanupTask();
-    } catch {
-      // The durable write already happened; cleanup must stay best-effort.
-    }
-  }
-
   private async resumeExecutionWithFailsafe(
     executionId: string,
     stepId: string,
@@ -146,28 +124,21 @@ export class SignalHandler {
     signalId: string;
     stepId: string;
     signalRecord: DurableSignalRecord;
-    timerId?: string;
   }): Promise<void> {
-    await this.runBestEffortCleanup(() =>
+    await runBestEffortCleanup(() =>
       this.store.appendSignalRecord(
         params.executionId,
         params.signalId,
         params.signalRecord,
       ),
     );
-    await this.runBestEffortCleanup(() =>
-      this.deleteSignalWaiter(
+    await runBestEffortCleanup(() =>
+      this.store.deleteSignalWaiter(
         params.executionId,
         params.signalId,
         params.stepId,
       ),
     );
-
-    if (params.timerId) {
-      await this.runBestEffortCleanup(() =>
-        this.store.deleteTimer(params.timerId!),
-      );
-    }
   }
 
   private async commitDeliveredSignal(params: {
@@ -185,26 +156,30 @@ export class SignalHandler {
       completedAt: new Date(),
     };
 
-    if (this.store.commitSignalDelivery) {
-      return await this.store.commitSignalDelivery({
-        executionId: params.executionId,
-        signalId: params.signalId,
-        stepId: params.stepId,
-        stepResult,
-        signalRecord: params.signalRecord,
-        timerId: params.timerId,
-      });
-    }
-
-    await this.store.saveStepResult(stepResult);
-    await this.finalizeDeliveredSignal({
-      executionId: params.executionId,
-      signalId: params.signalId,
-      stepId: params.stepId,
-      signalRecord: params.signalRecord,
+    return await commitDurableWaitCompletion({
+      store: this.store,
+      stepResult,
       timerId: params.timerId,
+      commitAtomically: this.store.commitSignalDelivery
+        ? async () =>
+            await this.store.commitSignalDelivery!({
+              executionId: params.executionId,
+              signalId: params.signalId,
+              stepId: params.stepId,
+              stepResult,
+              signalRecord: params.signalRecord,
+              timerId: params.timerId,
+            })
+        : undefined,
+      onFallbackCommitted: async () => {
+        await this.finalizeDeliveredSignal({
+          executionId: params.executionId,
+          signalId: params.signalId,
+          stepId: params.stepId,
+          signalRecord: params.signalRecord,
+        });
+      },
     });
-    return true;
   }
 
   async signal<TPayload>(
@@ -243,7 +218,7 @@ export class SignalHandler {
       let shouldResume = false;
 
       while (true) {
-        const waiter = await this.peekWaitingSignalWaiter(
+        const waiter = await this.store.peekNextSignalWaiter(
           executionId,
           signalId,
         );
@@ -256,7 +231,11 @@ export class SignalHandler {
           waiter.stepId,
         );
         if (!waitingStep) {
-          await this.deleteSignalWaiter(executionId, signalId, waiter.stepId);
+          await this.store.deleteSignalWaiter(
+            executionId,
+            signalId,
+            waiter.stepId,
+          );
           continue;
         }
 
@@ -266,7 +245,11 @@ export class SignalHandler {
           result: waitingStep.result,
         });
         if (waiterState.kind === "stale") {
-          await this.deleteSignalWaiter(executionId, signalId, waiter.stepId);
+          await this.store.deleteSignalWaiter(
+            executionId,
+            signalId,
+            waiter.stepId,
+          );
           continue;
         }
 

@@ -1,8 +1,19 @@
-import { defineEvent } from "../../..";
+import { defineEvent, r } from "../../..";
 import { createDurableStepId } from "../../durable/core/ids";
 import { recordFlowShape } from "../../durable/core/flowShape";
+import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 
 describe("durable: flowShape recorder", () => {
+  const ChildTask = r
+    .task("flow-child-task")
+    .tags([durableWorkflowTag.with({ category: "tests" })])
+    .run(async () => "ok")
+    .build();
+  const PlainTask = r
+    .task("flow-plain-task")
+    .run(async () => "ok")
+    .build();
+
   it("records step nodes", async () => {
     const shape = await recordFlowShape(async (ctx) => {
       await ctx.step("validate", async () => ({ ok: true }));
@@ -79,27 +90,51 @@ describe("durable: flowShape recorder", () => {
 
   it("records waitForExecution nodes", async () => {
     const shape = await recordFlowShape(async (ctx) => {
-      await ctx.waitForExecution("child-1", {
+      await ctx.waitForExecution(ChildTask, "child-1", {
         timeoutMs: 5_000,
         stepId: "wait-child",
       });
-      await ctx.waitForExecution("child-2");
+      await ctx.waitForExecution(ChildTask, "child-2");
     });
 
     expect(shape.nodes).toEqual([
       {
         kind: "waitForExecution",
+        taskId: "flow-child-task",
         executionId: "child-1",
         timeoutMs: 5_000,
         stepId: "wait-child",
       },
       {
         kind: "waitForExecution",
+        taskId: "flow-child-task",
         executionId: "child-2",
         timeoutMs: undefined,
         stepId: undefined,
       },
     ]);
+  });
+
+  it("records workflow nodes", async () => {
+    const shape = await recordFlowShape(async (ctx) => {
+      await ctx.workflow("start-child", ChildTask);
+    });
+
+    expect(shape.nodes).toEqual([
+      {
+        kind: "workflow",
+        stepId: "start-child",
+        taskId: "flow-child-task",
+      },
+    ]);
+  });
+
+  it("fails fast when workflow nodes target non-durable tasks", async () => {
+    await expect(
+      recordFlowShape(async (ctx) => {
+        await ctx.workflow("start-child", PlainTask);
+      }),
+    ).rejects.toThrow("not tagged as a durable workflow");
   });
 
   it("records emit nodes", async () => {

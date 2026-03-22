@@ -94,16 +94,31 @@ export function parseSignalState(value: unknown): {
   return null;
 }
 
-export function parseExecutionWaitState(value: unknown): {
-  state: "waiting" | "completed" | "failed" | "cancelled" | "timed_out";
-  targetExecutionId: string;
-  timerId?: string;
-  timeoutAtMs?: number;
-  result?: unknown;
-  error?: { message: string; stack?: string };
-  taskId?: string;
-  attempt?: number;
-} | null {
+export function parseExecutionWaitState(value: unknown):
+  | {
+      state: "waiting";
+      targetExecutionId: string;
+      timerId?: string;
+      timeoutAtMs?: number;
+    }
+  | {
+      state: "completed";
+      targetExecutionId: string;
+      taskId: string;
+      result: unknown;
+    }
+  | {
+      state: "failed" | "cancelled";
+      targetExecutionId: string;
+      error: { message: string; stack?: string };
+      taskId: string;
+      attempt: number;
+    }
+  | {
+      state: "timed_out";
+      targetExecutionId: string;
+    }
+  | null {
   if (!isRecord(value)) return null;
   if (typeof value.targetExecutionId !== "string") return null;
 
@@ -120,7 +135,16 @@ export function parseExecutionWaitState(value: unknown): {
   }
 
   if (state === "completed") {
-    return { state, targetExecutionId, result: value.result };
+    if (typeof value.taskId !== "string") {
+      return null;
+    }
+
+    return {
+      state,
+      targetExecutionId,
+      taskId: value.taskId,
+      result: value.result,
+    };
   }
 
   if (state === "failed" || state === "cancelled") {

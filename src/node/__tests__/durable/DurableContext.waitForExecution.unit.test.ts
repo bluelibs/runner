@@ -50,6 +50,7 @@ describe("durable: waitForExecutionDurably", () => {
   const baseParams = {
     executionId: "parent",
     targetExecutionId: "child",
+    expectedTaskId: "child-task",
     assertCanContinue: jest.fn(async () => undefined),
     assertUniqueStepId: jest.fn(),
   };
@@ -142,6 +143,7 @@ describe("durable: waitForExecutionDurably", () => {
         result: {
           state: "completed",
           targetExecutionId: "child",
+          taskId: "child-task",
           result: 99,
         },
         completedAt: new Date(),
@@ -205,6 +207,29 @@ describe("durable: waitForExecutionDurably", () => {
     });
   });
 
+  it("rejects replayed completed wait states when the persisted task id does not match", async () => {
+    const store = createStoreMock({
+      getStepResult: jest.fn().mockResolvedValue({
+        executionId: "parent",
+        stepId: "__execution:child",
+        result: {
+          state: "completed",
+          targetExecutionId: "child",
+          taskId: "other-child-task",
+          result: 99,
+        },
+        completedAt: new Date(),
+      }),
+    });
+
+    await expect(
+      waitForExecutionDurably<number>({
+        ...baseParams,
+        store,
+      }),
+    ).rejects.toThrow("stored durable execution belongs to 'other-child-task'");
+  });
+
   it("rejects invalid persisted wait state payloads", async () => {
     const store = createStoreMock({
       getStepResult: jest.fn().mockResolvedValue({
@@ -221,6 +246,29 @@ describe("durable: waitForExecutionDurably", () => {
         store,
       }),
     ).rejects.toThrow("Invalid execution wait state");
+  });
+
+  it("throws when a persisted completed wait state belongs to a different task", async () => {
+    const store = createStoreMock({
+      getStepResult: jest.fn().mockResolvedValue({
+        executionId: "parent",
+        stepId: "__execution:child",
+        result: {
+          state: "completed",
+          targetExecutionId: "child",
+          taskId: "different-task",
+          result: 99,
+        },
+        completedAt: new Date(),
+      }),
+    });
+
+    await expect(
+      waitForExecutionDurably<number>({
+        ...baseParams,
+        store,
+      }),
+    ).rejects.toThrow("belongs to 'different-task'");
   });
 
   it("throws when a replayed waiting state points to a missing target execution", async () => {
@@ -242,6 +290,60 @@ describe("durable: waitForExecutionDurably", () => {
         ...baseParams,
         store,
         options: { stepId: "child-step" },
+      }),
+    ).rejects.toThrow("target execution does not exist");
+  });
+
+  it("rejects replayed waiting states when the live target execution task id changes", async () => {
+    const store = createStoreMock({
+      getStepResult: jest.fn().mockResolvedValue({
+        executionId: "parent",
+        stepId: "__execution:child-step",
+        result: {
+          state: "waiting",
+          targetExecutionId: "child",
+        },
+        completedAt: new Date(),
+      }),
+      getExecution: jest.fn().mockResolvedValue({
+        id: "child",
+        taskId: "other-child-task",
+        input: undefined,
+        status: ExecutionStatus.Running,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    });
+
+    await expect(
+      waitForExecutionDurably({
+        ...baseParams,
+        store,
+        options: { stepId: "child-step" },
+      }),
+    ).rejects.toThrow("stored durable execution belongs to 'other-child-task'");
+  });
+
+  it("throws when an implicitly addressed replayed waiting state points to a missing target execution", async () => {
+    const store = createStoreMock({
+      getStepResult: jest.fn().mockResolvedValue({
+        executionId: "parent",
+        stepId: "__execution:child",
+        result: {
+          state: "waiting",
+          targetExecutionId: "child",
+        },
+        completedAt: new Date(),
+      }),
+      getExecution: jest.fn().mockResolvedValue(null),
+    });
+
+    await expect(
+      waitForExecutionDurably({
+        ...baseParams,
+        store,
       }),
     ).rejects.toThrow("target execution does not exist");
   });

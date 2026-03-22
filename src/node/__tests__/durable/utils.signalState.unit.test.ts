@@ -39,11 +39,13 @@ describe("durable: signal state utils", () => {
       parseExecutionWaitState({
         state: "completed",
         targetExecutionId: "child",
+        taskId: "child-task",
         result: { ok: true },
       }),
     ).toEqual({
       state: "completed",
       targetExecutionId: "child",
+      taskId: "child-task",
       result: { ok: true },
     });
     expect(
@@ -86,6 +88,36 @@ describe("durable: signal state utils", () => {
       parseExecutionWaitState({
         state: "unknown",
         targetExecutionId: "child",
+      }),
+    ).toBeNull();
+    expect(
+      parseExecutionWaitState({
+        state: "completed",
+        targetExecutionId: "child",
+        result: { ok: true },
+      }),
+    ).toBeNull();
+    expect(
+      parseExecutionWaitState({
+        state: "cancelled",
+        targetExecutionId: "child",
+        error: { message: "stopped" },
+        taskId: "child-task",
+        attempt: 3,
+      }),
+    ).toEqual({
+      state: "cancelled",
+      targetExecutionId: "child",
+      error: { message: "stopped", stack: undefined },
+      taskId: "child-task",
+      attempt: 3,
+    });
+    expect(
+      parseExecutionWaitState({
+        state: "failed",
+        targetExecutionId: "child",
+        error: { message: "boom" },
+        taskId: "child-task",
       }),
     ).toBeNull();
   });

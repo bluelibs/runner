@@ -34,6 +34,7 @@ export type {
   FlowSleepNode,
   FlowSignalNode,
   FlowEmitNode,
+  FlowWorkflowNode,
   FlowExecutionNode,
   FlowSwitchNode,
   FlowNoteNode,

@@ -1,4 +1,4 @@
-import { defineEvent } from "../../..";
+import { defineEvent, r } from "../../..";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { DurableContext } from "../../durable/core/DurableContext";
 import { DurableExecutionError } from "../../durable/core/DurableService";
@@ -9,7 +9,9 @@ import { handleExecutionWaitTimeoutTimer } from "../../durable/core/managers/Pol
 import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 import { genericError } from "../../../errors";
+import type { ITask } from "../../../types/task";
 import { createBareStore } from "./DurableService.unit.helpers";
 
 describe("durable: DurableContext", () => {
@@ -17,6 +19,19 @@ describe("durable: DurableContext", () => {
   const Refunded = defineEvent<{ refundedAt: number }>({
     id: "durable-tests-refunded",
   });
+  const ChildObjectTask = r
+    .task("child-task")
+    .run(async () => ({ ok: true }))
+    .build();
+  const ChildTextTask = r
+    .task("child-task")
+    .run(async () => "ok")
+    .build();
+  const ChildWorkflowTask = r
+    .task("child-workflow-task")
+    .tags([durableWorkflowTag.with({ category: "tests" })])
+    .run(async () => "child-ok")
+    .build();
   const createContext = (
     executionId = "e1",
     attempt = 1,
@@ -26,6 +41,19 @@ describe("durable: DurableContext", () => {
       auditEmitter?: DurableAuditEmitter;
       implicitInternalStepIds?: "allow" | "warn" | "error";
       declaredSignalIds?: ReadonlySet<string> | null;
+      startWorkflowExecution?: <TInput, TResult>(
+        task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+        input: TInput | undefined,
+        options: {
+          timeout?: number;
+          priority?: number;
+          parentExecutionId: string;
+          idempotencyKey: string;
+        },
+      ) => Promise<string>;
+      getTaskPersistenceId?: (
+        task: ITask<any, Promise<any>, any, any, any, any>,
+      ) => string;
     } = {},
   ) => {
     const bus = new MemoryEventBus();
@@ -173,6 +201,167 @@ describe("durable: DurableContext", () => {
     });
 
     await expect(ctx.sleep(1)).resolves.toBeUndefined();
+  });
+
+  it("workflow() injects parentExecutionId and a default idempotency key", async () => {
+    const startWorkflowExecution = jest.fn(async () => "child-execution-id");
+    const { store, ctx } = createContext(
+      "parent-execution",
+      1,
+      new MemoryStore(),
+      {
+        startWorkflowExecution,
+      },
+    );
+
+    await expect(ctx.workflow("start-child", ChildWorkflowTask)).resolves.toBe(
+      "child-execution-id",
+    );
+
+    expect(startWorkflowExecution).toHaveBeenCalledWith(
+      ChildWorkflowTask,
+      undefined,
+      {
+        parentExecutionId: "parent-execution",
+        idempotencyKey: "subflow:parent-execution:start-child",
+        priority: undefined,
+        timeout: undefined,
+      },
+    );
+    await expect(
+      store.getStepResult("parent-execution", "start-child"),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        result: "child-execution-id",
+      }),
+    );
+  });
+
+  it("workflow() preserves explicit idempotency keys", async () => {
+    const startWorkflowExecution = jest.fn(async () => "child-execution-id");
+    const { ctx } = createContext("parent-execution", 1, new MemoryStore(), {
+      startWorkflowExecution,
+    });
+
+    await expect(
+      ctx.workflow("start-child", ChildWorkflowTask, undefined, {
+        idempotencyKey: "custom-idempotency",
+        timeout: 1_000,
+      }),
+    ).resolves.toBe("child-execution-id");
+
+    expect(startWorkflowExecution).toHaveBeenCalledWith(
+      ChildWorkflowTask,
+      undefined,
+      {
+        parentExecutionId: "parent-execution",
+        idempotencyKey: "custom-idempotency",
+        priority: undefined,
+        timeout: 1_000,
+      },
+    );
+  });
+
+  it("workflow() fails fast when the child task is not tagged as durable", async () => {
+    const startWorkflowExecution = jest.fn(async () => "child-execution-id");
+    const { ctx } = createContext("parent-execution", 1, new MemoryStore(), {
+      startWorkflowExecution,
+    });
+
+    await expect(ctx.workflow("start-child", ChildTextTask)).rejects.toThrow(
+      "not tagged as a durable workflow",
+    );
+    expect(startWorkflowExecution).not.toHaveBeenCalled();
+  });
+
+  it("workflow() fails fast when durable workflow starts are unavailable in this context", async () => {
+    const { ctx } = createContext("parent-execution", 1, new MemoryStore());
+
+    await expect(
+      ctx.workflow("start-child", ChildWorkflowTask),
+    ).rejects.toThrow(
+      "Durable workflow starts are not available in this context.",
+    );
+  });
+
+  it("workflow() uses its default idempotency key to avoid duplicate child creates after a step-save failure", async () => {
+    class StepSaveFailsOnceStore extends MemoryStore {
+      private failed = false;
+
+      override async saveStepResult(result: {
+        executionId: string;
+        stepId: string;
+        result: unknown;
+        completedAt: Date;
+      }): Promise<void> {
+        if (
+          !this.failed &&
+          result.executionId === "parent" &&
+          result.stepId === "start-child"
+        ) {
+          this.failed = true;
+          throw new Error("step-save-failed");
+        }
+
+        await super.saveStepResult(result);
+      }
+    }
+
+    const store = new StepSaveFailsOnceStore();
+    const startWorkflowExecution = async <TInput, TResult>(
+      task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+      _input: TInput | undefined,
+      options: {
+        timeout?: number;
+        priority?: number;
+        parentExecutionId: string;
+        idempotencyKey: string;
+      },
+    ): Promise<string> => {
+      const executionId = `child:${options.idempotencyKey}`;
+      const created = await store.createExecutionWithIdempotencyKey!({
+        execution: {
+          id: executionId,
+          taskId: task.id,
+          parentExecutionId: options.parentExecutionId,
+          input: undefined,
+          status: ExecutionStatus.Pending,
+          attempt: 1,
+          maxAttempts: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        taskId: task.id,
+        idempotencyKey: options.idempotencyKey,
+      });
+
+      return created.executionId;
+    };
+
+    const first = new DurableContext(store, new MemoryEventBus(), "parent", 1, {
+      startWorkflowExecution,
+    });
+    await expect(
+      first.workflow("start-child", ChildWorkflowTask),
+    ).rejects.toThrow("step-save-failed");
+
+    const replay = new DurableContext(
+      store,
+      new MemoryEventBus(),
+      "parent",
+      1,
+      { startWorkflowExecution },
+    );
+    await expect(
+      replay.workflow("start-child", ChildWorkflowTask),
+    ).resolves.toBe("child:subflow:parent:start-child");
+
+    await expect(store.listExecutions({})).resolves.toEqual([
+      expect.objectContaining({
+        id: "child:subflow:parent:start-child",
+        parentExecutionId: "parent",
+      }),
+    ]);
   });
 
   it("memoizes steps, supports retries and timeouts", async () => {
@@ -860,19 +1049,107 @@ describe("durable: DurableContext", () => {
     const { ctx } = createContext("e1", 1, store);
 
     await expect(
-      ctx.waitForExecution<{ ok: boolean }>("child-completed"),
+      ctx.waitForExecution(ChildObjectTask, "child-completed"),
     ).resolves.toEqual({ ok: true });
     await expect(
       store.getStepResult("e1", "__execution:child-completed"),
     ).resolves.toEqual(
       expect.objectContaining({
-        result: {
+        result: expect.objectContaining({
           state: "completed",
+          taskId: "child-task",
           targetExecutionId: "child-completed",
           result: { ok: true },
-        },
+        }),
       }),
     );
+  });
+
+  it("uses the durable persistence id when matching waitForExecution() task witnesses", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "child-completed",
+      taskId: "canonical-child-task",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      result: { ok: true },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store, {
+      getTaskPersistenceId: (task) =>
+        task === ChildObjectTask ? "canonical-child-task" : task.id,
+    });
+
+    await expect(
+      ctx.waitForExecution(ChildObjectTask, "child-completed"),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("fails fast when waitForExecution() receives the wrong task witness", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "child-completed",
+      taskId: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      result: { ok: true },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForExecution(ChildWorkflowTask, "child-completed"),
+    ).rejects.toThrow("the stored durable execution belongs to 'child-task'");
+  });
+
+  it("fails fast when a cached completed wait result belongs to a different task", async () => {
+    const store = new MemoryStore();
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__execution:child-cached",
+      result: {
+        state: "completed",
+        targetExecutionId: "child-cached",
+        taskId: "child-task",
+        result: { ok: true },
+      },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForExecution(ChildWorkflowTask, "child-cached"),
+    ).rejects.toThrow("the stored durable execution belongs to 'child-task'");
+  });
+
+  it("fails fast when a cached waiting state points to a missing child execution", async () => {
+    const store = new MemoryStore();
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__execution:child-missing",
+      result: {
+        state: "waiting",
+        targetExecutionId: "child-missing",
+      },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForExecution(ChildTextTask, "child-missing"),
+    ).rejects.toThrow("target execution does not exist");
   });
 
   it("throws a durable execution error when the child execution failed", async () => {
@@ -892,9 +1169,9 @@ describe("durable: DurableContext", () => {
 
     const { ctx } = createContext("e1", 1, store);
 
-    await expect(ctx.waitForExecution("child-failed")).rejects.toBeInstanceOf(
-      DurableExecutionError,
-    );
+    await expect(
+      ctx.waitForExecution(ChildTextTask, "child-failed"),
+    ).rejects.toBeInstanceOf(DurableExecutionError);
     const replayContext = new DurableContext(
       store,
       new MemoryEventBus(),
@@ -902,7 +1179,7 @@ describe("durable: DurableContext", () => {
       1,
     );
     await expect(
-      replayContext.waitForExecution("child-failed"),
+      replayContext.waitForExecution(ChildTextTask, "child-failed"),
     ).rejects.toMatchObject({
       executionId: "child-failed",
       taskId: "child-task",
@@ -927,7 +1204,7 @@ describe("durable: DurableContext", () => {
     const { ctx } = createContext("e1", 1, store);
 
     await expect(
-      ctx.waitForExecution("child-pending", {
+      ctx.waitForExecution(ChildTextTask, "child-pending", {
         stepId: "child-timeout",
         timeoutMs: 5,
       }),
@@ -964,7 +1241,7 @@ describe("durable: DurableContext", () => {
       1,
     );
     await expect(
-      replayContext.waitForExecution("child-pending", {
+      replayContext.waitForExecution(ChildTextTask, "child-pending", {
         stepId: "child-timeout",
         timeoutMs: 5,
       }),
@@ -989,7 +1266,7 @@ describe("durable: DurableContext", () => {
     const { ctx } = createContext("e1", 1, store);
 
     await expect(
-      ctx.waitForExecution("child-comp-failed"),
+      ctx.waitForExecution(ChildTextTask, "child-comp-failed"),
     ).rejects.toBeInstanceOf(DurableExecutionError);
     const replayContext = new DurableContext(
       store,
@@ -998,7 +1275,7 @@ describe("durable: DurableContext", () => {
       1,
     );
     await expect(
-      replayContext.waitForExecution("child-comp-failed"),
+      replayContext.waitForExecution(ChildTextTask, "child-comp-failed"),
     ).rejects.toMatchObject({
       message: "rollback blew up",
       executionId: "child-comp-failed",

@@ -27,9 +27,7 @@ import {
 } from "./managers";
 import { durableExecutionInvariantError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
-import { getCurrentRuntimeCallSource } from "../../../models/RuntimeCallSourceStore";
 import type { DurableWorker } from "./DurableWorker";
-import { RuntimeCallSourceKind } from "../../../types/runtimeSource";
 
 export { DurableExecutionError } from "./utils";
 
@@ -484,14 +482,10 @@ export class DurableService implements IDurableService {
   }
 
   private assertCanStartDurableExecution(methodName: string): void {
-    if (this.lifecycleState === "running") {
-      return;
-    }
-
     if (
-      (this.lifecycleState === "cooldown" ||
-        this.lifecycleState === "disposing") &&
-      this.hasActiveInternalRuntimeContinuation()
+      this.lifecycleState === "running" ||
+      this.lifecycleState === "cooldown" ||
+      this.lifecycleState === "disposing"
     ) {
       return;
     }
@@ -517,20 +511,6 @@ export class DurableService implements IDurableService {
         `${methodName} cannot interact with this durable runtime because shutdown is already disposing resources. ` +
         "Wait for shutdown to complete or create a fresh runtime instance.",
     });
-  }
-
-  private hasActiveInternalRuntimeContinuation(): boolean {
-    const source = getCurrentRuntimeCallSource();
-    if (!source) {
-      return false;
-    }
-
-    return (
-      source.kind === RuntimeCallSourceKind.Task ||
-      source.kind === RuntimeCallSourceKind.Hook ||
-      source.kind === RuntimeCallSourceKind.TaskMiddleware ||
-      source.kind === RuntimeCallSourceKind.ResourceMiddleware
-    );
   }
 }
 

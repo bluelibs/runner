@@ -450,7 +450,7 @@ If RabbitMQ duplicates or drops a delivery hint, or Redis pub/sub misses a notif
 
 `RedisStore` persists the workflow state in a few buckets of data:
 
-- **Execution records**: one record per `executionId`, holding task id, input, status, attempt counters, timeout, result/error, and timestamps.
+- **Execution records**: one record per `executionId`, holding task id, optional `parentExecutionId`, input, status, attempt counters, timeout, result/error, and timestamps.
 - **Execution indexes**: sets for all executions, active executions, and stuck executions so operators and recovery loops can find relevant work quickly.
 - **Step results**: one hash per execution keyed by `stepId`. This is what lets replay skip already-completed `durableContext.step(...)` calls.
 - **Signal state**: one record per `executionId + signalId`, storing both retained signal history and a FIFO queue of unmatched arrivals for later `waitForSignal(...)` consumption.
@@ -980,9 +980,8 @@ Durable workflows follow Runner's normal graceful shutdown lifecycle, but the du
    - does **not** immediately tear down store / queue / event-bus connections
 2. drain window
    - the runtime is still alive while Runner waits for already-admitted work to settle
-   - `signal(...)` and `wait(...)` remain available during this phase
-   - fresh external durable starts should be treated as closed once durable `cooldown()` begins
-   - a start triggered by already-draining Runner work is part of that same business continuation and may still be needed while drain is in progress
+   - `signal(...)`, `wait(...)`, and task-level durable `start(...)` calls remain available during this phase
+   - Runner still owns business admission, so whether fresh work is allowed depends on the surrounding task/runtime policy rather than a durable-specific shutdown gate
 3. `dispose()`
    - final teardown closes durable adapters and finishes shutting the durable runtime down
 
@@ -990,16 +989,16 @@ This is especially relevant for embedded and mixed topologies:
 
 - if a workflow is already sleeping on `waitForSignal(...)`, shutdown still lets outside code deliver that signal while drain is active
 - if a workflow is suspended in `waitForExecution(...)`, child completion can still resume the parent while drain is active
-- if already-draining business work needs to start a dependent workflow, that is conceptually part of the same continuation rather than fresh ingress
+- task-level durable starts are still valid during drain as long as Runner has admitted the surrounding business work
 - if this runtime also owned an embedded worker, `cooldown()` has already stopped local queue / timer / recovery ownership, so forward progress may depend on another worker still being alive
 - if you need API-only nodes to call `start()` / `signal()` / `wait()` without owning polling, keep that separation explicit in your topology and let worker nodes own polling/recovery
 
 The important mental model is:
 
 - `cooldown()` stops this runtime from **owning more background durable work**
+- `cooldown()` does not take over Runner's task-admission policy for `start(...)`
 - `dispose()` is the hard stop that closes the durable runtime itself
-- fresh ingress and draining business continuations are not the same thing
-- the tricky edge is whether a draining continuation can still `start(...)` safely in every topology, especially when this same runtime has already stopped owning worker duties
+- the tricky edge is topology: once worker ownership is gone, a newly started workflow still needs some worker to pick it up
 
 ### What Happens with the Return Value
 
@@ -1161,22 +1160,24 @@ Return shapes:
 
 ## Waiting On Child Workflows
 
-When a workflow starts another workflow, keep the start itself inside a replay-safe `step(...)`, persist the returned child `executionId`, and then suspend on `durableContext.waitForExecution(...)`.
+When a workflow starts another workflow, prefer `durableContext.workflow(stepId, childWorkflowTask, input)` and then suspend on `durableContext.waitForExecution(childWorkflowTask, executionId)`.
 
 Why this shape matters:
 
-- `step("start-child", ...)` memoizes the child `executionId` in the parent
+- `workflow(stepId, ...)` memoizes the child `executionId` in the parent
+- `workflow(...)` always forwards `parentExecutionId: durableContext.executionId`
+- `workflow(...)` auto-derives a deterministic `idempotencyKey` from `parentExecutionId + stepId` when one is not explicitly provided
 - `waitForExecution(...)` durably suspends until that child reaches a terminal state
-- a deterministic `idempotencyKey` on `durable.start(...)` prevents duplicate child starts if the process crashes after the child is created but before the parent step result is saved
+- the task argument gives type inference and is checked against the stored durable execution identity; runtime waiting is still keyed by `executionId`
 
 Return shapes:
 
 | Call                                                      | Returns                                                 |
 | --------------------------------------------------------- | ------------------------------------------------------- |
-| `waitForExecution(executionId)`                           | `result`                                                |
-| `waitForExecution(executionId, { stepId })`               | `result`                                                |
-| `waitForExecution(executionId, { timeoutMs })`            | `{ kind: "completed", data }` or `{ kind: "timeout" }`  |
-| `waitForExecution(executionId, { timeoutMs, stepId })`    | `{ kind: "completed", data }` or `{ kind: "timeout" }`  |
+| `waitForExecution(childTask, executionId)`                           | `result`                                                |
+| `waitForExecution(childTask, executionId, { stepId })`               | `result`                                                |
+| `waitForExecution(childTask, executionId, { timeoutMs })`            | `{ kind: "completed", data }` or `{ kind: "timeout" }`  |
+| `waitForExecution(childTask, executionId, { timeoutMs, stepId })`    | `{ kind: "completed", data }` or `{ kind: "timeout" }`  |
 
 Terminal child outcomes:
 
@@ -1186,23 +1187,25 @@ Terminal child outcomes:
 Example:
 
 ```typescript
-const childExecutionId = await durableContext.step(
+const childExecutionId = await durableContext.workflow(
   "start-payment-child",
-  async () => {
-    return await durable.start(processPayment, input, {
-      idempotencyKey: `${durableContext.executionId}:start-payment-child`,
-    });
-  },
+  processPayment,
+  input,
 );
 
-const payment = await durableContext.waitForExecution(childExecutionId, {
+const payment = await durableContext.waitForExecution(
+  processPayment,
+  childExecutionId,
+  {
   stepId: "wait-payment-child",
-});
+  },
+);
 ```
 
 Shutdown note:
 
 - `waitForExecution(...)` is treated like other draining durable continuations: if the parent is already suspended and the child finishes during durable drain, the parent may still be resumed to settle that wait before final disposal.
+- `workflow(...)` is the recommended in-workflow child-start API because it handles replay-safe start memoization, parent linkage, and the default subflow idempotency scope together.
 
 ### Example: `waitUntilPaid()`
 

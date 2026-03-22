@@ -1,11 +1,16 @@
 import type { SignalOptions } from "../interfaces/context";
-import { SuspensionSignal } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import type { IEventDefinition } from "../../../../types/event";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
-import { TimerStatus, TimerType } from "../types";
+import { TimerType } from "../types";
 import { isRecord, shouldPersistStableSignalId } from "../utils";
 import { upsertSignalWaiter, withSignalLock } from "../signalWaiters";
+import {
+  createTimedWaitState,
+  deleteWaitTimerBestEffort,
+  ensureDurableWaitTimer,
+  suspendDurableWait,
+} from "../waiterCore";
 import {
   durableExecutionInvariantError,
   durableSignalTimeoutError,
@@ -155,68 +160,61 @@ export async function waitForSignalDurably<TPayload>(params: {
         });
         if (queuedSignal) {
           if ("timerId" in parsedState) {
-            try {
-              await params.store.deleteTimer(parsedState.timerId);
-            } catch {
-              // Durable completion already won; stale timer cleanup stays best-effort.
-            }
+            await deleteWaitTimerBestEffort(params.store, parsedState.timerId);
           }
           return resolveCompleted(queuedSignal.payload as TPayload);
         }
 
-        let waiterTimerId: string | undefined;
-        if (params.options?.timeoutMs !== undefined) {
-          if ("timeoutAtMs" in parsedState && "timerId" in parsedState) {
-            await params.store.createTimer({
-              id: parsedState.timerId,
-              executionId: params.executionId,
-              stepId,
-              type: TimerType.SignalTimeout,
-              fireAt: new Date(parsedState.timeoutAtMs),
-              status: TimerStatus.Pending,
-            });
-            waiterTimerId = parsedState.timerId;
-          } else {
-            const timerId = `signal_timeout:${params.executionId}:${stepId}`;
-            const timeoutAtMs = Date.now() + params.options.timeoutMs;
-
-            await params.store.createTimer({
-              id: timerId,
-              executionId: params.executionId,
-              stepId,
-              type: TimerType.SignalTimeout,
-              fireAt: new Date(timeoutAtMs),
-              status: TimerStatus.Pending,
-            });
-
+        const timeout = await ensureDurableWaitTimer({
+          store: params.store,
+          executionId: params.executionId,
+          stepId,
+          timerType: TimerType.SignalTimeout,
+          timeoutMs: params.options?.timeoutMs,
+          existing:
+            "timeoutAtMs" in parsedState && "timerId" in parsedState
+              ? parsedState
+              : undefined,
+          createTimerId: () => `signal_timeout:${params.executionId}:${stepId}`,
+          persistWaitingState: async (timeoutAtMs, timerId) => {
             await params.store.saveStepResult({
               executionId: params.executionId,
               stepId,
-              result: { state: "waiting", signalId, timeoutAtMs, timerId },
+              result: createTimedWaitState(
+                { state: "waiting" as const, signalId },
+                timeoutAtMs,
+                timerId,
+              ),
               completedAt: new Date(),
             });
-
+          },
+          onTimerCreated: async (timeoutAtMs, timerId) => {
             await params.appendAuditEntry({
               kind: DurableAuditEntryKind.SignalWaiting,
               stepId,
               signalId,
-              timeoutMs: params.options.timeoutMs,
+              timeoutMs: params.options?.timeoutMs,
               timeoutAtMs,
               timerId,
               reason: "timeout_armed",
             });
-            waiterTimerId = timerId;
-          }
-        }
+          },
+        });
 
-        await upsertSignalWaiter({
+        return await suspendDurableWait({
           store: params.store,
           executionId: params.executionId,
-          signalId,
           stepId,
-          timerId: waiterTimerId,
+          registerWaiter: async () => {
+            await upsertSignalWaiter({
+              store: params.store,
+              executionId: params.executionId,
+              signalId,
+              stepId,
+              timerId: timeout.timerId,
+            });
+          },
         });
-        throw new SuspensionSignal("yield");
       }
 
       const queuedSignal = await params.store.consumeBufferedSignalForStep({
@@ -229,69 +227,64 @@ export async function waitForSignalDurably<TPayload>(params: {
         return resolveCompleted(queuedSignal.payload as TPayload);
       }
 
-      if (params.options?.timeoutMs !== undefined) {
-        const timerId = `signal_timeout:${params.executionId}:${stepId}`;
-        const timeoutAtMs = Date.now() + params.options.timeoutMs;
+      const timeout = await ensureDurableWaitTimer({
+        store: params.store,
+        executionId: params.executionId,
+        stepId,
+        timerType: TimerType.SignalTimeout,
+        timeoutMs: params.options?.timeoutMs,
+        createTimerId: () => `signal_timeout:${params.executionId}:${stepId}`,
+        persistWaitingState: async (timeoutAtMs, timerId) => {
+          await params.store.saveStepResult({
+            executionId: params.executionId,
+            stepId,
+            result: createTimedWaitState(
+              { state: "waiting" as const, signalId },
+              timeoutAtMs,
+              timerId,
+            ),
+            completedAt: new Date(),
+          });
+        },
+        onTimerCreated: async (timeoutAtMs, timerId) => {
+          await params.appendAuditEntry({
+            kind: DurableAuditEntryKind.SignalWaiting,
+            stepId,
+            signalId,
+            timeoutMs: params.options?.timeoutMs,
+            timeoutAtMs,
+            timerId,
+            reason: "initial",
+          });
+        },
+      });
 
-        await params.store.createTimer({
-          id: timerId,
-          executionId: params.executionId,
-          stepId,
-          type: TimerType.SignalTimeout,
-          fireAt: new Date(timeoutAtMs),
-          status: TimerStatus.Pending,
-        });
-
-        await params.store.saveStepResult({
-          executionId: params.executionId,
-          stepId,
-          result: { state: "waiting", signalId, timeoutAtMs, timerId },
-          completedAt: new Date(),
-        });
-
-        await upsertSignalWaiter({
-          store: params.store,
-          executionId: params.executionId,
-          signalId,
-          stepId,
-          timerId,
-        });
-
+      if (params.options?.timeoutMs === undefined) {
         await params.appendAuditEntry({
           kind: DurableAuditEntryKind.SignalWaiting,
           stepId,
           signalId,
-          timeoutMs: params.options.timeoutMs,
-          timeoutAtMs,
-          timerId,
           reason: "initial",
         });
-
-        throw new SuspensionSignal("yield");
       }
 
-      await params.store.saveStepResult({
-        executionId: params.executionId,
-        stepId,
-        result: { state: "waiting", signalId },
-        completedAt: new Date(),
-      });
-
-      await upsertSignalWaiter({
+      return await suspendDurableWait({
         store: params.store,
         executionId: params.executionId,
-        signalId,
         stepId,
+        waitingState: timeout.persistedWaitingState
+          ? undefined
+          : { state: "waiting", signalId },
+        registerWaiter: async () => {
+          await upsertSignalWaiter({
+            store: params.store,
+            executionId: params.executionId,
+            signalId,
+            stepId,
+            timerId: timeout.timerId,
+          });
+        },
       });
-
-      await params.appendAuditEntry({
-        kind: DurableAuditEntryKind.SignalWaiting,
-        stepId,
-        signalId,
-        reason: "initial",
-      });
-
-      throw new SuspensionSignal("yield");
     },
   });
 }

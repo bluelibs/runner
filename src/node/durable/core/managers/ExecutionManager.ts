@@ -26,6 +26,7 @@ import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.
 import { acquireStoreLock } from "../locking";
 import { withExecutionWaitLock } from "../executionWaiters";
 import { createExecutionWaitCompletionState } from "../executionWaitState";
+import { commitDurableWaitCompletion } from "../waiterCore";
 import {
   createExecutionId,
   isTimeoutExceededError,
@@ -198,6 +199,7 @@ export class ExecutionManager {
     return {
       id: executionId ?? createExecutionId(),
       taskId: this.getTaskPersistenceId(task),
+      parentExecutionId: options?.parentExecutionId,
       input,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -646,19 +648,28 @@ export class ExecutionManager {
             completedAt: new Date(),
           };
 
-          const completed = this.config.store.commitExecutionWaiterCompletion
-            ? await this.config.store.commitExecutionWaiterCompletion({
-                targetExecutionId: execution.id,
-                executionId: waiter.executionId,
-                stepId: waiter.stepId,
-                stepResult,
-                timerId: waiter.timerId,
-              })
-            : await this.completeExecutionWaiterFallback({
-                executionId: execution.id,
-                waiter,
-                stepResult,
-              });
+          const completed = await commitDurableWaitCompletion({
+            store: this.config.store,
+            stepResult,
+            timerId: waiter.timerId,
+            commitAtomically: this.config.store.commitExecutionWaiterCompletion
+              ? async () =>
+                  await this.config.store.commitExecutionWaiterCompletion!({
+                    targetExecutionId: execution.id,
+                    executionId: waiter.executionId,
+                    stepId: waiter.stepId,
+                    stepResult,
+                    timerId: waiter.timerId,
+                  })
+              : undefined,
+            onFallbackCommitted: async () => {
+              await this.config.store.deleteExecutionWaiter(
+                execution.id,
+                waiter.executionId,
+                waiter.stepId,
+              );
+            },
+          });
 
           if (!completed) {
             continue;
@@ -668,34 +679,6 @@ export class ExecutionManager {
         }
       },
     });
-  }
-
-  private async completeExecutionWaiterFallback(params: {
-    executionId: string;
-    waiter: { executionId: string; stepId: string; timerId?: string };
-    stepResult: {
-      executionId: string;
-      stepId: string;
-      result: unknown;
-      completedAt: Date;
-    };
-  }): Promise<boolean> {
-    await this.config.store.saveStepResult(params.stepResult);
-    await this.config.store.deleteExecutionWaiter(
-      params.executionId,
-      params.waiter.executionId,
-      params.waiter.stepId,
-    );
-
-    if (params.waiter.timerId) {
-      try {
-        await this.config.store.deleteTimer(params.waiter.timerId);
-      } catch {
-        // Best-effort cleanup; replay safety comes from the step result.
-      }
-    }
-
-    return true;
   }
 
   private async logExecutionStatusChange(params: {
@@ -813,6 +796,10 @@ export class ExecutionManager {
           this.config.determinism?.implicitInternalStepIds,
         declaredSignalIds: getDeclaredDurableWorkflowSignalIds(task),
         assertLockOwnership,
+        startWorkflowExecution: async (childTask, input, options) =>
+          await this.start(childTask, input, options),
+        getTaskPersistenceId: (childTask) =>
+          this.getTaskPersistenceId(childTask),
       },
     );
   }

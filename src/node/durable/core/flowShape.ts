@@ -1,4 +1,11 @@
 import type { IEventDefinition } from "../../../types/event";
+import type { AnyTask } from "../../../types/task";
+import type {
+  ExtractTaskInput,
+  ResolveTaskOutput,
+} from "../../../types/utilities";
+import { durableExecutionInvariantError } from "../../../errors";
+import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import type {
   IDurableContext,
   SwitchBranch,
@@ -8,6 +15,7 @@ import type {
   StepOptions,
   IStepBuilder,
   WaitForExecutionOptions,
+  WorkflowOptions,
 } from "./interfaces/context";
 import type { DurableStepId } from "./ids";
 
@@ -19,6 +27,7 @@ export type FlowNode =
   | FlowSleepNode
   | FlowSignalNode
   | FlowEmitNode
+  | FlowWorkflowNode
   | FlowExecutionNode
   | FlowSwitchNode
   | FlowNoteNode;
@@ -48,8 +57,15 @@ export interface FlowEmitNode {
   stepId?: string;
 }
 
+export interface FlowWorkflowNode {
+  kind: "workflow";
+  stepId: string;
+  taskId: string;
+}
+
 export interface FlowExecutionNode {
   kind: "waitForExecution";
+  taskId: string;
   executionId: string;
   timeoutMs?: number;
   stepId?: string;
@@ -124,6 +140,27 @@ class FlowRecorder implements IDurableContext {
     });
   }
 
+  async workflow<TTask extends AnyTask>(
+    stepId: string,
+    task: TTask,
+    ..._args: ExtractTaskInput<TTask> extends undefined | void
+      ? [input?: ExtractTaskInput<TTask>, options?: WorkflowOptions]
+      : [input: ExtractTaskInput<TTask>, options?: WorkflowOptions]
+  ): Promise<string> {
+    if (!durableWorkflowTag.exists(task)) {
+      return durableExecutionInvariantError.throw({
+        message: `Task '${task.id}' is not tagged as a durable workflow and cannot be started via durableContext.workflow().`,
+      });
+    }
+
+    this.nodes.push({
+      kind: "workflow",
+      stepId,
+      taskId: task.id,
+    });
+    return "__flow_workflow_execution_id__";
+  }
+
   waitForSignal<TPayload>(
     signal: IEventDefinition<TPayload>,
   ): Promise<TPayload>;
@@ -160,27 +197,35 @@ class FlowRecorder implements IDurableContext {
     });
   }
 
-  waitForExecution<TResult = unknown>(executionId: string): Promise<TResult>;
-  waitForExecution<TResult = unknown>(
+  waitForExecution<TTask extends AnyTask>(
+    task: TTask,
+    executionId: string,
+  ): Promise<ResolveTaskOutput<TTask>>;
+  waitForExecution<TTask extends AnyTask>(
+    task: TTask,
     executionId: string,
     options: WaitForExecutionOptions & { timeoutMs: number },
-  ): Promise<{ kind: "completed"; data: TResult } | { kind: "timeout" }>;
-  waitForExecution<TResult = unknown>(
+  ): Promise<
+    { kind: "completed"; data: ResolveTaskOutput<TTask> } | { kind: "timeout" }
+  >;
+  waitForExecution<TTask extends AnyTask>(
+    task: TTask,
     executionId: string,
     options: WaitForExecutionOptions,
-  ): Promise<TResult>;
-  async waitForExecution<TResult = unknown>(
+  ): Promise<ResolveTaskOutput<TTask>>;
+  async waitForExecution<TTask extends AnyTask>(
+    task: TTask,
     executionId: string,
     options?: WaitForExecutionOptions,
   ): Promise<unknown> {
     this.nodes.push({
       kind: "waitForExecution",
+      taskId: task.id,
       executionId,
       timeoutMs: options?.timeoutMs,
       stepId: options?.stepId,
     });
-
-    return undefined as TResult;
+    return undefined as ResolveTaskOutput<TTask>;
   }
 
   async switch<TValue, TResult>(

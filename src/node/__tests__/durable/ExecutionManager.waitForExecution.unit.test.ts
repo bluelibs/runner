@@ -67,11 +67,12 @@ describe("durable: ExecutionManager waitForExecution", () => {
       store.getStepResult("parent-execution", "__execution:wait-child"),
     ).resolves.toEqual(
       expect.objectContaining({
-        result: {
+        result: expect.objectContaining({
           state: "completed",
           targetExecutionId: "child-execution",
+          taskId: "child-task",
           result: { ok: true },
-        },
+        }),
       }),
     );
     await expect(
@@ -194,11 +195,12 @@ describe("durable: ExecutionManager waitForExecution", () => {
       store.getStepResult("parent-execution", "__execution:wait-child"),
     ).resolves.toEqual(
       expect.objectContaining({
-        result: {
+        result: expect.objectContaining({
           state: "completed",
           targetExecutionId: "child-execution",
+          taskId: "child-task",
           result: { ok: true },
-        },
+        }),
       }),
     );
     expect(queue.enqueued).toContainEqual({
@@ -305,6 +307,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
     ).toEqual({
       state: "completed",
       targetExecutionId: "child-execution",
+      taskId: "child-task",
       result: { ok: true },
     });
     expect(queue.enqueued).toContainEqual({
@@ -362,6 +365,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
     ).toEqual({
       state: "completed",
       targetExecutionId: "child-execution",
+      taskId: "child-task",
       result: { ok: true },
     });
   });

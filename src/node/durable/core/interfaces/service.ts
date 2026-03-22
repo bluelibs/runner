@@ -129,6 +129,11 @@ export interface ExecuteOptions {
   timeout?: number;
   priority?: number;
   /**
+   * Optional parent execution linkage for nested durable workflow starts.
+   * Useful for operator tooling and execution tree visualizations.
+   */
+  parentExecutionId?: string;
+  /**
    * Optional workflow-level idempotency key.
    * When supported by the store, multiple concurrent callers using the same key will receive the same executionId.
    */
@@ -195,15 +200,16 @@ export interface RecoverReportType {
 
 export interface IDurableService {
   /**
-   * Stops background durable admissions and new durable starts for this runtime
-   * instance while still allowing signal/wait interactions needed by already-
-   * owned executions to finish settling during drain.
+   * Stops worker, polling, recovery, and other background durable ownership for
+   * this runtime instance while still allowing task-level durable interactions
+   * needed by already-admitted Runner work to settle during drain.
    */
   cooldown(): Promise<void>;
 
   /**
    * Starts a workflow execution.
-   * New starts are rejected once shutdown begins.
+   * Task-level admission stays owned by Runner; durable only rejects starts once
+   * this durable runtime has been fully disposed.
    */
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
@@ -227,7 +233,8 @@ export interface IDurableService {
 
   /**
    * Starts a workflow and waits for completion.
-   * New start-and-wait calls are rejected once shutdown begins.
+   * Task-level admission stays owned by Runner; durable only rejects starts once
+   * this durable runtime has been fully disposed.
    * Returns the started execution id together with the workflow result payload.
    */
   startAndWait<TInput, TResult>(

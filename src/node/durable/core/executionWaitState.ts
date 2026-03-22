@@ -2,7 +2,12 @@ import { durableExecutionInvariantError } from "../../../errors";
 import { ExecutionStatus, type Execution } from "./types";
 
 export type DurableExecutionWaitCompletionState<TResult> =
-  | { state: "completed"; targetExecutionId: string; result: TResult }
+  | {
+      state: "completed";
+      targetExecutionId: string;
+      taskId: string;
+      result: TResult;
+    }
   | {
       state: "failed" | "cancelled";
       targetExecutionId: string;
@@ -29,6 +34,7 @@ export function createExecutionWaitCompletionState<TResult>(
     return {
       state: "completed",
       targetExecutionId: execution.id,
+      taskId: execution.taskId,
       result: execution.result as TResult,
     };
   }

@@ -122,6 +122,7 @@ describe("durable: RedisStore executions (mock)", () => {
     const execution: Execution = {
       id: "1",
       taskId: "t",
+      parentExecutionId: "parent-1",
       input: undefined,
       status: "pending",
       attempt: 1,
@@ -292,6 +293,7 @@ describe("durable: RedisStore executions (mock)", () => {
     const pending = {
       id: "exec-pending",
       taskId: "task-a",
+      parentExecutionId: "parent-a",
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -303,6 +305,7 @@ describe("durable: RedisStore executions (mock)", () => {
       ...pending,
       id: "exec-failed",
       taskId: "task-b",
+      parentExecutionId: undefined,
       status: ExecutionStatus.Failed,
       updatedAt: new Date("2024-01-02T00:00:00.000Z"),
       createdAt: new Date("2024-01-02T00:00:00.000Z"),
@@ -320,7 +323,12 @@ describe("durable: RedisStore executions (mock)", () => {
       ]),
     });
 
-    await expect(store.listExecutions()).resolves.toEqual([failed, pending]);
+    const allExecutions = await store.listExecutions();
+    expect(allExecutions).toEqual([failed, pending]);
+    expect(allExecutions).toEqual([
+      expect.objectContaining({ parentExecutionId: undefined }),
+      expect.objectContaining({ parentExecutionId: "parent-a" }),
+    ]);
     await expect(
       store.listExecutions({
         status: [ExecutionStatus.Pending],

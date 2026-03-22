@@ -15,6 +15,8 @@ export type ExecutionStatus =
 export interface Execution<TInput = unknown, TResult = unknown> {
   id: string;
   taskId: string;
+  /** Optional parent execution when this workflow was started by another durable workflow. */
+  parentExecutionId?: string;
   input: TInput | undefined;
   status: ExecutionStatus;
   result?: TResult;

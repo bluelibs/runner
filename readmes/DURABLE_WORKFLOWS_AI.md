@@ -190,19 +190,25 @@ Rule of thumb: RabbitMQ makes it fast; Redis makes it correct.
 Nested workflow pattern:
 
 ```ts
-const childExecutionId = await durableContext.step("start-child", async () => {
-  return await durable.start(childWorkflow, input, {
-    idempotencyKey: `${durableContext.executionId}:start-child`,
-  });
-});
+const childExecutionId = await durableContext.workflow(
+  "start-child",
+  childWorkflow,
+  input,
+);
 
-const child = await durableContext.waitForExecution(childExecutionId, {
+const child = await durableContext.waitForExecution(
+  childWorkflow,
+  childExecutionId,
+  {
   stepId: "wait-child",
-});
+  },
+);
 ```
 
-- `waitForExecution(executionId)` returns the child result
-- `waitForExecution(executionId, { timeoutMs })` returns `{ kind: "completed", data } | { kind: "timeout" }`
+- `workflow(stepId, childTask, input)` starts a replay-safe subflow and returns its `executionId`
+- it auto-injects `parentExecutionId` plus a deterministic default idempotency key based on the parent execution + step id
+- `waitForExecution(childTask, executionId)` returns the child result with type inference from `childTask`
+- `waitForExecution(childTask, executionId, { timeoutMs })` returns `{ kind: "completed", data } | { kind: "timeout" }`
 - child `failed`, `cancelled`, and `compensation_failed` terminal states throw
 
 ## Scheduling
@@ -220,6 +226,7 @@ const child = await durableContext.waitForExecution(childExecutionId, {
 
 - `createDashboardMiddleware` is now part of `@bluelibs/runner-durable-dashboard` (not core).
 - `store.getExecution(executionId)` → status (running/sleeping/completed/failed/etc)
+  - child executions started via `durableContext.workflow(...)` also carry `parentExecutionId`
 - When supported:
   - `store.listStepResults(executionId)` → completed steps
   - `store.listAuditEntries(executionId)` → timeline (step_completed, signal_waiting, signal_delivered, sleeps, status changes)

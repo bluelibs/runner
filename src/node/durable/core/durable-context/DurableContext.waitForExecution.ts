@@ -1,14 +1,19 @@
 import type { WaitForExecutionOptions } from "../interfaces/context";
-import { SuspensionSignal } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { DurableExecutionError, parseExecutionWaitState } from "../utils";
-import { TimerStatus, TimerType, type Execution } from "../types";
+import { TimerType, type Execution } from "../types";
 import {
   createExecutionWaitCompletionState,
   isExecutionWaitTerminal,
   type DurableExecutionWaitCompletionState,
 } from "../executionWaitState";
 import { withExecutionWaitLock } from "../executionWaiters";
+import {
+  commitDurableWaitCompletion,
+  createTimedWaitState,
+  ensureDurableWaitTimer,
+  suspendDurableWait,
+} from "../waiterCore";
 import { durableExecutionInvariantError } from "../../../../errors";
 
 export type WaitForExecutionOutcome<TResult> =
@@ -27,21 +32,18 @@ function createExecutionStepId(
     : `__execution:${targetExecutionId}`;
 }
 
-function createWaitingState(
-  targetExecutionId: string,
-  timeoutAtMs?: number,
-  timerId?: string,
-) {
-  if (timeoutAtMs !== undefined && timerId !== undefined) {
-    return {
-      state: "waiting" as const,
-      targetExecutionId,
-      timeoutAtMs,
-      timerId,
-    };
+function assertExpectedTaskId(params: {
+  expectedTaskId: string;
+  actualTaskId: string;
+  targetExecutionId: string;
+}): void {
+  if (params.expectedTaskId !== params.actualTaskId) {
+    durableExecutionInvariantError.throw({
+      message:
+        `Cannot wait for execution '${params.targetExecutionId}' as task '${params.expectedTaskId}': ` +
+        `the stored durable execution belongs to '${params.actualTaskId}'.`,
+    });
   }
-
-  return { state: "waiting" as const, targetExecutionId };
 }
 
 function throwTerminalState(state: {
@@ -77,33 +79,36 @@ async function finalizeTerminalState<TResult>(params: {
   store: IDurableStore;
   executionId: string;
   targetExecution: Execution<unknown, unknown>;
+  expectedTaskId: string;
   stepId: string;
   timerId?: string;
 }): Promise<ExecutionTerminalState<TResult>> {
+  assertExpectedTaskId({
+    expectedTaskId: params.expectedTaskId,
+    actualTaskId: params.targetExecution.taskId,
+    targetExecutionId: params.targetExecution.id,
+  });
+
   const terminalState = createExecutionWaitCompletionState<TResult>(
     params.targetExecution,
   );
-
-  await params.store.saveStepResult({
-    executionId: params.executionId,
-    stepId: params.stepId,
-    result: terminalState,
-    completedAt: new Date(),
+  await commitDurableWaitCompletion({
+    store: params.store,
+    stepResult: {
+      executionId: params.executionId,
+      stepId: params.stepId,
+      result: terminalState,
+      completedAt: new Date(),
+    },
+    timerId: params.timerId,
+    onFallbackCommitted: async () => {
+      await params.store.deleteExecutionWaiter(
+        params.targetExecution.id,
+        params.executionId,
+        params.stepId,
+      );
+    },
   });
-
-  await params.store.deleteExecutionWaiter(
-    params.targetExecution.id,
-    params.executionId,
-    params.stepId,
-  );
-
-  if (params.timerId) {
-    try {
-      await params.store.deleteTimer(params.timerId);
-    } catch {
-      // Durable completion already won; timer cleanup stays best-effort.
-    }
-  }
 
   return terminalState as ExecutionTerminalState<TResult>;
 }
@@ -125,6 +130,7 @@ export async function waitForExecutionDurably<TResult>(params: {
   store: IDurableStore;
   executionId: string;
   targetExecutionId: string;
+  expectedTaskId: string;
   assertCanContinue: () => Promise<void>;
   assertUniqueStepId: (stepId: string) => void;
   options?: WaitForExecutionOptions;
@@ -158,10 +164,17 @@ export async function waitForExecutionDurably<TResult>(params: {
         }
 
         if (state.state === "completed") {
+          const taskId = state.taskId!;
+          assertExpectedTaskId({
+            expectedTaskId: params.expectedTaskId,
+            actualTaskId: taskId,
+            targetExecutionId: state.targetExecutionId,
+          });
           return resolveTerminalState<TResult>(
             {
               state: "completed",
               targetExecutionId: state.targetExecutionId,
+              taskId,
               result: state.result as TResult,
             },
             hasTimeout,
@@ -169,6 +182,11 @@ export async function waitForExecutionDurably<TResult>(params: {
         }
 
         if (state.state === "failed" || state.state === "cancelled") {
+          assertExpectedTaskId({
+            expectedTaskId: params.expectedTaskId,
+            actualTaskId: state.taskId!,
+            targetExecutionId: state.targetExecutionId,
+          });
           return resolveTerminalState<TResult>(
             {
               state: state.state,
@@ -185,6 +203,11 @@ export async function waitForExecutionDurably<TResult>(params: {
           return resolveTimedOut<TResult>(hasTimeout);
         }
 
+        const waitingState = state as Extract<
+          typeof state,
+          { state: "waiting" }
+        >;
+
         const targetExecution = await params.store.getExecution(
           params.targetExecutionId,
         );
@@ -194,13 +217,20 @@ export async function waitForExecutionDurably<TResult>(params: {
           });
         }
 
+        assertExpectedTaskId({
+          expectedTaskId: params.expectedTaskId,
+          actualTaskId: targetExecution.taskId,
+          targetExecutionId: targetExecution.id,
+        });
+
         if (isExecutionWaitTerminal(targetExecution)) {
           const terminalState = await finalizeTerminalState<TResult>({
             store: params.store,
             executionId: params.executionId,
             targetExecution,
+            expectedTaskId: params.expectedTaskId,
             stepId,
-            timerId: state.timerId,
+            timerId: waitingState.timerId,
           });
 
           return resolveTerminalState<TResult>(terminalState, hasTimeout) as
@@ -208,52 +238,45 @@ export async function waitForExecutionDurably<TResult>(params: {
             | WaitForExecutionOutcome<TResult>;
         }
 
-        let timerId = state.timerId;
-        if (params.options?.timeoutMs !== undefined) {
-          if (state.timeoutAtMs !== undefined && state.timerId) {
-            await params.store.createTimer({
-              id: state.timerId,
-              executionId: params.executionId,
-              stepId,
-              type: TimerType.Timeout,
-              fireAt: new Date(state.timeoutAtMs),
-              status: TimerStatus.Pending,
-            });
-            timerId = state.timerId;
-          } else {
-            timerId = `execution_timeout:${params.executionId}:${stepId}`;
-            const timeoutAtMs = Date.now() + params.options.timeoutMs;
-
-            await params.store.createTimer({
-              id: timerId,
-              executionId: params.executionId,
-              stepId,
-              type: TimerType.Timeout,
-              fireAt: new Date(timeoutAtMs),
-              status: TimerStatus.Pending,
-            });
-
+        const timeout = await ensureDurableWaitTimer({
+          store: params.store,
+          executionId: params.executionId,
+          stepId,
+          timerType: TimerType.Timeout,
+          timeoutMs: params.options?.timeoutMs,
+          existing: waitingState,
+          createTimerId: () =>
+            `execution_timeout:${params.executionId}:${stepId}`,
+          persistWaitingState: async (timeoutAtMs, timerId) => {
             await params.store.saveStepResult({
               executionId: params.executionId,
               stepId,
-              result: createWaitingState(
-                params.targetExecutionId,
+              result: createTimedWaitState(
+                {
+                  state: "waiting" as const,
+                  targetExecutionId: params.targetExecutionId,
+                },
                 timeoutAtMs,
                 timerId,
               ),
               completedAt: new Date(),
             });
-          }
-        }
-
-        await params.store.upsertExecutionWaiter({
-          executionId: params.executionId,
-          targetExecutionId: params.targetExecutionId,
-          stepId,
-          timerId,
+          },
         });
 
-        throw new SuspensionSignal("yield");
+        return await suspendDurableWait({
+          store: params.store,
+          executionId: params.executionId,
+          stepId,
+          registerWaiter: async () => {
+            await params.store.upsertExecutionWaiter({
+              executionId: params.executionId,
+              targetExecutionId: params.targetExecutionId,
+              stepId,
+              timerId: timeout.timerId,
+            });
+          },
+        });
       }
 
       const targetExecution = await params.store.getExecution(
@@ -265,11 +288,18 @@ export async function waitForExecutionDurably<TResult>(params: {
         });
       }
 
+      assertExpectedTaskId({
+        expectedTaskId: params.expectedTaskId,
+        actualTaskId: targetExecution.taskId,
+        targetExecutionId: targetExecution.id,
+      });
+
       if (isExecutionWaitTerminal(targetExecution)) {
         const terminalState = await finalizeTerminalState<TResult>({
           store: params.store,
           executionId: params.executionId,
           targetExecution,
+          expectedTaskId: params.expectedTaskId,
           stepId,
         });
 
@@ -278,41 +308,54 @@ export async function waitForExecutionDurably<TResult>(params: {
           | WaitForExecutionOutcome<TResult>;
       }
 
-      let timerId: string | undefined;
-      let timeoutAtMs: number | undefined;
-      if (params.options?.timeoutMs !== undefined) {
-        timerId = `execution_timeout:${params.executionId}:${stepId}`;
-        timeoutAtMs = Date.now() + params.options.timeoutMs;
-
-        await params.store.createTimer({
-          id: timerId,
-          executionId: params.executionId,
-          stepId,
-          type: TimerType.Timeout,
-          fireAt: new Date(timeoutAtMs),
-          status: TimerStatus.Pending,
-        });
-      }
-
-      await params.store.saveStepResult({
+      const timeout = await ensureDurableWaitTimer({
+        store: params.store,
         executionId: params.executionId,
         stepId,
-        result: createWaitingState(
-          params.targetExecutionId,
-          timeoutAtMs,
-          timerId,
-        ),
-        completedAt: new Date(),
+        timerType: TimerType.Timeout,
+        timeoutMs: params.options?.timeoutMs,
+        createTimerId: () =>
+          `execution_timeout:${params.executionId}:${stepId}`,
+        persistWaitingState: async (timeoutAtMs, timerId) => {
+          await params.store.saveStepResult({
+            executionId: params.executionId,
+            stepId,
+            result: createTimedWaitState(
+              {
+                state: "waiting" as const,
+                targetExecutionId: params.targetExecutionId,
+              },
+              timeoutAtMs,
+              timerId,
+            ),
+            completedAt: new Date(),
+          });
+        },
       });
 
-      await params.store.upsertExecutionWaiter({
+      return await suspendDurableWait({
+        store: params.store,
         executionId: params.executionId,
-        targetExecutionId: params.targetExecutionId,
         stepId,
-        timerId,
+        waitingState: timeout.persistedWaitingState
+          ? undefined
+          : createTimedWaitState(
+              {
+                state: "waiting" as const,
+                targetExecutionId: params.targetExecutionId,
+              },
+              timeout.timeoutAtMs,
+              timeout.timerId,
+            ),
+        registerWaiter: async () => {
+          await params.store.upsertExecutionWaiter({
+            executionId: params.executionId,
+            targetExecutionId: params.targetExecutionId,
+            stepId,
+            timerId: timeout.timerId,
+          });
+        },
       });
-
-      throw new SuspensionSignal("yield");
     },
   });
 }

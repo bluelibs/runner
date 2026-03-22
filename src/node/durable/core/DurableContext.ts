@@ -8,10 +8,16 @@ import type {
   StepOptions,
   SwitchBranch,
   WaitForExecutionOptions,
+  WorkflowOptions,
 } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
 import { StepBuilder } from "./StepBuilder";
 import type { IEventDefinition } from "../../../types/event";
+import type { AnyTask, ITask } from "../../../types/task";
+import type {
+  ExtractTaskInput,
+  ResolveTaskOutput,
+} from "../../../types/utilities";
 import type { DurableStepId } from "./ids";
 import { DurableAuditEntryKind, type DurableAuditEmitter } from "./audit";
 import { ExecutionStatus } from "./types";
@@ -36,6 +42,7 @@ import {
   durableContextCancelledError,
   durableExecutionInvariantError,
 } from "../../../errors";
+import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 
 /**
  * Per-execution workflow toolkit used by durable tasks.
@@ -43,9 +50,9 @@ import {
  * `DurableContext` is created by `ExecutionManager` for each execution attempt and
  * made available to user code via `DurableResource.use()` (AsyncLocalStorage).
  *
- * It provides deterministic "save points" (`step()`), durable suspension primitives
- * (`sleep()`, `waitForSignal()`, `waitForExecution()`), and best-effort
- * side-channel notifications (`emit()`).
+ * It provides deterministic "save points" (`step()`), typed subflow starts
+ * (`workflow()`), durable suspension primitives (`sleep()`, `waitForSignal()`,
+ * `waitForExecution()`), and best-effort side-channel notifications (`emit()`).
  * The durable store is the source of truth; this class is intentionally thin state
  * around indexes/guards to keep a single in-memory attempt deterministic.
  */
@@ -71,6 +78,19 @@ export class DurableContext implements IDurableContext {
   private readonly implicitInternalStepIdsPolicy: ImplicitInternalStepIdsPolicy;
   private readonly declaredSignalIds: ReadonlySet<string> | null;
   private readonly assertLockOwnership: () => void;
+  private readonly startWorkflowExecution: <TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+    input: TInput | undefined,
+    options: {
+      timeout?: number;
+      priority?: number;
+      parentExecutionId: string;
+      idempotencyKey: string;
+    },
+  ) => Promise<string>;
+  private readonly getTaskPersistenceId: (
+    task: ITask<any, Promise<any>, any, any, any, any>,
+  ) => string;
 
   constructor(
     private readonly store: IDurableStore,
@@ -83,6 +103,19 @@ export class DurableContext implements IDurableContext {
       implicitInternalStepIds?: ImplicitInternalStepIdsPolicy;
       declaredSignalIds?: ReadonlySet<string> | null;
       assertLockOwnership?: () => void;
+      startWorkflowExecution?: <TInput, TResult>(
+        task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+        input: TInput | undefined,
+        options: {
+          timeout?: number;
+          priority?: number;
+          parentExecutionId: string;
+          idempotencyKey: string;
+        },
+      ) => Promise<string>;
+      getTaskPersistenceId?: (
+        task: ITask<any, Promise<any>, any, any, any, any>,
+      ) => string;
     } = {},
   ) {
     this.auditEnabled = options.auditEnabled ?? false;
@@ -91,6 +124,14 @@ export class DurableContext implements IDurableContext {
       options.implicitInternalStepIds ?? "allow";
     this.declaredSignalIds = options.declaredSignalIds ?? null;
     this.assertLockOwnership = options.assertLockOwnership ?? (() => {});
+    this.startWorkflowExecution =
+      options.startWorkflowExecution ??
+      (() =>
+        durableExecutionInvariantError.throw({
+          message: "Durable workflow starts are not available in this context.",
+        }));
+    this.getTaskPersistenceId =
+      options.getTaskPersistenceId ?? ((task) => task.id);
 
     this.audit = createDurableContextAudit({
       store: this.store,
@@ -131,6 +172,19 @@ export class DurableContext implements IDurableContext {
     options: StepOptions = {},
   ): StepBuilder<T> {
     return new StepBuilder<T>(this, stepId, options);
+  }
+
+  private resolveWorkflowStartOptions(
+    stepId: string,
+    options: WorkflowOptions | undefined,
+  ) {
+    return {
+      timeout: options?.timeout,
+      priority: options?.priority,
+      parentExecutionId: this.executionId,
+      idempotencyKey:
+        options?.idempotencyKey ?? `subflow:${this.executionId}:${stepId}`,
+    };
   }
 
   step<T>(stepId: string): IStepBuilder<T>;
@@ -204,6 +258,30 @@ export class DurableContext implements IDurableContext {
     });
   }
 
+  async workflow<TTask extends AnyTask>(
+    stepId: string,
+    task: TTask,
+    ...args: ExtractTaskInput<TTask> extends undefined | void
+      ? [input?: ExtractTaskInput<TTask>, options?: WorkflowOptions]
+      : [input: ExtractTaskInput<TTask>, options?: WorkflowOptions]
+  ): Promise<string> {
+    const [input, options] = args;
+
+    if (!durableWorkflowTag.exists(task)) {
+      return durableExecutionInvariantError.throw({
+        message: `Task '${task.id}' is not tagged as a durable workflow and cannot be started via durableContext.workflow().`,
+      });
+    }
+
+    return await this.step(stepId, async () => {
+      return await this.startWorkflowExecution(
+        task,
+        input,
+        this.resolveWorkflowStartOptions(stepId, options),
+      );
+    });
+  }
+
   async waitForSignal<TPayload>(
     signal: IEventDefinition<TPayload>,
   ): Promise<TPayload>;
@@ -242,25 +320,32 @@ export class DurableContext implements IDurableContext {
     });
   }
 
-  async waitForExecution<TResult = unknown>(
+  async waitForExecution<TTask extends AnyTask>(
+    _task: TTask,
     executionId: string,
-  ): Promise<TResult>;
-  async waitForExecution<TResult = unknown>(
+  ): Promise<ResolveTaskOutput<TTask>>;
+  async waitForExecution<TTask extends AnyTask>(
+    _task: TTask,
     executionId: string,
     options: WaitForExecutionOptions & { timeoutMs: number },
-  ): Promise<{ kind: "completed"; data: TResult } | { kind: "timeout" }>;
-  async waitForExecution<TResult = unknown>(
+  ): Promise<
+    { kind: "completed"; data: ResolveTaskOutput<TTask> } | { kind: "timeout" }
+  >;
+  async waitForExecution<TTask extends AnyTask>(
+    _task: TTask,
     executionId: string,
     options: WaitForExecutionOptions,
-  ): Promise<TResult>;
-  async waitForExecution<TResult = unknown>(
+  ): Promise<ResolveTaskOutput<TTask>>;
+  async waitForExecution<TTask extends AnyTask>(
+    _task: TTask,
     executionId: string,
     options?: WaitForExecutionOptions,
   ): Promise<any> {
-    return await waitForExecutionDurably<TResult>({
+    return await waitForExecutionDurably<ResolveTaskOutput<TTask>>({
       store: this.store,
       executionId: this.executionId,
       targetExecutionId: executionId,
+      expectedTaskId: this.getTaskPersistenceId(_task),
       assertCanContinue: this.assertCanContinue.bind(this),
       assertUniqueStepId: this.determinism.assertUniqueStepId,
       options,
