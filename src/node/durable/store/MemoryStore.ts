@@ -68,6 +68,9 @@ const cloneExecutionWaiter = (
   waiter: DurableExecutionWaiter,
 ): DurableExecutionWaiter => structuredClone(waiter);
 
+const cloneExecution = (execution: Execution): Execution =>
+  structuredClone(execution);
+
 function getSignalIdFromStepResult(result: StepResult): string {
   const state = result.result;
   if (
@@ -146,12 +149,12 @@ export class MemoryStore implements IDurableStore {
     }
 
     this.executionIdByIdempotencyKey.set(key, params.execution.id);
-    this.executions.set(params.execution.id, { ...params.execution });
+    this.executions.set(params.execution.id, cloneExecution(params.execution));
     return { created: true, executionId: params.execution.id };
   }
 
   async saveExecution(execution: Execution): Promise<void> {
-    this.executions.set(execution.id, { ...execution });
+    this.executions.set(execution.id, cloneExecution(execution));
   }
 
   async saveExecutionIfStatus(
@@ -162,13 +165,13 @@ export class MemoryStore implements IDurableStore {
     if (!current) return false;
     if (!expectedStatuses.includes(current.status)) return false;
 
-    this.executions.set(execution.id, { ...execution });
+    this.executions.set(execution.id, cloneExecution(execution));
     return true;
   }
 
   async getExecution(id: string): Promise<Execution | null> {
     const e = this.executions.get(id);
-    return e ? { ...e } : null;
+    return e ? cloneExecution(e) : null;
   }
 
   async updateExecution(
@@ -177,7 +180,10 @@ export class MemoryStore implements IDurableStore {
   ): Promise<void> {
     const e = this.executions.get(id);
     if (!e) return;
-    this.executions.set(id, { ...e, ...updates, updatedAt: new Date() });
+    this.executions.set(
+      id,
+      cloneExecution({ ...e, ...updates, updatedAt: new Date() }),
+    );
   }
 
   async listIncompleteExecutions(): Promise<Execution[]> {
@@ -189,13 +195,13 @@ export class MemoryStore implements IDurableStore {
           e.status !== ExecutionStatus.CompensationFailed &&
           e.status !== ExecutionStatus.Cancelled,
       )
-      .map((e) => ({ ...e }));
+      .map(cloneExecution);
   }
 
   async listStuckExecutions(): Promise<Execution[]> {
     return Array.from(this.executions.values())
       .filter((e) => e.status === ExecutionStatus.CompensationFailed)
-      .map((e) => ({ ...e }));
+      .map(cloneExecution);
   }
 
   // Dashboard query API
@@ -225,7 +231,7 @@ export class MemoryStore implements IDurableStore {
     const limit = options.limit ?? 100;
     results = results.slice(offset, offset + limit);
 
-    return results.map((e) => ({ ...e }));
+    return results.map(cloneExecution);
   }
 
   async listStepResults(executionId: string): Promise<StepResult[]> {

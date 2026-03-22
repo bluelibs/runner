@@ -3,6 +3,7 @@ import { DurableAuditEntryKind, isDurableInternalStepId } from "../audit";
 import { SuspensionSignal } from "../interfaces/context";
 import type { IStepBuilder, StepOptions } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
+import { clearExecutionCurrent } from "../current";
 import { ExecutionStatus } from "../types";
 import { sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
@@ -29,6 +30,7 @@ export async function executeDurableStep<T>(params: {
   executionId: string;
   assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
+  setCurrent: () => Promise<void>;
   stepId: string;
   options: StepOptions;
   upFn: () => Promise<T>;
@@ -53,6 +55,8 @@ export async function executeDurableStep<T>(params: {
     }
     return result;
   }
+
+  await params.setCurrent();
 
   let attempts = 0;
   const maxRetries = params.options.retries ?? 0;
@@ -98,6 +102,8 @@ export async function executeDurableStep<T>(params: {
     isInternal: isDurableInternalStepId(params.stepId),
   });
 
+  await clearExecutionCurrent(params.store, params.executionId);
+
   if (params.downFn) {
     registerCompensation(
       params.compensations,
@@ -140,6 +146,7 @@ export async function rollbackDurableCompensations(params: {
 
     await params.store.updateExecution(params.executionId, {
       status: ExecutionStatus.CompensationFailed,
+      current: undefined,
       error: errorInfo,
       updatedAt: new Date(),
     });

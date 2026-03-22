@@ -12,6 +12,11 @@ import type {
 } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
 import { StepBuilder } from "./StepBuilder";
+import {
+  createStepCurrent,
+  createWorkflowStepCurrent,
+  setExecutionCurrent,
+} from "./current";
 import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask, ITask } from "../../../types/task";
 import type {
@@ -20,6 +25,7 @@ import type {
 } from "../../../types/utilities";
 import type { DurableStepId } from "./ids";
 import { DurableAuditEntryKind, type DurableAuditEmitter } from "./audit";
+import type { DurableExecutionCurrentWorkflowMeta } from "./types";
 import { ExecutionStatus } from "./types";
 import { createDurableContextAudit } from "./durable-context/DurableContext.audit";
 import {
@@ -219,12 +225,28 @@ export class DurableContext implements IDurableContext {
     options: StepOptions,
     upFn: () => Promise<T>,
     downFn?: (result: T) => Promise<void>,
+    currentMeta?: DurableExecutionCurrentWorkflowMeta,
   ): Promise<T> {
     return await executeDurableStep({
       store: this.store,
       executionId: this.executionId,
       assertCanContinue: this.assertCanContinue.bind(this),
       appendAuditEntry: this.audit.append,
+      setCurrent: async () =>
+        await setExecutionCurrent(
+          this.store,
+          this.executionId,
+          currentMeta
+            ? createWorkflowStepCurrent({
+                stepId,
+                startedAt: new Date(),
+                meta: currentMeta,
+              })
+            : createStepCurrent({
+                stepId,
+                startedAt: new Date(),
+              }),
+        ),
       stepId,
       options,
       upFn,
@@ -273,13 +295,20 @@ export class DurableContext implements IDurableContext {
       });
     }
 
-    return await this.step(stepId, async () => {
-      return await this.startWorkflowExecution(
-        task,
-        input,
-        this.resolveWorkflowStartOptions(stepId, options),
-      );
-    });
+    return await this._executeStep(
+      stepId,
+      {},
+      async () =>
+        await this.startWorkflowExecution(
+          task,
+          input,
+          this.resolveWorkflowStartOptions(stepId, options),
+        ),
+      undefined,
+      {
+        workflowTaskId: this.getTaskPersistenceId(task),
+      },
+    );
   }
 
   async waitForSignal<TPayload>(

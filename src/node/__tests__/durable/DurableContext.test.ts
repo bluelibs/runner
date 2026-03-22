@@ -32,6 +32,9 @@ describe("durable: DurableContext", () => {
     .tags([durableWorkflowTag.with({ category: "tests" })])
     .run(async () => "child-ok")
     .build();
+  type ExecutionCurrent = NonNullable<
+    Awaited<ReturnType<MemoryStore["getExecution"]>>
+  >["current"];
   const createContext = (
     executionId = "e1",
     attempt = 1,
@@ -99,6 +102,127 @@ describe("durable: DurableContext", () => {
     await ctx.rollback();
 
     expect(actions).toEqual(["up", "down"]);
+  });
+
+  it("tracks active step current state before executing new work", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+    let currentDuringStep: ExecutionCurrent;
+
+    await ctx.step("create", async () => {
+      currentDuringStep = (await store.getExecution("e1"))?.current;
+      return "ok";
+    });
+
+    expect(currentDuringStep).toMatchObject({
+      kind: "step",
+      stepId: "create",
+    });
+  });
+
+  it("clears current after a step completes", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+    await ctx.step("create", async () => "ok");
+
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
+  });
+
+  it("tracks workflow steps as step current with workflow metadata", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "parent",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    let currentDuringWorkflow: ExecutionCurrent | undefined;
+    const { ctx } = createContext("e1", 1, store, {
+      startWorkflowExecution: async () => {
+        currentDuringWorkflow = (await store.getExecution("e1"))?.current;
+        return "child-execution";
+      },
+      getTaskPersistenceId: () => "canonical.child-workflow-task",
+    });
+
+    await expect(ctx.workflow("start-child", ChildWorkflowTask)).resolves.toBe(
+      "child-execution",
+    );
+
+    expect(currentDuringWorkflow).toMatchObject({
+      kind: "step",
+      stepId: "start-child",
+      meta: {
+        workflowTaskId: "canonical.child-workflow-task",
+      },
+    });
+  });
+
+  it("clears current after a completed sleep resumes", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      current: {
+        kind: "sleep",
+        stepId: "__sleep:stable-sleep",
+        startedAt: new Date("2026-01-01T00:00:00.000Z"),
+        waitingFor: {
+          type: "sleep",
+          params: {
+            durationMs: 1000,
+            fireAtMs: Date.now() - 1,
+            timerId: "sleep:e1:__sleep:stable-sleep",
+          },
+        },
+      },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__sleep:stable-sleep",
+      result: { state: "completed" },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+    await expect(ctx.sleep(1_000, { stepId: "stable-sleep" })).resolves.toBe(
+      undefined,
+    );
+
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
   });
 
   it("rethrows SuspensionSignal from rollback()", async () => {
@@ -901,6 +1025,798 @@ describe("durable: DurableContext", () => {
         }),
       }),
     );
+  });
+
+  it("tracks sleep current state with typed waiting details", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.sleep(10_000, { stepId: "stable-sleep" })).rejects.toThrow(
+      SuspensionSignal,
+    );
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      kind: "sleep",
+      stepId: "__sleep:stable-sleep",
+      waitingFor: {
+        type: "sleep",
+        params: {
+          durationMs: 10_000,
+          timerId: "sleep:e1:__sleep:stable-sleep",
+        },
+      },
+    });
+  });
+
+  it("preserves persisted sleep duration in current state on replay", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__sleep:stable-sleep",
+      result: {
+        state: "sleeping",
+        timerId: "sleep:e1:__sleep:stable-sleep",
+        fireAtMs: Date.now() + 5_000,
+        durationMs: 5_000,
+      },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.sleep(10_000, { stepId: "stable-sleep" })).rejects.toThrow(
+      SuspensionSignal,
+    );
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      waitingFor: {
+        type: "sleep",
+        params: {
+          durationMs: 5_000,
+        },
+      },
+    });
+  });
+
+  it("tracks signal wait current state with typed waiting details", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForSignal(Paid, { stepId: "wait-paid", timeoutMs: 1_000 }),
+    ).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      kind: "waitForSignal",
+      stepId: "__signal:wait-paid",
+      waitingFor: {
+        type: "signal",
+        params: {
+          signalId: Paid.id,
+          timeoutMs: 1_000,
+          timerId: "signal_timeout:e1:__signal:wait-paid",
+        },
+      },
+    });
+  });
+
+  it("clears current when a persisted signal wait completes", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:wait-paid",
+        startedAt: new Date("2026-01-01T00:00:00.000Z"),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: Paid.id,
+            timeoutMs: 1_000,
+            timeoutAtMs: Date.now() + 1_000,
+            timerId: "signal_timeout:e1:__signal:wait-paid",
+          },
+        },
+      },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:wait-paid",
+      result: {
+        state: "waiting",
+        signalId: Paid.id,
+        timeoutMs: 1_000,
+        timeoutAtMs: Date.now() + 1_000,
+        timerId: "signal_timeout:e1:__signal:wait-paid",
+      },
+      completedAt: new Date(),
+    });
+    await store.bufferSignalRecord("e1", Paid.id, {
+      id: "record-1",
+      payload: { paidAt: 1 },
+      receivedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+    await expect(
+      ctx.waitForSignal(Paid, { stepId: "wait-paid", timeoutMs: 1_000 }),
+    ).resolves.toEqual({
+      kind: "signal",
+      payload: { paidAt: 1 },
+    });
+
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
+  });
+
+  it("tracks no-timeout signal waits from fresh and replayed persisted state", async () => {
+    const initialStore = new MemoryStore();
+    await initialStore.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx: initialCtx } = createContext("e1", 1, initialStore);
+    await expect(initialCtx.waitForSignal(Paid)).rejects.toThrow(
+      SuspensionSignal,
+    );
+    expect((await initialStore.getExecution("e1"))?.current).toMatchObject({
+      kind: "waitForSignal",
+      stepId: `__signal:${Paid.id}`,
+      waitingFor: {
+        type: "signal",
+        params: {
+          signalId: Paid.id,
+          timeoutMs: undefined,
+        },
+      },
+    });
+
+    const replayStore = new MemoryStore();
+    const recordedAt = new Date("2024-01-02T03:04:05.000Z");
+    await replayStore.saveExecution({
+      id: "e2",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await replayStore.saveStepResult({
+      executionId: "e2",
+      stepId: `__signal:${Paid.id}`,
+      result: { state: "waiting", signalId: Paid.id },
+      completedAt: recordedAt,
+    });
+
+    const { ctx: replayCtx } = createContext("e2", 1, replayStore);
+    await expect(replayCtx.waitForSignal(Paid)).rejects.toThrow(
+      SuspensionSignal,
+    );
+    expect((await replayStore.getExecution("e2"))?.current).toMatchObject({
+      kind: "waitForSignal",
+      stepId: `__signal:${Paid.id}`,
+      startedAt: recordedAt,
+      waitingFor: {
+        type: "signal",
+        params: {
+          signalId: Paid.id,
+          timeoutMs: undefined,
+        },
+      },
+    });
+  });
+
+  it("consumes buffered signals for default and explicit step ids", async () => {
+    const defaultStore = new MemoryStore();
+    await defaultStore.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await defaultStore.bufferSignalRecord("e1", Paid.id, {
+      id: "record-1",
+      payload: { paidAt: 1 },
+      receivedAt: new Date(),
+    });
+    const { ctx: defaultCtx } = createContext("e1", 1, defaultStore);
+    await expect(defaultCtx.waitForSignal(Paid)).resolves.toEqual({
+      paidAt: 1,
+    });
+    expect(
+      (await defaultStore.getStepResult("e1", `__signal:${Paid.id}`))?.result,
+    ).toEqual({
+      state: "completed",
+      payload: { paidAt: 1 },
+    });
+
+    const explicitStore = new MemoryStore();
+    await explicitStore.saveExecution({
+      id: "e2",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await explicitStore.bufferSignalRecord("e2", Paid.id, {
+      id: "record-2",
+      payload: { paidAt: 2 },
+      receivedAt: new Date(),
+    });
+    const { ctx: explicitCtx } = createContext("e2", 1, explicitStore);
+    await expect(
+      explicitCtx.waitForSignal(Paid, {
+        stepId: "custom-paid",
+        timeoutMs: 500,
+      }),
+    ).resolves.toEqual({
+      kind: "signal",
+      payload: { paidAt: 2 },
+    });
+    expect(
+      (await explicitStore.getStepResult("e2", "__signal:custom-paid"))?.result,
+    ).toEqual({
+      state: "completed",
+      signalId: Paid.id,
+      payload: { paidAt: 2 },
+    });
+  });
+
+  it("tracks signal wait current state without timeout metadata for explicit step ids", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.waitForSignal(Paid)).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      kind: "waitForSignal",
+      stepId: `__signal:${Paid.id}`,
+      waitingFor: {
+        type: "signal",
+        params: {
+          signalId: Paid.id,
+        },
+      },
+    });
+  });
+
+  it("preserves persisted signal timeout in current state on replay", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:wait-paid",
+      result: {
+        state: "waiting",
+        signalId: Paid.id,
+        timeoutMs: 1_000,
+        timeoutAtMs: Date.now() + 1_000,
+        timerId: "signal_timeout:e1:__signal:wait-paid",
+      },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForSignal(Paid, { stepId: "wait-paid", timeoutMs: 9_999 }),
+    ).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      waitingFor: {
+        type: "signal",
+        params: {
+          timeoutMs: 1_000,
+        },
+      },
+    });
+  });
+
+  it("tracks signal wait current state without timeout metadata", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForSignal(Paid, { stepId: "wait-no-timeout" }),
+    ).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      waitingFor: {
+        type: "signal",
+        params: {
+          signalId: Paid.id,
+          timeoutMs: undefined,
+        },
+      },
+    });
+  });
+
+  it("preserves persisted signal timeout metadata when replay rebuilds the timer", async () => {
+    const store = new MemoryStore();
+    const recordedAt = new Date("2024-01-02T03:04:05.000Z");
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:wait-timeout-replay",
+      result: {
+        state: "waiting",
+        signalId: Paid.id,
+        timeoutMs: 1_000,
+      },
+      completedAt: recordedAt,
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.waitForSignal(Paid, {
+        stepId: "wait-timeout-replay",
+        timeoutMs: 1_000,
+      }),
+    ).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      kind: "waitForSignal",
+      stepId: "__signal:wait-timeout-replay",
+      waitingFor: {
+        type: "signal",
+        params: {
+          signalId: Paid.id,
+          timeoutMs: 1_000,
+          timerId: "signal_timeout:e1:__signal:wait-timeout-replay",
+        },
+      },
+    });
+  });
+
+  it("tracks execution wait current state with typed waiting details", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "parent",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveExecution({
+      id: "child-exec",
+      taskId: "canonical.child-task",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store, {
+      getTaskPersistenceId: () => "canonical.child-task",
+    });
+
+    await expect(
+      ctx.waitForExecution(ChildTextTask, "child-exec", {
+        stepId: "wait-child",
+        timeoutMs: 2_000,
+      }),
+    ).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      kind: "waitForExecution",
+      stepId: "__execution:wait-child",
+      waitingFor: {
+        type: "execution",
+        params: {
+          targetExecutionId: "child-exec",
+          targetTaskId: "canonical.child-task",
+          timeoutMs: 2_000,
+          timerId: "execution_timeout:e1:__execution:wait-child",
+        },
+      },
+    });
+  });
+
+  it("clears current when a persisted execution wait completes", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "parent",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      current: {
+        kind: "waitForExecution",
+        stepId: "__execution:wait-child",
+        startedAt: new Date("2026-01-01T00:00:00.000Z"),
+        waitingFor: {
+          type: "execution",
+          params: {
+            targetExecutionId: "child-exec",
+            targetTaskId: "canonical.child-task",
+            timeoutMs: 2_000,
+            timeoutAtMs: Date.now() + 2_000,
+            timerId: "execution_timeout:e1:__execution:wait-child",
+          },
+        },
+      },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveExecution({
+      id: "child-exec",
+      taskId: "canonical.child-task",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      attempt: 1,
+      maxAttempts: 1,
+      result: "ok",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__execution:wait-child",
+      result: {
+        state: "waiting",
+        targetExecutionId: "child-exec",
+        timeoutMs: 2_000,
+        timeoutAtMs: Date.now() + 2_000,
+        timerId: "execution_timeout:e1:__execution:wait-child",
+      },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store, {
+      getTaskPersistenceId: () => "canonical.child-task",
+    });
+    await expect(
+      ctx.waitForExecution(ChildTextTask, "child-exec", {
+        stepId: "wait-child",
+        timeoutMs: 2_000,
+      }),
+    ).resolves.toEqual({
+      kind: "completed",
+      data: "ok",
+    });
+
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
+  });
+
+  it("tracks no-timeout execution waits from fresh and replayed persisted state", async () => {
+    const initialStore = new MemoryStore();
+    await initialStore.saveExecution({
+      id: "e1",
+      taskId: "parent",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await initialStore.saveExecution({
+      id: "child-exec",
+      taskId: "canonical.child-task",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx: initialCtx } = createContext("e1", 1, initialStore, {
+      getTaskPersistenceId: () => "canonical.child-task",
+    });
+    await expect(
+      initialCtx.waitForExecution(ChildTextTask, "child-exec"),
+    ).rejects.toThrow(SuspensionSignal);
+    expect((await initialStore.getExecution("e1"))?.current).toMatchObject({
+      kind: "waitForExecution",
+      stepId: "__execution:child-exec",
+      waitingFor: {
+        type: "execution",
+        params: {
+          targetExecutionId: "child-exec",
+          targetTaskId: "canonical.child-task",
+          timeoutMs: undefined,
+        },
+      },
+    });
+
+    const replayStore = new MemoryStore();
+    const recordedAt = new Date("2024-01-02T03:04:05.000Z");
+    await replayStore.saveExecution({
+      id: "e2",
+      taskId: "parent",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await replayStore.saveExecution({
+      id: "child-exec-2",
+      taskId: "canonical.child-task",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await replayStore.saveStepResult({
+      executionId: "e2",
+      stepId: "__execution:child-exec-2",
+      result: {
+        state: "waiting",
+        targetExecutionId: "child-exec-2",
+      },
+      completedAt: recordedAt,
+    });
+
+    const { ctx: replayCtx } = createContext("e2", 1, replayStore, {
+      getTaskPersistenceId: () => "canonical.child-task",
+    });
+    await expect(
+      replayCtx.waitForExecution(ChildTextTask, "child-exec-2"),
+    ).rejects.toThrow(SuspensionSignal);
+    expect((await replayStore.getExecution("e2"))?.current).toMatchObject({
+      kind: "waitForExecution",
+      stepId: "__execution:child-exec-2",
+      startedAt: recordedAt,
+      waitingFor: {
+        type: "execution",
+        params: {
+          targetExecutionId: "child-exec-2",
+          targetTaskId: "canonical.child-task",
+          timeoutMs: undefined,
+        },
+      },
+    });
+  });
+
+  it("tracks execution wait current state without timeout metadata for explicit step ids", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "parent",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveExecution({
+      id: "child-exec",
+      taskId: "canonical.child-task",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store, {
+      getTaskPersistenceId: () => "canonical.child-task",
+    });
+
+    await expect(
+      ctx.waitForExecution(ChildTextTask, "child-exec"),
+    ).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      kind: "waitForExecution",
+      stepId: "__execution:child-exec",
+      waitingFor: {
+        type: "execution",
+        params: {
+          targetExecutionId: "child-exec",
+          targetTaskId: "canonical.child-task",
+        },
+      },
+    });
+  });
+
+  it("preserves persisted execution timeout in current state on replay", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "parent",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveExecution({
+      id: "child-exec",
+      taskId: "canonical.child-task",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__execution:wait-child",
+      result: {
+        state: "waiting",
+        targetExecutionId: "child-exec",
+        timeoutMs: 2_000,
+        timeoutAtMs: Date.now() + 2_000,
+        timerId: "execution_timeout:e1:__execution:wait-child",
+      },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store, {
+      getTaskPersistenceId: () => "canonical.child-task",
+    });
+
+    await expect(
+      ctx.waitForExecution(ChildTextTask, "child-exec", {
+        stepId: "wait-child",
+        timeoutMs: 9_999,
+      }),
+    ).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      waitingFor: {
+        type: "execution",
+        params: {
+          timeoutMs: 2_000,
+        },
+      },
+    });
+  });
+
+  it("tracks execution wait current state without timeout metadata", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "parent",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveExecution({
+      id: "child-exec",
+      taskId: "canonical.child-task",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store, {
+      getTaskPersistenceId: () => "canonical.child-task",
+    });
+
+    await expect(
+      ctx.waitForExecution(ChildTextTask, "child-exec", {
+        stepId: "wait-no-timeout",
+      }),
+    ).rejects.toThrow(SuspensionSignal);
+
+    expect((await store.getExecution("e1"))?.current).toMatchObject({
+      waitingFor: {
+        type: "execution",
+        params: {
+          targetExecutionId: "child-exec",
+          timeoutMs: undefined,
+        },
+      },
+    });
   });
 
   it("throws when waitForSignal() cannot acquire the signal lock", async () => {

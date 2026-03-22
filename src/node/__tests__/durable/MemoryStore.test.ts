@@ -108,6 +108,47 @@ describe("durable: MemoryStore", () => {
     expect((await store.getExecution("e1"))?.status).toBe("running");
   });
 
+  it("returns deep-cloned executions so nested current state stays isolated", async () => {
+    const store = new MemoryStore();
+    const execution = createExecution({
+      id: "e-current",
+      taskId: "t",
+      status: "running",
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:paid",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "paid",
+            timeoutMs: 1_000,
+          },
+        },
+      },
+    });
+
+    await store.saveExecution(execution);
+
+    const firstRead = await store.getExecution("e-current");
+    expect(firstRead?.current?.kind).toBe("waitForSignal");
+    if (!firstRead || firstRead.current?.kind !== "waitForSignal") {
+      return;
+    }
+    firstRead.current.waitingFor.params.signalId = "mutated";
+
+    const secondRead = await store.getExecution("e-current");
+    expect(secondRead?.current).toMatchObject({
+      kind: "waitForSignal",
+      waitingFor: {
+        type: "signal",
+        params: {
+          signalId: "paid",
+        },
+      },
+    });
+  });
+
   it("returns false when saveExecutionIfStatus targets a missing execution", async () => {
     const store = new MemoryStore();
 

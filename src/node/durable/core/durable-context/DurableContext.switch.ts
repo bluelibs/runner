@@ -1,6 +1,11 @@
 import type { SwitchBranch } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
+import {
+  clearExecutionCurrent,
+  createSwitchCurrent,
+  setExecutionCurrent,
+} from "../current";
 import { durableExecutionInvariantError } from "../../../../errors";
 
 /**
@@ -48,6 +53,12 @@ export async function switchDurably<TValue, TResult>(params: {
   }
 
   // First execution: evaluate matchers in order
+  await setExecutionCurrent(
+    params.store,
+    params.executionId,
+    createSwitchCurrent({ stepId: params.stepId, startedAt: new Date() }),
+  );
+
   const startedAt = Date.now();
   let matchedBranch: {
     id: string;
@@ -100,6 +111,8 @@ export async function switchDurably<TValue, TResult>(params: {
     branchId: selectedBranch.id,
     durationMs,
   });
+
+  await clearExecutionCurrent(params.store, params.executionId);
 
   return result;
 }

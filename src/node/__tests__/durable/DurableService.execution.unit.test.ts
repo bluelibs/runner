@@ -228,6 +228,215 @@ describe("durable: DurableService — execution (unit)", () => {
     expect((await store.getExecution("e1"))?.status).toBe("failed");
   });
 
+  it("clears stale current state before a new attempt runs and after completion", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-current-reset");
+    let currentDuringTask: Execution["current"] | undefined;
+
+    const service = new DurableService({
+      store,
+      contextProvider: async (context, fn) => {
+        currentDuringTask = (await store.getExecution(context.executionId))
+          ?.current;
+        return await fn();
+      },
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+
+    await store.saveExecution(
+      pendingExecution({
+        id: "e-current-reset",
+        taskId: task.id,
+        current: {
+          kind: "waitForSignal",
+          stepId: "__signal:old",
+          startedAt: new Date(),
+          waitingFor: {
+            type: "signal",
+            params: {
+              signalId: "old-signal",
+            },
+          },
+        },
+      }),
+    );
+
+    await service.processExecution("e-current-reset");
+
+    expect(currentDuringTask).toBeUndefined();
+    expect(await store.getExecution("e-current-reset")).toMatchObject({
+      status: "completed",
+      current: undefined,
+    });
+  });
+
+  it("clears stale current state when recovering an already-running execution", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-running-current-reset");
+    let currentDuringTask: Execution["current"] | undefined;
+
+    const service = new DurableService({
+      store,
+      contextProvider: async (context, fn) => {
+        currentDuringTask = (await store.getExecution(context.executionId))
+          ?.current;
+        return await fn();
+      },
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+
+    await store.saveExecution({
+      id: "e-running-current-reset",
+      taskId: task.id,
+      input: undefined,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:old",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "old-signal",
+          },
+        },
+      },
+    });
+
+    await service.processExecution("e-running-current-reset");
+
+    expect(currentDuringTask).toBeUndefined();
+    expect(await store.getExecution("e-running-current-reset")).toMatchObject({
+      status: "completed",
+      current: undefined,
+    });
+  });
+
+  it("clears waiting current when a child execution completion resumes its parent", async () => {
+    const store = new MemoryStore();
+    const childTask = okTask("t-child-current-clear");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({ [childTask.id]: async () => "ok" }),
+      tasks: [childTask],
+      execution: { maxAttempts: 1 },
+    });
+
+    await store.saveExecution(
+      pendingExecution({
+        id: "parent",
+        taskId: "t-parent",
+        status: "sleeping",
+        current: {
+          kind: "waitForExecution",
+          stepId: "__execution:child",
+          startedAt: new Date(),
+          waitingFor: {
+            type: "execution",
+            params: {
+              targetExecutionId: "child",
+              targetTaskId: childTask.id,
+            },
+          },
+        },
+      }),
+    );
+    await store.saveStepResult({
+      executionId: "parent",
+      stepId: "__execution:child",
+      result: { state: "waiting", targetExecutionId: "child" },
+      completedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "parent",
+      targetExecutionId: "child",
+      stepId: "__execution:child",
+    });
+    await store.saveExecution(
+      pendingExecution({
+        id: "child",
+        taskId: childTask.id,
+      }),
+    );
+
+    await service.processExecution("child");
+
+    expect((await store.getExecution("parent"))?.current).toBeUndefined();
+    expect(
+      (await store.getStepResult("parent", "__execution:child"))?.result,
+    ).toEqual({
+      state: "completed",
+      targetExecutionId: "child",
+      taskId: childTask.id,
+      result: "ok",
+    });
+  });
+
+  it("skips execution when a running execution can no longer be resumed atomically", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-running-race");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({
+        [task.id]: async () => "ok",
+      }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+
+    await store.saveExecution({
+      id: "e-running-race",
+      taskId: task.id,
+      input: undefined,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:old",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "old-signal",
+          },
+        },
+      },
+    });
+
+    const saveExecutionIfStatus = jest.spyOn(store, "saveExecutionIfStatus");
+    saveExecutionIfStatus.mockImplementation(async (execution, expected) => {
+      if (execution.id === "e-running-race" && expected[0] === "running") {
+        return false;
+      }
+
+      return await MemoryStore.prototype.saveExecutionIfStatus.call(
+        store,
+        execution,
+        expected,
+      );
+    });
+
+    await service.processExecution("e-running-race");
+
+    expect(await store.getExecution("e-running-race")).toMatchObject({
+      status: "running",
+      current: {
+        kind: "waitForSignal",
+      },
+    });
+  });
+
   it("processes executions even when the store does not implement locks", async () => {
     const base = new MemoryStore();
     const task = okTask("t-no-lock-store");

@@ -8,6 +8,14 @@ import type {
 } from "./service";
 import type { DurableOperator } from "../DurableOperator";
 import type { DurableFlowShape } from "../flowShape";
+import type { DurableAuditEntry } from "../audit";
+import type { Execution, StepResult } from "../types";
+
+export interface DurableExecutionDetail<TInput = unknown, TResult = unknown> {
+  execution: Execution<TInput, TResult> | null;
+  steps: StepResult[];
+  audit: DurableAuditEntry[];
+}
 
 export interface IDurableResource extends Pick<
   IDurableService,
@@ -67,6 +75,17 @@ export interface IDurableResource extends Pick<
     task: ITask<TInput, any, any, any, any, any>,
     input?: TInput,
   ): Promise<DurableFlowShape>;
+
+  /**
+   * Typed shorthand for execution detail inspection.
+   *
+   * Uses the supplied task as a type witness and verifies that the stored
+   * durable execution belongs to that task's canonical runtime identity.
+   */
+  getExecutionDetail<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+    executionId: string,
+  ): Promise<DurableExecutionDetail<TInput, TResult>>;
 
   /**
    * Store-backed operator API to inspect and administrate executions

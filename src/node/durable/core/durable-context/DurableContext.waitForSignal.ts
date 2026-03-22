@@ -2,6 +2,11 @@ import type { SignalOptions } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import type { IEventDefinition } from "../../../../types/event";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
+import {
+  clearExecutionCurrent,
+  createSignalWaitCurrent,
+  setExecutionCurrent,
+} from "../current";
 import { TimerType } from "../types";
 import { isRecord, shouldPersistStableSignalId } from "../utils";
 import { upsertSignalWaiter, withSignalLock } from "../signalWaiters";
@@ -21,10 +26,11 @@ export type WaitForSignalOutcome<TPayload> =
   | { kind: "timeout" };
 
 type SignalStepState =
-  | { state: "waiting"; signalId?: string }
+  | { state: "waiting"; signalId?: string; timeoutMs?: number }
   | {
       state: "waiting";
       signalId?: string;
+      timeoutMs?: number;
       timeoutAtMs: number;
       timerId: string;
     }
@@ -37,17 +43,36 @@ function getSignalId(signal: SignalInput<unknown>): string {
   return signal.id;
 }
 
+function createWaitingSignalState(
+  signalId: string,
+  timeoutMs: number | undefined,
+) {
+  return {
+    state: "waiting" as const,
+    signalId,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  };
+}
+
 function parseSignalStepState(value: unknown): SignalStepState | null {
   if (!isRecord(value)) return null;
   const signalId = value.signalId;
   if (signalId !== undefined && typeof signalId !== "string") return null;
   const state = value.state;
   if (state === "waiting") {
+    const timeoutMs = value.timeoutMs;
     const timeoutAtMs = value.timeoutAtMs;
     const timerId = value.timerId;
     if (typeof timeoutAtMs === "number" && typeof timerId === "string") {
-      return { state: "waiting", signalId, timeoutAtMs, timerId };
+      return {
+        state: "waiting",
+        signalId,
+        timeoutMs: typeof timeoutMs === "number" ? timeoutMs : undefined,
+        timeoutAtMs,
+        timerId,
+      };
     }
+    void timeoutMs;
     return { state: "waiting", signalId };
   }
   if (state === "completed") {
@@ -95,8 +120,9 @@ export async function waitForSignalDurably<TPayload>(params: {
 
   const resolveCompleted = (
     payload: TPayload,
-  ): TPayload | WaitForSignalOutcome<TPayload> =>
-    hasTimeout ? { kind: "signal", payload } : payload;
+  ): TPayload | WaitForSignalOutcome<TPayload> => {
+    return hasTimeout ? { kind: "signal", payload } : payload;
+  };
 
   const resolveTimedOut = (): WaitForSignalOutcome<TPayload> => {
     if (!hasTimeout) {
@@ -104,6 +130,26 @@ export async function waitForSignalDurably<TPayload>(params: {
     }
     return { kind: "timeout" };
   };
+
+  const writeSignalWaitCurrent = async (options: {
+    stepId: string;
+    timeoutMs?: number;
+    timeoutAtMs?: number;
+    timerId?: string;
+    startedAt: Date;
+  }): Promise<void> =>
+    await setExecutionCurrent(
+      params.store,
+      params.executionId,
+      createSignalWaitCurrent({
+        stepId: options.stepId,
+        signalId,
+        timeoutMs: options.timeoutMs,
+        timeoutAtMs: options.timeoutAtMs,
+        timerId: options.timerId,
+        startedAt: options.startedAt,
+      }),
+    );
 
   return await withSignalLock({
     store: params.store,
@@ -135,23 +181,20 @@ export async function waitForSignalDurably<TPayload>(params: {
             message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
           });
         }
-        const parsedState = state;
-        if (
-          parsedState.signalId !== undefined &&
-          parsedState.signalId !== signalId
-        ) {
+        if (state.signalId !== undefined && state.signalId !== signalId) {
           return durableExecutionInvariantError.throw({
             message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
           });
         }
-        if (parsedState.state === "completed") {
-          const payload = parsedState.payload as TPayload;
-          return resolveCompleted(payload);
+        if (state.state === "completed") {
+          await clearExecutionCurrent(params.store, params.executionId);
+          return resolveCompleted(state.payload as TPayload);
         }
-        if (parsedState.state === "timed_out") {
+        if (state.state === "timed_out") {
+          await clearExecutionCurrent(params.store, params.executionId);
           return resolveTimedOut();
         }
-        // Remaining valid parsed state is "waiting" (completed/timed_out returned above).
+
         const queuedSignal = await params.store.consumeBufferedSignalForStep({
           executionId: params.executionId,
           stepId,
@@ -159,12 +202,14 @@ export async function waitForSignalDurably<TPayload>(params: {
           completedAt: new Date(),
         });
         if (queuedSignal) {
-          if ("timerId" in parsedState) {
-            await deleteWaitTimerBestEffort(params.store, parsedState.timerId);
+          if ("timerId" in state) {
+            await deleteWaitTimerBestEffort(params.store, state.timerId);
           }
+          await clearExecutionCurrent(params.store, params.executionId);
           return resolveCompleted(queuedSignal.payload as TPayload);
         }
 
+        let waitingRecordedAt: Date | undefined;
         const timeout = await ensureDurableWaitTimer({
           store: params.store,
           executionId: params.executionId,
@@ -172,20 +217,19 @@ export async function waitForSignalDurably<TPayload>(params: {
           timerType: TimerType.SignalTimeout,
           timeoutMs: params.options?.timeoutMs,
           existing:
-            "timeoutAtMs" in parsedState && "timerId" in parsedState
-              ? parsedState
-              : undefined,
+            "timeoutAtMs" in state && "timerId" in state ? state : undefined,
           createTimerId: () => `signal_timeout:${params.executionId}:${stepId}`,
           persistWaitingState: async (timeoutAtMs, timerId) => {
+            waitingRecordedAt = new Date();
             await params.store.saveStepResult({
               executionId: params.executionId,
               stepId,
               result: createTimedWaitState(
-                { state: "waiting" as const, signalId },
+                createWaitingSignalState(signalId, params.options?.timeoutMs),
                 timeoutAtMs,
                 timerId,
               ),
-              completedAt: new Date(),
+              completedAt: waitingRecordedAt,
             });
           },
           onTimerCreated: async (timeoutAtMs, timerId) => {
@@ -199,6 +243,16 @@ export async function waitForSignalDurably<TPayload>(params: {
               reason: "timeout_armed",
             });
           },
+        });
+
+        await writeSignalWaitCurrent({
+          stepId,
+          timeoutMs: timeout.persistedWaitingState
+            ? params.options?.timeoutMs
+            : state.timeoutMs,
+          timeoutAtMs: timeout.timeoutAtMs,
+          timerId: timeout.timerId,
+          startedAt: waitingRecordedAt ?? existing.completedAt,
         });
 
         return await suspendDurableWait({
@@ -224,9 +278,12 @@ export async function waitForSignalDurably<TPayload>(params: {
         completedAt: new Date(),
       });
       if (queuedSignal) {
+        await clearExecutionCurrent(params.store, params.executionId);
         return resolveCompleted(queuedSignal.payload as TPayload);
       }
 
+      let waitingRecordedAt: Date | undefined =
+        params.options?.timeoutMs === undefined ? new Date() : undefined;
       const timeout = await ensureDurableWaitTimer({
         store: params.store,
         executionId: params.executionId,
@@ -235,15 +292,16 @@ export async function waitForSignalDurably<TPayload>(params: {
         timeoutMs: params.options?.timeoutMs,
         createTimerId: () => `signal_timeout:${params.executionId}:${stepId}`,
         persistWaitingState: async (timeoutAtMs, timerId) => {
+          waitingRecordedAt = new Date();
           await params.store.saveStepResult({
             executionId: params.executionId,
             stepId,
             result: createTimedWaitState(
-              { state: "waiting" as const, signalId },
+              createWaitingSignalState(signalId, params.options?.timeoutMs),
               timeoutAtMs,
               timerId,
             ),
-            completedAt: new Date(),
+            completedAt: waitingRecordedAt,
           });
         },
         onTimerCreated: async (timeoutAtMs, timerId) => {
@@ -268,13 +326,22 @@ export async function waitForSignalDurably<TPayload>(params: {
         });
       }
 
+      await writeSignalWaitCurrent({
+        stepId,
+        timeoutMs: params.options?.timeoutMs,
+        timeoutAtMs: timeout.timeoutAtMs,
+        timerId: timeout.timerId,
+        startedAt: waitingRecordedAt!,
+      });
+
       return await suspendDurableWait({
         store: params.store,
         executionId: params.executionId,
         stepId,
+        recordedAt: waitingRecordedAt!,
         waitingState: timeout.persistedWaitingState
           ? undefined
-          : { state: "waiting", signalId },
+          : createWaitingSignalState(signalId, params.options?.timeoutMs),
         registerWaiter: async () => {
           await upsertSignalWaiter({
             store: params.store,

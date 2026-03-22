@@ -43,7 +43,7 @@ Rule: side effects belong inside `durableContext.step(...)`.
    - look up `executionId`
    - `await service.signal(executionId, SignalDef, payload)`
 
-For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres): `store.getExecution(executionId)` (or `new DurableOperator(store).getExecutionDetail(executionId)` when supported).
+For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres). If you already have the durable resource in DI, prefer `durable.getExecutionDetail(task, executionId)` for typed inspection. The lower-level raw path is `new DurableOperator(store).getExecutionDetail(executionId)` when supported.
 
 Signals retain execution-level history for live workflows. Each `executionId + signalId`
 keeps a FIFO queue of unmatched signals for automatic `waitForSignal(...)` consumption,
@@ -209,6 +209,9 @@ const child = await durableContext.waitForExecution(
 - it auto-injects `parentExecutionId` plus a deterministic default idempotency key based on the parent execution + step id
 - `waitForExecution(childTask, executionId)` returns the child result with type inference from `childTask`
 - `waitForExecution(childTask, executionId, { timeoutMs })` returns `{ kind: "completed", data } | { kind: "timeout" }`
+- execution records may also expose `current`, a live execution position view
+- waiting `current` states are canonical durable truth; active running states are best-effort operator metadata
+- when `workflow(...)` is actively starting a child, `current` is still `{ kind: "step", stepId, meta: { workflowTaskId } }`
 - child `failed`, `cancelled`, and `compensation_failed` terminal states throw
 
 ## Scheduling
@@ -230,7 +233,8 @@ const child = await durableContext.waitForExecution(
 - When supported:
   - `store.listStepResults(executionId)` → completed steps
   - `store.listAuditEntries(executionId)` → timeline (step_completed, signal_waiting, signal_delivered, sleeps, status changes)
-- `new DurableOperator(store).getExecutionDetail(executionId)` returns `{ execution, steps, audit }`.
+- `durable.getExecutionDetail(task, executionId)` is the typed shorthand for `{ execution, steps, audit }`.
+- `new DurableOperator(store).getExecutionDetail(executionId)` remains the raw store-backed inspection path.
 
 "Internal steps" are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
 

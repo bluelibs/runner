@@ -7,6 +7,9 @@ import { MemoryStore } from "../../durable/store/MemoryStore";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
 
 describe("durable: DurableContext.switch", () => {
+  type ExecutionCurrent = NonNullable<
+    Awaited<ReturnType<MemoryStore["getExecution"]>>
+  >["current"];
   const createContext = (
     executionId = "e1",
     attempt = 1,
@@ -43,6 +46,16 @@ describe("durable: DurableContext.switch", () => {
 
   it("persists the branch result in the store", async () => {
     const { store, ctx } = createContext();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "switch-task",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     await ctx.switch("route", "a", [
       { id: "alpha", match: (v) => v === "a", run: async () => 42 },
@@ -51,6 +64,59 @@ describe("durable: DurableContext.switch", () => {
     const step = await store.getStepResult("e1", "route");
     expect(step).not.toBeNull();
     expect(step!.result).toEqual({ branchId: "alpha", result: 42 });
+  });
+
+  it("tracks switch current state while the branch is executing", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "switch-task",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const { ctx } = createContext("e1", 1, store);
+    let currentDuringSwitch: ExecutionCurrent | undefined;
+
+    await ctx.switch("route", "a", [
+      {
+        id: "alpha",
+        match: (v) => v === "a",
+        run: async () => {
+          currentDuringSwitch = (await store.getExecution("e1"))?.current;
+          return 42;
+        },
+      },
+    ]);
+
+    expect(currentDuringSwitch).toMatchObject({
+      kind: "switch",
+      stepId: "route",
+    });
+  });
+
+  it("clears current after a switch branch completes", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "switch-task",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const { ctx } = createContext("e1", 1, store);
+
+    await ctx.switch("route", "a", [
+      { id: "alpha", match: (v) => v === "a", run: async () => 42 },
+    ]);
+
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
   });
 
   it("returns cached result on replay without re-running matchers", async () => {

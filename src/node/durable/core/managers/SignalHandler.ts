@@ -18,6 +18,7 @@ import {
   shouldPersistStableSignalId,
   parseSignalState,
 } from "../utils";
+import { clearExecutionCurrentIfSuspendedOnStep } from "../current";
 import { withSignalLock } from "../signalWaiters";
 import {
   commitDurableWaitCompletion,
@@ -274,6 +275,10 @@ export class SignalHandler {
         if (!committed) {
           continue;
         }
+        await clearExecutionCurrentIfSuspendedOnStep(this.store, executionId, {
+          stepId: waiter.stepId,
+          kinds: ["waitForSignal"],
+        });
         completedStepId = waiter.stepId;
         shouldResume = true;
         break;

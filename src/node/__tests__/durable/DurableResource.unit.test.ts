@@ -108,6 +108,22 @@ describe("durable: DurableResource", () => {
     );
   });
 
+  it("throws when getExecutionDetail() shorthand is called without runner store", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+    const durable = new DurableResource(service, storage, store);
+
+    const task = r
+      .task("durable-tests-resource-detail-task")
+      .run(async () => "ok")
+      .build();
+
+    await expect(durable.getExecutionDetail(task, "e1")).rejects.toThrow(
+      "Durable execution detail shorthand is not available: runner store was not provided to DurableResource.",
+    );
+  });
+
   it("throws when getWorkflows() is called without runner store", () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
@@ -156,6 +172,104 @@ describe("durable: DurableResource", () => {
       },
     ]);
     expect(runnerStore.getTagAccessor).toHaveBeenCalledWith(durableWorkflowTag);
+  });
+
+  it("getExecutionDetail() provides a typed shorthand over the operator", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+
+    const task = r
+      .task("durable-tests-resource-detail-shortcut")
+      .inputSchema<{ orderId: string }>({
+        parse: (value: any) => value,
+      })
+      .run(async (input: { orderId: string }) => ({
+        orderId: input.orderId,
+        ok: true as const,
+      }))
+      .build();
+
+    const runnerStore = {
+      resolveDefinitionId: jest
+        .fn()
+        .mockImplementation((reference) =>
+          reference === task
+            ? "app.tasks.durable-tests-resource-detail-shortcut"
+            : undefined,
+        ),
+    } as any;
+
+    await store.saveExecution({
+      id: "e1",
+      taskId: "app.tasks.durable-tests-resource-detail-shortcut",
+      input: { orderId: "o-1" },
+      status: "completed",
+      result: { orderId: "o-1", ok: true as const },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "done",
+      result: "ok",
+      completedAt: new Date(),
+    });
+
+    const durable = new DurableResource(service, storage, store, runnerStore);
+    const detail = await durable.getExecutionDetail(task, "e1");
+
+    expect(runnerStore.resolveDefinitionId).toHaveBeenCalledWith(task);
+    expect(detail.execution).toEqual(
+      expect.objectContaining({
+        id: "e1",
+        taskId: "app.tasks.durable-tests-resource-detail-shortcut",
+        input: { orderId: "o-1" },
+        result: { orderId: "o-1", ok: true },
+      }),
+    );
+    expect(detail.steps.map((step) => step.stepId)).toEqual(["done"]);
+  });
+
+  it("getExecutionDetail() fails fast when the task witness does not match the stored execution", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+
+    const requestedTask = r
+      .task("durable-tests-resource-detail-requested")
+      .run(async () => "ok")
+      .build();
+
+    const runnerStore = {
+      resolveDefinitionId: jest
+        .fn()
+        .mockImplementation((reference) =>
+          reference === requestedTask ? "app.tasks.requested" : undefined,
+        ),
+    } as any;
+
+    await store.saveExecution({
+      id: "e1",
+      taskId: "app.tasks.actual",
+      input: undefined,
+      status: "pending",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const durable = new DurableResource(service, storage, store, runnerStore);
+
+    await expect(
+      durable.getExecutionDetail(requestedTask, "e1"),
+    ).rejects.toThrow(
+      "Cannot inspect execution 'e1' as task 'app.tasks.requested': the stored durable execution belongs to 'app.tasks.actual'.",
+    );
   });
 
   it("fails fast when workflow discovery APIs are missing from the runner store", () => {

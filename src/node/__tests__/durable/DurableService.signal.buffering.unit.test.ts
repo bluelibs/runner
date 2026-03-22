@@ -166,6 +166,20 @@ describe("durable: DurableService - signals buffering and audit", () => {
 
   it("signal completes indexed waits and deletes any timeout timer", async () => {
     const { store, queue, service } = await signalSetup();
+    await store.updateExecution("e1", {
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:paid:1",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "paid",
+            timerId: "t1",
+          },
+        },
+      },
+    });
 
     await store.saveStepResult({
       executionId: "e1",
@@ -203,6 +217,7 @@ describe("durable: DurableService - signals buffering and audit", () => {
     ).toEqual({ state: "completed", payload: { paidAt: 2 } });
     const timers = await store.getReadyTimers(new Date(Date.now() + 60_000));
     expect(timers.some((t) => t.id === "t1")).toBe(false);
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
     expect(queue!.enqueued).toEqual([
       { type: "resume", payload: { executionId: "e1" } },
     ]);

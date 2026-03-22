@@ -217,4 +217,43 @@ describe("durable: ExecutionManager persistence outcomes", () => {
       manager.runExecutionAttempt(execution, task, createLockState()),
     ).rejects.toThrow("unexpected-recheck");
   });
+
+  it("bails out when clearing stale current on an already-running execution loses the CAS race", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-running-cas-race");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+    const execution = pendingExecution({
+      id: "e-running-cas-race",
+      taskId: task.id,
+      status: ExecutionStatus.Running,
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:old",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "old-signal",
+          },
+        },
+      },
+    });
+    await store.saveExecution(execution);
+    jest.spyOn(store, "saveExecutionIfStatus").mockResolvedValueOnce(false);
+
+    await getManager(service).runExecutionAttempt(
+      execution,
+      task,
+      createLockState(),
+    );
+
+    expect((await store.getExecution("e-running-cas-race"))?.current).toEqual(
+      execution.current,
+    );
+  });
 });

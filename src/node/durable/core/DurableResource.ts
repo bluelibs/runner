@@ -7,7 +7,10 @@ import type {
   DependencyValuesType,
 } from "../../../types/utilities";
 import type { IDurableContext } from "./interfaces/context";
-import type { IDurableResource } from "./interfaces/resource";
+import type {
+  DurableExecutionDetail,
+  IDurableResource,
+} from "./interfaces/resource";
 import type {
   DurableStartAndWaitResult,
   EnsureScheduleOptions,
@@ -23,7 +26,10 @@ import { DurableOperator } from "./DurableOperator";
 import { recordFlowShape, type DurableFlowShape } from "./flowShape";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { durableExecutionInvariantError } from "../../../errors";
-import { toCanonicalDefinitionFromStore } from "../../../models/StoreLookup";
+import {
+  resolveRequestedIdFromStore,
+  toCanonicalDefinitionFromStore,
+} from "../../../models/StoreLookup";
 
 export type { IDurableResource } from "./interfaces/resource";
 
@@ -121,11 +127,40 @@ export class DurableResource implements IDurableResource {
     );
   }
 
+  async getExecutionDetail<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+    executionId: string,
+  ): Promise<DurableExecutionDetail<TInput, TResult>> {
+    const runnerStore = this.requireRunnerStoreForExecutionDetail();
+    const expectedTaskId = resolveRequestedIdFromStore(runnerStore, task)!;
+
+    const detail = await this.operator.getExecutionDetail(executionId);
+
+    if (detail.execution && detail.execution.taskId !== expectedTaskId) {
+      return durableExecutionInvariantError.throw({
+        message:
+          `Cannot inspect execution '${executionId}' as task '${expectedTaskId}': ` +
+          `the stored durable execution belongs to '${detail.execution.taskId}'.`,
+      });
+    }
+
+    return detail as DurableExecutionDetail<TInput, TResult>;
+  }
+
   private requireRunnerStoreForDescribe(): Store {
     const runnerStore = this.runnerStore;
     this.assertRunnerStore(
       runnerStore,
       "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) instead of manually constructing DurableResource.",
+    );
+    return runnerStore;
+  }
+
+  private requireRunnerStoreForExecutionDetail(): Store {
+    const runnerStore = this.runnerStore;
+    this.assertRunnerStore(
+      runnerStore,
+      "Durable execution detail shorthand is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) or fall back to durable.operator.getExecutionDetail(executionId).",
     );
     return runnerStore;
   }

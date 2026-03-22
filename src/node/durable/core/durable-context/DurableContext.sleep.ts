@@ -1,5 +1,10 @@
 import type { SleepOptions } from "../interfaces/context";
 import { SuspensionSignal } from "../interfaces/context";
+import {
+  clearExecutionCurrent,
+  createSleepCurrent,
+  setExecutionCurrent,
+} from "../current";
 import type { IDurableStore } from "../interfaces/store";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
 import { TimerStatus, TimerType } from "../types";
@@ -38,15 +43,32 @@ export async function sleepDurably(params: {
   );
 
   const existingState = existing?.result as
-    | { state: "sleeping"; timerId: string; fireAtMs: number }
+    | {
+        state: "sleeping";
+        timerId: string;
+        fireAtMs: number;
+        durationMs?: number;
+      }
     | { state: "completed" }
     | undefined;
 
   if (existingState?.state === "completed") {
+    await clearExecutionCurrent(params.store, params.executionId);
     return;
   }
 
   if (existingState?.state === "sleeping") {
+    await setExecutionCurrent(
+      params.store,
+      params.executionId,
+      createSleepCurrent({
+        stepId: sleepStepId,
+        durationMs: existingState.durationMs,
+        fireAtMs: existingState.fireAtMs,
+        timerId: existingState.timerId,
+        startedAt: existing!.completedAt,
+      }),
+    );
     await params.store.createTimer({
       id: existingState.timerId,
       executionId: params.executionId,
@@ -60,6 +82,7 @@ export async function sleepDurably(params: {
 
   const timerId = `sleep:${params.executionId}:${sleepStepId}`;
   const fireAtMs = Date.now() + params.durationMs;
+  const recordedAt = new Date();
 
   await params.store.createTimer({
     id: timerId,
@@ -73,9 +96,26 @@ export async function sleepDurably(params: {
   await params.store.saveStepResult({
     executionId: params.executionId,
     stepId: sleepStepId,
-    result: { state: "sleeping", timerId, fireAtMs },
-    completedAt: new Date(),
+    result: {
+      state: "sleeping",
+      timerId,
+      fireAtMs,
+      durationMs: params.durationMs,
+    },
+    completedAt: recordedAt,
   });
+
+  await setExecutionCurrent(
+    params.store,
+    params.executionId,
+    createSleepCurrent({
+      stepId: sleepStepId,
+      durationMs: params.durationMs,
+      fireAtMs,
+      timerId,
+      startedAt: recordedAt,
+    }),
+  );
 
   await params.appendAuditEntry({
     kind: DurableAuditEntryKind.SleepScheduled,

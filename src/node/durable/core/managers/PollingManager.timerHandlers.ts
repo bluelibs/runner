@@ -2,6 +2,7 @@ import type { IDurableStore } from "../interfaces/store";
 import type { Timer, Execution } from "../types";
 import { ExecutionStatus, TimerType } from "../types";
 import { DurableAuditEntryKind } from "../audit";
+import { clearExecutionCurrentIfSuspendedOnStep } from "../current";
 import type { AuditLogger } from "./AuditLogger";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ScheduleManager } from "./ScheduleManager";
@@ -34,6 +35,14 @@ export async function handleSleepTimer(params: {
     result: { state: "completed" },
     completedAt: new Date(),
   });
+  await clearExecutionCurrentIfSuspendedOnStep(
+    params.store,
+    params.timer.executionId,
+    {
+      stepId: params.timer.stepId,
+      kinds: ["sleep"],
+    },
+  );
 
   const execution = await params.store.getExecution(params.timer.executionId);
   await params.auditLogger.log({
@@ -127,6 +136,14 @@ export async function handleSignalTimeoutTimer(params: {
         result: timedOutState,
         completedAt: new Date(),
       });
+      await clearExecutionCurrentIfSuspendedOnStep(
+        params.store,
+        params.timer.executionId!,
+        {
+          stepId: params.timer.stepId!,
+          kinds: ["waitForSignal"],
+        },
+      );
 
       return signalId;
     },
@@ -185,6 +202,14 @@ export async function handleExecutionWaitTimeoutTimer(params: {
         },
         completedAt: new Date(),
       });
+      await clearExecutionCurrentIfSuspendedOnStep(
+        params.store,
+        params.timer.executionId!,
+        {
+          stepId: params.timer.stepId!,
+          kinds: ["waitForExecution"],
+        },
+      );
 
       return true;
     },

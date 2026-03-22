@@ -136,6 +136,7 @@ export async function suspendDurableWait(params: {
   executionId: string;
   stepId: string;
   waitingState?: unknown;
+  recordedAt?: Date;
   registerWaiter: () => Promise<void>;
 }): Promise<never> {
   if (params.waitingState !== undefined) {
@@ -143,7 +144,7 @@ export async function suspendDurableWait(params: {
       executionId: params.executionId,
       stepId: params.stepId,
       result: params.waitingState,
-      completedAt: new Date(),
+      completedAt: params.recordedAt ?? new Date(),
     });
   }
 

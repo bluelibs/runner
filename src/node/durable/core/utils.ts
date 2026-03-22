@@ -72,17 +72,20 @@ export function parseSignalState(value: unknown): {
   state: "waiting" | "completed" | "timed_out";
   timerId?: string;
   signalId?: string;
+  timeoutMs?: number;
 } | null {
   if (!isRecord(value)) return null;
   const state = value.state;
   const signalId =
     typeof value.signalId === "string" ? value.signalId : undefined;
   if (state === "waiting") {
+    const timeoutMs = value.timeoutMs;
     const timerId = value.timerId;
     return {
       state: "waiting",
       timerId: typeof timerId === "string" ? timerId : undefined,
       signalId,
+      timeoutMs: typeof timeoutMs === "number" ? timeoutMs : undefined,
     };
   }
   if (state === "completed") {
@@ -98,6 +101,7 @@ export function parseExecutionWaitState(value: unknown):
   | {
       state: "waiting";
       targetExecutionId: string;
+      timeoutMs?: number;
       timerId?: string;
       timeoutAtMs?: number;
     }
@@ -126,11 +130,19 @@ export function parseExecutionWaitState(value: unknown):
   const targetExecutionId = value.targetExecutionId;
 
   if (state === "waiting") {
+    const timeoutMs = value.timeoutMs;
     const timeoutAtMs = value.timeoutAtMs;
     const timerId = value.timerId;
     if (typeof timeoutAtMs === "number" && typeof timerId === "string") {
-      return { state, targetExecutionId, timeoutAtMs, timerId };
+      return {
+        state,
+        targetExecutionId,
+        timeoutMs: typeof timeoutMs === "number" ? timeoutMs : undefined,
+        timeoutAtMs,
+        timerId,
+      };
     }
+    void timeoutMs;
     return { state, targetExecutionId };
   }
 

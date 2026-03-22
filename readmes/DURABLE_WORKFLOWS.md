@@ -213,7 +213,21 @@ const detail = await operator.getExecutionDetail(executionId);
 
 Keep the durable store prefix in one shared config module and reuse it for both workflow runtime wiring and read-only status lookups.
 
-If you already have the durable resource instance (dependency injection), you can use the operator API directly:
+If you already have the durable resource instance (dependency injection), prefer the typed shorthand:
+
+```ts
+const detail = await durableRuntime.getExecutionDetail(
+  paymentWorkflow,
+  executionId,
+);
+```
+
+This shorthand:
+
+- infers `execution.input` / `execution.result` from the task definition
+- verifies that the stored execution belongs to the supplied task witness
+
+If you need raw store-level inspection without a task witness, you can still use:
 
 ```ts
 const detail = await durableRuntime.operator.getExecutionDetail(executionId);
@@ -450,7 +464,7 @@ If RabbitMQ duplicates or drops a delivery hint, or Redis pub/sub misses a notif
 
 `RedisStore` persists the workflow state in a few buckets of data:
 
-- **Execution records**: one record per `executionId`, holding task id, optional `parentExecutionId`, input, status, attempt counters, timeout, result/error, and timestamps.
+- **Execution records**: one record per `executionId`, holding task id, optional `parentExecutionId`, input, status, attempt counters, timeout, optional live `current` position metadata, result/error, and timestamps.
 - **Execution indexes**: sets for all executions, active executions, and stuck executions so operators and recovery loops can find relevant work quickly.
 - **Step results**: one hash per execution keyed by `stepId`. This is what lets replay skip already-completed `durableContext.step(...)` calls.
 - **Signal state**: one record per `executionId + signalId`, storing both retained signal history and a FIFO queue of unmatched arrivals for later `waitForSignal(...)` consumption.
@@ -461,6 +475,44 @@ If RabbitMQ duplicates or drops a delivery hint, or Redis pub/sub misses a notif
 - **Idempotency mappings**: optional `taskId + idempotencyKey -> executionId` records used to dedupe starts.
 
 The implementation uses Runner's serializer for persistence, so `Date` values and other supported built-ins round-trip correctly instead of degrading into plain JSON strings.
+
+### Live Execution Position: `execution.current`
+
+Execution records can also expose `current`, a live view of where the workflow is now.
+
+- Waiting states are canonical durable truth because they are derived from persisted wait state.
+- Active running states are best-effort operator metadata. They are useful for dashboards and debugging, but abrupt worker loss can leave them stale until the next durable transition overwrites or clears them.
+
+Current shapes:
+
+- `kind: "step"`: currently running a durable step
+- `kind: "switch"`: currently evaluating a durable switch branch
+- `kind: "sleep"`: durably suspended in `sleep(...)`
+- `kind: "waitForSignal"`: durably suspended in `waitForSignal(...)`
+- `kind: "waitForExecution"`: durably suspended in `waitForExecution(...)`
+
+Waiting shapes include typed `waitingFor` details. For example:
+
+- `sleep` carries timer id / fire time metadata
+- `waitForSignal` carries the target signal id and optional timeout metadata
+- `waitForExecution` carries the target execution id, target task id, and optional timeout metadata
+
+When `durableContext.workflow(stepId, childTask, input)` is actively running, `current` still uses `kind: "step"` because `workflow(...)` is modeled as a replay-safe step around the child start. In that case the step also carries:
+
+- `meta.workflowTaskId`: the canonical durable task identity of the child workflow being started
+
+Example shape:
+
+```ts
+{
+  kind: "step",
+  stepId: "start-child",
+  startedAt: new Date(),
+  meta: {
+    workflowTaskId: "app.billing.tasks.chargeCustomer",
+  },
+}
+```
 
 ### RabbitMQ message semantics
 
@@ -1206,6 +1258,12 @@ Shutdown note:
 
 - `waitForExecution(...)` is treated like other draining durable continuations: if the parent is already suspended and the child finishes during durable drain, the parent may still be resumed to settle that wait before final disposal.
 - `workflow(...)` is the recommended in-workflow child-start API because it handles replay-safe start memoization, parent linkage, and the default subflow idempotency scope together.
+
+Operator note:
+
+- while `workflow(...)` is actively starting the child, `execution.current` is a `kind: "step"` entry for that `stepId`
+- that active step also exposes `meta.workflowTaskId`, which identifies the canonical child workflow task being started
+- after the child start step completes and the parent moves into `waitForExecution(...)`, `execution.current` switches to `kind: "waitForExecution"` with typed wait metadata
 
 ### Example: `waitUntilPaid()`
 

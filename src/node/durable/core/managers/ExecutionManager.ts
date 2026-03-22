@@ -21,6 +21,7 @@ import type { AuditLogger } from "./AuditLogger";
 import type { WaitManager } from "./WaitManager";
 import { Logger } from "../../../../models/Logger";
 import { DurableContext } from "../DurableContext";
+import { clearExecutionCurrentIfSuspendedOnStep } from "../current";
 import { SuspensionSignal } from "../interfaces/context";
 import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.tag";
 import { acquireStoreLock } from "../locking";
@@ -292,6 +293,7 @@ export class ExecutionManager {
       const cancelledExecution: Execution = {
         ...execution,
         status: ExecutionStatus.Cancelled,
+        current: undefined,
         cancelRequestedAt: execution.cancelRequestedAt ?? now,
         cancelledAt: now,
         completedAt: now,
@@ -499,6 +501,7 @@ export class ExecutionManager {
       const failedExecution: Execution = {
         ...execution,
         status: ExecutionStatus.Failed,
+        current: undefined,
         error: { message },
         completedAt,
         updatedAt: completedAt,
@@ -674,6 +677,14 @@ export class ExecutionManager {
           if (!completed) {
             continue;
           }
+          await clearExecutionCurrentIfSuspendedOnStep(
+            this.config.store,
+            waiter.executionId,
+            {
+              stepId: waiter.stepId,
+              kinds: ["waitForExecution"],
+            },
+          );
 
           await this.kickoffWithFailsafe(waiter.executionId);
         }
@@ -749,13 +760,28 @@ export class ExecutionManager {
     execution: Execution<unknown, unknown>,
   ): Promise<Execution<unknown, unknown> | null> {
     if (execution.status === ExecutionStatus.Running) {
-      return execution;
+      if (execution.current === undefined) {
+        return execution;
+      }
+
+      const resumedExecution: Execution = {
+        ...execution,
+        current: undefined,
+        updatedAt: new Date(),
+      };
+      const resumed = await this.config.store.saveExecutionIfStatus(
+        resumedExecution,
+        [ExecutionStatus.Running],
+      );
+
+      return resumed ? resumedExecution : null;
     }
 
     const now = new Date();
     const runningExecution: Execution = {
       ...execution,
       status: ExecutionStatus.Running,
+      current: undefined,
       result: undefined,
       error: undefined,
       completedAt: undefined,
@@ -863,6 +889,7 @@ export class ExecutionManager {
     const finishedExecution: Execution = {
       ...runningExecution,
       status: ExecutionStatus.Completed,
+      current: undefined,
       result,
       error: undefined,
       completedAt: new Date(),
@@ -952,6 +979,7 @@ export class ExecutionManager {
     const retryingExecution: Execution = {
       ...params.runningExecution,
       status: ExecutionStatus.Retrying,
+      current: undefined,
       attempt: params.runningExecution.attempt + 1,
       error: params.error,
       updatedAt: new Date(),
@@ -1136,6 +1164,7 @@ export class ExecutionManager {
     const failedExecution: Execution = {
       ...params.execution,
       status: ExecutionStatus.Failed,
+      current: undefined,
       error: params.error,
       completedAt,
       updatedAt: completedAt,

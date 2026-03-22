@@ -5,7 +5,7 @@ import {
   handleSignalTimeoutTimer,
   handleSleepTimer,
 } from "../../durable/core/managers/PollingManager.timerHandlers";
-import { TimerType } from "../../durable/core/types";
+import { ExecutionStatus, TimerType } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 
 describe("durable: PollingManager timer handlers (unit)", () => {
@@ -39,6 +39,48 @@ describe("durable: PollingManager timer handlers (unit)", () => {
         },
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it("clears matching suspended current when a sleep timer completes", async () => {
+    const store = new MemoryStore();
+    const auditLogger = new AuditLogger({}, store);
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Sleeping,
+      current: {
+        kind: "sleep",
+        stepId: "__sleep:nap",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "sleep",
+          params: {
+            fireAtMs: Date.now() + 1000,
+            timerId: "sleep:e1:__sleep:nap",
+          },
+        },
+      },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await handleSleepTimer({
+      store,
+      auditLogger,
+      timer: {
+        id: "sleep:e1:__sleep:nap",
+        type: TimerType.Sleep,
+        executionId: "e1",
+        stepId: "__sleep:nap",
+        fireAt: new Date(),
+        status: "pending",
+      },
+    });
+
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
   });
 
   it("ignores non-timeout or incomplete signal-timeout timers", async () => {
@@ -77,6 +119,108 @@ describe("durable: PollingManager timer handlers (unit)", () => {
         },
       }),
     ).resolves.toBeNull();
+  });
+
+  it("clears matching suspended current when signal and execution waits time out", async () => {
+    const store = new MemoryStore();
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+
+    await store.saveExecution({
+      id: "signal-exec",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Sleeping,
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:paid",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "paid",
+            timerId: "signal_timeout:signal-exec:__signal:paid",
+          },
+        },
+      },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "signal-exec",
+      stepId: "__signal:paid",
+      result: { state: "waiting", signalId: "paid" },
+      completedAt: new Date(),
+    });
+
+    await handleSignalTimeoutTimer({
+      store,
+      logger,
+      timer: {
+        id: "signal_timeout:signal-exec:__signal:paid",
+        type: TimerType.SignalTimeout,
+        executionId: "signal-exec",
+        stepId: "__signal:paid",
+        fireAt: new Date(),
+        status: "pending",
+      },
+    });
+
+    expect((await store.getExecution("signal-exec"))?.current).toBeUndefined();
+
+    await store.saveExecution({
+      id: "wait-exec",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Sleeping,
+      current: {
+        kind: "waitForExecution",
+        stepId: "__execution:child",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "execution",
+          params: {
+            targetExecutionId: "child",
+            targetTaskId: "canonical.child",
+            timerId: "execution_timeout:wait-exec:__execution:child",
+          },
+        },
+      },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "wait-exec",
+      stepId: "__execution:child",
+      result: { state: "waiting", targetExecutionId: "child" },
+      completedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "wait-exec",
+      targetExecutionId: "child",
+      stepId: "__execution:child",
+    });
+
+    await handleExecutionWaitTimeoutTimer({
+      store,
+      timer: {
+        id: "execution_timeout:wait-exec:__execution:child",
+        type: TimerType.Timeout,
+        executionId: "wait-exec",
+        stepId: "__execution:child",
+        fireAt: new Date(),
+        status: "pending",
+      },
+    });
+
+    expect((await store.getExecution("wait-exec"))?.current).toBeUndefined();
   });
 
   it("handles execution wait timeout timers across edge cases", async () => {

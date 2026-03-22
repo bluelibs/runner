@@ -12,6 +12,109 @@ export const ExecutionStatus = {
 export type ExecutionStatus =
   (typeof ExecutionStatus)[keyof typeof ExecutionStatus];
 
+/**
+ * Extra metadata for active durable step tracking.
+ *
+ * `workflowTaskId` uses the durable persisted task identity so dashboards and
+ * operator tooling see the same canonical child workflow id that durable uses.
+ */
+export interface DurableExecutionCurrentWorkflowMeta {
+  workflowTaskId: string;
+}
+
+/**
+ * Canonical live view of a durable execution suspended in `sleep()`.
+ */
+export interface DurableExecutionCurrentSleep {
+  kind: "sleep";
+  stepId: string;
+  /** Timestamp when this current state was persisted or last restored. */
+  startedAt: Date;
+  waitingFor: {
+    type: "sleep";
+    params: {
+      durationMs?: number;
+      fireAtMs: number;
+      timerId: string;
+    };
+  };
+}
+
+/**
+ * Canonical live view of a durable execution suspended in `waitForSignal()`.
+ */
+export interface DurableExecutionCurrentSignalWait {
+  kind: "waitForSignal";
+  stepId: string;
+  /** Timestamp when this current state was persisted or last restored. */
+  startedAt: Date;
+  waitingFor: {
+    type: "signal";
+    params: {
+      signalId: string;
+      timeoutMs?: number;
+      timeoutAtMs?: number;
+      timerId?: string;
+    };
+  };
+}
+
+/**
+ * Canonical live view of a durable execution suspended in `waitForExecution()`.
+ */
+export interface DurableExecutionCurrentExecutionWait {
+  kind: "waitForExecution";
+  stepId: string;
+  /** Timestamp when this current state was persisted or last restored. */
+  startedAt: Date;
+  waitingFor: {
+    type: "execution";
+    params: {
+      targetExecutionId: string;
+      targetTaskId: string;
+      timeoutMs?: number;
+      timeoutAtMs?: number;
+      timerId?: string;
+    };
+  };
+}
+
+/**
+ * Best-effort live view of a durable execution actively running user code
+ * inside a durable step.
+ */
+export interface DurableExecutionCurrentStep {
+  kind: "step";
+  stepId: string;
+  /** Timestamp when this active position was recorded. */
+  startedAt: Date;
+  meta?: DurableExecutionCurrentWorkflowMeta;
+}
+
+/**
+ * Best-effort live view of a durable execution evaluating a durable switch.
+ */
+export interface DurableExecutionCurrentSwitch {
+  kind: "switch";
+  stepId: string;
+  /** Timestamp when this active position was recorded. */
+  startedAt: Date;
+}
+
+/**
+ * Live execution position for operator tooling and status reads.
+ *
+ * Waiting states are durable truth because they are derived from persisted wait
+ * state. Active states are best-effort because abrupt process loss can leave a
+ * stale in-flight position until the next durable transition overwrites it.
+ */
+export type DurableExecutionCurrent =
+  | DurableExecutionCurrentSleep
+  | DurableExecutionCurrentSignalWait
+  | DurableExecutionCurrentExecutionWait
+  | DurableExecutionCurrentStep
+  | DurableExecutionCurrentSwitch;
+
 export interface Execution<TInput = unknown, TResult = unknown> {
   id: string;
   taskId: string;
@@ -30,6 +133,12 @@ export interface Execution<TInput = unknown, TResult = unknown> {
   attempt: number;
   maxAttempts: number;
   timeout?: number;
+  /**
+   * Optional live execution position for operator tooling and status pages.
+   *
+   * Waiting states are canonical durable truth. Active states are best-effort.
+   */
+  current?: DurableExecutionCurrent;
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;
