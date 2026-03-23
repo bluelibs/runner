@@ -39,13 +39,13 @@ describe("durable: signal state utils", () => {
       parseExecutionWaitState({
         state: "completed",
         targetExecutionId: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         result: { ok: true },
       }),
     ).toEqual({
       state: "completed",
       targetExecutionId: "child",
-      taskId: "child-task",
+      workflowKey: "child-task",
       result: { ok: true },
     });
     expect(
@@ -53,14 +53,14 @@ describe("durable: signal state utils", () => {
         state: "failed",
         targetExecutionId: "child",
         error: { message: "boom", stack: "stack" },
-        taskId: "child-task",
+        workflowKey: "child-task",
         attempt: 2,
       }),
     ).toEqual({
       state: "failed",
       targetExecutionId: "child",
       error: { message: "boom", stack: "stack" },
-      taskId: "child-task",
+      workflowKey: "child-task",
       attempt: 2,
     });
     expect(
@@ -80,7 +80,7 @@ describe("durable: signal state utils", () => {
         state: "failed",
         targetExecutionId: "child",
         error: { nope: true },
-        taskId: "child-task",
+        workflowKey: "child-task",
         attempt: 2,
       }),
     ).toBeNull();
@@ -102,14 +102,14 @@ describe("durable: signal state utils", () => {
         state: "cancelled",
         targetExecutionId: "child",
         error: { message: "stopped" },
-        taskId: "child-task",
+        workflowKey: "child-task",
         attempt: 3,
       }),
     ).toEqual({
       state: "cancelled",
       targetExecutionId: "child",
       error: { message: "stopped", stack: undefined },
-      taskId: "child-task",
+      workflowKey: "child-task",
       attempt: 3,
     });
     expect(
@@ -117,7 +117,15 @@ describe("durable: signal state utils", () => {
         state: "failed",
         targetExecutionId: "child",
         error: { message: "boom" },
-        taskId: "child-task",
+        workflowKey: "child-task",
+      }),
+    ).toBeNull();
+    expect(
+      parseExecutionWaitState({
+        state: "failed",
+        targetExecutionId: "child",
+        error: { message: "boom" },
+        attempt: 2,
       }),
     ).toBeNull();
   });

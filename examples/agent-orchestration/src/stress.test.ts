@@ -50,6 +50,7 @@ test("rolls back compensated steps when a reviewer aborts", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -58,7 +59,7 @@ test("rolls back compensated steps when a reviewer aborts", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressPolicyDecision.id,
     });
@@ -91,6 +92,7 @@ test("handles careful-lane revision and then approval", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -99,7 +101,7 @@ test("handles careful-lane revision and then approval", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressPolicyDecision.id,
     });
@@ -111,7 +113,7 @@ test("handles careful-lane revision and then approval", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressRevisionDraft.id,
     });
@@ -123,7 +125,7 @@ test("handles careful-lane revision and then approval", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressPolicyDecision.id,
     });
@@ -153,6 +155,7 @@ test("rejects regulated drafts at compliance and rolls back", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -161,7 +164,7 @@ test("rejects regulated drafts at compliance and rolls back", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressPolicyDecision.id,
     });
@@ -172,7 +175,7 @@ test("rejects regulated drafts at compliance and rolls back", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: ComplianceDecision.id,
     });
@@ -205,6 +208,7 @@ test("times out when the first stress policy signal never arrives", async () => 
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -239,7 +243,7 @@ test("times out when a stress revision never arrives", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressPolicyDecision.id,
     });
@@ -269,6 +273,7 @@ test("aborts when the revision budget is exhausted", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -277,7 +282,7 @@ test("aborts when the revision budget is exhausted", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressPolicyDecision.id,
     });
@@ -289,7 +294,7 @@ test("aborts when the revision budget is exhausted", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressRevisionDraft.id,
     });
@@ -301,7 +306,7 @@ test("aborts when the revision budget is exhausted", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressPolicyDecision.id,
     });
@@ -331,6 +336,7 @@ test("rolls back reserved work when stress evidence collection fails", async () 
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -348,7 +354,7 @@ test("rolls back reserved work when stress evidence collection fails", async () 
       /broken evidence/,
     );
 
-    const execution = await service.operator.getExecutionDetail(executionId);
+    const execution = await repository.findOneOrFail({ id: executionId });
     assert.equal(execution.execution?.status, "failed");
   } finally {
     await runtime.dispose();
@@ -362,6 +368,7 @@ test("rejects regulated drafts when compliance never answers", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -370,7 +377,7 @@ test("rejects regulated drafts when compliance never answers", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: StressPolicyDecision.id,
     });

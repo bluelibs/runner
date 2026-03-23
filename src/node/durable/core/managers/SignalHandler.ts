@@ -32,7 +32,7 @@ import {
 export interface SignalHandlerCallbacks {
   processExecution: (executionId: string) => Promise<void>;
   resolveTask: (
-    taskId: string,
+    workflowKey: string,
   ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
 }
 
@@ -199,13 +199,14 @@ export class SignalHandler {
       const execution = await this.store.getExecution(executionId);
       if (!execution) return null;
       if (isTerminalExecutionStatus(execution.status)) return null;
-      const task = this.callbacks.resolveTask(execution.taskId);
+      const workflowKey = execution.workflowKey;
+      const task = this.callbacks.resolveTask(workflowKey);
       const declaredSignalIds = task
         ? getDeclaredDurableWorkflowSignalIds(task)
         : null;
       if (declaredSignalIds !== null && !declaredSignalIds.has(signalId)) {
         return durableExecutionInvariantError.throw({
-          message: `Signal '${signalId}' is not declared in durableWorkflow.signals for task '${execution.taskId}'.`,
+          message: `Signal '${signalId}' is not declared in durableWorkflow.signals for workflow '${workflowKey}'.`,
         });
       }
 
@@ -312,7 +313,7 @@ export class SignalHandler {
     await this.auditLogger.log({
       kind: DurableAuditEntryKind.SignalDelivered,
       executionId,
-      taskId: execution?.taskId,
+      workflowKey: execution?.workflowKey,
       attempt,
       stepId: delivered.auditStepId,
       signalId,

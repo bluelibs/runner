@@ -82,13 +82,14 @@ export interface DurableServiceConfig {
    * Useful in Runner environments where tasks are registered in the Store registry.
    */
   taskResolver?: (
-    taskId: string,
+    workflowKey: string,
   ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
   /**
-   * Resolves the durable persistence id for a task definition.
-   * In Runner environments this should be the canonical runtime task id.
+   * Resolves the durable persisted workflow key for a task definition.
+   * In Runner environments this prefers tags.durableWorkflow.with({ key })
+   * and falls back to the canonical runtime task id.
    */
-  taskIdResolver?: (
+  workflowKeyResolver?: (
     task: ITask<any, Promise<any>, any, any, any, any>,
   ) => string | undefined;
   audit?: {

@@ -65,7 +65,7 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       execution: { maxAttempts: 1 },
     });
 
-    await store.saveExecution(sleepingExecution({ taskId: task.id }));
+    await store.saveExecution(sleepingExecution({ workflowKey: task.id }));
     await store.saveStepResult({
       executionId: "e1",
       stepId: "__signal:paid",
@@ -98,11 +98,50 @@ describe("durable: DurableService - signals invalid state and direct resume", ()
       execution: { maxAttempts: 1 },
     });
 
-    await store.saveExecution(sleepingExecution({ taskId: task.id }));
+    await store.saveExecution(sleepingExecution({ workflowKey: task.id }));
 
     await expect(service.signal("e1", Other, { ok: true })).rejects.toThrow(
       "not declared in durableWorkflow.signals",
     );
+  });
+
+  it("can deliver signals even when the sleeping execution was persisted without a workflow key", async () => {
+    const { base, queue, service } = await signalSetup();
+
+    await base.saveExecution({
+      id: "e-missing-key",
+      input: undefined,
+      status: "sleeping",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    await base.saveStepResult({
+      executionId: "e-missing-key",
+      stepId: "__signal:paid",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+    await base.upsertSignalWaiter({
+      executionId: "e-missing-key",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+
+    await expect(
+      service.signal("e-missing-key", Paid, { paidAt: 99 }),
+    ).resolves.toBeUndefined();
+    expect(
+      (await base.getStepResult("e-missing-key", "__signal:paid"))?.result,
+    ).toEqual({
+      state: "completed",
+      payload: { paidAt: 99 },
+    });
+    expect(queue!.enqueued).toEqual([
+      { type: "resume", payload: { executionId: "e-missing-key" } },
+    ]);
   });
 
   it("drops stale waiters when signal() finds a waiter but the waiting step disappeared", async () => {

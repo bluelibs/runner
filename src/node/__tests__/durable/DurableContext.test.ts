@@ -68,7 +68,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Cancelled,
       attempt: 1,
@@ -108,7 +108,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -135,7 +135,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -154,7 +154,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "parent",
+      workflowKey: "parent",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -180,7 +180,7 @@ describe("durable: DurableContext", () => {
       kind: "step",
       stepId: "start-child",
       meta: {
-        workflowTaskId: "canonical.child-workflow-task",
+        childWorkflowKey: "canonical.child-workflow-task",
       },
     });
   });
@@ -189,7 +189,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       current: {
@@ -243,7 +243,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "running",
       attempt: 1,
@@ -446,7 +446,7 @@ describe("durable: DurableContext", () => {
       const created = await store.createExecutionWithIdempotencyKey!({
         execution: {
           id: executionId,
-          taskId: task.id,
+          workflowKey: task.id,
           parentExecutionId: options.parentExecutionId,
           input: undefined,
           status: ExecutionStatus.Pending,
@@ -455,7 +455,7 @@ describe("durable: DurableContext", () => {
           createdAt: new Date(),
           updatedAt: new Date(),
         },
-        taskId: task.id,
+        workflowKey: task.id,
         idempotencyKey: options.idempotencyKey,
       });
 
@@ -1031,7 +1031,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1063,7 +1063,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1103,7 +1103,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1136,7 +1136,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       current: {
@@ -1191,7 +1191,7 @@ describe("durable: DurableContext", () => {
     const initialStore = new MemoryStore();
     await initialStore.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1220,7 +1220,7 @@ describe("durable: DurableContext", () => {
     const recordedAt = new Date("2024-01-02T03:04:05.000Z");
     await replayStore.saveExecution({
       id: "e2",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1257,7 +1257,7 @@ describe("durable: DurableContext", () => {
     const defaultStore = new MemoryStore();
     await defaultStore.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1284,7 +1284,7 @@ describe("durable: DurableContext", () => {
     const explicitStore = new MemoryStore();
     await explicitStore.saveExecution({
       id: "e2",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1320,7 +1320,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1349,7 +1349,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1390,7 +1390,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1421,7 +1421,7 @@ describe("durable: DurableContext", () => {
     const recordedAt = new Date("2024-01-02T03:04:05.000Z");
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1467,7 +1467,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "parent",
+      workflowKey: "parent",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1477,7 +1477,7 @@ describe("durable: DurableContext", () => {
     });
     await store.saveExecution({
       id: "child-exec",
-      taskId: "canonical.child-task",
+      workflowKey: "canonical.child-task",
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -1504,7 +1504,7 @@ describe("durable: DurableContext", () => {
         type: "execution",
         params: {
           targetExecutionId: "child-exec",
-          targetTaskId: "canonical.child-task",
+          targetWorkflowKey: "canonical.child-task",
           timeoutMs: 2_000,
           timerId: "execution_timeout:e1:__execution:wait-child",
         },
@@ -1516,7 +1516,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "parent",
+      workflowKey: "parent",
       input: undefined,
       status: ExecutionStatus.Running,
       current: {
@@ -1527,7 +1527,7 @@ describe("durable: DurableContext", () => {
           type: "execution",
           params: {
             targetExecutionId: "child-exec",
-            targetTaskId: "canonical.child-task",
+            targetWorkflowKey: "canonical.child-task",
             timeoutMs: 2_000,
             timeoutAtMs: Date.now() + 2_000,
             timerId: "execution_timeout:e1:__execution:wait-child",
@@ -1541,7 +1541,7 @@ describe("durable: DurableContext", () => {
     });
     await store.saveExecution({
       id: "child-exec",
-      taskId: "canonical.child-task",
+      workflowKey: "canonical.child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       attempt: 1,
@@ -1584,7 +1584,7 @@ describe("durable: DurableContext", () => {
     const initialStore = new MemoryStore();
     await initialStore.saveExecution({
       id: "e1",
-      taskId: "parent",
+      workflowKey: "parent",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1594,7 +1594,7 @@ describe("durable: DurableContext", () => {
     });
     await initialStore.saveExecution({
       id: "child-exec",
-      taskId: "canonical.child-task",
+      workflowKey: "canonical.child-task",
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -1616,7 +1616,7 @@ describe("durable: DurableContext", () => {
         type: "execution",
         params: {
           targetExecutionId: "child-exec",
-          targetTaskId: "canonical.child-task",
+          targetWorkflowKey: "canonical.child-task",
           timeoutMs: undefined,
         },
       },
@@ -1626,7 +1626,7 @@ describe("durable: DurableContext", () => {
     const recordedAt = new Date("2024-01-02T03:04:05.000Z");
     await replayStore.saveExecution({
       id: "e2",
-      taskId: "parent",
+      workflowKey: "parent",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1636,7 +1636,7 @@ describe("durable: DurableContext", () => {
     });
     await replayStore.saveExecution({
       id: "child-exec-2",
-      taskId: "canonical.child-task",
+      workflowKey: "canonical.child-task",
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -1668,7 +1668,7 @@ describe("durable: DurableContext", () => {
         type: "execution",
         params: {
           targetExecutionId: "child-exec-2",
-          targetTaskId: "canonical.child-task",
+          targetWorkflowKey: "canonical.child-task",
           timeoutMs: undefined,
         },
       },
@@ -1679,7 +1679,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "parent",
+      workflowKey: "parent",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1689,7 +1689,7 @@ describe("durable: DurableContext", () => {
     });
     await store.saveExecution({
       id: "child-exec",
-      taskId: "canonical.child-task",
+      workflowKey: "canonical.child-task",
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -1713,7 +1713,7 @@ describe("durable: DurableContext", () => {
         type: "execution",
         params: {
           targetExecutionId: "child-exec",
-          targetTaskId: "canonical.child-task",
+          targetWorkflowKey: "canonical.child-task",
         },
       },
     });
@@ -1723,7 +1723,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "parent",
+      workflowKey: "parent",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1733,7 +1733,7 @@ describe("durable: DurableContext", () => {
     });
     await store.saveExecution({
       id: "child-exec",
-      taskId: "canonical.child-task",
+      workflowKey: "canonical.child-task",
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -1779,7 +1779,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "parent",
+      workflowKey: "parent",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -1789,7 +1789,7 @@ describe("durable: DurableContext", () => {
     });
     await store.saveExecution({
       id: "child-exec",
-      taskId: "canonical.child-task",
+      workflowKey: "canonical.child-task",
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -1951,7 +1951,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "child-completed",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -1973,7 +1973,7 @@ describe("durable: DurableContext", () => {
       expect.objectContaining({
         result: expect.objectContaining({
           state: "completed",
-          taskId: "child-task",
+          workflowKey: "child-task",
           targetExecutionId: "child-completed",
           result: { ok: true },
         }),
@@ -1985,7 +1985,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "child-completed",
-      taskId: "canonical-child-task",
+      workflowKey: "canonical-child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -2010,7 +2010,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "child-completed",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -2036,7 +2036,7 @@ describe("durable: DurableContext", () => {
       result: {
         state: "completed",
         targetExecutionId: "child-cached",
-        taskId: "child-task",
+        workflowKey: "child-task",
         result: { ok: true },
       },
       completedAt: new Date(),
@@ -2072,7 +2072,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "child-failed",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Failed,
       error: { message: "child boom" },
@@ -2098,7 +2098,7 @@ describe("durable: DurableContext", () => {
       replayContext.waitForExecution(ChildTextTask, "child-failed"),
     ).rejects.toMatchObject({
       executionId: "child-failed",
-      taskId: "child-task",
+      workflowKey: "child-task",
       attempt: 3,
       message: "child boom",
     });
@@ -2108,7 +2108,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "child-pending",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -2168,7 +2168,7 @@ describe("durable: DurableContext", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "child-comp-failed",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.CompensationFailed,
       error: { message: "rollback blew up" },
@@ -2195,7 +2195,7 @@ describe("durable: DurableContext", () => {
     ).rejects.toMatchObject({
       message: "rollback blew up",
       executionId: "child-comp-failed",
-      taskId: "child-task",
+      workflowKey: "child-task",
       attempt: 2,
     });
   });

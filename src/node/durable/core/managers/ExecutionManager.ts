@@ -137,7 +137,7 @@ export class ExecutionManager {
   // ─── Idempotent start ──────────────────────────────────────────────────────
 
   /**
-   * Start a workflow with deduplication: if the same (taskId, idempotencyKey)
+   * Start a workflow with deduplication: if the same (workflowKey, idempotencyKey)
    * was already started, returns the existing executionId instead of creating
    * a duplicate. Relies on an atomic store primitive so create + dedupe claim
    * happen in one transaction.
@@ -152,7 +152,7 @@ export class ExecutionManager {
     const execution = this.createPendingExecution(task, input, options);
     const created = await this.config.store.createExecutionWithIdempotencyKey!({
       execution,
-      taskId: this.getTaskPersistenceId(task),
+      workflowKey: this.getTaskWorkflowKey(task),
       idempotencyKey,
     });
 
@@ -185,10 +185,10 @@ export class ExecutionManager {
 
   // ─── Execution persistence ─────────────────────────────────────────────────
 
-  private getTaskPersistenceId(
+  private getTaskWorkflowKey(
     task: ITask<any, Promise<any>, any, any, any, any>,
   ): string {
-    return this.taskRegistry.getPersistenceId(task);
+    return this.taskRegistry.getWorkflowKey(task);
   }
 
   private createPendingExecution(
@@ -199,7 +199,7 @@ export class ExecutionManager {
   ): Execution<unknown, unknown> {
     return {
       id: executionId ?? createExecutionId(),
-      taskId: this.getTaskPersistenceId(task),
+      workflowKey: this.getTaskWorkflowKey(task),
       parentExecutionId: options?.parentExecutionId,
       input,
       status: ExecutionStatus.Pending,
@@ -215,7 +215,7 @@ export class ExecutionManager {
     await this.auditLogger.log({
       kind: DurableAuditEntryKind.ExecutionStatusChanged,
       executionId: execution.id,
-      taskId: execution.taskId,
+      workflowKey: execution.workflowKey,
       attempt: execution.attempt,
       from: null,
       to: ExecutionStatus.Pending,
@@ -314,7 +314,7 @@ export class ExecutionManager {
       await this.auditLogger.log({
         kind: DurableAuditEntryKind.ExecutionStatusChanged,
         executionId,
-        taskId: execution.taskId,
+        workflowKey: execution.workflowKey,
         attempt: execution.attempt,
         from: execution.status,
         to: ExecutionStatus.Cancelled,
@@ -382,13 +382,25 @@ export class ExecutionManager {
       if (!execution) return;
       if (this.isExecutionTerminal(execution.status)) return;
 
-      const task = this.taskRegistry.find(execution.taskId);
+      if (!execution.workflowKey) {
+        await this.transitionExecutionToFailed({
+          execution,
+          from: execution.status,
+          reason: "workflow_key_missing",
+          error: { message: "Execution is missing its durable workflow key." },
+        });
+        return;
+      }
+
+      const task = this.taskRegistry.find(execution.workflowKey);
       if (!task) {
         await this.transitionExecutionToFailed({
           execution,
           from: execution.status,
           reason: "task_not_registered",
-          error: { message: `Task not registered: ${execution.taskId}` },
+          error: {
+            message: `Task not registered for workflow key: ${execution.workflowKey}`,
+          },
         });
         return;
       }
@@ -701,7 +713,7 @@ export class ExecutionManager {
     await this.auditLogger.log({
       kind: DurableAuditEntryKind.ExecutionStatusChanged,
       executionId: params.execution.id,
-      taskId: params.execution.taskId,
+      workflowKey: params.execution.workflowKey,
       attempt: params.execution.attempt,
       from: params.from,
       to: params.to,
@@ -824,8 +836,7 @@ export class ExecutionManager {
         assertLockOwnership,
         startWorkflowExecution: async (childTask, input, options) =>
           await this.start(childTask, input, options),
-        getTaskPersistenceId: (childTask) =>
-          this.getTaskPersistenceId(childTask),
+        getTaskPersistenceId: (childTask) => this.getTaskWorkflowKey(childTask),
       },
     );
   }
@@ -1153,6 +1164,7 @@ export class ExecutionManager {
     reason:
       | "failed"
       | "timed_out"
+      | "workflow_key_missing"
       | "task_not_registered"
       | "delivery_attempts_exhausted";
     error: {

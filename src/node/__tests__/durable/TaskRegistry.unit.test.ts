@@ -1,16 +1,14 @@
 import { TaskRegistry } from "../../durable/core/managers/TaskRegistry";
 
 describe("durable: TaskRegistry", () => {
-  it("rejects empty persistence ids", () => {
+  it("rejects empty workflow keys", () => {
     const registry = new TaskRegistry(undefined, () => "");
     const task = { id: "task-a" } as any;
 
-    expect(() => registry.register(task)).toThrow(
-      "empty durable persistence id",
-    );
+    expect(() => registry.register(task)).toThrow("empty durable workflow key");
   });
 
-  it("rejects conflicting persistence ids from different tasks", () => {
+  it("rejects conflicting workflow keys from different tasks", () => {
     const registry = new TaskRegistry(undefined, (task) =>
       task.id === "task-a" ? "shared" : "shared",
     );
@@ -21,7 +19,7 @@ describe("durable: TaskRegistry", () => {
     );
   });
 
-  it("allows re-registering the same task with the same persistence id", () => {
+  it("allows re-registering the same task with the same workflow key", () => {
     const registry = new TaskRegistry(undefined, () => "shared");
     const task = { id: "task-a" } as any;
 
@@ -30,17 +28,15 @@ describe("durable: TaskRegistry", () => {
     expect(registry.find("shared")).toBe(task);
   });
 
-  it("does not leave partial task entries behind when persistence id validation fails", () => {
+  it("does not leave partial task entries behind when workflow key validation fails", () => {
     const registry = new TaskRegistry(undefined, () => "");
     const task = { id: "task-a" } as any;
 
-    expect(() => registry.register(task)).toThrow(
-      "empty durable persistence id",
-    );
+    expect(() => registry.register(task)).toThrow("empty durable workflow key");
     expect(registry.find("task-a")).toBeUndefined();
   });
 
-  it("rejects collisions when a task id matches an existing persistence id", () => {
+  it("rejects collisions when a task id matches an existing workflow key", () => {
     const registry = new TaskRegistry(undefined, (task) =>
       task.id === "task-a" ? "shared" : task.id,
     );

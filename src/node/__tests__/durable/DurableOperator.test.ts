@@ -1,7 +1,6 @@
 import { DurableOperator } from "../../durable/core/DurableOperator";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import type { DurableAuditEntry } from "../../durable/core/audit";
 import { createBareStore } from "./DurableService.unit.helpers";
 
 describe("durable: DurableOperator", () => {
@@ -11,7 +10,7 @@ describe("durable: DurableOperator", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "compensation_failed",
       attempt: 1,
@@ -42,7 +41,7 @@ describe("durable: DurableOperator", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "compensation_failed",
       attempt: 1,
@@ -72,13 +71,13 @@ describe("durable: DurableOperator", () => {
     );
   });
 
-  it("lists executions via listExecutions when supported and falls back otherwise", async () => {
+  it("lists executions via the required store query API", async () => {
     const store = new MemoryStore();
     const operator = new DurableOperator(store);
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "pending",
       attempt: 1,
@@ -87,91 +86,50 @@ describe("durable: DurableOperator", () => {
       updatedAt: new Date(),
     });
 
-    const executions = await operator.listExecutions({ taskId: "t" });
+    const executions = await operator.listExecutions({ workflowKey: "t" });
     expect(executions.map((e) => e.id)).toEqual(["e1"]);
-
-    const fallbackStore: IDurableStore = createBareStore(new MemoryStore(), {
-      saveExecution: async () => {},
-      getExecution: async () => null,
-      updateExecution: async () => {},
-      listIncompleteExecutions: async () => [
-        {
-          id: "e2",
-          taskId: "t",
-          input: undefined,
-          status: "pending",
-          attempt: 1,
-          maxAttempts: 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
-    });
-
-    const fallbackOperator = new DurableOperator(fallbackStore);
-    const fallback = await fallbackOperator.listExecutions();
-    expect(fallback.map((e) => e.id)).toEqual(["e2"]);
   });
 
-  it("returns execution detail with steps and audit entries when available", async () => {
+  it("returns raw execution detail including steps and audit trail", async () => {
     const store = new MemoryStore();
     const operator = new DurableOperator(store);
 
     await store.saveExecution({
-      id: "e1",
-      taskId: "t",
-      input: undefined,
-      status: "pending",
+      id: "e-detail",
+      workflowKey: "orders",
+      input: { orderId: "o1" },
+      status: "completed",
+      result: { ok: true },
       attempt: 1,
       maxAttempts: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
-
-    await store.saveStepResult({
-      executionId: "e1",
-      stepId: "s1",
-      result: "ok",
       completedAt: new Date(),
     });
-
-    const auditEntry: DurableAuditEntry = {
-      id: "1:x",
-      executionId: "e1",
-      at: new Date(),
-      attempt: 1,
+    await store.saveStepResult({
+      executionId: "e-detail",
+      stepId: "step-1",
+      result: { child: "done" },
+      completedAt: new Date(),
+    });
+    await store.appendAuditEntry?.({
+      id: "audit-1",
       kind: "note",
-      message: "hello",
-    };
-    await store.appendAuditEntry(auditEntry);
-
-    const detail = await operator.getExecutionDetail("e1");
-    expect(detail.execution?.id).toBe("e1");
-    expect(detail.steps.map((s) => s.stepId)).toEqual(["s1"]);
-    expect(detail.audit.some((a) => a.kind === "note")).toBe(true);
-  });
-
-  it("returns empty arrays for missing step/audit listing support", async () => {
-    const store: IDurableStore = createBareStore(new MemoryStore(), {
-      saveExecution: async () => {},
-      getExecution: async () => ({
-        id: "e1",
-        taskId: "t",
-        input: undefined,
-        status: "pending",
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }),
-      updateExecution: async () => {},
-      listIncompleteExecutions: async () => [],
+      executionId: "e-detail",
+      attempt: 1,
+      at: new Date(),
+      message: "hello detail",
     });
 
-    const operator = new DurableOperator(store);
-    const detail = await operator.getExecutionDetail("e1");
-    expect(detail.execution?.id).toBe("e1");
-    expect(detail.steps).toEqual([]);
-    expect(detail.audit).toEqual([]);
+    await expect(operator.getExecutionDetail("e-detail")).resolves.toEqual({
+      execution: expect.objectContaining({
+        id: "e-detail",
+        workflowKey: "orders",
+      }),
+      steps: [expect.objectContaining({ stepId: "step-1" })],
+      audit: [
+        expect.objectContaining({ kind: "note", message: "hello detail" }),
+      ],
+    });
   });
 });

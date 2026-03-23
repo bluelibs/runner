@@ -31,7 +31,7 @@ function createManager(store: IDurableStore): ExecutionManager {
 function createRunningExecution(): Execution {
   return {
     id: "e1",
-    taskId: task.id,
+    workflowKey: task.id,
     input: undefined,
     status: ExecutionStatus.Running,
     attempt: 1,

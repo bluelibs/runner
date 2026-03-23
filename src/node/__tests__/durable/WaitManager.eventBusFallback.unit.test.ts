@@ -20,7 +20,7 @@ async function savePendingExecution(
 ): Promise<void> {
   await store.saveExecution({
     id: executionId,
-    taskId: "t",
+    workflowKey: "t",
     input: undefined,
     status: ExecutionStatus.Pending,
     attempt: 1,
@@ -117,7 +117,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     ).rejects.toThrow("getExecution-failed");
   });
 
-  it("uses unknown taskId/attempt when execution is missing during timeout", async () => {
+  it("uses unknown workflow metadata when execution is missing during timeout", async () => {
     const store = new MemoryStore();
     const bus = new SilentEventBus();
     const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
@@ -140,7 +140,10 @@ describe("durable: WaitManager (event bus fallback)", () => {
         timeout: 10,
         waitPollIntervalMs: 1_000,
       }),
-    ).rejects.toMatchObject({ taskId: "unknown", attempt: 0 });
+    ).rejects.toMatchObject({
+      workflowKey: "unknown",
+      attempt: 0,
+    });
   });
 
   it("respects timeout budget spent before event-bus wiring", async () => {

@@ -24,7 +24,7 @@ describe("durable: ExecutionManager lock ownership coverage", () => {
     });
 
     await store.saveExecution(
-      pendingExecution({ id: "e-lock-ownership-error", taskId: task.id }),
+      pendingExecution({ id: "e-lock-ownership-error", workflowKey: task.id }),
     );
 
     jest
@@ -50,7 +50,10 @@ describe("durable: ExecutionManager lock ownership coverage", () => {
     });
 
     await store.saveExecution(
-      pendingExecution({ id: "e-lock-ownership-suspend", taskId: task.id }),
+      pendingExecution({
+        id: "e-lock-ownership-suspend",
+        workflowKey: task.id,
+      }),
     );
 
     await service.processExecution("e-lock-ownership-suspend");
@@ -77,7 +80,7 @@ describe("durable: ExecutionManager lock ownership coverage", () => {
     await store.saveExecution(
       pendingExecution({
         id: "e-lock-ownership-retry",
-        taskId: task.id,
+        workflowKey: task.id,
         maxAttempts: 2,
       }),
     );

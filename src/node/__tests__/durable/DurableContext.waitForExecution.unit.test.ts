@@ -50,7 +50,7 @@ describe("durable: waitForExecutionDurably", () => {
   const baseParams = {
     executionId: "parent",
     targetExecutionId: "child",
-    expectedTaskId: "child-task",
+    expectedWorkflowKey: "child-task",
     assertCanContinue: jest.fn(async () => undefined),
     assertUniqueStepId: jest.fn(),
   };
@@ -64,7 +64,7 @@ describe("durable: waitForExecutionDurably", () => {
       getStepResult: jest.fn().mockResolvedValue(null),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Running,
         attempt: 1,
@@ -116,7 +116,7 @@ describe("durable: waitForExecutionDurably", () => {
       getStepResult: jest.fn().mockResolvedValue(null),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Completed,
         result: 42,
@@ -143,7 +143,7 @@ describe("durable: waitForExecutionDurably", () => {
         result: {
           state: "completed",
           targetExecutionId: "child",
-          taskId: "child-task",
+          workflowKey: "child-task",
           result: 99,
         },
         completedAt: new Date(),
@@ -163,7 +163,7 @@ describe("durable: waitForExecutionDurably", () => {
       getStepResult: jest.fn().mockResolvedValue(null),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Failed,
         error: { message: "boom" },
@@ -186,7 +186,7 @@ describe("durable: waitForExecutionDurably", () => {
       getStepResult: jest.fn().mockResolvedValue(null),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Cancelled,
         attempt: 2,
@@ -207,7 +207,7 @@ describe("durable: waitForExecutionDurably", () => {
     });
   });
 
-  it("rejects replayed completed wait states when the persisted task id does not match", async () => {
+  it("rejects replayed completed wait states when the persisted workflow key does not match", async () => {
     const store = createStoreMock({
       getStepResult: jest.fn().mockResolvedValue({
         executionId: "parent",
@@ -215,7 +215,7 @@ describe("durable: waitForExecutionDurably", () => {
         result: {
           state: "completed",
           targetExecutionId: "child",
-          taskId: "other-child-task",
+          workflowKey: "other-child-task",
           result: 99,
         },
         completedAt: new Date(),
@@ -248,7 +248,7 @@ describe("durable: waitForExecutionDurably", () => {
     ).rejects.toThrow("Invalid execution wait state");
   });
 
-  it("throws when a persisted completed wait state belongs to a different task", async () => {
+  it("throws when a persisted completed wait state belongs to a different workflow", async () => {
     const store = createStoreMock({
       getStepResult: jest.fn().mockResolvedValue({
         executionId: "parent",
@@ -256,7 +256,7 @@ describe("durable: waitForExecutionDurably", () => {
         result: {
           state: "completed",
           targetExecutionId: "child",
-          taskId: "different-task",
+          workflowKey: "different-task",
           result: 99,
         },
         completedAt: new Date(),
@@ -294,7 +294,7 @@ describe("durable: waitForExecutionDurably", () => {
     ).rejects.toThrow("target execution does not exist");
   });
 
-  it("rejects replayed waiting states when the live target execution task id changes", async () => {
+  it("rejects replayed waiting states when the live target execution workflow changes", async () => {
     const store = createStoreMock({
       getStepResult: jest.fn().mockResolvedValue({
         executionId: "parent",
@@ -307,7 +307,7 @@ describe("durable: waitForExecutionDurably", () => {
       }),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "other-child-task",
+        workflowKey: "other-child-task",
         input: undefined,
         status: ExecutionStatus.Running,
         attempt: 1,
@@ -363,7 +363,7 @@ describe("durable: waitForExecutionDurably", () => {
       }),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Running,
         attempt: 1,
@@ -423,7 +423,7 @@ describe("durable: waitForExecutionDurably", () => {
       }),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Running,
         attempt: 1,
@@ -472,7 +472,7 @@ describe("durable: waitForExecutionDurably", () => {
       }),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Running,
         attempt: 1,
@@ -516,7 +516,7 @@ describe("durable: waitForExecutionDurably", () => {
       }),
       getExecution: jest.fn().mockResolvedValue({
         id: "child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Completed,
         result: "ok",

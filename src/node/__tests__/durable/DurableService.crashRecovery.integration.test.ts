@@ -203,7 +203,7 @@ describe("durable: crash recovery + resume (integration)", () => {
 
     await store.saveExecution({
       id: executionId,
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,

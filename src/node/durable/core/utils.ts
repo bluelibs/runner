@@ -108,14 +108,14 @@ export function parseExecutionWaitState(value: unknown):
   | {
       state: "completed";
       targetExecutionId: string;
-      taskId: string;
+      workflowKey: string;
       result: unknown;
     }
   | {
       state: "failed" | "cancelled";
       targetExecutionId: string;
       error: { message: string; stack?: string };
-      taskId: string;
+      workflowKey: string;
       attempt: number;
     }
   | {
@@ -147,14 +147,14 @@ export function parseExecutionWaitState(value: unknown):
   }
 
   if (state === "completed") {
-    if (typeof value.taskId !== "string") {
+    if (typeof value.workflowKey !== "string") {
       return null;
     }
 
     return {
       state,
       targetExecutionId,
-      taskId: value.taskId,
+      workflowKey: value.workflowKey,
       result: value.result,
     };
   }
@@ -164,7 +164,7 @@ export function parseExecutionWaitState(value: unknown):
     if (
       !isRecord(error) ||
       typeof error.message !== "string" ||
-      typeof value.taskId !== "string" ||
+      typeof value.workflowKey !== "string" ||
       typeof value.attempt !== "number"
     ) {
       return null;
@@ -177,7 +177,7 @@ export function parseExecutionWaitState(value: unknown):
         message: error.message,
         stack: typeof error.stack === "string" ? error.stack : undefined,
       },
-      taskId: value.taskId,
+      workflowKey: value.workflowKey,
       attempt: value.attempt,
     };
   }
@@ -211,14 +211,14 @@ export function shouldPersistStableSignalId(
 export class DurableExecutionError extends RunnerError<{
   message: string;
   executionId: string;
-  taskId: string;
+  workflowKey: string;
   attempt: number;
   causeInfo?: { message: string; stack?: string };
 }> {
   constructor(
     message: string,
     public readonly executionId: string,
-    public readonly taskId: string,
+    public readonly workflowKey: string,
     public readonly attempt: number,
     public readonly causeInfo?: { message: string; stack?: string },
   ) {
@@ -228,7 +228,7 @@ export class DurableExecutionError extends RunnerError<{
       {
         message,
         executionId,
-        taskId,
+        workflowKey,
         attempt,
         causeInfo,
       },

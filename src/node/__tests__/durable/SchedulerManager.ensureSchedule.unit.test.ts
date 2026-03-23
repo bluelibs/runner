@@ -30,7 +30,7 @@ describe("ensureSchedule()", () => {
 
     const schedule = await store.getSchedule("s1");
     expect(schedule).not.toBeNull();
-    expect(schedule?.taskId).toBe(task.id);
+    expect(schedule?.workflowKey).toBe(task.id);
     expect(schedule?.type).toBe("cron");
     expect(schedule?.pattern).toBe("*/5 * * * *");
     expect(schedule?.status).toBe("active");
@@ -62,7 +62,7 @@ describe("ensureSchedule()", () => {
     expect(timer?.scheduleId).toBe("s1");
   });
 
-  it("rejects rebinding an existing schedule id to a different task id", async () => {
+  it("rejects rebinding an existing schedule id to a different workflow", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
     const a = r
@@ -124,7 +124,7 @@ describe("ensureSchedule()", () => {
     await expect(
       scheduleManager.saveScheduleWithTimer({
         id: "s-missing-next-run",
-        taskId: "t-missing-next-run",
+        workflowKey: "t-missing-next-run",
         input: undefined,
         pattern: "1000",
         type: "interval",
@@ -167,7 +167,7 @@ describe("ensureSchedule()", () => {
     await expect(
       durable.ensureSchedule(task, undefined, { id: "s1", interval: 1000 }),
     ).resolves.toBe("s1");
-    expect((await store.getSchedule("s1"))?.taskId).toBe(task.id);
+    expect((await store.getSchedule("s1"))?.workflowKey).toBe(task.id);
   });
 
   it("does not re-arm when the updated schedule cannot be reloaded", async () => {

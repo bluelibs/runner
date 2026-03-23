@@ -77,7 +77,7 @@ describe("durable: RedisStore timers and schedules (mock)", () => {
     const { redisMock, store } = harness;
     const schedule: Schedule = {
       id: "s1",
-      taskId: "t",
+      workflowKey: "t",
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -99,7 +99,7 @@ describe("durable: RedisStore timers and schedules (mock)", () => {
     const { redisMock, store } = harness;
     const schedule: Schedule = {
       id: "s-atomic",
-      taskId: "t",
+      workflowKey: "t",
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -111,7 +111,7 @@ describe("durable: RedisStore timers and schedules (mock)", () => {
     const timer: Timer = {
       id: "timer-atomic",
       scheduleId: "s-atomic",
-      taskId: "t",
+      workflowKey: "t",
       type: "scheduled",
       fireAt: schedule.nextRun!,
       status: "pending",

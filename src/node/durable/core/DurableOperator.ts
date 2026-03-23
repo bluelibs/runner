@@ -9,32 +9,31 @@ import { durableOperatorUnsupportedStoreCapabilityError } from "../../../errors"
  * Administrative / operator API for durable workflows.
  *
  * This class is intentionally store-backed and side-effect free with respect to
- * "running" workflows: it reads execution details and, when supported by the store,
+ * "running" workflows: it lists executions and, when supported by the store,
  * can perform operator actions (retry rollback, skip a step, force fail, patch state).
  *
- * Used by dashboards / CLIs / tooling to inspect and recover executions.
+ * Used by dashboards / CLIs / tooling to inspect execution indexes and recover executions.
  */
 export class DurableOperator {
   constructor(private readonly store: IDurableStore) {}
 
   async listExecutions(options?: ListExecutionsOptions): Promise<Execution[]> {
-    if (this.store.listExecutions) {
-      return await this.store.listExecutions(options);
-    }
-
-    // Fallback for stores that haven't implemented the new method
-    return await this.store.listIncompleteExecutions();
+    return await this.store.listExecutions(options);
   }
 
+  /**
+   * Reads one execution together with its persisted step results and audit trail.
+   *
+   * This raw operator path remains useful for dashboards, CLIs, and recovery
+   * tooling that need execution detail without binding to a typed task repository.
+   */
   async getExecutionDetail(executionId: string): Promise<{
     execution: Execution | null;
     steps: StepResult[];
     audit: DurableAuditEntry[];
   }> {
     const execution = await this.store.getExecution(executionId);
-
     const steps = await this.store.listStepResults(executionId);
-
     const audit = this.store.listAuditEntries
       ? await this.store.listAuditEntries(executionId)
       : [];

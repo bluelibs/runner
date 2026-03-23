@@ -4,11 +4,11 @@ import { ExecutionStatus, type Execution } from "../../durable/core/types";
 function createExecution(
   overrides: Partial<Execution> & {
     id: string;
-    taskId: string;
+    workflowKey: string;
     status: Execution["status"];
   },
 ): Execution {
-  const { id, taskId, status, ...rest } = overrides;
+  const { id, workflowKey, status, ...rest } = overrides;
 
   return {
     input: undefined,
@@ -18,7 +18,7 @@ function createExecution(
     updatedAt: new Date(),
     ...rest,
     id,
-    taskId,
+    workflowKey,
     status,
   };
 }
@@ -37,28 +37,28 @@ describe("durable: MemoryStore runtime surfaces", () => {
 
     await saveExecution(store, {
       id: "e1",
-      taskId: "t1",
+      workflowKey: "t1",
       status: "running",
       createdAt: now,
       updatedAt: now,
     });
     await saveExecution(store, {
       id: "e2",
-      taskId: "t2",
+      workflowKey: "t2",
       status: "completed",
       createdAt: now,
       updatedAt: now,
     });
     await saveExecution(store, {
       id: "e3",
-      taskId: "t3",
+      workflowKey: "t3",
       status: "compensation_failed",
       createdAt: now,
       updatedAt: now,
     });
     await saveExecution(store, {
       id: "e4",
-      taskId: "t4",
+      workflowKey: "t4",
       status: ExecutionStatus.Cancelled,
       error: { message: "cancelled" },
       createdAt: now,
@@ -180,7 +180,7 @@ describe("durable: MemoryStore runtime surfaces", () => {
 
     await store.createSchedule({
       id: "s1",
-      taskId: "t1",
+      workflowKey: "t1",
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -190,7 +190,7 @@ describe("durable: MemoryStore runtime surfaces", () => {
     });
     await store.createSchedule({
       id: "s2",
-      taskId: "t2",
+      workflowKey: "t2",
       type: "cron",
       pattern: "0 0 * * *",
       input: undefined,

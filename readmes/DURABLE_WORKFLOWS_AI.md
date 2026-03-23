@@ -43,7 +43,9 @@ Rule: side effects belong inside `durableContext.step(...)`.
    - look up `executionId`
    - `await service.signal(executionId, SignalDef, payload)`
 
-For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres). If you already have the durable resource in DI, prefer `durable.getExecutionDetail(task, executionId)` for typed inspection. The lower-level raw path is `new DurableOperator(store).getExecutionDetail(executionId)` when supported.
+For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres). If you already have the durable resource in DI, prefer `durable.getRepository(task).findOneOrFail({ id: executionId })` for typed inspection. The repository is task-scoped, cached, and also exposes `find(filters, { sort, limit, skip })` plus `findTree(filters, { sort, limit, skip })` for filtered list and subflow-aware views.
+
+When you want raw store-backed detail or generic operator tooling without binding to one workflow task, keep using `durable.operator.getExecutionDetail(executionId)` plus the other operator listing/admin APIs.
 
 Signals retain execution-level history for live workflows. Each `executionId + signalId`
 keeps a FIFO queue of unmatched signals for automatic `waitForSignal(...)` consumption,
@@ -105,6 +107,7 @@ The unified response envelope is produced by `startAndWait(...)`: `{ durable: { 
 `defaults` are applied only by `describe(task)` when no explicit describe input is passed.
 It can also declare optional workflow-local `signals` to constrain which signal ids the
 workflow may wait for or receive.
+It may also declare `key`, a stable durable workflow identity persisted as `execution.workflowKey`. If omitted, durable falls back to the canonical runtime task id.
 
 ### Starting workflows from dependencies (HTTP route)
 
@@ -211,7 +214,7 @@ const child = await durableContext.waitForExecution(
 - `waitForExecution(childTask, executionId, { timeoutMs })` returns `{ kind: "completed", data } | { kind: "timeout" }`
 - execution records may also expose `current`, a live execution position view
 - waiting `current` states are canonical durable truth; active running states are best-effort operator metadata
-- when `workflow(...)` is actively starting a child, `current` is still `{ kind: "step", stepId, meta: { workflowTaskId } }`
+- when `workflow(...)` is actively starting a child, `current` is still `{ kind: "step", stepId, meta: { childWorkflowKey } }`
 - child `failed`, `cancelled`, and `compensation_failed` terminal states throw
 
 ## Scheduling
@@ -233,8 +236,11 @@ const child = await durableContext.waitForExecution(
 - When supported:
   - `store.listStepResults(executionId)` → completed steps
   - `store.listAuditEntries(executionId)` → timeline (step_completed, signal_waiting, signal_delivered, sleeps, status changes)
-- `durable.getExecutionDetail(task, executionId)` is the typed shorthand for `{ execution, steps, audit }`.
-- `new DurableOperator(store).getExecutionDetail(executionId)` remains the raw store-backed inspection path.
+- `durable.getRepository(task).findOneOrFail({ id: executionId })` is the typed way to load `{ execution, steps, audit }`.
+- `durable.getRepository(task).find({ status, createdAt, input }, { sort, limit, skip })` is the list/query path.
+- `durable.getRepository(task).findTree(filters, { sort, limit, skip })` adds recursive child workflow nodes with the same detail payload per node. Pagination applies to roots only.
+- `durable.operator.getExecutionDetail(executionId)` remains the raw detail path when you do not want a task-scoped repository.
+- `new DurableOperator(store)` remains useful for generic listing/admin actions such as `listExecutions()` and `listStuckExecutions()`.
 
 "Internal steps" are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
 

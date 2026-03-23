@@ -9,7 +9,7 @@ describe("durable: execution wait state helpers", () => {
     expect(
       isExecutionWaitTerminal({
         id: "e1",
-        taskId: "task",
+        workflowKey: "task",
         input: undefined,
         status: ExecutionStatus.Completed,
         attempt: 1,
@@ -22,7 +22,7 @@ describe("durable: execution wait state helpers", () => {
     expect(
       isExecutionWaitTerminal({
         id: "e1",
-        taskId: "task",
+        workflowKey: "task",
         input: undefined,
         status: ExecutionStatus.CompensationFailed,
         attempt: 1,
@@ -35,7 +35,7 @@ describe("durable: execution wait state helpers", () => {
     expect(
       isExecutionWaitTerminal({
         id: "e1",
-        taskId: "task",
+        workflowKey: "task",
         input: undefined,
         status: ExecutionStatus.Running,
         attempt: 1,
@@ -50,7 +50,7 @@ describe("durable: execution wait state helpers", () => {
     expect(
       createExecutionWaitCompletionState({
         id: "failed-child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Failed,
         error: { message: "boom", stack: "stack" },
@@ -63,14 +63,14 @@ describe("durable: execution wait state helpers", () => {
       state: "failed",
       targetExecutionId: "failed-child",
       error: { message: "boom", stack: "stack" },
-      taskId: "child-task",
+      workflowKey: "child-task",
       attempt: 2,
     });
 
     expect(
       createExecutionWaitCompletionState({
         id: "cancelled-child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Cancelled,
         attempt: 4,
@@ -82,14 +82,14 @@ describe("durable: execution wait state helpers", () => {
       state: "cancelled",
       targetExecutionId: "cancelled-child",
       error: { message: "Execution cancelled", stack: undefined },
-      taskId: "child-task",
+      workflowKey: "child-task",
       attempt: 4,
     });
 
     expect(
       createExecutionWaitCompletionState({
         id: "comp-child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.CompensationFailed,
         attempt: 3,
@@ -101,14 +101,14 @@ describe("durable: execution wait state helpers", () => {
       state: "failed",
       targetExecutionId: "comp-child",
       error: { message: "Compensation failed", stack: undefined },
-      taskId: "child-task",
+      workflowKey: "child-task",
       attempt: 3,
     });
 
     expect(
       createExecutionWaitCompletionState({
         id: "failed-no-message",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Failed,
         attempt: 1,
@@ -120,7 +120,7 @@ describe("durable: execution wait state helpers", () => {
       state: "failed",
       targetExecutionId: "failed-no-message",
       error: { message: "Execution failed", stack: undefined },
-      taskId: "child-task",
+      workflowKey: "child-task",
       attempt: 1,
     });
   });
@@ -129,7 +129,7 @@ describe("durable: execution wait state helpers", () => {
     expect(() =>
       createExecutionWaitCompletionState({
         id: "running-child",
-        taskId: "child-task",
+        workflowKey: "child-task",
         input: undefined,
         status: ExecutionStatus.Running,
         attempt: 1,
@@ -138,5 +138,20 @@ describe("durable: execution wait state helpers", () => {
         updatedAt: new Date(),
       }),
     ).toThrow("cannot resolve execution waits");
+  });
+
+  it("fails fast when a terminal execution is missing its workflow key", () => {
+    expect(() =>
+      createExecutionWaitCompletionState({
+        id: "missing-key-child",
+        input: undefined,
+        status: ExecutionStatus.Completed,
+        result: "ok",
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never),
+    ).toThrow("missing its durable workflow key");
   });
 });

@@ -260,7 +260,7 @@ export class PollingManager {
           await this.auditLogger.log({
             kind: DurableAuditEntryKind.SignalTimedOut,
             executionId: timer.executionId,
-            taskId: execution?.taskId,
+            workflowKey: execution?.workflowKey,
             attempt,
             stepId: timer.stepId,
             signalId: persistedSignalId,
@@ -330,7 +330,7 @@ export class PollingManager {
             timerId: timer.id,
             timerType: timer.type,
             executionId: timer.executionId,
-            taskId: timer.taskId,
+            workflowKey: timer.workflowKey,
             scheduleId: timer.scheduleId,
             safeToFinalizeCurrentTimer,
             cleanupError,
@@ -346,12 +346,12 @@ export class PollingManager {
 
   private async persistTaskTimerExecution(params: {
     timer: Timer;
-    taskId: string;
+    workflowKey: string;
   }): Promise<string> {
     return await persistTaskTimerExecution({
       store: this.store,
       timer: params.timer,
-      taskId: params.taskId,
+      workflowKey: params.workflowKey,
       maxAttempts: this.maxAttempts,
       defaultTimeout: this.defaultTimeout,
     });

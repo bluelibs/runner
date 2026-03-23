@@ -23,17 +23,19 @@ function isWaitingForSignal(
 }
 
 export async function waitForSignalCheckpoint(params: {
-  operator: {
-    getExecutionDetail(
-      executionId: string,
-    ): Promise<{ steps: Array<{ result: unknown }> }>;
+  repository: {
+    findOneOrFail(query: {
+      id: string;
+    }): Promise<{ steps: Array<{ result: unknown }> }>;
   };
   executionId: string;
   signalId: string;
 }): Promise<void> {
   await waitUntil(
     async () => {
-      const detail = await params.operator.getExecutionDetail(params.executionId);
+      const detail = await params.repository.findOneOrFail({
+        id: params.executionId,
+      });
       return detail.steps.some((stepResult) =>
         isWaitingForSignal(stepResult.result, params.signalId),
       );
@@ -92,6 +94,7 @@ export async function runRevisionThenApprovalScenario(params?: {
 
   const runtime = await run(runtimeShape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(runtimeShape.durable);
+  const repository = service.getRepository(runtimeShape.workflow);
 
   try {
     const executionId = await service.start(runtimeShape.workflow, {
@@ -99,7 +102,7 @@ export async function runRevisionThenApprovalScenario(params?: {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: ReviewDecision.id,
     });
@@ -111,7 +114,7 @@ export async function runRevisionThenApprovalScenario(params?: {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: RevisedDraft.id,
     });
@@ -122,7 +125,7 @@ export async function runRevisionThenApprovalScenario(params?: {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: ReviewDecision.id,
     });
@@ -158,6 +161,7 @@ export async function runParallelApprovalScenario(params: {
   });
   const runtime = await run(runtimeShape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(runtimeShape.durable);
+  const repository = service.getRepository(runtimeShape.workflow);
 
   try {
     const executionIds = await Promise.all(
@@ -171,7 +175,7 @@ export async function runParallelApprovalScenario(params: {
     await Promise.all(
       executionIds.map((executionId) =>
         waitForSignalCheckpoint({
-          operator: service.operator,
+          repository,
           executionId,
           signalId: ReviewDecision.id,
         }),
@@ -218,6 +222,7 @@ export async function runParallelMixedReviewScenario(params: {
   });
   const runtime = await run(runtimeShape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(runtimeShape.durable);
+  const repository = service.getRepository(runtimeShape.workflow);
 
   try {
     const executionIds = await Promise.all(
@@ -231,7 +236,7 @@ export async function runParallelMixedReviewScenario(params: {
     await Promise.all(
       executionIds.map((executionId) =>
         waitForSignalCheckpoint({
-          operator: service.operator,
+          repository,
           executionId,
           signalId: ReviewDecision.id,
         }),
@@ -270,7 +275,7 @@ export async function runParallelMixedReviewScenario(params: {
     await Promise.all(
       revisionIds.map((executionId) =>
         waitForSignalCheckpoint({
-          operator: service.operator,
+          repository,
           executionId,
           signalId: RevisedDraft.id,
         }),
@@ -289,7 +294,7 @@ export async function runParallelMixedReviewScenario(params: {
     await Promise.all(
       revisionIds.map((executionId) =>
         waitForSignalCheckpoint({
-          operator: service.operator,
+          repository,
           executionId,
           signalId: ReviewDecision.id,
         }),
@@ -315,6 +320,7 @@ export async function runDemoFromEnv(): Promise<AgentResearchResult> {
   const runtimeShape = getRuntimeFromEnv();
   const runtime = await run(runtimeShape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(runtimeShape.durable);
+  const repository = service.getRepository(runtimeShape.workflow);
 
   try {
     const executionId = await service.start(runtimeShape.workflow, {
@@ -323,7 +329,7 @@ export async function runDemoFromEnv(): Promise<AgentResearchResult> {
     console.log(`Started execution: ${executionId}`);
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: ReviewDecision.id,
     });
@@ -336,7 +342,7 @@ export async function runDemoFromEnv(): Promise<AgentResearchResult> {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: RevisedDraft.id,
     });
@@ -348,7 +354,7 @@ export async function runDemoFromEnv(): Promise<AgentResearchResult> {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: ReviewDecision.id,
     });

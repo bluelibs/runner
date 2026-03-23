@@ -80,7 +80,7 @@ export class DurableService implements IDurableService {
     // Initialize task registry
     this.taskRegistry = new TaskRegistry(
       config.taskResolver,
-      config.taskIdResolver,
+      config.workflowKeyResolver,
     );
 
     // Register initial tasks
@@ -145,7 +145,7 @@ export class DurableService implements IDurableService {
       config.execution?.maxAttempts ?? 3,
       {
         processExecution: (id) => this.executionManager.processExecution(id),
-        resolveTask: (taskId) => this.taskRegistry.find(taskId),
+        resolveTask: (workflowKey) => this.taskRegistry.find(workflowKey),
       },
     );
 
@@ -184,9 +184,9 @@ export class DurableService implements IDurableService {
   }
 
   findTask(
-    taskId: string,
+    workflowKey: string,
   ): ITask<any, Promise<any>, any, any, any, any> | undefined {
-    return this.taskRegistry.find(taskId);
+    return this.taskRegistry.find(workflowKey);
   }
 
   async cooldown(): Promise<void> {

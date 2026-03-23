@@ -13,7 +13,7 @@ describe("PollingManager schedule timer guards", () => {
 
     const schedule: Schedule = {
       id: "s1",
-      taskId: "t",
+      workflowKey: "t",
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -27,7 +27,7 @@ describe("PollingManager schedule timer guards", () => {
     const timer: Timer = {
       id: "sched:s1",
       scheduleId: "s1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       type: "scheduled",
       fireAt: new Date(schedule.nextRun!),
@@ -49,7 +49,7 @@ describe("PollingManager schedule timer guards", () => {
 
     const schedule: Schedule = {
       id: "s1",
-      taskId: "t",
+      workflowKey: "t",
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -63,7 +63,7 @@ describe("PollingManager schedule timer guards", () => {
     const timer: Timer = {
       id: "sched:s1:stale",
       scheduleId: "s1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       type: "scheduled",
       fireAt: new Date(Date.now() + 2000),

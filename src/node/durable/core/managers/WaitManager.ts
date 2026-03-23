@@ -41,7 +41,7 @@ export class WaitManager {
       return new DurableExecutionError(
         `Timeout waiting for execution ${executionId}`,
         executionId,
-        exec?.taskId || "unknown",
+        exec?.workflowKey || "unknown",
         exec?.attempt || 0,
       );
     };
@@ -73,7 +73,7 @@ export class WaitManager {
         throw new DurableExecutionError(
           exec.error?.message || "Execution failed",
           exec.id,
-          exec.taskId,
+          exec.workflowKey || "unknown",
           exec.attempt,
           exec.error,
         );
@@ -83,7 +83,7 @@ export class WaitManager {
         throw new DurableExecutionError(
           exec.error?.message || "Compensation failed",
           exec.id,
-          exec.taskId,
+          exec.workflowKey || "unknown",
           exec.attempt,
           exec.error,
         );
@@ -93,7 +93,7 @@ export class WaitManager {
         throw new DurableExecutionError(
           exec.error?.message || "Execution cancelled",
           exec.id,
-          exec.taskId,
+          exec.workflowKey || "unknown",
           exec.attempt,
           exec.error,
         );

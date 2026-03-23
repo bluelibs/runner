@@ -67,7 +67,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
     });
     const sleepingExecution = pendingExecution({
       id: "e-sleep-path",
-      taskId: sleepTask.id,
+      workflowKey: sleepTask.id,
     });
     await sleepStore.saveExecution(sleepingExecution);
     await getManager(sleepService).runExecutionAttempt(
@@ -93,7 +93,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
     });
     const retryExecution = pendingExecution({
       id: "e-retry-path",
-      taskId: retryTask.id,
+      workflowKey: retryTask.id,
       maxAttempts: 2,
     });
     await retryStore.saveExecution(retryExecution);
@@ -133,7 +133,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
     });
     const sleepingExecution = pendingExecution({
       id: "e-sleep-lock-loss",
-      taskId: sleepTask.id,
+      workflowKey: sleepTask.id,
     });
     await sleepStore.saveExecution(sleepingExecution);
     await getManager(sleepService).runExecutionAttempt(
@@ -164,7 +164,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
     });
     const retryExecution = pendingExecution({
       id: "e-retry-lock-loss",
-      taskId: retryTask.id,
+      workflowKey: retryTask.id,
       maxAttempts: 2,
     });
     await retryStore.saveExecution(retryExecution);
@@ -200,7 +200,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
     });
     const execution = pendingExecution({
       id: "e-unexpected-recheck",
-      taskId: task.id,
+      workflowKey: task.id,
       maxAttempts: 2,
     });
     await store.saveExecution(execution);
@@ -229,7 +229,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
     });
     const execution = pendingExecution({
       id: "e-running-cas-race",
-      taskId: task.id,
+      workflowKey: task.id,
       status: ExecutionStatus.Running,
       current: {
         kind: "waitForSignal",

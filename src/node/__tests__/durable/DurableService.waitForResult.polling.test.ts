@@ -11,7 +11,7 @@ describe("durable: DurableService waitForResult (polling)", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "compensation_failed",
       error: { message: "rollback blew up" },
@@ -24,7 +24,7 @@ describe("durable: DurableService waitForResult (polling)", () => {
     await expect(service.wait("e1", { timeout: 5_000 })).rejects.toMatchObject({
       message: "rollback blew up",
       executionId: "e1",
-      taskId: "t",
+      workflowKey: "t",
     });
   });
 
@@ -34,7 +34,7 @@ describe("durable: DurableService waitForResult (polling)", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "compensation_failed",
       attempt: 1,
@@ -54,7 +54,7 @@ describe("durable: DurableService waitForResult (polling)", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "pending",
       attempt: 2,
@@ -71,7 +71,7 @@ describe("durable: DurableService waitForResult (polling)", () => {
       await expect(
         service.wait("e1", { timeout: 5, waitPollIntervalMs: 1 }),
       ).rejects.toMatchObject({
-        taskId: "t",
+        workflowKey: "t",
         attempt: 2,
       });
     } finally {
@@ -97,7 +97,7 @@ describe("durable: DurableService waitForResult (polling)", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "pending",
       attempt: 1,
@@ -114,7 +114,7 @@ describe("durable: DurableService waitForResult (polling)", () => {
       const promise = service.wait("e1", { timeout: 5, waitPollIntervalMs: 1 });
       await expect(promise).rejects.toBeInstanceOf(DurableExecutionError);
       await expect(promise).rejects.toMatchObject({
-        taskId: "unknown",
+        workflowKey: "unknown",
         attempt: 0,
       });
     } finally {

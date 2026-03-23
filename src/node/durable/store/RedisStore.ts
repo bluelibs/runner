@@ -54,7 +54,7 @@ export class RedisStore implements IDurableStore {
 
   async createExecutionWithIdempotencyKey(params: {
     execution: Execution;
-    taskId: string;
+    workflowKey: string;
     idempotencyKey: string;
   }): Promise<
     | { created: true; executionId: string }

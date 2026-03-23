@@ -36,13 +36,13 @@ describe("durable: current helpers", () => {
       createWorkflowStepCurrent({
         stepId: "step-1",
         startedAt,
-        meta: { workflowTaskId: "canonical.child" },
+        meta: { childWorkflowKey: "canonical.child" },
       }),
     ).toMatchObject({
       kind: "step",
       stepId: "step-1",
       startedAt,
-      meta: { workflowTaskId: "canonical.child" },
+      meta: { childWorkflowKey: "canonical.child" },
     });
 
     expect(
@@ -119,7 +119,7 @@ describe("durable: current helpers", () => {
       createExecutionWaitCurrent({
         stepId: "__execution:child",
         targetExecutionId: "child",
-        targetTaskId: "canonical.child",
+        targetWorkflowKey: "canonical.child",
         timeoutMs: 500,
         timerId: "execution_timeout:e1:child",
         startedAt,
@@ -134,7 +134,7 @@ describe("durable: current helpers", () => {
       createExecutionWaitCurrent({
         stepId: "__execution:plain",
         targetExecutionId: "plain-child",
-        targetTaskId: "canonical.plain-child",
+        targetWorkflowKey: "canonical.plain-child",
         startedAt,
       }),
     ).toMatchObject({
@@ -144,7 +144,7 @@ describe("durable: current helpers", () => {
         type: "execution",
         params: {
           targetExecutionId: "plain-child",
-          targetTaskId: "canonical.plain-child",
+          targetWorkflowKey: "canonical.plain-child",
         },
       },
     });
@@ -164,7 +164,7 @@ describe("durable: current helpers", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "completed",
       attempt: 1,
@@ -189,7 +189,7 @@ describe("durable: current helpers", () => {
 
     await store.saveExecution({
       id: "running",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "running",
       attempt: 1,
@@ -220,7 +220,7 @@ describe("durable: current helpers", () => {
     ] as const) {
       await store.saveExecution({
         id: status,
-        taskId: "t",
+        workflowKey: "t",
         input: undefined,
         status,
         attempt: 1,
@@ -250,7 +250,7 @@ describe("durable: current helpers", () => {
 
     await store.saveExecution({
       id: "running",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "running",
       current: createSwitchCurrent({ stepId: "route", startedAt }),
@@ -265,7 +265,7 @@ describe("durable: current helpers", () => {
 
     await store.saveExecution({
       id: "terminal",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "completed",
       current: createStepCurrent({ stepId: "done", startedAt }),
@@ -284,7 +284,7 @@ describe("durable: current helpers", () => {
 
     await store.saveExecution({
       id: "idle",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "running",
       attempt: 1,
@@ -303,7 +303,7 @@ describe("durable: current helpers", () => {
 
     await store.saveExecution({
       id: "sleeping",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "sleeping",
       current: createSignalWaitCurrent({
@@ -325,13 +325,13 @@ describe("durable: current helpers", () => {
 
     await store.saveExecution({
       id: "mismatch",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "sleeping",
       current: createExecutionWaitCurrent({
         stepId: "__execution:child",
         targetExecutionId: "child",
-        targetTaskId: "canonical.child",
+        targetWorkflowKey: "canonical.child",
         startedAt,
       }),
       attempt: 1,
@@ -351,7 +351,7 @@ describe("durable: current helpers", () => {
 
     await store.saveExecution({
       id: "running",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "running",
       current: createSleepCurrent({
@@ -420,27 +420,27 @@ describe("durable: current helpers", () => {
       parseExecutionWaitState({
         state: "completed",
         targetExecutionId: "child-exec",
-        taskId: "canonical.child",
+        workflowKey: "canonical.child",
         result: "ok",
       }),
     ).toEqual({
       state: "completed",
       targetExecutionId: "child-exec",
-      taskId: "canonical.child",
+      workflowKey: "canonical.child",
       result: "ok",
     });
     expect(
       parseExecutionWaitState({
         state: "failed",
         targetExecutionId: "child-exec",
-        taskId: "canonical.child",
+        workflowKey: "canonical.child",
         attempt: 2,
         error: { message: "boom" },
       }),
     ).toEqual({
       state: "failed",
       targetExecutionId: "child-exec",
-      taskId: "canonical.child",
+      workflowKey: "canonical.child",
       attempt: 2,
       error: { message: "boom", stack: undefined },
     });
@@ -448,14 +448,14 @@ describe("durable: current helpers", () => {
       parseExecutionWaitState({
         state: "cancelled",
         targetExecutionId: "child-exec",
-        taskId: "canonical.child",
+        workflowKey: "canonical.child",
         attempt: 3,
         error: { message: "stop", stack: "trace" },
       }),
     ).toEqual({
       state: "cancelled",
       targetExecutionId: "child-exec",
-      taskId: "canonical.child",
+      workflowKey: "canonical.child",
       attempt: 3,
       error: { message: "stop", stack: "trace" },
     });
@@ -472,7 +472,7 @@ describe("durable: current helpers", () => {
       parseExecutionWaitState({
         state: "failed",
         targetExecutionId: "child-exec",
-        taskId: "canonical.child",
+        workflowKey: "canonical.child",
         attempt: "bad",
         error: { message: "boom" },
       }),
@@ -527,7 +527,8 @@ describe("durable: current helpers", () => {
     });
 
     expect(error.executionId).toBe("exec-1");
-    expect(error.taskId).toBe("task-1");
+    expect(error.workflowKey).toBe("task-1");
+    expect(error.workflowKey).toBe("task-1");
     expect(error.attempt).toBe(2);
     expect(error.causeInfo).toEqual({ message: "cause" });
   });

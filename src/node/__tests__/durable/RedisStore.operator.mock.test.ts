@@ -131,7 +131,7 @@ describe("durable: RedisStore operator helpers (mock)", () => {
 
     const execution: Execution = {
       id: "1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "compensation_failed",
       error: { message: "boom", stack: "s" },

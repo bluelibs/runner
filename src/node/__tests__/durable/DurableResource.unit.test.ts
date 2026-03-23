@@ -75,12 +75,6 @@ describe("durable: DurableResource", () => {
     const op1 = durable.operator;
     const op2 = durable.operator;
     expect(op1).toBe(op2);
-
-    await expect(op1.getExecutionDetail("e1")).resolves.toEqual({
-      execution: null,
-      steps: [],
-      audit: [],
-    });
   });
 
   it("throws when use() is called outside a durable execution", () => {
@@ -108,7 +102,7 @@ describe("durable: DurableResource", () => {
     );
   });
 
-  it("throws when getExecutionDetail() shorthand is called without runner store", async () => {
+  it("throws when getRepository() is called without runner store", () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
     const store = new MemoryStore();
@@ -119,8 +113,42 @@ describe("durable: DurableResource", () => {
       .run(async () => "ok")
       .build();
 
-    await expect(durable.getExecutionDetail(task, "e1")).rejects.toThrow(
-      "Durable execution detail shorthand is not available: runner store was not provided to DurableResource.",
+    expect(() => durable.getRepository(task)).toThrow(
+      "Durable repository API is not available: runner store was not provided to DurableResource.",
+    );
+  });
+
+  it("throws when getRepository() is called without a store", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const task = r
+      .task("durable-tests-resource-repository-no-store")
+      .run(async () => "ok")
+      .build();
+    const durable = new DurableResource(service, storage, undefined, {
+      resolveDefinitionId: jest
+        .fn()
+        .mockImplementation((reference) =>
+          reference === task ? "app.tasks.no-store" : undefined,
+        ),
+    } as any);
+
+    expect(() => durable.getRepository(task)).toThrow(
+      "Durable repository API is not available: store was not provided to DurableResource.",
+    );
+  });
+
+  it("throws when getRepository() receives an unregistered task reference", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+    const durable = new DurableResource(service, storage, store, {
+      resolveDefinitionId: jest.fn().mockReturnValue(undefined),
+      tasks: new Map(),
+    } as any);
+
+    expect(() => durable.getRepository({} as any)).toThrow(
+      "the task is not registered in the runtime store",
     );
   });
 
@@ -174,7 +202,7 @@ describe("durable: DurableResource", () => {
     expect(runnerStore.getTagAccessor).toHaveBeenCalledWith(durableWorkflowTag);
   });
 
-  it("getExecutionDetail() provides a typed shorthand over the operator", async () => {
+  it("getRepository() is cached and finds typed execution records", async () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
     const store = new MemoryStore();
@@ -184,6 +212,7 @@ describe("durable: DurableResource", () => {
       .inputSchema<{ orderId: string }>({
         parse: (value: any) => value,
       })
+      .tags([durableWorkflowTag.with({ category: "orders" })])
       .run(async (input: { orderId: string }) => ({
         orderId: input.orderId,
         ok: true as const,
@@ -198,11 +227,14 @@ describe("durable: DurableResource", () => {
             ? "app.tasks.durable-tests-resource-detail-shortcut"
             : undefined,
         ),
+      tasks: new Map([
+        ["app.tasks.durable-tests-resource-detail-shortcut", { task }],
+      ]),
     } as any;
 
     await store.saveExecution({
       id: "e1",
-      taskId: "app.tasks.durable-tests-resource-detail-shortcut",
+      workflowKey: "app.tasks.durable-tests-resource-detail-shortcut",
       input: { orderId: "o-1" },
       status: "completed",
       result: { orderId: "o-1", ok: true as const },
@@ -220,13 +252,16 @@ describe("durable: DurableResource", () => {
     });
 
     const durable = new DurableResource(service, storage, store, runnerStore);
-    const detail = await durable.getExecutionDetail(task, "e1");
+    const repository1 = durable.getRepository(task);
+    const repository2 = durable.getRepository(task);
+    const detail = await repository1.findOneOrFail({ id: "e1" });
 
     expect(runnerStore.resolveDefinitionId).toHaveBeenCalledWith(task);
+    expect(repository1).toBe(repository2);
     expect(detail.execution).toEqual(
       expect.objectContaining({
         id: "e1",
-        taskId: "app.tasks.durable-tests-resource-detail-shortcut",
+        workflowKey: "app.tasks.durable-tests-resource-detail-shortcut",
         input: { orderId: "o-1" },
         result: { orderId: "o-1", ok: true },
       }),
@@ -234,13 +269,120 @@ describe("durable: DurableResource", () => {
     expect(detail.steps.map((step) => step.stepId)).toEqual(["done"]);
   });
 
-  it("getExecutionDetail() fails fast when the task witness does not match the stored execution", async () => {
+  it("getRepository() fails fast when the task is not tagged as a durable workflow", () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
     const store = new MemoryStore();
 
     const requestedTask = r
-      .task("durable-tests-resource-detail-requested")
+      .task("durable-tests-resource-repository-requested")
+      .run(async () => "ok")
+      .build();
+
+    const storeTask = {
+      task: requestedTask,
+    };
+    const runnerStore = {
+      resolveDefinitionId: jest
+        .fn()
+        .mockImplementation((reference) =>
+          reference === requestedTask ? "app.tasks.requested" : undefined,
+        ),
+      tasks: new Map([["app.tasks.requested", storeTask]]),
+    } as any;
+
+    const durable = new DurableResource(service, storage, store, runnerStore);
+
+    expect(() => durable.getRepository(requestedTask)).toThrow(
+      'Cannot create a durable repository for task "app.tasks.requested": the task is not tagged with tags.durableWorkflow.',
+    );
+  });
+
+  it("findTree() includes child subflows with execution details", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+
+    const parentTask = r
+      .task("durable-tests-resource-parent")
+      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .run(async () => "ok")
+      .build();
+    const childTask = r
+      .task("durable-tests-resource-child")
+      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .run(async () => "ok")
+      .build();
+
+    const runnerStore = {
+      resolveDefinitionId: jest.fn().mockImplementation((reference) => {
+        if (reference === parentTask) {
+          return "app.tasks.parent";
+        }
+        if (reference === childTask) {
+          return "app.tasks.child";
+        }
+        return undefined;
+      }),
+      tasks: new Map([
+        ["app.tasks.parent", { task: parentTask }],
+        ["app.tasks.child", { task: childTask }],
+      ]),
+    } as any;
+
+    await store.saveExecution({
+      id: "parent-exec",
+      workflowKey: "app.tasks.parent",
+      input: undefined,
+      status: "completed",
+      result: "ok",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+    await store.saveExecution({
+      id: "child-exec",
+      workflowKey: "app.tasks.child",
+      parentExecutionId: "parent-exec",
+      input: undefined,
+      status: "completed",
+      result: "child-ok",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "child-exec",
+      stepId: "child-step",
+      result: "done",
+      completedAt: new Date(),
+    });
+
+    const durable = new DurableResource(service, storage, store, runnerStore);
+    const repository = durable.getRepository(parentTask);
+    const tree = await repository.findTree({ id: "parent-exec" });
+
+    expect(tree).toHaveLength(1);
+    expect(tree[0].execution.id).toBe("parent-exec");
+    expect(tree[0].children).toHaveLength(1);
+    expect(tree[0].children[0].execution.id).toBe("child-exec");
+    expect(tree[0].children[0].steps.map((step) => step.stepId)).toEqual([
+      "child-step",
+    ]);
+  });
+
+  it("repository equality queries filter results and findOne() returns null when missing", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+
+    const task = r
+      .task("durable-tests-resource-query-task")
+      .tags([durableWorkflowTag.with({ category: "orders" })])
       .run(async () => "ok")
       .build();
 
@@ -248,27 +390,75 @@ describe("durable: DurableResource", () => {
       resolveDefinitionId: jest
         .fn()
         .mockImplementation((reference) =>
-          reference === requestedTask ? "app.tasks.requested" : undefined,
+          reference === task ? "app.tasks.query" : undefined,
         ),
+      tasks: new Map([["app.tasks.query", { task }]]),
     } as any;
 
     await store.saveExecution({
       id: "e1",
-      taskId: "app.tasks.actual",
+      workflowKey: "app.tasks.query",
       input: undefined,
       status: "pending",
       attempt: 1,
-      maxAttempts: 1,
+      maxAttempts: 2,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await store.saveExecution({
+      id: "e2",
+      workflowKey: "app.tasks.query",
+      parentExecutionId: "parent",
+      input: undefined,
+      status: "completed",
+      attempt: 2,
+      maxAttempts: 2,
+      createdAt: new Date(Date.now() + 1),
+      updatedAt: new Date(Date.now() + 1),
+      completedAt: new Date(Date.now() + 1),
+    });
+
+    const durable = new DurableResource(service, storage, store, runnerStore);
+    const repository = durable.getRepository(task);
+
+    await expect(repository.find({ status: "completed" })).resolves.toEqual([
+      expect.objectContaining({
+        execution: expect.objectContaining({
+          id: "e2",
+          parentExecutionId: "parent",
+          attempt: 2,
+        }),
+      }),
+    ]);
+    await expect(repository.findOne({ id: "missing" })).resolves.toBeNull();
+  });
+
+  it("findOneOrFail() throws a useful error when nothing matches", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+
+    const task = r
+      .task("durable-tests-resource-find-one-or-fail")
+      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .run(async () => "ok")
+      .build();
+
+    const runnerStore = {
+      resolveDefinitionId: jest
+        .fn()
+        .mockImplementation((reference) =>
+          reference === task ? "app.tasks.find-one-or-fail" : undefined,
+        ),
+      tasks: new Map([["app.tasks.find-one-or-fail", { task }]]),
+    } as any;
 
     const durable = new DurableResource(service, storage, store, runnerStore);
 
     await expect(
-      durable.getExecutionDetail(requestedTask, "e1"),
+      durable.getRepository(task).findOneOrFail({ id: "missing" }),
     ).rejects.toThrow(
-      "Cannot inspect execution 'e1' as task 'app.tasks.requested': the stored durable execution belongs to 'app.tasks.actual'.",
+      'No durable execution matched task "app.tasks.find-one-or-fail" and query {"id":"missing"}.',
     );
   });
 

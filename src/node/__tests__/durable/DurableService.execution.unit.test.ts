@@ -146,7 +146,10 @@ describe("durable: DurableService — execution (unit)", () => {
     expect(scheduleId).toBeDefined();
     expect(timers).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ taskId: task.id, id: `once:${scheduleId}` }),
+        expect.objectContaining({
+          workflowKey: task.id,
+          id: `once:${scheduleId}`,
+        }),
       ]),
     );
   });
@@ -222,7 +225,7 @@ describe("durable: DurableService — execution (unit)", () => {
       taskExecutor: createTaskExecutor({}),
     });
 
-    await store.saveExecution(pendingExecution({ taskId: "missing" }));
+    await store.saveExecution(pendingExecution({ workflowKey: "missing" }));
 
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("failed");
@@ -248,7 +251,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await store.saveExecution(
       pendingExecution({
         id: "e-current-reset",
-        taskId: task.id,
+        workflowKey: task.id,
         current: {
           kind: "waitForSignal",
           stepId: "__signal:old",
@@ -291,7 +294,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
     await store.saveExecution({
       id: "e-running-current-reset",
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       status: "running",
       attempt: 1,
@@ -333,7 +336,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await store.saveExecution(
       pendingExecution({
         id: "parent",
-        taskId: "t-parent",
+        workflowKey: "t-parent",
         status: "sleeping",
         current: {
           kind: "waitForExecution",
@@ -343,7 +346,7 @@ describe("durable: DurableService — execution (unit)", () => {
             type: "execution",
             params: {
               targetExecutionId: "child",
-              targetTaskId: childTask.id,
+              targetWorkflowKey: childTask.id,
             },
           },
         },
@@ -363,7 +366,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await store.saveExecution(
       pendingExecution({
         id: "child",
-        taskId: childTask.id,
+        workflowKey: childTask.id,
       }),
     );
 
@@ -375,7 +378,7 @@ describe("durable: DurableService — execution (unit)", () => {
     ).toEqual({
       state: "completed",
       targetExecutionId: "child",
-      taskId: childTask.id,
+      workflowKey: childTask.id,
       result: "ok",
     });
   });
@@ -394,7 +397,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
     await store.saveExecution({
       id: "e-running-race",
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       status: "running",
       attempt: 1,
@@ -448,7 +451,7 @@ describe("durable: DurableService — execution (unit)", () => {
       execution: { maxAttempts: 1 },
     });
 
-    await base.saveExecution(pendingExecution({ taskId: task.id }));
+    await base.saveExecution(pendingExecution({ workflowKey: task.id }));
 
     await service.processExecution("e1");
     expect((await base.getExecution("e1"))?.status).toBe("completed");
@@ -475,7 +478,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await store.saveExecution(
-      pendingExecution({ taskId: task.id, maxAttempts: 2 }),
+      pendingExecution({ workflowKey: task.id, maxAttempts: 2 }),
     );
 
     await service.processExecution("e1");
@@ -556,7 +559,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [task],
     });
 
-    await store.saveExecution(pendingExecution({ taskId: task.id }));
+    await store.saveExecution(pendingExecution({ workflowKey: task.id }));
 
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("sleeping");
@@ -574,7 +577,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await expect(service.processExecution("missing")).resolves.toBeUndefined();
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: task.id }),
+      ...pendingExecution({ workflowKey: task.id }),
       id: "done",
       status: "completed",
       result: "ok",
@@ -594,7 +597,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [task],
     });
 
-    await store.saveExecution(pendingExecution({ taskId: task.id }));
+    await store.saveExecution(pendingExecution({ workflowKey: task.id }));
 
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("pending");
@@ -620,7 +623,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await base.saveExecution(
       pendingExecution({
         id: "e-no-renew",
-        taskId: task.id,
+        workflowKey: task.id,
       }),
     );
 
@@ -652,7 +655,7 @@ describe("durable: DurableService — execution (unit)", () => {
         tasks: [task],
       });
 
-      await store.saveExecution(pendingExecution({ taskId: task.id }));
+      await store.saveExecution(pendingExecution({ workflowKey: task.id }));
       const processing = service.processExecution("e1");
 
       await advanceTimers(35_000);
@@ -691,7 +694,7 @@ describe("durable: DurableService — execution (unit)", () => {
       });
 
       await store.saveExecution(
-        pendingExecution({ id: "e-renew-reject", taskId: task.id }),
+        pendingExecution({ id: "e-renew-reject", workflowKey: task.id }),
       );
 
       const processing = service.processExecution("e-renew-reject");
@@ -720,7 +723,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [task],
     });
 
-    await base.saveExecution(pendingExecution({ taskId: task.id }));
+    await base.saveExecution(pendingExecution({ workflowKey: task.id }));
     await service.processExecution("e1");
 
     expect((await base.getExecution("e1"))?.status).toBe("completed");
@@ -745,7 +748,7 @@ describe("durable: DurableService — execution (unit)", () => {
         tasks: [task],
       });
 
-      await store.saveExecution(pendingExecution({ taskId: task.id }));
+      await store.saveExecution(pendingExecution({ workflowKey: task.id }));
       const processing = service.processExecution("e1");
       await advanceTimers(12_000);
       await processing;
@@ -761,7 +764,7 @@ describe("durable: DurableService — execution (unit)", () => {
     const task = okTask("t-ok");
     const service = new DurableService({ store, tasks: [task] });
 
-    await store.saveExecution(pendingExecution({ taskId: task.id }));
+    await store.saveExecution(pendingExecution({ workflowKey: task.id }));
 
     await expect(service.processExecution("e1")).rejects.toThrow(
       "taskExecutor",
@@ -866,7 +869,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: slow.id }),
+      ...pendingExecution({ workflowKey: slow.id }),
       id: "timeout",
       timeout: 1,
     });
@@ -874,7 +877,7 @@ describe("durable: DurableService — execution (unit)", () => {
     expect((await store.getExecution("timeout"))?.status).toBe("failed");
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: nonError.id }),
+      ...pendingExecution({ workflowKey: nonError.id }),
       id: "nonerror",
       maxAttempts: 2,
     });
@@ -896,7 +899,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: task.id }),
+      ...pendingExecution({ workflowKey: task.id }),
       id: "elapsed",
       timeout: 1,
       createdAt: new Date(Date.now() - 10_000),
@@ -925,7 +928,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: task.id, maxAttempts: 3 }),
+      ...pendingExecution({ workflowKey: task.id, maxAttempts: 3 }),
       id: "timeout-no-retry",
       timeout: 1,
       createdAt: new Date(Date.now() - 10_000),
@@ -960,7 +963,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [task],
     });
 
-    await store.saveExecution(pendingExecution({ taskId: task.id }));
+    await store.saveExecution(pendingExecution({ workflowKey: task.id }));
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("completed");
 
@@ -982,7 +985,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     const base: Omit<Execution, "id" | "status"> = {
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       attempt: 1,
       maxAttempts: 1,

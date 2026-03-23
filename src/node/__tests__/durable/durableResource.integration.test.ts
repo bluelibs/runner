@@ -99,7 +99,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const executionId = "exec_unified_queue_1";
     await store.saveExecution({
       id: executionId,
-      taskId: task.id,
+      workflowKey: task.id,
       input: { v: 2 },
       status: "pending",
       attempt: 1,

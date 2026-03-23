@@ -12,7 +12,7 @@ async function savePendingExecution(
 ): Promise<void> {
   await store.saveExecution({
     id: executionId,
-    taskId: "t",
+    workflowKey: "t",
     input: undefined,
     status: ExecutionStatus.Pending,
     attempt: 1,
@@ -137,7 +137,7 @@ describe("durable: WaitManager (poll guards)", () => {
 
     let releasePreflight!: (execution: {
       id: string;
-      taskId: string;
+      workflowKey: string;
       input: undefined;
       status: "completed";
       attempt: number;
@@ -149,7 +149,7 @@ describe("durable: WaitManager (poll guards)", () => {
     }) => void;
     const preflightExecution = new Promise<{
       id: string;
-      taskId: string;
+      workflowKey: string;
       input: undefined;
       status: "completed";
       attempt: number;
@@ -173,7 +173,7 @@ describe("durable: WaitManager (poll guards)", () => {
         queueMicrotask(() => {
           releasePreflight({
             id: executionId,
-            taskId: "t",
+            workflowKey: "t",
             input: undefined,
             status: ExecutionStatus.Completed,
             attempt: 1,
@@ -188,7 +188,7 @@ describe("durable: WaitManager (poll guards)", () => {
 
       return {
         id: executionId,
-        taskId: "t",
+        workflowKey: "t",
         input: undefined,
         status: ExecutionStatus.Pending,
         attempt: 1,

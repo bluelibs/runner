@@ -5,14 +5,14 @@ export type DurableExecutionWaitCompletionState<TResult> =
   | {
       state: "completed";
       targetExecutionId: string;
-      taskId: string;
+      workflowKey: string;
       result: TResult;
     }
   | {
       state: "failed" | "cancelled";
       targetExecutionId: string;
       error: { message: string; stack?: string };
-      taskId: string;
+      workflowKey: string;
       attempt: number;
     };
 
@@ -30,11 +30,17 @@ export function isExecutionWaitTerminal(
 export function createExecutionWaitCompletionState<TResult>(
   execution: Execution<unknown, unknown>,
 ): DurableExecutionWaitCompletionState<TResult> {
+  if (!execution.workflowKey) {
+    return durableExecutionInvariantError.throw({
+      message: `Execution '${execution.id}' is missing its durable workflow key.`,
+    });
+  }
+
   if (execution.status === ExecutionStatus.Completed) {
     return {
       state: "completed",
       targetExecutionId: execution.id,
-      taskId: execution.taskId,
+      workflowKey: execution.workflowKey,
       result: execution.result as TResult,
     };
   }
@@ -47,7 +53,7 @@ export function createExecutionWaitCompletionState<TResult>(
         message: execution.error?.message || "Execution failed",
         stack: execution.error?.stack,
       },
-      taskId: execution.taskId,
+      workflowKey: execution.workflowKey,
       attempt: execution.attempt,
     };
   }
@@ -60,7 +66,7 @@ export function createExecutionWaitCompletionState<TResult>(
         message: execution.error?.message || "Compensation failed",
         stack: execution.error?.stack,
       },
-      taskId: execution.taskId,
+      workflowKey: execution.workflowKey,
       attempt: execution.attempt,
     };
   }
@@ -73,7 +79,7 @@ export function createExecutionWaitCompletionState<TResult>(
         message: execution.error?.message || "Execution cancelled",
         stack: execution.error?.stack,
       },
-      taskId: execution.taskId,
+      workflowKey: execution.workflowKey,
       attempt: execution.attempt,
     };
   }

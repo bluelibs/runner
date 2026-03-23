@@ -130,19 +130,25 @@ export class MemoryStore implements IDurableStore {
     }
   }
 
-  private getIdempotencyMapKey(taskId: string, idempotencyKey: string): string {
-    return `${taskId}::${idempotencyKey}`;
+  private getIdempotencyMapKey(
+    workflowKey: string,
+    idempotencyKey: string,
+  ): string {
+    return `${workflowKey}::${idempotencyKey}`;
   }
 
   async createExecutionWithIdempotencyKey(params: {
     execution: Execution;
-    taskId: string;
+    workflowKey: string;
     idempotencyKey: string;
   }): Promise<
     | { created: true; executionId: string }
     | { created: false; executionId: string }
   > {
-    const key = this.getIdempotencyMapKey(params.taskId, params.idempotencyKey);
+    const key = this.getIdempotencyMapKey(
+      params.workflowKey,
+      params.idempotencyKey,
+    );
     const existingExecutionId = this.executionIdByIdempotencyKey.get(key);
     if (existingExecutionId) {
       return { created: false, executionId: existingExecutionId };
@@ -215,9 +221,9 @@ export class MemoryStore implements IDurableStore {
       results = results.filter((e) => options.status!.includes(e.status));
     }
 
-    // Filter by taskId
-    if (options.taskId) {
-      results = results.filter((e) => e.taskId === options.taskId);
+    // Filter by workflowKey
+    if (options.workflowKey) {
+      results = results.filter((e) => e.workflowKey === options.workflowKey);
     }
 
     // Sort by createdAt desc (most recent first)
@@ -258,7 +264,7 @@ export class MemoryStore implements IDurableStore {
     const list = this.auditEntries.get(executionId) ?? [];
     const offset = options.offset ?? 0;
     const limit = options.limit ?? list.length;
-    return list.slice(offset, offset + limit).map((e) => ({ ...e }));
+    return list.slice(offset, offset + limit).map((entry) => ({ ...entry }));
   }
 
   // Operator API
@@ -689,7 +695,7 @@ export class MemoryStore implements IDurableStore {
   async getReadyTimers(now: Date = new Date()): Promise<Timer[]> {
     return Array.from(this.timers.values())
       .filter((t) => t.status === TimerStatus.Pending && t.fireAt <= now)
-      .map((t) => ({ ...t }));
+      .map((timer) => ({ ...timer }));
   }
 
   async markTimerFired(timerId: string): Promise<void> {
@@ -799,13 +805,15 @@ export class MemoryStore implements IDurableStore {
   }
 
   async listSchedules(): Promise<Schedule[]> {
-    return Array.from(this.schedules.values()).map((s) => ({ ...s }));
+    return Array.from(this.schedules.values()).map((schedule) => ({
+      ...schedule,
+    }));
   }
 
   async listActiveSchedules(): Promise<Schedule[]> {
     return Array.from(this.schedules.values())
       .filter((s) => s.status === ScheduleStatus.Active)
-      .map((s) => ({ ...s }));
+      .map((schedule) => ({ ...schedule }));
   }
 
   async acquireLock(resource: string, ttlMs: number): Promise<string | null> {

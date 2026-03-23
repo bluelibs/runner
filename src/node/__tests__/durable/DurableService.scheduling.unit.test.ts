@@ -48,7 +48,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
 
     const schedule: Schedule = {
       id: "s1",
-      taskId: "t",
+      workflowKey: "t",
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -269,7 +269,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
 
     await store.createSchedule({
       id: "s1",
-      taskId: "t",
+      workflowKey: "t",
       type: "interval",
       pattern: "1000",
       input: { version: 1 },

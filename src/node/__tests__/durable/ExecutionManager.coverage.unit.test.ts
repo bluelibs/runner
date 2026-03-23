@@ -249,10 +249,10 @@ describe("durable: ExecutionManager coverage", () => {
 
     const store = new MemoryStore();
     await store.saveExecution(
-      pendingExecution({ id: "e-active", taskId: "t-active" }),
+      pendingExecution({ id: "e-active", workflowKey: "t-active" }),
     );
     await store.saveExecution({
-      ...pendingExecution({ id: "e-terminal", taskId: "t-terminal" }),
+      ...pendingExecution({ id: "e-terminal", workflowKey: "t-terminal" }),
       status: ExecutionStatus.Completed,
       completedAt: new Date(),
     });
@@ -295,7 +295,7 @@ describe("durable: ExecutionManager coverage", () => {
     );
 
     await manager.notifyExecutionFinished(
-      pendingExecution({ id: "e-finished", taskId: "t-finished" }),
+      pendingExecution({ id: "e-finished", workflowKey: "t-finished" }),
     );
     expect(
       logs.some((log) => {
@@ -334,7 +334,7 @@ describe("durable: ExecutionManager coverage", () => {
     });
 
     const alreadyRunning = {
-      ...pendingExecution({ id: "e-helper-running", taskId: task.id }),
+      ...pendingExecution({ id: "e-helper-running", workflowKey: task.id }),
       status: ExecutionStatus.Running,
     };
     expect(await manager.transitionExecutionToRunning(alreadyRunning)).toBe(
@@ -343,7 +343,7 @@ describe("durable: ExecutionManager coverage", () => {
 
     const pending = pendingExecution({
       id: "e-helper-pending",
-      taskId: task.id,
+      workflowKey: task.id,
     });
     await store.saveExecution(pending);
     const running = await manager.transitionExecutionToRunning(pending);
@@ -466,7 +466,7 @@ describe("durable: ExecutionManager coverage", () => {
     const manager = getManager(service);
 
     const running = {
-      ...pendingExecution({ id: "e-helper-complete", taskId: task.id }),
+      ...pendingExecution({ id: "e-helper-complete", workflowKey: task.id }),
       status: ExecutionStatus.Running,
     };
     await store.saveExecution(running);
@@ -477,14 +477,17 @@ describe("durable: ExecutionManager coverage", () => {
     expect(eventBus.publish).toHaveBeenCalled();
 
     const staleRunning = {
-      ...pendingExecution({ id: "e-helper-stale-complete", taskId: task.id }),
+      ...pendingExecution({
+        id: "e-helper-stale-complete",
+        workflowKey: task.id,
+      }),
       status: ExecutionStatus.Running,
     };
     await manager.completeExecutionAttempt(staleRunning, "ignored");
     expect(await store.getExecution(staleRunning.id)).toBeNull();
 
     const sleeping = {
-      ...pendingExecution({ id: "e-helper-suspend", taskId: task.id }),
+      ...pendingExecution({ id: "e-helper-suspend", workflowKey: task.id }),
       status: ExecutionStatus.Running,
     };
     await store.saveExecution(sleeping);
@@ -496,7 +499,7 @@ describe("durable: ExecutionManager coverage", () => {
     const suspendedWithFailedRecheck = {
       ...pendingExecution({
         id: "e-helper-suspend-recheck",
-        taskId: task.id,
+        workflowKey: task.id,
       }),
       status: ExecutionStatus.Running,
     };
@@ -513,7 +516,7 @@ describe("durable: ExecutionManager coverage", () => {
     ).toBe(ExecutionStatus.Running);
 
     const retrying = {
-      ...pendingExecution({ id: "e-helper-retry", taskId: task.id }),
+      ...pendingExecution({ id: "e-helper-retry", workflowKey: task.id }),
       status: ExecutionStatus.Running,
       attempt: 2,
       maxAttempts: 4,
@@ -530,7 +533,7 @@ describe("durable: ExecutionManager coverage", () => {
     const retryBlockedByRecheck = {
       ...pendingExecution({
         id: "e-helper-retry-recheck",
-        taskId: task.id,
+        workflowKey: task.id,
       }),
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -560,7 +563,7 @@ describe("durable: ExecutionManager coverage", () => {
     const completedWithFailedRecheck = {
       ...pendingExecution({
         id: "e-helper-complete-recheck",
-        taskId: task.id,
+        workflowKey: task.id,
       }),
       status: ExecutionStatus.Running,
     };
@@ -577,7 +580,10 @@ describe("durable: ExecutionManager coverage", () => {
     ).toBe(ExecutionStatus.Running);
 
     const retryCleanup = {
-      ...pendingExecution({ id: "e-helper-retry-cleanup", taskId: task.id }),
+      ...pendingExecution({
+        id: "e-helper-retry-cleanup",
+        workflowKey: task.id,
+      }),
       status: ExecutionStatus.Running,
       attempt: 1,
       maxAttempts: 3,
@@ -618,14 +624,14 @@ describe("durable: ExecutionManager coverage", () => {
       }),
     });
     await cancelledStore.saveExecution({
-      ...pendingExecution({ id: "e-cancelled", taskId: task.id }),
+      ...pendingExecution({ id: "e-cancelled", workflowKey: task.id }),
       status: ExecutionStatus.Cancelled,
       completedAt: new Date(),
     });
     await expect(
       getManager(cancelledService).runExecutionAttempt(
         {
-          ...pendingExecution({ id: "e-cancelled", taskId: task.id }),
+          ...pendingExecution({ id: "e-cancelled", workflowKey: task.id }),
           status: ExecutionStatus.Cancelled,
         },
         task,
@@ -644,7 +650,7 @@ describe("durable: ExecutionManager coverage", () => {
       }),
     });
     const suspendedExecution = {
-      ...pendingExecution({ id: "e-suspend-branch", taskId: task.id }),
+      ...pendingExecution({ id: "e-suspend-branch", workflowKey: task.id }),
       status: ExecutionStatus.Running,
     };
     await suspendedStore.saveExecution(suspendedExecution);
@@ -664,7 +670,7 @@ describe("durable: ExecutionManager coverage", () => {
     const manager = getManager(service);
     const execution = pendingExecution({
       id: "e-failed-noop",
-      taskId: "t-failed-noop",
+      workflowKey: "t-failed-noop",
     });
 
     await store.saveExecution(execution);
@@ -678,5 +684,32 @@ describe("durable: ExecutionManager coverage", () => {
         error: { message: "boom" },
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it("fails executions that cannot be resumed because they are missing a workflow key", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const manager = getManager(service);
+
+    await store.saveExecution({
+      id: "e-missing-workflow-key",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+
+    await manager.processExecution("e-missing-workflow-key");
+
+    expect(await store.getExecution("e-missing-workflow-key")).toEqual(
+      expect.objectContaining({
+        status: ExecutionStatus.Failed,
+        error: expect.objectContaining({
+          message: "Execution is missing its durable workflow key.",
+        }),
+      }),
+    );
   });
 });

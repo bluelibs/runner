@@ -213,7 +213,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
       });
 
       await store.saveExecution(
-        pendingExecution({ id: "e-lock-lost", taskId: task.id }),
+        pendingExecution({ id: "e-lock-lost", workflowKey: task.id }),
       );
 
       const processing = service.processExecution("e-lock-lost");
@@ -249,7 +249,10 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
       });
 
       await store.saveExecution(
-        pendingExecution({ id: "e-lock-transient-renew", taskId: task.id }),
+        pendingExecution({
+          id: "e-lock-transient-renew",
+          workflowKey: task.id,
+        }),
       );
 
       const processing = service.processExecution("e-lock-transient-renew");
@@ -278,7 +281,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
     });
 
     await store.saveExecution(
-      pendingExecution({ id: "e-lock-recheck-complete", taskId: task.id }),
+      pendingExecution({ id: "e-lock-recheck-complete", workflowKey: task.id }),
     );
 
     await service.processExecution("e-lock-recheck-complete");
@@ -304,7 +307,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
     });
 
     await store.saveExecution(
-      pendingExecution({ id: "e-lock-recheck-retry", taskId: task.id }),
+      pendingExecution({ id: "e-lock-recheck-retry", workflowKey: task.id }),
     );
 
     await service.processExecution("e-lock-recheck-retry");
@@ -343,7 +346,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
 
     await expect(
       getTestExecutionManager(service).runExecutionAttempt(
-        pendingExecution({ id: "e-already-lost", taskId: task.id }),
+        pendingExecution({ id: "e-already-lost", workflowKey: task.id }),
         task,
         {
           lost: true,
@@ -374,7 +377,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
 
       const execution = pendingExecution({
         id: "e-lock-lost-during-error",
-        taskId: task.id,
+        workflowKey: task.id,
       });
       await store.saveExecution(execution);
 

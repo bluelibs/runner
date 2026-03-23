@@ -8,7 +8,7 @@ import { MemoryStore } from "../../durable/store/MemoryStore";
 describe("WaitManager", () => {
   const baseExecution: Execution = {
     id: "exec-1",
-    taskId: "task-test",
+    workflowKey: "task-test",
     input: undefined,
     status: ExecutionStatus.Running,
     attempt: 1,
@@ -115,6 +115,36 @@ describe("WaitManager", () => {
     await expect(waitManager.waitForResult("exec-1")).rejects.toThrow(
       "Execution cancelled",
     );
+  });
+
+  it("uses an 'unknown' workflow key when terminal executions are missing durable identity", async () => {
+    const store = new MemoryStore();
+    const waitManager = new WaitManager(store);
+
+    for (const status of [
+      ExecutionStatus.Failed,
+      ExecutionStatus.CompensationFailed,
+      ExecutionStatus.Cancelled,
+    ]) {
+      await store.saveExecution({
+        id: `exec-${status}`,
+        input: undefined,
+        status,
+        error: undefined,
+        attempt: 2,
+        maxAttempts: 3,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+
+      await expect(
+        waitManager.waitForResult(`exec-${status}`),
+      ).rejects.toMatchObject({
+        workflowKey: "unknown",
+        executionId: `exec-${status}`,
+        attempt: 2,
+      });
+    }
   });
 
   it("keeps other waiters subscribed when one waiter times out", async () => {

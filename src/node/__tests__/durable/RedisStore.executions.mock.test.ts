@@ -13,7 +13,7 @@ describe("durable: RedisStore executions (mock)", () => {
 
     const execution: Execution = {
       id: "exec-1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "pending",
       attempt: 1,
@@ -25,7 +25,7 @@ describe("durable: RedisStore executions (mock)", () => {
     await expect(
       store.createExecutionWithIdempotencyKey({
         execution,
-        taskId: "t",
+        workflowKey: "t",
         idempotencyKey: "k",
       }),
     ).resolves.toEqual({ created: true, executionId: "exec-1" });
@@ -33,7 +33,7 @@ describe("durable: RedisStore executions (mock)", () => {
     await expect(
       store.createExecutionWithIdempotencyKey({
         execution: { ...execution, id: "exec-2" },
-        taskId: "t",
+        workflowKey: "t",
         idempotencyKey: "k",
       }),
     ).resolves.toEqual({ created: false, executionId: "exec-1" });
@@ -43,7 +43,7 @@ describe("durable: RedisStore executions (mock)", () => {
     const { redisMock, store } = harness;
     const execution: Execution = {
       id: "exec-cas",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "running",
       attempt: 1,
@@ -72,7 +72,7 @@ describe("durable: RedisStore executions (mock)", () => {
     await store.createExecutionWithIdempotencyKey({
       execution: {
         id: "exec-encoded",
-        taskId: "task/with spaces",
+        workflowKey: "task/with spaces",
         input: undefined,
         status: "pending",
         attempt: 1,
@@ -80,7 +80,7 @@ describe("durable: RedisStore executions (mock)", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       },
-      taskId: "task/with spaces",
+      workflowKey: "task/with spaces",
       idempotencyKey: "key:with?chars",
     });
 
@@ -103,7 +103,7 @@ describe("durable: RedisStore executions (mock)", () => {
       store.createExecutionWithIdempotencyKey({
         execution: {
           id: "exec-invalid",
-          taskId: "t",
+          workflowKey: "t",
           input: undefined,
           status: "pending",
           attempt: 1,
@@ -111,7 +111,7 @@ describe("durable: RedisStore executions (mock)", () => {
           createdAt: new Date(),
           updatedAt: new Date(),
         },
-        taskId: "t",
+        workflowKey: "t",
         idempotencyKey: "k",
       }),
     ).rejects.toThrow("Unexpected Redis idempotent execution create response");
@@ -121,7 +121,7 @@ describe("durable: RedisStore executions (mock)", () => {
     const { redisMock, store } = harness;
     const execution: Execution = {
       id: "1",
-      taskId: "t",
+      workflowKey: "t",
       parentExecutionId: "parent-1",
       input: undefined,
       status: "pending",
@@ -162,7 +162,7 @@ describe("durable: RedisStore executions (mock)", () => {
     const { redisMock, store } = harness;
     await store.saveExecution({
       id: "c1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Cancelled,
       error: { message: "cancelled" },
@@ -187,7 +187,7 @@ describe("durable: RedisStore executions (mock)", () => {
 
     await store.saveExecution({
       id: "stuck-1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.CompensationFailed,
       attempt: 1,
@@ -213,7 +213,7 @@ describe("durable: RedisStore executions (mock)", () => {
     const { redisMock, store } = harness;
     const running: Execution = {
       id: "no-status",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -228,7 +228,7 @@ describe("durable: RedisStore executions (mock)", () => {
 
     const initialExecution: Execution = {
       id: "lua-safe-1",
-      taskId: "task-lua-safe",
+      workflowKey: "task-lua-safe",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -292,7 +292,7 @@ describe("durable: RedisStore executions (mock)", () => {
     const { redisMock, store } = harness;
     const pending = {
       id: "exec-pending",
-      taskId: "task-a",
+      workflowKey: "task-a",
       parentExecutionId: "parent-a",
       input: undefined,
       status: ExecutionStatus.Pending,
@@ -304,7 +304,7 @@ describe("durable: RedisStore executions (mock)", () => {
     const failed = {
       ...pending,
       id: "exec-failed",
-      taskId: "task-b",
+      workflowKey: "task-b",
       parentExecutionId: undefined,
       status: ExecutionStatus.Failed,
       updatedAt: new Date("2024-01-02T00:00:00.000Z"),
@@ -332,7 +332,7 @@ describe("durable: RedisStore executions (mock)", () => {
     await expect(
       store.listExecutions({
         status: [ExecutionStatus.Pending],
-        taskId: "task-a",
+        workflowKey: "task-a",
       }),
     ).resolves.toEqual([pending]);
   });

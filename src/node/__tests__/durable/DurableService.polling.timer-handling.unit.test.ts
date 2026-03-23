@@ -262,7 +262,7 @@ describe("durable: DurableService polling timer handling (unit)", () => {
     });
     await store.createTimer({
       id: "unknown-task",
-      taskId: "missing",
+      workflowKey: "missing",
       type: "scheduled",
       fireAt: new Date(Date.now() - 10),
       status: "pending",
@@ -285,7 +285,7 @@ describe("durable: DurableService polling timer handling (unit)", () => {
     await service.stop();
   });
 
-  it("persists scheduled executions with the durable task persistence id", async () => {
+  it("persists scheduled executions with the durable workflow key", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
     const task = okTask("t-scheduled-persistence-id");
@@ -294,12 +294,12 @@ describe("durable: DurableService polling timer handling (unit)", () => {
       store,
       queue,
       tasks: [task],
-      taskIdResolver: () => persistenceTaskId,
+      workflowKeyResolver: () => persistenceTaskId,
     });
 
     const timer: Timer = {
       id: "sched:persistence-id",
-      taskId: persistenceTaskId,
+      workflowKey: persistenceTaskId,
       type: "scheduled",
       fireAt: new Date(0),
       status: "pending",
@@ -318,7 +318,7 @@ describe("durable: DurableService polling timer handling (unit)", () => {
     const executions = await store.listIncompleteExecutions();
     expect(executions).toEqual([
       expect.objectContaining({
-        taskId: persistenceTaskId,
+        workflowKey: persistenceTaskId,
       }),
     ]);
   });

@@ -14,10 +14,10 @@ import {
   SpyQueue,
 } from "./DurableService.unit.helpers";
 
-function pendingExecution(id: string, taskId: string): Execution {
+function pendingExecution(id: string, workflowKey: string): Execution {
   return {
     id,
-    taskId,
+    workflowKey,
     input: undefined,
     status: ExecutionStatus.Pending,
     attempt: 1,

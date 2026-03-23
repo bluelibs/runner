@@ -31,7 +31,7 @@ describe("durable: ExecutionManager timeout classification", () => {
 
     await store.saveExecution({
       ...pendingExecution({
-        taskId: task.id,
+        workflowKey: task.id,
         maxAttempts: 2,
       }),
       id: executionId,

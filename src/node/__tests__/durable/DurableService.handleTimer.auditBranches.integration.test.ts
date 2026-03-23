@@ -26,7 +26,7 @@ describe("durable: DurableService handleTimer audit branches", () => {
 
     await store.saveExecution({
       id: "exec-1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "sleeping",
       attempt: 2,

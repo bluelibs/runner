@@ -183,7 +183,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   it("cancelExecution is a no-op when execution is already terminal", async () => {
     const exec: Execution = {
       id: "e1",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Completed,
       attempt: 1,
@@ -215,7 +215,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   it("cancelExecution backs off between conflicting retries", async () => {
     const exec: Execution = {
       id: "e-cancel-retries",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -258,7 +258,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   it("cancelExecution throws after exhausting conflicting retries", async () => {
     const exec: Execution = {
       id: "e-cancel-exhausted",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -304,7 +304,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const exec: Execution = {
       id: "e-cancel-defaults",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -343,7 +343,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   it("retries cancellation when compare-and-save loses the first race", async () => {
     const exec: Execution = {
       id: "e-cancel-retry",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -390,7 +390,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         if (getCalls <= 3) {
           return {
             id: "e1",
-            taskId: TaskId.T,
+            workflowKey: TaskId.T,
             input: undefined,
             status: ExecutionStatus.Pending,
             attempt: 1,
@@ -402,7 +402,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
         return {
           id: "e1",
-          taskId: TaskId.T,
+          workflowKey: TaskId.T,
           input: undefined,
           status: ExecutionStatus.Cancelled,
           attempt: 1,
@@ -441,7 +441,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         if (getCalls <= 2) {
           return {
             id: "e0",
-            taskId: TaskId.T,
+            workflowKey: TaskId.T,
             input: undefined,
             status: ExecutionStatus.Pending,
             attempt: 1,
@@ -452,7 +452,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         }
         return {
           id: "e0",
-          taskId: TaskId.T,
+          workflowKey: TaskId.T,
           input: undefined,
           status: ExecutionStatus.Cancelled,
           attempt: 1,
@@ -491,7 +491,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         if (getCalls === 1) {
           return {
             id: "e-missing-after-lock",
-            taskId: TaskId.T,
+            workflowKey: TaskId.T,
             input: undefined,
             status: ExecutionStatus.Pending,
             attempt: 1,
@@ -527,7 +527,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         if (getCalls === 1) {
           return {
             id: "e-terminal-after-lock",
-            taskId: TaskId.T,
+            workflowKey: TaskId.T,
             input: undefined,
             status: ExecutionStatus.Pending,
             attempt: 1,
@@ -538,7 +538,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         }
         return {
           id: "e-terminal-after-lock",
-          taskId: TaskId.T,
+          workflowKey: TaskId.T,
           input: undefined,
           status: ExecutionStatus.Completed,
           attempt: 1,
@@ -573,7 +573,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         getCalls += 1;
         return {
           id: "e-running-race",
-          taskId: TaskId.T,
+          workflowKey: TaskId.T,
           input: undefined,
           status: ExecutionStatus.Pending,
           attempt: 1,
@@ -609,7 +609,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         if (getCalls <= 3) {
           return {
             id: "e2",
-            taskId: TaskId.T,
+            workflowKey: TaskId.T,
             input: undefined,
             status: ExecutionStatus.Pending,
             attempt: 1,
@@ -621,7 +621,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
         return {
           id: "e2",
-          taskId: TaskId.T,
+          workflowKey: TaskId.T,
           input: undefined,
           status: ExecutionStatus.Cancelled,
           attempt: 1,
@@ -669,7 +669,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         if (getCalls <= 3) {
           return {
             id: "e3",
-            taskId: TaskId.T,
+            workflowKey: TaskId.T,
             input: undefined,
             status: ExecutionStatus.Pending,
             attempt: 1,
@@ -681,7 +681,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
         return {
           id: "e3",
-          taskId: TaskId.T,
+          workflowKey: TaskId.T,
           input: undefined,
           status: ExecutionStatus.Cancelled,
           attempt: 1,
@@ -722,7 +722,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const execution: Execution = {
       id: "e-fail-patch",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: { hello: "world" },
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -776,7 +776,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const execution: Execution = {
       id: "e-timeout-mid-attempt",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -838,7 +838,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       saveExecution: async () => {},
       getExecution: async () => ({
         id: "e-complete-race",
-        taskId: TaskId.T,
+        workflowKey: TaskId.T,
         input: undefined,
         status: ExecutionStatus.Pending,
         attempt: 1,
@@ -885,7 +885,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       saveExecution: async () => {},
       getExecution: async () => ({
         id: "e-suspend-race",
-        taskId: TaskId.T,
+        workflowKey: TaskId.T,
         input: undefined,
         status: ExecutionStatus.Pending,
         attempt: 1,
@@ -924,7 +924,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       saveExecution: async () => {},
       getExecution: async () => ({
         id: "e-retry-race",
-        taskId: TaskId.T,
+        workflowKey: TaskId.T,
         input: undefined,
         status: ExecutionStatus.Pending,
         attempt: 1,
@@ -960,7 +960,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const execution: Execution = {
       id: "e-exhausted",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Retrying,
       attempt: 2,
@@ -1015,7 +1015,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       saveExecution: async () => {},
       getExecution: async () => ({
         id: "e-failed-race",
-        taskId: TaskId.T,
+        workflowKey: TaskId.T,
         input: undefined,
         status: ExecutionStatus.Retrying,
         attempt: 2,
@@ -1067,7 +1067,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     let saveAttempts = 0;
     const storeExecution: Execution = {
       id: "e-failed-retry",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Retrying,
       attempt: 2,
@@ -1133,7 +1133,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       saveExecution: async () => {},
       getExecution: async () => ({
         id: "e-failed-stuck",
-        taskId: TaskId.T,
+        workflowKey: TaskId.T,
         input: undefined,
         status: ExecutionStatus.Retrying,
         attempt: 2,
@@ -1175,7 +1175,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
         return {
           id: "e-failed-missing-after-races",
-          taskId: TaskId.T,
+          workflowKey: TaskId.T,
           input: undefined,
           status: ExecutionStatus.Retrying,
           attempt: 2,
@@ -1237,7 +1237,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const execution: Execution = {
       id: "e-terminal",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Failed,
       attempt: 3,
@@ -1308,7 +1308,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     await manager.notifyExecutionFinished({
       id: "e-notify",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Completed,
       attempt: 1,
@@ -1355,7 +1355,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     await store.saveExecution({
       id: "e-completed-publish-failure",
-      taskId: TaskId.T,
+      workflowKey: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Pending,
       attempt: 1,
@@ -1412,7 +1412,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     await expect(
       manager.notifyExecutionFinished({
         id: "e-notify-noop",
-        taskId: TaskId.T,
+        workflowKey: TaskId.T,
         input: undefined,
         status: ExecutionStatus.Completed,
         attempt: 1,

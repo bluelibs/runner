@@ -48,17 +48,19 @@ function isWaitingForSignal(
 }
 
 async function waitForSignalCheckpoint(params: {
-  operator: {
-    getExecutionDetail(
-      executionId: string,
-    ): Promise<{ steps: Array<{ result: unknown }> }>;
+  repository: {
+    findOneOrFail(query: {
+      id: string;
+    }): Promise<{ steps: Array<{ result: unknown }> }>;
   };
   executionId: string;
   signalId: string;
 }): Promise<void> {
   await waitUntil(
     async () => {
-      const detail = await params.operator.getExecutionDetail(params.executionId);
+      const detail = await params.repository.findOneOrFail({
+        id: params.executionId,
+      });
       return detail.steps.some((stepResult) =>
         isWaitingForSignal(stepResult.result, params.signalId),
       );
@@ -217,6 +219,7 @@ export async function runParallelStressScenario(params: {
   });
   const runtime = await run(runtimeShape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(runtimeShape.durable);
+  const repository = service.getRepository(runtimeShape.workflow);
   const instructions = Array.from({ length: params.count }, (_, index) =>
     buildInstruction(index + 1),
   );
@@ -240,7 +243,7 @@ export async function runParallelStressScenario(params: {
     await Promise.all(
       executionIds.map((executionId) =>
         waitForSignalCheckpoint({
-          operator: service.operator,
+          repository,
           executionId,
           signalId: StressPolicyDecision.id,
         }),
@@ -302,7 +305,7 @@ export async function runParallelStressScenario(params: {
     await Promise.all(
       revisionIds.map((executionId) =>
         waitForSignalCheckpoint({
-          operator: service.operator,
+          repository,
           executionId,
           signalId: StressRevisionDraft.id,
         }),
@@ -322,7 +325,7 @@ export async function runParallelStressScenario(params: {
     await Promise.all(
       revisionIds.map((executionId) =>
         waitForSignalCheckpoint({
-          operator: service.operator,
+          repository,
           executionId,
           signalId: StressPolicyDecision.id,
         }),
@@ -347,7 +350,7 @@ export async function runParallelStressScenario(params: {
     await Promise.all(
       [...new Set(complianceIds)].map((executionId) =>
         waitForSignalCheckpoint({
-          operator: service.operator,
+          repository,
           executionId,
           signalId: ComplianceDecision.id,
         }),

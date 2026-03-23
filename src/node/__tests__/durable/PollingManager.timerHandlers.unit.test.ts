@@ -2,9 +2,11 @@ import { Logger } from "../../../models/Logger";
 import { AuditLogger } from "../../durable/core/managers/AuditLogger";
 import {
   handleExecutionWaitTimeoutTimer,
+  handleScheduledTaskTimer,
   handleSignalTimeoutTimer,
   handleSleepTimer,
 } from "../../durable/core/managers/PollingManager.timerHandlers";
+import { TaskRegistry } from "../../durable/core/managers/TaskRegistry";
 import { ExecutionStatus, TimerType } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 
@@ -46,7 +48,7 @@ describe("durable: PollingManager timer handlers (unit)", () => {
     const auditLogger = new AuditLogger({}, store);
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Sleeping,
       current: {
@@ -131,7 +133,7 @@ describe("durable: PollingManager timer handlers (unit)", () => {
 
     await store.saveExecution({
       id: "signal-exec",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Sleeping,
       current: {
@@ -175,7 +177,7 @@ describe("durable: PollingManager timer handlers (unit)", () => {
 
     await store.saveExecution({
       id: "wait-exec",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Sleeping,
       current: {
@@ -186,7 +188,7 @@ describe("durable: PollingManager timer handlers (unit)", () => {
           type: "execution",
           params: {
             targetExecutionId: "child",
-            targetTaskId: "canonical.child",
+            targetWorkflowKey: "canonical.child",
             timerId: "execution_timeout:wait-exec:__execution:child",
           },
         },
@@ -343,5 +345,124 @@ describe("durable: PollingManager timer handlers (unit)", () => {
       state: "timed_out",
       targetExecutionId: "child",
     });
+  });
+
+  it("handles scheduled task timers when the schedule is missing, stale, or turned off mid-flight", async () => {
+    const createParams = (store: MemoryStore) => {
+      const taskRegistry = new TaskRegistry();
+      const scheduleManager = {
+        reschedule: jest.fn(async () => undefined),
+      } as never;
+
+      return {
+        store,
+        taskRegistry,
+        scheduleManager,
+        kickoffExecution: jest.fn(async () => undefined),
+        persistTaskTimerExecution: jest.fn(async () => "e-scheduled"),
+        assertTimerClaimIsStillOwned: jest.fn(),
+      };
+    };
+
+    const missingStore = new MemoryStore();
+    const missingParams = createParams(missingStore);
+    await expect(
+      handleScheduledTaskTimer({
+        ...missingParams,
+        timer: {
+          id: "timer-missing",
+          type: TimerType.Scheduled,
+          workflowKey: "orders",
+          scheduleId: "schedule-missing",
+          fireAt: new Date(100),
+          status: "pending",
+        },
+      }),
+    ).resolves.toEqual({
+      handled: false,
+      finalizeCurrentTimer: true,
+      releaseCurrentTimerClaim: false,
+    });
+
+    const staleStore = new MemoryStore();
+    await staleStore.createSchedule({
+      id: "schedule-stale",
+      workflowKey: "orders",
+      type: "cron",
+      pattern: "* * * * *",
+      input: undefined,
+      nextRun: new Date(200),
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const staleParams = createParams(staleStore);
+    await expect(
+      handleScheduledTaskTimer({
+        ...staleParams,
+        timer: {
+          id: "timer-stale",
+          type: TimerType.Scheduled,
+          workflowKey: "orders",
+          scheduleId: "schedule-stale",
+          fireAt: new Date(100),
+          status: "pending",
+        },
+      }),
+    ).resolves.toEqual({
+      handled: false,
+      finalizeCurrentTimer: true,
+      releaseCurrentTimerClaim: false,
+    });
+
+    const inactiveAfterKickoffStore = new MemoryStore();
+    const schedule = {
+      id: "schedule-inactive",
+      workflowKey: "orders",
+      type: "cron" as const,
+      pattern: "* * * * *",
+      input: undefined,
+      nextRun: new Date(100),
+      status: "active" as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await inactiveAfterKickoffStore.createSchedule(schedule);
+    const task = {
+      id: "orders",
+      tags: [],
+    } as never;
+    const inactiveAfterKickoffParams = createParams(inactiveAfterKickoffStore);
+    inactiveAfterKickoffParams.taskRegistry.register(task);
+    inactiveAfterKickoffParams.kickoffExecution = jest.fn(async () => {
+      await inactiveAfterKickoffStore.updateSchedule(schedule.id, {
+        status: "paused",
+      });
+      return undefined;
+    });
+
+    await expect(
+      handleScheduledTaskTimer({
+        ...inactiveAfterKickoffParams,
+        timer: {
+          id: "timer-inactive",
+          type: TimerType.Scheduled,
+          workflowKey: "orders",
+          scheduleId: schedule.id,
+          fireAt: new Date(100),
+          status: "pending",
+        },
+      }),
+    ).resolves.toEqual({
+      handled: true,
+      finalizeCurrentTimer: true,
+      releaseCurrentTimerClaim: false,
+    });
+    expect(
+      inactiveAfterKickoffParams.persistTaskTimerExecution,
+    ).toHaveBeenCalled();
+    expect(
+      (inactiveAfterKickoffParams.scheduleManager as any).reschedule,
+    ).not.toHaveBeenCalled();
   });
 });

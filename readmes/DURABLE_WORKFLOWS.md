@@ -193,7 +193,7 @@ If you store the `executionId` in your main database (eg. `orders.durable_execut
 This avoids mirroring every durable transition into Postgres.
 
 ```ts
-import { DurableOperator, RedisStore } from "@bluelibs/runner/node";
+import { RedisStore } from "@bluelibs/runner/node";
 
 const durableStorePrefix = process.env.DURABLE_STORE_PREFIX!; // same value used by your durable runtime config
 
@@ -205,33 +205,53 @@ const store = new RedisStore({
 
 // Minimal: just the execution row (status/result/error)
 const execution = await store.getExecution(executionId);
-
-// Rich: execution + steps + audit (dashboard-like view)
-const operator = new DurableOperator(store);
-const detail = await operator.getExecutionDetail(executionId);
 ```
 
 Keep the durable store prefix in one shared config module and reuse it for both workflow runtime wiring and read-only status lookups.
 
-If you already have the durable resource instance (dependency injection), prefer the typed shorthand:
+If you already have the durable resource instance (dependency injection), prefer the task-scoped repository:
 
 ```ts
-const detail = await durableRuntime.getExecutionDetail(
-  paymentWorkflow,
-  executionId,
+const paymentRepository = durableRuntime.getRepository(paymentWorkflow);
+const detail = await paymentRepository.findOneOrFail({ id: executionId });
+```
+
+This repository:
+
+- is cached per durable resource + canonical workflow task id
+- infers `execution.input` / `execution.result` from the task definition
+- scopes reads to the supplied workflow task automatically
+- exposes `find()`, `findOne()`, `findOneOrFail()`, and `findTree()`
+- accepts task-scoped filters such as `id`, `status`, `parentExecutionId`, date ranges, and nested `input` equality
+- supports collection controls on `find()` / `findTree()` via a second `{ sort, limit, skip }` argument
+
+`findTree()` is useful when a root workflow started child workflows via `durableContext.workflow(...)` and you want one recursive view with each node's execution, steps, audit, and children.
+
+```ts
+const recentPayments = await paymentRepository.find(
+  {
+    status: "completed",
+    createdAt: { $gte: new Date("2025-01-01T00:00:00.000Z") },
+    input: { orderId: "order-123" },
+  },
+  {
+    sort: { createdAt: -1 },
+    limit: 20,
+    skip: 0,
+  },
 );
 ```
 
-This shorthand:
+`findOne()` and `findOneOrFail()` stay filter-only and use the repository's default ordering.
 
-- infers `execution.input` / `execution.result` from the task definition
-- verifies that the stored execution belongs to the supplied task witness
-
-If you need raw store-level inspection without a task witness, you can still use:
+If you need low-level store-backed admin access without a task witness, use the operator:
 
 ```ts
+const stuck = await durableRuntime.operator.listStuckExecutions();
 const detail = await durableRuntime.operator.getExecutionDetail(executionId);
 ```
+
+Use the repository when you want task-scoped typed detail and tree views. Use the operator when you want raw store-backed detail, generic listing, or manual admin actions without binding to one workflow task.
 
 ### 3) Resume from the outside (webhook / callback)
 
@@ -464,7 +484,7 @@ If RabbitMQ duplicates or drops a delivery hint, or Redis pub/sub misses a notif
 
 `RedisStore` persists the workflow state in a few buckets of data:
 
-- **Execution records**: one record per `executionId`, holding task id, optional `parentExecutionId`, input, status, attempt counters, timeout, optional live `current` position metadata, result/error, and timestamps.
+- **Execution records**: one record per `executionId`, holding `workflowKey`, optional `parentExecutionId`, input, status, attempt counters, timeout, optional live `current` position metadata, result/error, and timestamps.
 - **Execution indexes**: sets for all executions, active executions, and stuck executions so operators and recovery loops can find relevant work quickly.
 - **Step results**: one hash per execution keyed by `stepId`. This is what lets replay skip already-completed `durableContext.step(...)` calls.
 - **Signal state**: one record per `executionId + signalId`, storing both retained signal history and a FIFO queue of unmatched arrivals for later `waitForSignal(...)` consumption.
@@ -472,7 +492,7 @@ If RabbitMQ duplicates or drops a delivery hint, or Redis pub/sub misses a notif
 - **Timers**: persisted sleep, retry, signal-timeout, and schedule wakeups, plus their fire times.
 - **Schedules**: the recurring/one-shot schedule definitions and their active timer linkage.
 - **Audit entries**: optional per-execution timeline entries used by dashboards and operator tooling.
-- **Idempotency mappings**: optional `taskId + idempotencyKey -> executionId` records used to dedupe starts.
+- **Idempotency mappings**: optional `workflowKey + idempotencyKey -> executionId` records used to dedupe starts.
 
 The implementation uses Runner's serializer for persistence, so `Date` values and other supported built-ins round-trip correctly instead of degrading into plain JSON strings.
 
@@ -495,11 +515,11 @@ Waiting shapes include typed `waitingFor` details. For example:
 
 - `sleep` carries timer id / fire time metadata
 - `waitForSignal` carries the target signal id and optional timeout metadata
-- `waitForExecution` carries the target execution id, target task id, and optional timeout metadata
+- `waitForExecution` carries the target execution id, target workflow key, and optional timeout metadata
 
 When `durableContext.workflow(stepId, childTask, input)` is actively running, `current` still uses `kind: "step"` because `workflow(...)` is modeled as a replay-safe step around the child start. In that case the step also carries:
 
-- `meta.workflowTaskId`: the canonical durable task identity of the child workflow being started
+- `meta.childWorkflowKey`: the durable workflow key of the child workflow being started
 
 Example shape:
 
@@ -509,10 +529,43 @@ Example shape:
   stepId: "start-child",
   startedAt: new Date(),
   meta: {
-    workflowTaskId: "app.billing.tasks.chargeCustomer",
+    childWorkflowKey: "app.billing.tasks.chargeCustomer",
   },
 }
 ```
+
+## Stable Workflow Identity: `tags.durableWorkflow.with({ key })`
+
+Durable persistence now distinguishes between:
+
+- the Runner canonical task id used by the runtime to address a task definition
+- the durable `workflowKey` written into persisted execution state
+
+By default those are the same. If you want a workflow to survive future canonical-id refactors, give it a stable durable key:
+
+```ts
+const paymentWorkflow = r
+  .task("payment")
+  .tags([
+    tags.durableWorkflow.with({
+      category: "billing",
+      key: "billing.payment",
+    }),
+  ])
+  .run(async () => {
+    // ...
+  })
+  .build();
+```
+
+Rules:
+
+- `key` is optional
+- when `key` is present, durable persists it as `execution.workflowKey`
+- when `key` is omitted, durable falls back to the canonical runtime task id
+- durable persistence writes and reads `workflowKey` as the workflow identity
+
+This is why store-facing durable APIs and metadata use `workflowKey` rather than `taskId`.
 
 ### RabbitMQ message semantics
 
@@ -651,14 +704,14 @@ export interface IDurableStore {
   // Optional: Idempotency (dedupe start calls)
   createExecutionWithIdempotencyKey?(params: {
     execution: Execution;
-    taskId: string;
+    workflowKey: string;
     idempotencyKey: string;
   }):
     | Promise<{ created: true; executionId: string }>
     | Promise<{ created: false; executionId: string }>;
 
   // Optional: Dashboard & Operator API
-  listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
+  listExecutions(options?: ListExecutionsOptions): Promise<Execution[]>;
   listStepResults(executionId: string): Promise<StepResult[]>;
   retryRollback?(executionId: string): Promise<void>;
   skipStep?(executionId: string, stepId: string): Promise<void>;
@@ -786,7 +839,8 @@ To implement a custom store (e.g., for SQL), you only need to satisfy the `IDura
 The current durable contract has a small required core and a larger optional operator/tooling surface:
 
 - Required: execution persistence, step persistence, timers, schedules, signal journaling (`getSignalState`, `appendSignalRecord`, `bufferSignalRecord`, `enqueueQueuedSignalRecord`, `consumeQueuedSignalRecord`, `consumeBufferedSignalForStep`), and signal waiter ordering (`upsertSignalWaiter`, `peekNextSignalWaiter`, `takeNextSignalWaiter`, `deleteSignalWaiter`).
-- Optional: operator/dashboard helpers such as `listExecutions`, `listStepResults`, `appendAuditEntry`, `listAuditEntries`, `retryRollback`, `skipStep`, `forceFail`, `editStepResult`, and `listStuckExecutions`.
+- Required for durable stores: `listExecutions` and `listStepResults`.
+- Optional extras: `appendAuditEntry`, `listAuditEntries`, `retryRollback`, `skipStep`, `forceFail`, `editStepResult`, and `listStuckExecutions`.
 - Required ordering note: `peekNextSignalWaiter` must expose the earliest waiter for a given execution/signal pair without consuming it, and `takeNextSignalWaiter` must return and consume that same earliest waiter using the same deterministic ordering as the built-in stores.
 - Required buffering note: `bufferSignalRecord` should persist an incoming signal into both the signal history and the replay buffer, while `consumeBufferedSignalForStep` should atomically claim and return the buffered payload for a completed wait step.
 
@@ -1262,7 +1316,7 @@ Shutdown note:
 Operator note:
 
 - while `workflow(...)` is actively starting the child, `execution.current` is a `kind: "step"` entry for that `stepId`
-- that active step also exposes `meta.workflowTaskId`, which identifies the canonical child workflow task being started
+- that active step also exposes `meta.childWorkflowKey`, which identifies the durable child workflow key being started
 - after the child start step completes and the parent moves into `waitForExecution(...)`, `execution.current` switches to `kind: "waitForExecution"` with typed wait metadata
 
 ### Example: `waitUntilPaid()`
@@ -1755,7 +1809,7 @@ export type ExecutionStatus =
 
 export interface Execution<TInput = unknown, TResult = unknown> {
   id: string;
-  taskId: string;
+  workflowKey: string;
   input: TInput | undefined;
   status: ExecutionStatus;
   result?: TResult;
@@ -1791,6 +1845,7 @@ export interface Timer {
   executionId?: string; // For sleep/timeout timers
   stepId?: string; // For step-specific timers
   scheduleId?: string; // For cron timers
+  workflowKey?: string; // For scheduled task timers / durable task identity
   type: TimerType;
   fireAt: Date;
   status: "pending" | "fired";
@@ -1800,7 +1855,7 @@ export type ScheduleType = "cron" | "interval";
 
 export interface Schedule<TInput = unknown> {
   id: string;
-  taskId: string;
+  workflowKey: string;
   type: ScheduleType;
   pattern: string; // Cron expression or interval (ms)
   input: TInput | undefined;
@@ -2521,7 +2576,7 @@ There are two different "idempotency" problems:
 1. **Workflow-level deduplication (start only once)**
 
 - `start(task, input, { idempotencyKey })` supports a store-backed **"start-or-get"** mode.
-- It returns the same `executionId` for the same `{ taskId, idempotencyKey }` pair, even if multiple callers race.
+- It returns the same `executionId` for the same `{ workflowKey, idempotencyKey }` pair, even if multiple callers race.
 - Important: subsequent calls return the existing `executionId` and do **not** overwrite the originally stored `input`.
 - Store support: `MemoryStore` and `RedisStore` implement this. Custom stores must implement `createExecutionWithIdempotencyKey(...)` so the dedupe claim and execution creation happen atomically.
 - You should still persist the returned `executionId` in your domain model for observability and to make webhook handling trivial.

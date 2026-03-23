@@ -48,7 +48,7 @@ describe("durable: DurableContext.switch", () => {
     const { store, ctx } = createContext();
     await store.saveExecution({
       id: "e1",
-      taskId: "switch-task",
+      workflowKey: "switch-task",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -70,7 +70,7 @@ describe("durable: DurableContext.switch", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "switch-task",
+      workflowKey: "switch-task",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -102,7 +102,7 @@ describe("durable: DurableContext.switch", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "switch-task",
+      workflowKey: "switch-task",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -225,7 +225,7 @@ describe("durable: DurableContext.switch", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Cancelled,
       attempt: 1,
@@ -247,7 +247,7 @@ describe("durable: DurableContext.switch", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,

@@ -11,6 +11,11 @@ export type DurableWorkflowSignalDefinition = Pick<
 
 export interface DurableWorkflowTagConfig {
   /**
+   * Optional stable durable workflow key persisted across refactors.
+   * When omitted, durable falls back to the canonical runtime task id.
+   */
+  key?: string;
+  /**
    * Optional domain/category to group workflows (eg. "orders", "billing").
    */
   category?: string;
@@ -32,6 +37,7 @@ export interface DurableWorkflowTagConfig {
 }
 
 const durableWorkflowConfigPattern = Match.compile({
+  key: Match.Optional(Match.NonEmptyString),
   category: Match.Optional(String),
   defaults: Match.Optional(Object),
   metadata: Match.Optional(Object),
@@ -65,6 +71,15 @@ export function getDeclaredDurableWorkflowSignalIds(
   if (!config?.signals) return null;
 
   return new Set(config.signals.map((signal) => signal.id));
+}
+
+export function getDurableWorkflowKey(
+  task: Pick<AnyTask, "id" | "tags"> | undefined,
+  canonicalTaskId?: string,
+): string | undefined {
+  if (!task) return canonicalTaskId;
+  const config = durableWorkflowTag.extract(task.tags ?? []);
+  return config?.key ?? canonicalTaskId ?? task.id;
 }
 
 /**

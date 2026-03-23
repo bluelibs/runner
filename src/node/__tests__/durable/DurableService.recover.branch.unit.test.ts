@@ -15,7 +15,7 @@ import { genericError } from "../../../errors";
 function exec(id: string, status: ExecutionStatus): Execution {
   return {
     id,
-    taskId: "t",
+    workflowKey: "t",
     input: undefined,
     status,
     attempt: 1,

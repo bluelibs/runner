@@ -99,7 +99,7 @@ export function createSignalWaitCurrent(params: {
 export function createExecutionWaitCurrent(params: {
   stepId: string;
   targetExecutionId: string;
-  targetTaskId: string;
+  targetWorkflowKey: string;
   timeoutMs?: number;
   timeoutAtMs?: number;
   timerId?: string;
@@ -113,7 +113,7 @@ export function createExecutionWaitCurrent(params: {
       type: "execution",
       params: {
         targetExecutionId: params.targetExecutionId,
-        targetTaskId: params.targetTaskId,
+        targetWorkflowKey: params.targetWorkflowKey,
         timeoutMs: params.timeoutMs,
         timeoutAtMs: params.timeoutAtMs,
         timerId: params.timerId,

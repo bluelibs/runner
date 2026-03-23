@@ -26,7 +26,7 @@ describe("durable: memory backends", () => {
       expect(await store.getExecution("missing")).toBeNull();
       const exec: Execution = {
         id: "1",
-        taskId: "t",
+        workflowKey: "t",
         input: {},
         status: "pending",
         attempt: 1,
@@ -79,7 +79,7 @@ describe("durable: memory backends", () => {
       expect((await store.listSchedules()).length).toBe(0);
       const s: Schedule = {
         id: "s1",
-        taskId: "t",
+        workflowKey: "t",
         type: "cron",
         pattern: "* * * * *",
         input: {},

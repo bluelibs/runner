@@ -4,11 +4,11 @@ import { type Execution } from "../../durable/core/types";
 function createExecution(
   overrides: Partial<Execution> & {
     id: string;
-    taskId: string;
+    workflowKey: string;
     status: Execution["status"];
   },
 ): Execution {
-  const { id, taskId, status, ...rest } = overrides;
+  const { id, workflowKey, status, ...rest } = overrides;
 
   return {
     input: undefined,
@@ -18,7 +18,7 @@ function createExecution(
     updatedAt: new Date(),
     ...rest,
     id,
-    taskId,
+    workflowKey,
     status,
   };
 }
@@ -35,7 +35,7 @@ describe("durable: MemoryStore", () => {
     const store = new MemoryStore();
     const execution = {
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: { ok: true },
       status: "pending" as const,
       attempt: 1,
@@ -47,7 +47,7 @@ describe("durable: MemoryStore", () => {
     await expect(
       store.createExecutionWithIdempotencyKey({
         execution,
-        taskId: "t",
+        workflowKey: "t",
         idempotencyKey: "k",
       }),
     ).resolves.toEqual({
@@ -58,7 +58,7 @@ describe("durable: MemoryStore", () => {
     await expect(
       store.createExecutionWithIdempotencyKey({
         execution: { ...execution, id: "e2" },
-        taskId: "t",
+        workflowKey: "t",
         idempotencyKey: "k",
       }),
     ).resolves.toEqual({
@@ -74,7 +74,7 @@ describe("durable: MemoryStore", () => {
     const store = new MemoryStore();
     const execution = {
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "pending" as const,
       attempt: 1,
@@ -112,7 +112,7 @@ describe("durable: MemoryStore", () => {
     const store = new MemoryStore();
     const execution = createExecution({
       id: "e-current",
-      taskId: "t",
+      workflowKey: "t",
       status: "running",
       current: {
         kind: "waitForSignal",
@@ -156,7 +156,7 @@ describe("durable: MemoryStore", () => {
       store.saveExecutionIfStatus(
         {
           id: "missing",
-          taskId: "t",
+          workflowKey: "t",
           input: undefined,
           status: "running",
           attempt: 1,
@@ -179,7 +179,7 @@ describe("durable: MemoryStore", () => {
 
     await saveExecution(store, {
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       status: "compensation_failed",
       error: { message: "boom" },
     });
@@ -216,14 +216,14 @@ describe("durable: MemoryStore", () => {
 
     await saveExecution(store, {
       id: "e1",
-      taskId: "t1",
+      workflowKey: "t1",
       status: "pending",
       createdAt: new Date(now.getTime() - 10),
       updatedAt: now,
     });
     await saveExecution(store, {
       id: "e2",
-      taskId: "t2",
+      workflowKey: "t2",
       status: "compensation_failed",
       createdAt: new Date(now.getTime() - 5),
       updatedAt: now,
@@ -242,17 +242,17 @@ describe("durable: MemoryStore", () => {
       completedAt: new Date(now.getTime() + 1),
     });
 
-    const all = await store.listExecutions?.();
-    expect(all?.map((e) => e.id)).toEqual(["e2", "e1"]);
+    const all = await store.listExecutions();
+    expect(all.map((e) => e.id)).toEqual(["e2", "e1"]);
 
-    const onlyPending = await store.listExecutions?.({ status: ["pending"] });
-    expect(onlyPending?.map((e) => e.id)).toEqual(["e1"]);
+    const onlyPending = await store.listExecutions({ status: ["pending"] });
+    expect(onlyPending.map((e) => e.id)).toEqual(["e1"]);
 
-    const byTask = await store.listExecutions?.({ taskId: "t2" });
-    expect(byTask?.map((e) => e.id)).toEqual(["e2"]);
+    const byTask = await store.listExecutions({ workflowKey: "t2" });
+    expect(byTask.map((e) => e.id)).toEqual(["e2"]);
 
-    const paged = await store.listExecutions?.({ offset: 1, limit: 1 });
-    expect(paged?.map((e) => e.id)).toEqual(["e1"]);
+    const paged = await store.listExecutions({ offset: 1, limit: 1 });
+    expect(paged.map((e) => e.id)).toEqual(["e1"]);
 
     const results = await store.listStepResults("e1");
     expect(results.map((r) => r.stepId)).toEqual(["s1", "s2"]);

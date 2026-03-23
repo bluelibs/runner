@@ -173,9 +173,9 @@ export class RedisStoreRuntime {
     return this.k(`exec:${executionId}`);
   }
 
-  idempotencyKey(taskId: string, idempotencyKey: string): string {
+  idempotencyKey(workflowKey: string, idempotencyKey: string): string {
     return this.k(
-      `idem:${this.encodeKeyPart(taskId)}:${this.encodeKeyPart(idempotencyKey)}`,
+      `idem:${this.encodeKeyPart(workflowKey)}:${this.encodeKeyPart(idempotencyKey)}`,
     );
   }
 

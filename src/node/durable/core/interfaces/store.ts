@@ -14,7 +14,7 @@ import type { DurableAuditEntry } from "../audit";
 
 export interface ListExecutionsOptions {
   status?: ExecutionStatus[];
-  taskId?: string;
+  workflowKey?: string;
   limit?: number;
   offset?: number;
 }
@@ -48,7 +48,7 @@ export interface IDurableStore {
    */
   createExecutionWithIdempotencyKey?(params: {
     execution: Execution;
-    taskId: string;
+    workflowKey: string;
     idempotencyKey: string;
   }): Promise<
     | { created: true; executionId: string }
@@ -56,7 +56,7 @@ export interface IDurableStore {
   >;
 
   // Enhanced querying for operator tooling
-  listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
+  listExecutions(options?: ListExecutionsOptions): Promise<Execution[]>;
   listStepResults(executionId: string): Promise<StepResult[]>;
   appendAuditEntry?(entry: DurableAuditEntry): Promise<void>;
   listAuditEntries?(

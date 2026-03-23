@@ -13,6 +13,7 @@ import type { ITask } from "../../../types/task";
 import { initDurableWorker } from "./DurableWorker";
 import { durableExecutionInvariantError } from "../../../errors";
 import { runtimeSource } from "../../../types/runtimeSource";
+import { getDurableWorkflowKey } from "../tags/durableWorkflow.tag";
 
 export type RunnerDurableRuntimeConfig = Omit<
   DurableServiceConfig,
@@ -34,16 +35,24 @@ export interface RunnerDurableDeps {
 
 function resolveRunnerTask(
   runnerStore: Store,
-  taskId: string,
+  workflowKey: string,
 ): ITask<any, Promise<any>, any, any, any, any> | undefined {
-  const registeredTask = runnerStore.tasks.get(taskId)?.task;
+  const registeredTask = runnerStore.tasks.get(workflowKey)?.task;
   if (registeredTask) {
     return registeredTask;
   }
 
   let legacyMatch: ITask<any, Promise<any>, any, any, any, any> | undefined;
-  for (const entry of runnerStore.tasks.values()) {
-    if (entry.task.id !== taskId) {
+  for (const [registeredId, entry] of runnerStore.tasks.entries()) {
+    const persistedWorkflowKey = getDurableWorkflowKey(
+      entry.task,
+      registeredId,
+    );
+    if (
+      entry.task.id !== workflowKey &&
+      registeredId !== workflowKey &&
+      persistedWorkflowKey !== workflowKey
+    ) {
       continue;
     }
 
@@ -120,10 +129,13 @@ export async function createRunnerDurableRuntime(
         return output as TResult;
       },
     },
-    taskResolver: (taskId) => {
-      return resolveRunnerTask(deps.runnerStore, taskId);
+    taskResolver: (workflowKey) => {
+      return resolveRunnerTask(deps.runnerStore, workflowKey);
     },
-    taskIdResolver: (task) => deps.runnerStore.findIdByDefinition(task),
+    workflowKeyResolver: (task) => {
+      const canonicalTaskId = deps.runnerStore.findIdByDefinition(task);
+      return getDurableWorkflowKey(task, canonicalTaskId);
+    },
     contextProvider: (durableContext, fn) =>
       contextStorage.run(durableContext, fn),
   });

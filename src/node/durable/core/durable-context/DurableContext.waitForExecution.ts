@@ -48,16 +48,16 @@ function createExecutionWaitingState(
   };
 }
 
-function assertExpectedTaskId(params: {
-  expectedTaskId: string;
-  actualTaskId: string;
+function assertExpectedWorkflowKey(params: {
+  expectedWorkflowKey: string;
+  actualWorkflowKey: string;
   targetExecutionId: string;
 }): void {
-  if (params.expectedTaskId !== params.actualTaskId) {
+  if (params.expectedWorkflowKey !== params.actualWorkflowKey) {
     durableExecutionInvariantError.throw({
       message:
-        `Cannot wait for execution '${params.targetExecutionId}' as task '${params.expectedTaskId}': ` +
-        `the stored durable execution belongs to '${params.actualTaskId}'.`,
+        `Cannot wait for execution '${params.targetExecutionId}' as workflow '${params.expectedWorkflowKey}': ` +
+        `the stored durable execution belongs to '${params.actualWorkflowKey}'.`,
     });
   }
 }
@@ -66,13 +66,13 @@ function throwTerminalState(state: {
   state: "failed" | "cancelled";
   targetExecutionId: string;
   error: { message: string; stack?: string };
-  taskId: string;
+  workflowKey: string;
   attempt: number;
 }): never {
   throw new DurableExecutionError(
     state.error.message,
     state.targetExecutionId,
-    state.taskId,
+    state.workflowKey,
     state.attempt,
     state.error,
   );
@@ -95,13 +95,13 @@ async function finalizeTerminalState<TResult>(params: {
   store: IDurableStore;
   executionId: string;
   targetExecution: Execution<unknown, unknown>;
-  expectedTaskId: string;
+  expectedWorkflowKey: string;
   stepId: string;
   timerId?: string;
 }): Promise<ExecutionTerminalState<TResult>> {
-  assertExpectedTaskId({
-    expectedTaskId: params.expectedTaskId,
-    actualTaskId: params.targetExecution.taskId,
+  assertExpectedWorkflowKey({
+    expectedWorkflowKey: params.expectedWorkflowKey,
+    actualWorkflowKey: params.targetExecution.workflowKey,
     targetExecutionId: params.targetExecution.id,
   });
 
@@ -146,7 +146,7 @@ export async function waitForExecutionDurably<TResult>(params: {
   store: IDurableStore;
   executionId: string;
   targetExecutionId: string;
-  expectedTaskId: string;
+  expectedWorkflowKey: string;
   assertCanContinue: () => Promise<void>;
   assertUniqueStepId: (stepId: string) => void;
   options?: WaitForExecutionOptions;
@@ -170,7 +170,7 @@ export async function waitForExecutionDurably<TResult>(params: {
       createExecutionWaitCurrent({
         stepId,
         targetExecutionId: params.targetExecutionId,
-        targetTaskId: params.expectedTaskId,
+        targetWorkflowKey: params.expectedWorkflowKey,
         timeoutMs: options.timeoutMs,
         timeoutAtMs: options.timeoutAtMs,
         timerId: options.timerId,
@@ -199,10 +199,10 @@ export async function waitForExecutionDurably<TResult>(params: {
         }
 
         if (state.state === "completed") {
-          const taskId = state.taskId!;
-          assertExpectedTaskId({
-            expectedTaskId: params.expectedTaskId,
-            actualTaskId: taskId,
+          const workflowKey = state.workflowKey;
+          assertExpectedWorkflowKey({
+            expectedWorkflowKey: params.expectedWorkflowKey,
+            actualWorkflowKey: workflowKey,
             targetExecutionId: state.targetExecutionId,
           });
           await clearExecutionCurrent(params.store, params.executionId);
@@ -210,7 +210,7 @@ export async function waitForExecutionDurably<TResult>(params: {
             {
               state: "completed",
               targetExecutionId: state.targetExecutionId,
-              taskId,
+              workflowKey,
               result: state.result as TResult,
             },
             hasTimeout,
@@ -218,9 +218,9 @@ export async function waitForExecutionDurably<TResult>(params: {
         }
 
         if (state.state === "failed" || state.state === "cancelled") {
-          assertExpectedTaskId({
-            expectedTaskId: params.expectedTaskId,
-            actualTaskId: state.taskId!,
+          assertExpectedWorkflowKey({
+            expectedWorkflowKey: params.expectedWorkflowKey,
+            actualWorkflowKey: state.workflowKey,
             targetExecutionId: state.targetExecutionId,
           });
           await clearExecutionCurrent(params.store, params.executionId);
@@ -229,7 +229,7 @@ export async function waitForExecutionDurably<TResult>(params: {
               state: state.state,
               targetExecutionId: state.targetExecutionId,
               error: state.error!,
-              taskId: state.taskId!,
+              workflowKey: state.workflowKey,
               attempt: state.attempt!,
             },
             hasTimeout,
@@ -255,9 +255,9 @@ export async function waitForExecutionDurably<TResult>(params: {
           });
         }
 
-        assertExpectedTaskId({
-          expectedTaskId: params.expectedTaskId,
-          actualTaskId: targetExecution.taskId,
+        assertExpectedWorkflowKey({
+          expectedWorkflowKey: params.expectedWorkflowKey,
+          actualWorkflowKey: targetExecution.workflowKey,
           targetExecutionId: targetExecution.id,
         });
 
@@ -266,7 +266,7 @@ export async function waitForExecutionDurably<TResult>(params: {
             store: params.store,
             executionId: params.executionId,
             targetExecution,
-            expectedTaskId: params.expectedTaskId,
+            expectedWorkflowKey: params.expectedWorkflowKey,
             stepId,
             timerId: waitingState.timerId,
           });
@@ -338,9 +338,9 @@ export async function waitForExecutionDurably<TResult>(params: {
         });
       }
 
-      assertExpectedTaskId({
-        expectedTaskId: params.expectedTaskId,
-        actualTaskId: targetExecution.taskId,
+      assertExpectedWorkflowKey({
+        expectedWorkflowKey: params.expectedWorkflowKey,
+        actualWorkflowKey: targetExecution.workflowKey,
         targetExecutionId: targetExecution.id,
       });
 
@@ -349,7 +349,7 @@ export async function waitForExecutionDurably<TResult>(params: {
           store: params.store,
           executionId: params.executionId,
           targetExecution,
-          expectedTaskId: params.expectedTaskId,
+          expectedWorkflowKey: params.expectedWorkflowKey,
           stepId,
         });
 

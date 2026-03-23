@@ -102,7 +102,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "pending",
       attempt: 1,
@@ -182,7 +182,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "pending",
       attempt: 1,
@@ -221,7 +221,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
 
       await store.saveExecution({
         id: "e1",
-        taskId: "t",
+        workflowKey: "t",
         input: undefined,
         status: "running",
         attempt: 1,
@@ -261,7 +261,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
 
       await store.saveExecution({
         id: "e1",
-        taskId: "t",
+        workflowKey: "t",
         input: undefined,
         status: "running",
         attempt: 2,
@@ -275,7 +275,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
       await Promise.resolve();
 
       await expect(promise).rejects.toMatchObject({
-        taskId: "unknown",
+        workflowKey: "unknown",
         attempt: 0,
       });
     } finally {
@@ -304,7 +304,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
 
       await store.saveExecution({
         id: "e1",
-        taskId: "t",
+        workflowKey: "t",
         input: undefined,
         status: "running",
         attempt: 1,
@@ -332,7 +332,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "pending",
       attempt: 1,
@@ -382,7 +382,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
 
       await store.saveExecution({
         id: "e1",
-        taskId: "t",
+        workflowKey: "t",
         input: undefined,
         status: "pending",
         attempt: 1,
@@ -396,7 +396,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
       await Promise.resolve();
 
       await expect(promise).rejects.toMatchObject({
-        taskId: "unknown",
+        workflowKey: "unknown",
         attempt: 0,
       });
     } finally {
@@ -425,7 +425,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
 
       await store.saveExecution({
         id: "e1",
-        taskId: "t",
+        workflowKey: "t",
         input: undefined,
         status: "pending",
         attempt: 1,

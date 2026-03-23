@@ -134,13 +134,13 @@ export function createBufferedLogger(): { logger: Logger; logs: ILog[] } {
 }
 
 // ---------------------------------------------------------------------------
-// Bare store — MemoryStore stripped of optional capabilities
+// Bare store — MemoryStore stripped of optional extras
 // ---------------------------------------------------------------------------
 
 /**
  * Creates a minimal IDurableStore by delegating to `base` (MemoryStore),
  * intentionally omitting optional methods like `acquireLock`, `releaseLock`,
- * and `appendAuditEntry`.
+ * and `appendAuditEntry` while preserving required store capabilities.
  *
  * Pass `overrides` to add back specific optional methods.
  */
@@ -154,6 +154,7 @@ export function createBareStore(
     getExecution: base.getExecution.bind(base),
     updateExecution: base.updateExecution.bind(base),
     listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
+    listExecutions: base.listExecutions.bind(base),
     listStepResults: base.listStepResults.bind(base),
     getStepResult: base.getStepResult.bind(base),
     saveStepResult: base.saveStepResult.bind(base),
@@ -203,8 +204,9 @@ export function okTask(id: string) {
 // ---------------------------------------------------------------------------
 
 export function pendingExecution(
-  overrides: Partial<Execution> & { taskId: string },
+  overrides: Partial<Execution> & { workflowKey?: string },
 ): Execution {
+  const workflowKey = overrides.workflowKey ?? "t";
   return {
     id: "e1",
     input: undefined,
@@ -214,14 +216,17 @@ export function pendingExecution(
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
+    workflowKey,
   };
 }
 
-export function sleepingExecution(overrides?: Partial<Execution>): Execution {
+export function sleepingExecution(
+  overrides?: Partial<Execution> & { workflowKey?: string },
+): Execution {
   return pendingExecution({
-    taskId: "t",
     status: "sleeping",
     ...overrides,
+    workflowKey: overrides?.workflowKey ?? "t",
   });
 }
 

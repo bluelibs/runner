@@ -395,7 +395,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
 
     const schedule: Schedule = {
       id: "s1",
-      taskId: task.id,
+      workflowKey: task.id,
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -408,7 +408,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     const timer: Timer = {
       id: "sched:s1:now",
       scheduleId: "s1",
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       type: "scheduled",
       fireAt: new Date(Date.now() - 10),
@@ -667,7 +667,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
 
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "failed",
       attempt: 1,

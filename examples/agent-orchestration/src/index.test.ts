@@ -178,8 +178,8 @@ test("waitForSignalCheckpoint polls until the requested signal wait appears", as
   await waitForSignalCheckpoint({
     executionId: "exec-1",
     signalId: ReviewDecision.id,
-    operator: {
-      async getExecutionDetail() {
+    repository: {
+      async findOneOrFail() {
         calls += 1;
 
         if (calls === 1) {
@@ -207,6 +207,7 @@ test("times out while waiting for the first review", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -240,7 +241,7 @@ test("times out while waiting for a revised draft", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: ReviewDecision.id,
     });
@@ -271,6 +272,7 @@ test("escalates after too many revisions", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -279,7 +281,7 @@ test("escalates after too many revisions", async () => {
 
     for (let round = 1; round <= 2; round += 1) {
       await waitForSignalCheckpoint({
-        operator: service.operator,
+        repository,
         executionId,
         signalId: ReviewDecision.id,
       });
@@ -291,7 +293,7 @@ test("escalates after too many revisions", async () => {
       });
 
       await waitForSignalCheckpoint({
-        operator: service.operator,
+        repository,
         executionId,
         signalId: RevisedDraft.id,
       });
@@ -322,6 +324,7 @@ test("handles revise-without-feedback before publishing", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -329,7 +332,7 @@ test("handles revise-without-feedback before publishing", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: ReviewDecision.id,
     });
@@ -340,7 +343,7 @@ test("handles revise-without-feedback before publishing", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: RevisedDraft.id,
     });
@@ -351,7 +354,7 @@ test("handles revise-without-feedback before publishing", async () => {
     });
 
     await waitForSignalCheckpoint({
-      operator: service.operator,
+      repository,
       executionId,
       signalId: ReviewDecision.id,
     });
@@ -380,6 +383,7 @@ test("fails the durable execution when the evidence tool step crashes", async ()
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {
@@ -396,7 +400,7 @@ test("fails the durable execution when the evidence tool step crashes", async ()
       /tool failure/,
     );
 
-    const execution = await service.operator.getExecutionDetail(executionId);
+    const execution = await repository.findOneOrFail({ id: executionId });
     assert.equal(execution.execution?.status, "failed");
   } finally {
     await runtime.dispose();

@@ -155,7 +155,7 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
 
     const timer: Timer = {
       id: "t-scheduled-queue-down",
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,

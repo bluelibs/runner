@@ -1,6 +1,6 @@
 # BlueLibs Runner
 
-## Explicit TypeScript Dependency Injection Toolkit
+## Enterprise Application Runtime for TypeScript
 
 **Build apps from tasks and resources with explicit dependencies, predictable lifecycle, and first-class testing**
 

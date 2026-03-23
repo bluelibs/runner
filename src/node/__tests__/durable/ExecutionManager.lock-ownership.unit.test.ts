@@ -54,10 +54,10 @@ describe("durable: ExecutionManager lock ownership", () => {
     });
 
     await store.saveExecution(
-      pendingExecution({ id: "e-lock-complete", taskId: completeTask.id }),
+      pendingExecution({ id: "e-lock-complete", workflowKey: completeTask.id }),
     );
     await store.saveExecution(
-      pendingExecution({ id: "e-lock-suspend", taskId: suspendTask.id }),
+      pendingExecution({ id: "e-lock-suspend", workflowKey: suspendTask.id }),
     );
 
     await service.processExecution("e-lock-complete");
@@ -93,14 +93,14 @@ describe("durable: ExecutionManager lock ownership", () => {
     await store.saveExecution(
       pendingExecution({
         id: "e-lock-fail",
-        taskId: failTask.id,
+        workflowKey: failTask.id,
         maxAttempts: 1,
       }),
     );
     await store.saveExecution(
       pendingExecution({
         id: "e-lock-retry",
-        taskId: retryTask.id,
+        workflowKey: retryTask.id,
         maxAttempts: 2,
       }),
     );

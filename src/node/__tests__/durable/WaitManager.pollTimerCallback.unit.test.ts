@@ -14,7 +14,7 @@ async function savePendingExecution(
 ): Promise<void> {
   await store.saveExecution({
     id: executionId,
-    taskId: "t",
+    workflowKey: "t",
     input: undefined,
     status: ExecutionStatus.Pending,
     attempt: 1,

@@ -15,7 +15,7 @@ describe("durable: RedisStore execution indexes (mock)", () => {
           null,
           serializer.stringify({
             id: "1",
-            taskId: "t1",
+            workflowKey: "t1",
             status: "completed",
             createdAt: new Date("2024-01-02T00:00:00.000Z"),
           }),
@@ -24,7 +24,7 @@ describe("durable: RedisStore execution indexes (mock)", () => {
           null,
           serializer.stringify({
             id: "2",
-            taskId: "t1",
+            workflowKey: "t1",
             status: "completed",
             createdAt: new Date("2024-01-01T00:00:00.000Z"),
           }),
@@ -32,7 +32,7 @@ describe("durable: RedisStore execution indexes (mock)", () => {
       ]),
     });
     await expect(
-      store.listExecutions({ taskId: "t1", status: ["completed"] }),
+      store.listExecutions({ workflowKey: "t1", status: ["completed"] }),
     ).resolves.toHaveLength(2);
 
     redisMock.sscan.mockResolvedValue(["0", ["1", "2", "3"]]);
@@ -66,7 +66,7 @@ describe("durable: RedisStore execution indexes (mock)", () => {
           null,
           serializer.stringify({
             id: "stuck-1",
-            taskId: "t-stuck",
+            workflowKey: "t-stuck",
             input: undefined,
             status: ExecutionStatus.CompensationFailed,
             attempt: 1,

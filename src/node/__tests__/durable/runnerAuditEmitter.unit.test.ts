@@ -76,13 +76,13 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
     const at = new Date("2025-01-01T00:00:00.000Z");
     const base: Pick<
       DurableAuditEntry,
-      "id" | "executionId" | "at" | "attempt" | "taskId"
+      "id" | "executionId" | "at" | "attempt" | "workflowKey"
     > = {
       id: "a1",
       executionId: "e1",
       at,
       attempt: 1,
-      taskId: "t1",
+      workflowKey: "t1",
     };
 
     await emitter.emit({
@@ -180,7 +180,7 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
       executionId: "e-default",
       at: new Date("2025-01-01T00:00:00.000Z"),
       attempt: 1,
-      taskId: "t-default",
+      workflowKey: "t-default",
       kind: "note",
       message: "default-source",
     });

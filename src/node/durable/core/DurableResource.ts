@@ -8,7 +8,7 @@ import type {
 } from "../../../types/utilities";
 import type { IDurableContext } from "./interfaces/context";
 import type {
-  DurableExecutionDetail,
+  IDurableExecutionRepository,
   IDurableResource,
 } from "./interfaces/resource";
 import type {
@@ -23,6 +23,7 @@ import type {
 import type { Schedule } from "./types";
 import type { IDurableStore } from "./interfaces/store";
 import { DurableOperator } from "./DurableOperator";
+import { DurableExecutionRepository } from "./DurableExecutionRepository";
 import { recordFlowShape, type DurableFlowShape } from "./flowShape";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { durableExecutionInvariantError } from "../../../errors";
@@ -31,7 +32,16 @@ import {
   toCanonicalDefinitionFromStore,
 } from "../../../models/StoreLookup";
 
-export type { IDurableResource } from "./interfaces/resource";
+export type {
+  DurableExecutionDateFilter,
+  DurableExecutionFilters,
+  DurableExecutionInputFilter,
+  DurableExecutionQueryOptions,
+  DurableExecutionRecord,
+  DurableExecutionTreeNode,
+  IDurableExecutionRepository,
+  IDurableResource,
+} from "./interfaces/resource";
 
 export interface DurableResourceConfig {
   worker?: boolean;
@@ -46,6 +56,10 @@ export interface DurableResourceConfig {
  */
 export class DurableResource implements IDurableResource {
   private operatorInstance: DurableOperator | null = null;
+  private readonly repositories = new Map<
+    string,
+    IDurableExecutionRepository<any, any>
+  >();
 
   constructor(
     public readonly service: IDurableService,
@@ -127,24 +141,34 @@ export class DurableResource implements IDurableResource {
     );
   }
 
-  async getExecutionDetail<TInput, TResult>(
+  getRepository<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    executionId: string,
-  ): Promise<DurableExecutionDetail<TInput, TResult>> {
-    const runnerStore = this.requireRunnerStoreForExecutionDetail();
-    const expectedTaskId = resolveRequestedIdFromStore(runnerStore, task)!;
+  ): IDurableExecutionRepository<TInput, TResult> {
+    const runnerStore = this.requireRunnerStoreForRepository();
+    const taskId = resolveRequestedIdFromStore(runnerStore, task);
 
-    const detail = await this.operator.getExecutionDetail(executionId);
-
-    if (detail.execution && detail.execution.taskId !== expectedTaskId) {
+    if (!taskId) {
       return durableExecutionInvariantError.throw({
         message:
-          `Cannot inspect execution '${executionId}' as task '${expectedTaskId}': ` +
-          `the stored durable execution belongs to '${detail.execution.taskId}'.`,
+          `Durable repository API is not available for task "${task.id}": ` +
+          "the task is not registered in the runtime store.",
       });
     }
 
-    return detail as DurableExecutionDetail<TInput, TResult>;
+    const cached = this.repositories.get(taskId);
+    if (cached) {
+      return cached as IDurableExecutionRepository<TInput, TResult>;
+    }
+
+    const repository = new DurableExecutionRepository({
+      task,
+      store: this.requireStoreForRepository(),
+      operator: this.operator,
+      runnerStore,
+    });
+    this.repositories.set(taskId, repository);
+
+    return repository;
   }
 
   private requireRunnerStoreForDescribe(): Store {
@@ -156,13 +180,24 @@ export class DurableResource implements IDurableResource {
     return runnerStore;
   }
 
-  private requireRunnerStoreForExecutionDetail(): Store {
+  private requireRunnerStoreForRepository(): Store {
     const runnerStore = this.runnerStore;
     this.assertRunnerStore(
       runnerStore,
-      "Durable execution detail shorthand is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) or fall back to durable.operator.getExecutionDetail(executionId).",
+      "Durable repository API is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) instead of manually constructing DurableResource.",
     );
     return runnerStore;
+  }
+
+  private requireStoreForRepository(): IDurableStore {
+    if (!this.store) {
+      return durableExecutionInvariantError.throw({
+        message:
+          "Durable repository API is not available: store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) instead of manually constructing DurableResource.",
+      });
+    }
+
+    return this.store;
   }
 
   private requireRunnerStoreForWorkflowDiscovery(): Store {

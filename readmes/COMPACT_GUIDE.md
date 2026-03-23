@@ -156,6 +156,7 @@ Useful examples:
 
 - `run(app, { debug: "verbose" })` for structured debug output
 - `run(app, { logs: { printThreshold: null } })` to silence console printing
+- Node durable workflows expose task-scoped repositories via `durable.getRepository(workflowTask)` for typed execution inspection. Use `find(filters, { sort, limit, skip })` for lists, `findOne(filters)` / `findOneOrFail(filters)` for single reads, and `findTree(filters, { sort, limit, skip })` for recursive subflow trees.
 
 Lifecycle order:
 

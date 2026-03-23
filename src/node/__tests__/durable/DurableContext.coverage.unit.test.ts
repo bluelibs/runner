@@ -105,7 +105,7 @@ describe("durable: DurableContext coverage", () => {
       expect.objectContaining({
         executionId: "parent-execution",
         targetExecutionId: "child-execution",
-        expectedTaskId: "persisted-child-task",
+        expectedWorkflowKey: "persisted-child-task",
       }),
     );
 
@@ -180,11 +180,11 @@ describe("durable: DurableContext coverage", () => {
       createWorkflowStepCurrent({
         stepId: "workflow-step",
         startedAt,
-        meta: { workflowTaskId: "canonical.child" },
+        meta: { childWorkflowKey: "canonical.child" },
       }),
     ).toMatchObject({
       kind: "step",
-      meta: { workflowTaskId: "canonical.child" },
+      meta: { childWorkflowKey: "canonical.child" },
     });
     expect(
       createSwitchCurrent({
@@ -224,7 +224,7 @@ describe("durable: DurableContext coverage", () => {
       createExecutionWaitCurrent({
         stepId: "__execution:child",
         targetExecutionId: "child",
-        targetTaskId: "canonical.child",
+        targetWorkflowKey: "canonical.child",
         timeoutMs: 1000,
         timeoutAtMs: 2000,
         timerId: "execution_timeout:e1:__execution:child",
@@ -244,7 +244,7 @@ describe("durable: DurableContext coverage", () => {
 
     await store.saveExecution({
       id: "running",
-      taskId: "task",
+      workflowKey: "task",
       input: undefined,
       status: "running",
       attempt: 1,
@@ -268,7 +268,7 @@ describe("durable: DurableContext coverage", () => {
 
     await store.saveExecution({
       id: "completed",
-      taskId: "task",
+      workflowKey: "task",
       input: undefined,
       status: "completed",
       current: createStepCurrent({ stepId: "done", startedAt }),
@@ -296,7 +296,7 @@ describe("durable: DurableContext coverage", () => {
     const initialStore = new MemoryStore();
     await initialStore.saveExecution({
       id: "sleep-initial",
-      taskId: "task",
+      workflowKey: "task",
       input: undefined,
       status: "running",
       attempt: 1,
@@ -327,7 +327,7 @@ describe("durable: DurableContext coverage", () => {
     const replayStore = new MemoryStore();
     await replayStore.saveExecution({
       id: "sleep-replay",
-      taskId: "task",
+      workflowKey: "task",
       input: undefined,
       status: "running",
       attempt: 1,
@@ -368,7 +368,7 @@ describe("durable: DurableContext coverage", () => {
     const completedStore = new MemoryStore();
     await completedStore.saveExecution({
       id: "sleep-completed",
-      taskId: "task",
+      workflowKey: "task",
       input: undefined,
       status: "running",
       current: createSleepCurrent({

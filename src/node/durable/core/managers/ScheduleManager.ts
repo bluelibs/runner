@@ -62,15 +62,15 @@ export class ScheduleManager {
         }),
       fn: async () => {
         const existing = await this.store.getSchedule(scheduleId);
-        const persistedTaskId = this.taskRegistry.getPersistenceId(task);
+        const workflowKey = this.taskRegistry.getWorkflowKey(task);
 
         const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
         const pattern = options.cron ?? String(options.interval);
 
         if (existing) {
-          if (existing.taskId !== persistedTaskId) {
+          if (existing.workflowKey !== workflowKey) {
             durableScheduleConfigError.throw({
-              message: `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${persistedTaskId}'`,
+              message: `Schedule '${scheduleId}' already exists for workflow '${existing.workflowKey}', cannot rebind to '${workflowKey}'`,
             });
           }
 
@@ -88,7 +88,7 @@ export class ScheduleManager {
 
         const schedule: Schedule = {
           id: scheduleId,
-          taskId: persistedTaskId,
+          workflowKey,
           input,
           pattern,
           type,
@@ -114,10 +114,10 @@ export class ScheduleManager {
     const id = options.id ?? createExecutionId();
 
     if (options.cron || options.interval !== undefined) {
-      const persistedTaskId = this.taskRegistry.getPersistenceId(task);
+      const workflowKey = this.taskRegistry.getWorkflowKey(task);
       const schedule: Schedule = {
         id,
-        taskId: persistedTaskId,
+        workflowKey,
         input,
         pattern: options.cron ?? String(options.interval),
         type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
@@ -135,7 +135,7 @@ export class ScheduleManager {
 
     await this.store.createTimer({
       id: `once:${id}`,
-      taskId: this.taskRegistry.getPersistenceId(task),
+      workflowKey: this.taskRegistry.getWorkflowKey(task),
       input,
       type: TimerType.Scheduled,
       fireAt,
@@ -267,7 +267,7 @@ export class ScheduleManager {
     await this.store.saveScheduleWithTimer(schedule, {
       id: `sched:${schedule.id}`,
       scheduleId: schedule.id,
-      taskId: schedule.taskId,
+      workflowKey: schedule.workflowKey,
       input: schedule.input,
       type: TimerType.Scheduled,
       fireAt: nextRun,

@@ -48,7 +48,7 @@ export async function handleSleepTimer(params: {
   await params.auditLogger.log({
     kind: DurableAuditEntryKind.SleepCompleted,
     executionId: params.timer.executionId,
-    taskId: execution?.taskId,
+    workflowKey: execution?.workflowKey,
     attempt: execution ? execution.attempt : 0,
     stepId: params.timer.stepId,
     timerId: params.timer.id,
@@ -219,7 +219,7 @@ export async function handleExecutionWaitTimeoutTimer(params: {
 export async function persistTaskTimerExecution(params: {
   store: IDurableStore;
   timer: Timer;
-  taskId: string;
+  workflowKey: string;
   maxAttempts: number;
   defaultTimeout: number | undefined;
 }): Promise<string> {
@@ -227,7 +227,7 @@ export async function persistTaskTimerExecution(params: {
   const executionId = `timer:${timerExecutionKey}`;
   const execution: Execution<unknown, unknown> = {
     id: executionId,
-    taskId: params.taskId,
+    workflowKey: params.workflowKey,
     input: params.timer.input,
     status: ExecutionStatus.Pending,
     attempt: 1,
@@ -240,7 +240,7 @@ export async function persistTaskTimerExecution(params: {
   if (params.store.createExecutionWithIdempotencyKey) {
     const created = await params.store.createExecutionWithIdempotencyKey({
       execution,
-      taskId: params.taskId,
+      workflowKey: params.workflowKey,
       idempotencyKey: `timer:${timerExecutionKey}`,
     });
     return created.executionId;
@@ -307,12 +307,12 @@ export async function handleScheduledTaskTimer(params: {
   kickoffExecution: (executionId: string) => Promise<void>;
   persistTaskTimerExecution: (params: {
     timer: Timer;
-    taskId: string;
+    workflowKey: string;
   }) => Promise<string>;
   assertTimerClaimIsStillOwned: () => void;
   onSafeToFinalizeCurrentTimer?: () => void;
 }): Promise<ScheduledTimerHandleResult> {
-  if (!params.timer.taskId) {
+  if (!params.timer.workflowKey) {
     return {
       handled: false,
       finalizeCurrentTimer: false,
@@ -342,7 +342,7 @@ export async function handleScheduledTaskTimer(params: {
     }
   }
 
-  const task = params.taskRegistry.find(params.timer.taskId);
+  const task = params.taskRegistry.find(params.timer.workflowKey);
   if (!task) {
     return {
       handled: false,
@@ -353,7 +353,7 @@ export async function handleScheduledTaskTimer(params: {
 
   const executionId = await params.persistTaskTimerExecution({
     timer: params.timer,
-    taskId: params.taskRegistry.getPersistenceId(task),
+    workflowKey: params.taskRegistry.getWorkflowKey(task),
   });
   params.assertTimerClaimIsStillOwned();
   if (!params.timer.scheduleId) {

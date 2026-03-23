@@ -28,7 +28,7 @@ describe("durable: DurableService.handleTimer branch edges", () => {
 
     const timer: Timer = {
       id: "oneoff:no-claim",
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -123,7 +123,7 @@ describe("durable: DurableService.handleTimer branch edges", () => {
 
     const schedule: Schedule = {
       id: "s1",
-      taskId: task.id,
+      workflowKey: task.id,
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -137,7 +137,7 @@ describe("durable: DurableService.handleTimer branch edges", () => {
     const timer: Timer = {
       id: "sched:s1",
       scheduleId: "s1",
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       type: TimerType.Scheduled,
       fireAt: new Date(schedule.nextRun!),

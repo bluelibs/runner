@@ -37,9 +37,9 @@ export async function listExecutions(
       options.status?.includes(execution.status),
     );
   }
-  if (options.taskId) {
+  if (options.workflowKey) {
     executions = executions.filter(
-      (execution) => execution.taskId === options.taskId,
+      (execution) => execution.workflowKey === options.workflowKey,
     );
   }
   executions.sort(

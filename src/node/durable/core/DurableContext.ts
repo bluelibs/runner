@@ -306,7 +306,7 @@ export class DurableContext implements IDurableContext {
         ),
       undefined,
       {
-        workflowTaskId: this.getTaskPersistenceId(task),
+        childWorkflowKey: this.getTaskPersistenceId(task),
       },
     );
   }
@@ -374,7 +374,7 @@ export class DurableContext implements IDurableContext {
       store: this.store,
       executionId: this.executionId,
       targetExecutionId: executionId,
-      expectedTaskId: this.getTaskPersistenceId(_task),
+      expectedWorkflowKey: this.getTaskPersistenceId(_task),
       assertCanContinue: this.assertCanContinue.bind(this),
       assertUniqueStepId: this.determinism.assertUniqueStepId,
       options,

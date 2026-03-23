@@ -15,7 +15,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await store.saveExecution({
       id: "parent-execution",
-      taskId: "parent-task",
+      workflowKey: "parent-task",
       input: undefined,
       status: ExecutionStatus.Sleeping,
       attempt: 1,
@@ -25,7 +25,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
     });
     await store.saveExecution({
       id: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -52,7 +52,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await service._executionManager.notifyExecutionFinished({
       id: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -70,7 +70,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
         result: expect.objectContaining({
           state: "completed",
           targetExecutionId: "child-execution",
-          taskId: "child-task",
+          workflowKey: "child-task",
           result: { ok: true },
         }),
       }),
@@ -93,7 +93,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await store.saveExecution({
       id: "parent-execution",
-      taskId: "parent-task",
+      workflowKey: "parent-task",
       input: undefined,
       status: ExecutionStatus.Sleeping,
       attempt: 1,
@@ -118,7 +118,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await service._executionManager.notifyExecutionFinished({
       id: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.CompensationFailed,
       error: { message: "rollback blew up" },
@@ -153,7 +153,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await store.saveExecution({
       id: "parent-execution",
-      taskId: "parent-task",
+      workflowKey: "parent-task",
       input: undefined,
       status: ExecutionStatus.Sleeping,
       attempt: 1,
@@ -180,7 +180,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await service._executionManager.notifyExecutionFinished({
       id: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -198,7 +198,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
         result: expect.objectContaining({
           state: "completed",
           targetExecutionId: "child-execution",
-          taskId: "child-task",
+          workflowKey: "child-task",
           result: { ok: true },
         }),
       }),
@@ -234,7 +234,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await service._executionManager.notifyExecutionFinished({
       id: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -290,7 +290,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await service._executionManager.notifyExecutionFinished({
       id: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -307,7 +307,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
     ).toEqual({
       state: "completed",
       targetExecutionId: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       result: { ok: true },
     });
     expect(queue.enqueued).toContainEqual({
@@ -348,7 +348,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
 
     await service._executionManager.notifyExecutionFinished({
       id: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       input: undefined,
       status: ExecutionStatus.Completed,
       result: { ok: true },
@@ -365,7 +365,7 @@ describe("durable: ExecutionManager waitForExecution", () => {
     ).toEqual({
       state: "completed",
       targetExecutionId: "child-execution",
-      taskId: "child-task",
+      workflowKey: "child-task",
       result: { ok: true },
     });
   });

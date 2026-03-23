@@ -36,7 +36,7 @@ describe("durable: DurableService - signals buffering and audit", () => {
 
     await store.saveExecution({
       id: "done",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "completed",
       result: "ok",
@@ -60,7 +60,7 @@ describe("durable: DurableService - signals buffering and audit", () => {
 
     await store.saveExecution({
       id: "failed",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "failed",
       error: { message: "err" },

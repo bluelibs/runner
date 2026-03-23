@@ -60,7 +60,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     const timer: Timer = {
       id: "sched:claim-loss",
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -110,7 +110,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     const schedule = {
       id: "s-recurring-claim-loss",
-      taskId: task.id,
+      workflowKey: task.id,
       type: "interval" as const,
       pattern: "1000",
       input: undefined,
@@ -124,7 +124,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     const timer: Timer = {
       id: "sched:s-recurring-claim-loss",
       scheduleId: schedule.id,
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -185,7 +185,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     const schedule = {
       id: "s-recurring-claim-release",
-      taskId: task.id,
+      workflowKey: task.id,
       type: "interval" as const,
       pattern: "1000",
       input: undefined,
@@ -199,7 +199,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     const firstTimer: Timer = {
       id: "sched:s-recurring-claim-release",
       scheduleId: schedule.id,
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -268,7 +268,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     const schedule = {
       id: "s-recurring-distinct-executions",
-      taskId: task.id,
+      workflowKey: task.id,
       type: "interval" as const,
       pattern: "1000",
       input: undefined,
@@ -282,7 +282,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     const firstTimer: Timer = {
       id: "sched:s-recurring-distinct-executions",
       scheduleId: schedule.id,
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -302,7 +302,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     await service.handleTimer(secondTimer!);
 
     const completedExecutions = await store.listExecutions({
-      taskId: task.id,
+      workflowKey: task.id,
     });
 
     expect(executionsStarted).toHaveLength(2);
@@ -335,7 +335,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     const timer: Timer = {
       id: "sched:no-store-idempotency",
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -352,7 +352,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     expect(await store.getExecution(`timer:${timer.id}`)).toEqual(
       expect.objectContaining({
         id: `timer:${timer.id}`,
-        taskId: task.id,
+        workflowKey: task.id,
         status: "pending",
       }),
     );
@@ -373,7 +373,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     const timer: Timer = {
       id: "sched:atomic-finalize",
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -411,7 +411,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     const schedule = {
       id: "s-recurring-missing-claim-release",
-      taskId: task.id,
+      workflowKey: task.id,
       type: "interval" as const,
       pattern: "1000",
       input: undefined,
@@ -425,7 +425,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     const timer: Timer = {
       id: "sched:s-recurring-missing-claim-release",
       scheduleId: schedule.id,
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -459,7 +459,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
 
     const schedule = {
       id: "s-recurring-claim-release-loss",
-      taskId: task.id,
+      workflowKey: task.id,
       type: "interval" as const,
       pattern: "1000",
       input: undefined,
@@ -473,7 +473,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     const timer: Timer = {
       id: "sched:s-recurring-claim-release-loss",
       scheduleId: schedule.id,
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,

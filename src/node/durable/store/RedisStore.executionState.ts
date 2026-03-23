@@ -89,7 +89,7 @@ export async function createExecutionWithIdempotencyKey(
   runtime: RedisStoreRuntime,
   params: {
     execution: Execution;
-    taskId: string;
+    workflowKey: string;
     idempotencyKey: string;
   },
 ): Promise<
@@ -110,7 +110,7 @@ export async function createExecutionWithIdempotencyKey(
       return "__created__"
     `,
     5,
-    runtime.idempotencyKey(params.taskId, params.idempotencyKey),
+    runtime.idempotencyKey(params.workflowKey, params.idempotencyKey),
     runtime.executionKey(params.execution.id),
     runtime.allExecutionsKey(),
     runtime.activeExecutionsKey(),

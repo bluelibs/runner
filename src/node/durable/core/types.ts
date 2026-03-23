@@ -15,11 +15,12 @@ export type ExecutionStatus =
 /**
  * Extra metadata for active durable step tracking.
  *
- * `workflowTaskId` uses the durable persisted task identity so dashboards and
- * operator tooling see the same canonical child workflow id that durable uses.
+ * `childWorkflowKey` uses the durable persisted workflow identity so
+ * dashboards and operator tooling see the same stable child workflow key that
+ * durable uses.
  */
 export interface DurableExecutionCurrentWorkflowMeta {
-  workflowTaskId: string;
+  childWorkflowKey: string;
 }
 
 /**
@@ -71,7 +72,7 @@ export interface DurableExecutionCurrentExecutionWait {
     type: "execution";
     params: {
       targetExecutionId: string;
-      targetTaskId: string;
+      targetWorkflowKey: string;
       timeoutMs?: number;
       timeoutAtMs?: number;
       timerId?: string;
@@ -117,7 +118,7 @@ export type DurableExecutionCurrent =
 
 export interface Execution<TInput = unknown, TResult = unknown> {
   id: string;
-  taskId: string;
+  workflowKey: string;
   /** Optional parent execution when this workflow was started by another durable workflow. */
   parentExecutionId?: string;
   input: TInput | undefined;
@@ -243,7 +244,7 @@ export interface Timer {
   executionId?: string;
   stepId?: string;
   scheduleId?: string;
-  taskId?: string;
+  workflowKey?: string;
   input?: unknown;
   type: TimerType;
   fireAt: Date;
@@ -267,7 +268,7 @@ export type ScheduleStatus =
 
 export interface Schedule<TInput = unknown> {
   id: string;
-  taskId: string;
+  workflowKey: string;
   type: ScheduleType;
   pattern: string;
   input: TInput | undefined;
