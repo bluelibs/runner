@@ -53,6 +53,14 @@ class FailingConsumeQueue extends TestQueue {
   }
 }
 
+class CancelFailQueue extends TestQueue {
+  override async cancelConsumer(): Promise<void> {
+    this.cancelConsumerCalls += 1;
+    this.handler = null;
+    throw genericError.new({ message: "cancel failed" });
+  }
+}
+
 function message(payload: unknown, type: QueueMessage["type"]): QueueMessage {
   return {
     id: "m1",
@@ -384,5 +392,76 @@ describe("durable: DurableWorker", () => {
 
     expect(stopped).toBe(true);
     expect(queue.ackCalls).toEqual(["m1"]);
+  });
+
+  it("waits for in-flight messages even when cancelConsumer() fails", async () => {
+    const queue = new CancelFailQueue();
+    let releaseExecution!: () => void;
+    const executionBlocked = new Promise<void>((resolve) => {
+      releaseExecution = resolve;
+    });
+    const { service } = createService({
+      processExecution: async () => {
+        await executionBlocked;
+      },
+    });
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    const handlerPromise = queue.handler?.(
+      message({ executionId: "e1" }, "execute"),
+    );
+    expect(handlerPromise).toBeDefined();
+
+    await Promise.resolve();
+
+    let settled = false;
+    const stopPromise = worker.stop().finally(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(queue.cancelConsumerCalls).toBe(1);
+
+    releaseExecution();
+
+    await expect(stopPromise).rejects.toThrow("cancel failed");
+    await handlerPromise;
+
+    expect(queue.ackCalls).toEqual(["m1"]);
+  });
+
+  it("preserves cooldown failures when draining in-flight messages also fails", async () => {
+    const queue = new CancelFailQueue();
+    const { service } = createService();
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    const waitError = genericError.new({ message: "wait failed" });
+
+    jest
+      .spyOn(
+        worker as unknown as { waitForInFlightMessages: () => Promise<void> },
+        "waitForInFlightMessages",
+      )
+      .mockRejectedValue(waitError);
+
+    await expect(worker.stop()).rejects.toThrow("cancel failed");
+  });
+
+  it("rethrows drain failures when cooldown succeeds", async () => {
+    const queue = new TestQueue();
+    const { service } = createService();
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    const waitError = genericError.new({ message: "wait failed" });
+
+    jest
+      .spyOn(
+        worker as unknown as { waitForInFlightMessages: () => Promise<void> },
+        "waitForInFlightMessages",
+      )
+      .mockRejectedValue(waitError);
+
+    await expect(worker.stop()).rejects.toThrow("wait failed");
   });
 });

@@ -333,9 +333,16 @@ export class DurableService implements IDurableService {
     if (this.lifecycleState === "disposed") {
       return;
     }
-    await this.cooldown();
-    this.lifecycleState = "disposing";
+
     let firstError: unknown = null;
+
+    try {
+      await this.cooldown();
+    } catch (error) {
+      firstError ??= error;
+    }
+
+    this.lifecycleState = "disposing";
 
     while (this.stopHandlers.length > 0) {
       const stop = this.stopHandlers.pop()!;
@@ -564,7 +571,28 @@ export async function disposeDurableService(
   config: DurableServiceConfig,
 ): Promise<void> {
   await service.stop();
-  if (config.store.dispose) await config.store.dispose();
-  if (config.queue?.dispose) await config.queue.dispose();
-  if (config.eventBus?.dispose) await config.eventBus.dispose();
+
+  let firstError: unknown = null;
+
+  try {
+    if (config.store.dispose) await config.store.dispose();
+  } catch (error) {
+    firstError ??= error;
+  }
+
+  try {
+    if (config.queue?.dispose) await config.queue.dispose();
+  } catch (error) {
+    firstError ??= error;
+  }
+
+  try {
+    if (config.eventBus?.dispose) await config.eventBus.dispose();
+  } catch (error) {
+    firstError ??= error;
+  }
+
+  if (firstError) {
+    throw firstError;
+  }
 }

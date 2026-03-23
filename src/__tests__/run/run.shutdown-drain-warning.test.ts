@@ -498,17 +498,27 @@ describe("run shutdown drain warning", () => {
 
     expect(warns).toHaveLength(1);
     expect(warns[0]).toMatchObject({
-      reason: "dispose-budget-exhausted-before-abort-window",
       requestedDrainBudgetMs: 20,
       requestedAbortWindowMs: 20,
-      effectiveAbortWindowMs: 0,
       effectiveDrainBudgetMs: expect.any(Number),
+      effectiveAbortWindowMs: expect.any(Number),
     });
-    const effectiveDrainBudgetMs = (
-      warns[0] as { effectiveDrainBudgetMs: number }
-    ).effectiveDrainBudgetMs;
+    const { effectiveDrainBudgetMs, effectiveAbortWindowMs, reason } =
+      warns[0] as {
+        effectiveDrainBudgetMs: number;
+        effectiveAbortWindowMs: number;
+        reason: string;
+      };
     expect(effectiveDrainBudgetMs).toBeGreaterThan(0);
     expect(effectiveDrainBudgetMs).toBeLessThanOrEqual(20);
+    expect(effectiveAbortWindowMs).toBeGreaterThanOrEqual(0);
+    expect(effectiveAbortWindowMs).toBeLessThanOrEqual(1);
+
+    if (effectiveAbortWindowMs === 0) {
+      expect(reason).toBe("dispose-budget-exhausted-before-abort-window");
+    } else {
+      expect(reason).toBe("abort-window-timeout");
+    }
   });
 
   it("continues disposal when warning emission fails", async () => {

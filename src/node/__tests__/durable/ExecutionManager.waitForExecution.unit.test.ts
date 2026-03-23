@@ -1,7 +1,8 @@
 import { DurableService } from "../../durable/core/DurableService";
+import { createExecutionWaitCurrent } from "../../durable/core/current";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { SpyQueue } from "./DurableService.unit.helpers";
+import { createBufferedLogger, SpyQueue } from "./DurableService.unit.helpers";
 
 describe("durable: ExecutionManager waitForExecution", () => {
   it("resolves waiting parent executions when the child execution completes", async () => {
@@ -368,5 +369,107 @@ describe("durable: ExecutionManager waitForExecution", () => {
       workflowKey: "child-task",
       result: { ok: true },
     });
+  });
+
+  it("still kicks the parent if suspended-current cleanup fails after completion commits", async () => {
+    class CleanupFailingStore extends MemoryStore {
+      override async saveExecutionIfStatus(
+        execution: Parameters<MemoryStore["saveExecutionIfStatus"]>[0],
+        expectedStatuses: Parameters<MemoryStore["saveExecutionIfStatus"]>[1],
+      ): Promise<boolean> {
+        if (
+          execution.id === "parent-execution" &&
+          expectedStatuses.includes(ExecutionStatus.Sleeping) &&
+          execution.current === undefined
+        ) {
+          throw new Error("transient CAS failure");
+        }
+
+        return await super.saveExecutionIfStatus(execution, expectedStatuses);
+      }
+    }
+
+    const store = new CleanupFailingStore();
+    const queue = new SpyQueue();
+    const { logger, logs } = createBufferedLogger();
+    const service = new DurableService({
+      store,
+      queue,
+      logger,
+      tasks: [],
+    });
+
+    await store.saveExecution({
+      id: "parent-execution",
+      workflowKey: "parent-task",
+      input: undefined,
+      status: ExecutionStatus.Sleeping,
+      current: createExecutionWaitCurrent({
+        stepId: "__execution:wait-child",
+        targetExecutionId: "child-execution",
+        targetWorkflowKey: "child-task",
+        startedAt: new Date(),
+      }),
+      attempt: 1,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "parent-execution",
+      stepId: "__execution:wait-child",
+      result: {
+        state: "waiting",
+        targetExecutionId: "child-execution",
+      },
+      completedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "parent-execution",
+      targetExecutionId: "child-execution",
+      stepId: "__execution:wait-child",
+    });
+
+    await service._executionManager.notifyExecutionFinished({
+      id: "child-execution",
+      workflowKey: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      result: { ok: true },
+      attempt: 1,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    expect(
+      (await store.getStepResult("parent-execution", "__execution:wait-child"))
+        ?.result,
+    ).toEqual({
+      state: "completed",
+      targetExecutionId: "child-execution",
+      workflowKey: "child-task",
+      result: { ok: true },
+    });
+    await expect(
+      store.listExecutionWaiters("child-execution"),
+    ).resolves.toEqual([]);
+    expect(queue.enqueued).toContainEqual({
+      type: "execute",
+      payload: { executionId: "parent-execution" },
+    });
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          message:
+            "Durable waitForExecution current cleanup failed; resuming parent execution anyway.",
+          error: expect.objectContaining({
+            message: "transient CAS failure",
+          }),
+        }),
+      ]),
+    );
   });
 });

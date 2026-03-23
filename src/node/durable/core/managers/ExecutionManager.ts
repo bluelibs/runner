@@ -689,19 +689,53 @@ export class ExecutionManager {
           if (!completed) {
             continue;
           }
-          await clearExecutionCurrentIfSuspendedOnStep(
-            this.config.store,
-            waiter.executionId,
-            {
-              stepId: waiter.stepId,
-              kinds: ["waitForExecution"],
-            },
-          );
+
+          await this.clearExecutionWaitCurrentBestEffort({
+            executionId: waiter.executionId,
+            stepId: waiter.stepId,
+            targetExecutionId: execution.id,
+          });
 
           await this.kickoffWithFailsafe(waiter.executionId);
         }
       },
     });
+  }
+
+  /**
+   * The durable completion is already persisted before this cleanup runs.
+   * If clearing `execution.current` fails, we still need to kick the parent so
+   * replay can observe the completed wait state and continue.
+   */
+  private async clearExecutionWaitCurrentBestEffort(params: {
+    executionId: string;
+    stepId: string;
+    targetExecutionId: string;
+  }): Promise<void> {
+    try {
+      await clearExecutionCurrentIfSuspendedOnStep(
+        this.config.store,
+        params.executionId,
+        {
+          stepId: params.stepId,
+          kinds: ["waitForExecution"],
+        },
+      );
+    } catch (error) {
+      try {
+        await this.logger.warn(
+          "Durable waitForExecution current cleanup failed; resuming parent execution anyway.",
+          {
+            executionId: params.executionId,
+            stepId: params.stepId,
+            targetExecutionId: params.targetExecutionId,
+            error,
+          },
+        );
+      } catch {
+        // Logging must not block wait completion recovery.
+      }
+    }
   }
 
   private async logExecutionStatusChange(params: {
