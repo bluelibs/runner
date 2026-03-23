@@ -711,8 +711,8 @@ export interface IDurableStore {
     ttlMs: number,
   ): Promise<boolean>;
 
-  // Optional: Idempotency (dedupe start calls)
-  createExecutionWithIdempotencyKey?(params: {
+  // Required: Idempotency (dedupe durable starts atomically)
+  createExecutionWithIdempotencyKey(params: {
     execution: Execution;
     workflowKey: string;
     idempotencyKey: string;
@@ -2526,7 +2526,7 @@ There are two different "idempotency" problems:
 - `start(task, input, { idempotencyKey })` supports a store-backed **"start-or-get"** mode.
 - It returns the same `executionId` for the same `{ workflowKey, idempotencyKey }` pair, even if multiple callers race.
 - Important: subsequent calls return the existing `executionId` and do **not** overwrite the originally stored `input`.
-- Store support: `MemoryStore` and `RedisStore` implement this. Custom stores must implement `createExecutionWithIdempotencyKey(...)` so the dedupe claim and execution creation happen atomically.
+- Store support: `MemoryStore` and `RedisStore` implement this. Custom stores must implement `createExecutionWithIdempotencyKey(...)`; durable execution creation is not considered complete without atomic dedupe support.
 - You should still persist the returned `executionId` in your domain model for observability and to make webhook handling trivial.
 
 2. **Schedule-level deduplication (create schedule only once)**

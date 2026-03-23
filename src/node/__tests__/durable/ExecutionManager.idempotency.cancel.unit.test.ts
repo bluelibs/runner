@@ -78,26 +78,6 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       ) => result,
     ) as SaveExecutionIfStatusMock;
 
-  it("throws when idempotencyKey is used with a store that lacks support", async () => {
-    const store = createStore({
-      saveExecution: async () => {},
-      getExecution: async () => null,
-      updateExecution: async () => {},
-      listIncompleteExecutions: async () => [],
-    });
-
-    const manager = createManager({
-      store,
-      queue: { enqueue: async () => "id" } as any,
-    });
-
-    await expect(
-      manager.start(task, undefined, {
-        idempotencyKey: IdempotencyKey.K,
-      }),
-    ).rejects.toThrow("does not support execution idempotency keys");
-  });
-
   it("returns the existing execution when the idempotency key is already claimed", async () => {
     const store = createStore({
       saveExecution: async () => {

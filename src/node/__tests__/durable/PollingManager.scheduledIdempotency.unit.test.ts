@@ -312,15 +312,10 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
     ).toBe(2);
   });
 
-  it("finalizes claimed scheduled timers after durable side effects even without store idempotency helpers", async () => {
+  it("finalizes claimed scheduled timers after durable idempotent execution creation", async () => {
     const store = new MemoryStore();
-    Object.defineProperty(store, "createExecutionWithIdempotencyKey", {
-      value: undefined,
-      configurable: true,
-      writable: true,
-    });
     const queue = new RecordingDelayedQueue();
-    const task = okTask("t-scheduled-no-store-idempotency");
+    const task = okTask("t-scheduled-idempotent-store");
     const service = new DurableService({
       store,
       queue,
@@ -334,7 +329,7 @@ describe("durable: PollingManager scheduled timer idempotency", () => {
       .mockResolvedValue(false as boolean);
 
     const timer: Timer = {
-      id: "sched:no-store-idempotency",
+      id: "sched:idempotent-store",
       workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),

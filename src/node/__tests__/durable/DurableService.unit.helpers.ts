@@ -154,6 +154,8 @@ export function createBareStore(
     getExecution: base.getExecution.bind(base),
     updateExecution: base.updateExecution.bind(base),
     listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
+    createExecutionWithIdempotencyKey:
+      base.createExecutionWithIdempotencyKey.bind(base),
     listExecutions: base.listExecutions.bind(base),
     listStepResults: base.listStepResults.bind(base),
     getStepResult: base.getStepResult.bind(base),

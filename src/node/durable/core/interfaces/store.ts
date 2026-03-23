@@ -42,11 +42,11 @@ export interface IDurableStore {
   listIncompleteExecutions(): Promise<Execution[]>;
 
   /**
-   * Optional transactional execution-level idempotency helper.
-   * If supported, allows `start(..., { idempotencyKey })` to atomically create
-   * the execution and claim the dedupe mapping in one store operation.
+   * Transactional execution-level idempotency helper.
+   * Durable starts rely on this to atomically create the execution and claim
+   * the dedupe mapping in one store operation.
    */
-  createExecutionWithIdempotencyKey?(params: {
+  createExecutionWithIdempotencyKey(params: {
     execution: Execution;
     workflowKey: string;
     idempotencyKey: string;

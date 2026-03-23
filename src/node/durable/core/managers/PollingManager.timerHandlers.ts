@@ -237,17 +237,12 @@ export async function persistTaskTimerExecution(params: {
     updatedAt: new Date(),
   };
 
-  if (params.store.createExecutionWithIdempotencyKey) {
-    const created = await params.store.createExecutionWithIdempotencyKey({
-      execution,
-      workflowKey: params.workflowKey,
-      idempotencyKey: `timer:${timerExecutionKey}`,
-    });
-    return created.executionId;
-  }
-
-  await params.store.saveExecution(execution);
-  return executionId;
+  const created = await params.store.createExecutionWithIdempotencyKey({
+    execution,
+    workflowKey: params.workflowKey,
+    idempotencyKey: `timer:${timerExecutionKey}`,
+  });
+  return created.executionId;
 }
 
 function getTaskTimerExecutionKey(timer: Timer): string {

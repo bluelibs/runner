@@ -126,7 +126,7 @@ export class ExecutionManager {
     this.assertCanExecute();
 
     if (options?.idempotencyKey) {
-      return this.startWithIdempotencyKey(
+      return await this.startWithIdempotencyKey(
         task,
         input,
         options.idempotencyKey,
@@ -153,9 +153,8 @@ export class ExecutionManager {
     idempotencyKey: string,
     options: ExecuteOptions | undefined,
   ): Promise<string> {
-    this.assertStoreSupportsIdempotency();
     const execution = this.createPendingExecution(task, input, options);
-    const created = await this.config.store.createExecutionWithIdempotencyKey!({
+    const created = await this.config.store.createExecutionWithIdempotencyKey({
       execution,
       workflowKey: this.getTaskWorkflowKey(task),
       idempotencyKey,
@@ -175,15 +174,6 @@ export class ExecutionManager {
       durableExecutionInvariantError.throw({
         message:
           "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use a Runner durable workflow resource such as `resources.memoryWorkflow.fork(...).with(...)` or provide a custom executor in config.",
-      });
-    }
-  }
-
-  private assertStoreSupportsIdempotency(): void {
-    if (!this.config.store.createExecutionWithIdempotencyKey) {
-      durableExecutionInvariantError.throw({
-        message:
-          "Durable store does not support execution idempotency keys. Implement createExecutionWithIdempotencyKey() on the store to use ExecuteOptions.idempotencyKey.",
       });
     }
   }
