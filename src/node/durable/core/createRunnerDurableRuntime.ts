@@ -20,11 +20,15 @@ export type RunnerDurableRuntimeConfig = Omit<
   "taskExecutor" | "tasks" | "taskResolver" | "contextProvider"
 > & {
   /**
-   * Starts an embedded durable queue consumer in this process.
+   * Advanced runtime-role ownership knobs for low-level durable resources.
    *
-   * This flag has effect only when `queue` is configured.
+   * Built-in workflow resources expose higher-level queue config such as
+   * `queue.consume`; this field preserves the same capability for callers that
+   * wire custom durable backends via `durableResource`.
    */
-  consumeQueue?: boolean;
+  roles?: {
+    queueConsumer?: boolean;
+  };
 };
 
 export interface RunnerDurableDeps {
@@ -137,7 +141,7 @@ export async function createRunnerDurableRuntime(
       contextStorage.run(durableContext, fn),
   });
 
-  if (config.consumeQueue === true && config.queue) {
+  if (config.roles?.queueConsumer === true && config.queue) {
     const worker = await initDurableWorker(
       service,
       config.queue,

@@ -38,15 +38,6 @@ export type {
   IDurableResource,
 } from "./interfaces/resource";
 
-export interface DurableResourceConfig {
-  /**
-   * Starts an embedded durable queue consumer in this process.
-   *
-   * This flag has effect only when `queue` is configured.
-   */
-  consumeQueue?: boolean;
-}
-
 /**
  * A Runner-facing wrapper around `DurableService` that exposes a per-instance
  * context store and the public durable API (`start`, `startAndWait`, `signal`, `wait`, etc.).

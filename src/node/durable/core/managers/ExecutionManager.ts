@@ -696,10 +696,82 @@ export class ExecutionManager {
             targetExecutionId: execution.id,
           });
 
-          await this.kickoffWithFailsafe(waiter.executionId);
+          await this.resumeExecutionWaitParentBestEffort({
+            executionId: waiter.executionId,
+            stepId: waiter.stepId,
+            targetExecutionId: execution.id,
+          });
         }
       },
     });
+  }
+
+  private async resumeExecutionWaitParentBestEffort(params: {
+    executionId: string;
+    stepId: string;
+    targetExecutionId: string;
+  }): Promise<void> {
+    const timerId = `wait_execution_resume:${params.executionId}:${params.stepId}`;
+    let retryTimerArmed = false;
+    let retryTimerError: unknown;
+
+    try {
+      await this.config.store.createTimer({
+        id: timerId,
+        executionId: params.executionId,
+        type: TimerType.Retry,
+        fireAt: new Date(),
+        status: TimerStatus.Pending,
+      });
+      retryTimerArmed = true;
+    } catch (error) {
+      retryTimerError = error;
+    }
+
+    try {
+      await this.kickoffExecution(params.executionId);
+    } catch (error) {
+      if (!retryTimerArmed) {
+        try {
+          await this.config.store.createTimer({
+            id: timerId,
+            executionId: params.executionId,
+            type: TimerType.Retry,
+            fireAt: new Date(),
+            status: TimerStatus.Pending,
+          });
+          retryTimerArmed = true;
+          retryTimerError = undefined;
+        } catch (timerError) {
+          retryTimerError = retryTimerError ?? timerError;
+        }
+      }
+
+      try {
+        await this.logger.warn(
+          "Durable waitForExecution parent kickoff failed; relying on retry handling instead.",
+          {
+            executionId: params.executionId,
+            stepId: params.stepId,
+            targetExecutionId: params.targetExecutionId,
+            retryTimerArmed,
+            retryTimerError,
+            error,
+          },
+        );
+      } catch {
+        // Logging must stay best-effort after the wait completion is durable.
+      }
+      return;
+    }
+
+    if (retryTimerArmed) {
+      try {
+        await this.config.store.deleteTimer(timerId);
+      } catch {
+        // Best-effort timer cleanup; duplicate resumes stay replay-safe.
+      }
+    }
   }
 
   /**

@@ -1244,7 +1244,7 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - `IDurableQueue` provides **at-least-once** delivery: messages may be delivered more than once but will not be silently dropped.
   - On the built-in `memoryWorkflow` / `redisWorkflow` resources, `queue: { ... }` means "queue enabled"; `queue.consume: true` means "this runtime consumes it too".
   - Queue consumers must treat queue messages as hints to load state from the store, apply `DurableContext` logic, and then `ack` or `nack` the message. Idempotency is achieved by reading/writing through `IDurableStore`, not by trusting the queue alone.
-  - Queue-less runtimes still execute workflows directly in-process via the internal task executor; they are not queue consumers unless an actual queue is configured and `consumeQueue` / `queue.consume` is explicitly enabled.
+  - Queue-less runtimes still execute workflows directly in-process via the internal task executor and can resume durable work through store-backed polling when polling is enabled; they are not queue consumers unless an actual queue is configured and `queue.consume` is explicitly enabled.
 
 - **Multi-node coordination**
   - `IEventBus` is used to reduce `wait()` latency (publish `execution:<id>` completion events) but does not replace the store.

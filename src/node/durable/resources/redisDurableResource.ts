@@ -85,12 +85,9 @@ export const redisDurableResource = r
           })
         : undefined;
 
-    const consumeQueue = queue ? (config.queue?.consume ?? false) : false;
-
     const runtimeConfig: RunnerDurableRuntimeConfig = {
       ...config,
       logger: durableLogger,
-      consumeQueue,
       store: new RedisStore({
         redis: config.redis.url,
         prefix: isolation.storePrefix,
@@ -101,6 +98,10 @@ export const redisDurableResource = r
         logger: durableLogger.with({ source: "durable.bus.redis" }),
       }),
       queue,
+      roles: {
+        ...config.roles,
+        queueConsumer: queue !== undefined && config.queue?.consume === true,
+      },
     };
 
     resourceContext.runtimeConfig = runtimeConfig;

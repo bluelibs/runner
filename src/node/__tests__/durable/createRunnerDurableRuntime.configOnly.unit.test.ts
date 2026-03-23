@@ -2,10 +2,15 @@ import type { Logger } from "../../../models/Logger";
 
 type InitDurableService =
   typeof import("../../durable/core/DurableService").initDurableService;
-type InitDurableWorker =
-  typeof import("../../durable/core/DurableWorker").initDurableWorker;
-
 describe("durable: createRunnerDurableRuntime (config-only)", () => {
+  const createLoggerMock = () => {
+    const logger = {
+      with: jest.fn(),
+    };
+    logger.with.mockReturnValue(logger);
+    return logger;
+  };
+
   const deps = {
     taskRunner: {} as any,
     eventManager: {} as any,
@@ -13,11 +18,7 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
       tasks: new Map(),
       findIdByDefinition: jest.fn(),
     } as any,
-    logger: {
-      with: jest.fn(() => ({
-        with: jest.fn(() => ({})),
-      })),
-    } as unknown as Logger,
+    logger: createLoggerMock() as unknown as Logger,
   };
 
   beforeEach(() => {
@@ -37,28 +38,16 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     return { initDurableService, fakeService };
   }
 
-  function mockInitDurableWorker() {
-    const fakeWorker = {
-      stop: jest.fn(async () => {}),
+  it("starts an embedded queue consumer only when resources request it", async () => {
+    const { initDurableService, fakeService } = mockInitDurableService();
+    const queue = {
+      consume: jest.fn(async () => {}),
+      ack: jest.fn(),
+      nack: jest.fn(),
     };
 
-    const initDurableWorker = jest.fn<
-      ReturnType<InitDurableWorker>,
-      Parameters<InitDurableWorker>
-    >(async () => fakeWorker as any);
-
-    return { initDurableWorker, fakeWorker };
-  }
-
-  it("starts an embedded queue consumer only when consumeQueue=true", async () => {
-    const { initDurableService, fakeService } = mockInitDurableService();
-    const { initDurableWorker } = mockInitDurableWorker();
-
     jest.doMock("../../durable/core/DurableService", () => ({
       initDurableService,
-    }));
-    jest.doMock("../../durable/core/DurableWorker", () => ({
-      initDurableWorker,
     }));
 
     let createRunnerDurableRuntime!: typeof import("../../durable/core/createRunnerDurableRuntime").createRunnerDurableRuntime;
@@ -71,8 +60,8 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     const durable = await createRunnerDurableRuntime(
       {
         store: {} as any,
-        queue: {} as any,
-        consumeQueue: true,
+        queue: queue as any,
+        roles: { queueConsumer: true },
       },
       deps,
     );
@@ -80,41 +69,8 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     expect(durable).toBeDefined();
     expect(initDurableService).toHaveBeenCalledTimes(1);
     expect(initDurableService.mock.calls[0]?.[0].recovery).toEqual({});
-    expect(initDurableWorker).toHaveBeenCalledTimes(1);
+    expect(queue.consume).toHaveBeenCalledTimes(1);
     expect(fakeService.registerWorker).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not start an embedded queue consumer when consumeQueue=false", async () => {
-    const { initDurableService } = mockInitDurableService();
-    const initDurableWorker = jest.fn();
-
-    jest.doMock("../../durable/core/DurableService", () => ({
-      initDurableService,
-    }));
-    jest.doMock("../../durable/core/DurableWorker", () => ({
-      initDurableWorker,
-    }));
-
-    let createRunnerDurableRuntime!: typeof import("../../durable/core/createRunnerDurableRuntime").createRunnerDurableRuntime;
-    jest.isolateModules(() => {
-      ({
-        createRunnerDurableRuntime,
-      } = require("../../durable/core/createRunnerDurableRuntime"));
-    });
-
-    const durable = await createRunnerDurableRuntime(
-      {
-        store: {} as any,
-        queue: {} as any,
-        consumeQueue: false,
-      },
-      deps,
-    );
-
-    expect(durable).toBeDefined();
-    expect(initDurableService).toHaveBeenCalledTimes(1);
-    expect(initDurableService.mock.calls[0]?.[0].recovery).toEqual({});
-    expect(initDurableWorker).not.toHaveBeenCalled();
   });
 
   it("respects an explicit recovery.onStartup override", async () => {
@@ -123,9 +79,6 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     jest.doMock("../../durable/core/DurableService", () => ({
       initDurableService,
     }));
-    jest.doMock("../../durable/core/DurableWorker", () => ({
-      initDurableWorker: jest.fn(),
-    }));
 
     let createRunnerDurableRuntime!: typeof import("../../durable/core/createRunnerDurableRuntime").createRunnerDurableRuntime;
     jest.isolateModules(() => {
@@ -137,7 +90,6 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     const durable = await createRunnerDurableRuntime(
       {
         store: {} as any,
-        consumeQueue: true,
         recovery: { onStartup: false, concurrency: 3 },
       },
       deps,
@@ -163,9 +115,6 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     jest.doMock("../../durable/core/DurableService", () => ({
       initDurableService,
     }));
-    jest.doMock("../../durable/core/DurableWorker", () => ({
-      initDurableWorker: jest.fn(),
-    }));
 
     let createRunnerDurableRuntime!: typeof import("../../durable/core/createRunnerDurableRuntime").createRunnerDurableRuntime;
     jest.isolateModules(() => {
@@ -177,7 +126,6 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     await createRunnerDurableRuntime(
       {
         store: {} as any,
-        consumeQueue: false,
       },
       {
         ...deps,
@@ -205,9 +153,6 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     jest.doMock("../../durable/core/DurableService", () => ({
       initDurableService,
     }));
-    jest.doMock("../../durable/core/DurableWorker", () => ({
-      initDurableWorker: jest.fn(),
-    }));
 
     let createRunnerDurableRuntime!: typeof import("../../durable/core/createRunnerDurableRuntime").createRunnerDurableRuntime;
     jest.isolateModules(() => {
@@ -219,7 +164,6 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     await createRunnerDurableRuntime(
       {
         store: {} as any,
-        consumeQueue: false,
       },
       {
         ...deps,

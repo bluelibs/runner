@@ -4,6 +4,7 @@ import type { IEventDefinition } from "../../../../types/event";
 import type { ITask } from "../../../../types/task";
 import type { IValidationSchema } from "../../../../defs";
 import type { AuditLogger } from "./AuditLogger";
+import type { Logger } from "../../../../models/Logger";
 import { DurableAuditEntryKind } from "../audit";
 import {
   type DurableSignalRecord,
@@ -84,20 +85,47 @@ export class SignalHandler {
   constructor(
     private readonly store: IDurableStore,
     private readonly auditLogger: AuditLogger,
+    private readonly logger: Pick<Logger, "warn">,
     private readonly queue: IDurableQueue | undefined,
     private readonly maxAttempts: number,
     private readonly callbacks: SignalHandlerCallbacks,
   ) {}
 
+  private async clearSignalWaitCurrentBestEffort(params: {
+    executionId: string;
+    stepId: string;
+    signalId: string;
+  }): Promise<void> {
+    try {
+      await clearExecutionCurrentIfSuspendedOnStep(
+        this.store,
+        params.executionId,
+        {
+          stepId: params.stepId,
+          kinds: ["waitForSignal"],
+        },
+      );
+    } catch (error) {
+      try {
+        await this.logger.warn(
+          "Durable waitForSignal current cleanup failed; resuming execution anyway.",
+          {
+            executionId: params.executionId,
+            stepId: params.stepId,
+            signalId: params.signalId,
+            error,
+          },
+        );
+      } catch {
+        // Logging must stay best-effort here.
+      }
+    }
+  }
+
   private async resumeExecutionWithFailsafe(
     executionId: string,
     stepId: string,
   ): Promise<void> {
-    if (!this.queue) {
-      await this.callbacks.processExecution(executionId);
-      return;
-    }
-
     const timerId = `signal_resume:${executionId}:${stepId}`;
     await this.store.createTimer({
       id: timerId,
@@ -107,11 +135,15 @@ export class SignalHandler {
       status: TimerStatus.Pending,
     });
 
-    await this.queue.enqueue({
-      type: "resume",
-      payload: { executionId },
-      maxAttempts: this.maxAttempts,
-    });
+    if (this.queue) {
+      await this.queue.enqueue({
+        type: "resume",
+        payload: { executionId },
+        maxAttempts: this.maxAttempts,
+      });
+    } else {
+      await this.callbacks.processExecution(executionId);
+    }
 
     try {
       await this.store.deleteTimer(timerId);
@@ -276,9 +308,10 @@ export class SignalHandler {
         if (!committed) {
           continue;
         }
-        await clearExecutionCurrentIfSuspendedOnStep(this.store, executionId, {
+        await this.clearSignalWaitCurrentBestEffort({
+          executionId,
+          signalId,
           stepId: waiter.stepId,
-          kinds: ["waitForSignal"],
         });
         completedStepId = waiter.stepId;
         shouldResume = true;

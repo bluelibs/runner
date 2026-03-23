@@ -19,7 +19,6 @@ describe("durable: durableResource (config-only)", () => {
 
   function mockCreateRunnerDurableRuntime() {
     const fakeDurable = { service: {} } as unknown as DurableResource;
-
     const createRunnerDurableRuntime = jest.fn<
       ReturnType<CreateRunnerDurableRuntime>,
       Parameters<CreateRunnerDurableRuntime>
@@ -63,7 +62,7 @@ describe("durable: durableResource (config-only)", () => {
     expect(cooldown).toHaveBeenCalledTimes(1);
   });
 
-  it("disposes through disposeDurableService", async () => {
+  it("resolves queue wrappers into runtime config and disposes through it", async () => {
     const { createRunnerDurableRuntime, fakeDurable } =
       mockCreateRunnerDurableRuntime();
     const { disposeDurableService } = mockDisposeDurableService();
@@ -80,23 +79,109 @@ describe("durable: durableResource (config-only)", () => {
       ({ durableResource } = require("../../durable/core/resource"));
     });
 
+    expect(durableResource.context?.()).toEqual({ runtimeConfig: null });
+
+    const transport = {
+      enqueue: jest.fn(),
+      consume: jest.fn(),
+      ack: jest.fn(),
+      nack: jest.fn(),
+    };
+    const runtimeContext = { runtimeConfig: null as any };
     const durable = await durableResource.init!(
-      {} as any,
+      {
+        store: {} as any,
+        queue: transport,
+        roles: { queueConsumer: true },
+      } as any,
       deps as any,
-      {} as any,
+      runtimeContext as any,
     );
 
     await durableResource.dispose!(
       durable,
-      { store: {} } as any,
       {} as any,
       {} as any,
+      runtimeContext as any,
     );
 
     expect(durable).toBe(fakeDurable);
+    expect(createRunnerDurableRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        store: expect.anything(),
+        queue: transport,
+        roles: { queueConsumer: true },
+      }),
+      expect.anything(),
+    );
     expect(disposeDurableService).toHaveBeenCalledWith(
       (durable as any).service,
-      { store: {} },
+      runtimeContext.runtimeConfig,
     );
+  });
+
+  it("skips dispose when init never stored runtimeConfig", async () => {
+    const { disposeDurableService } = mockDisposeDurableService();
+
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime: jest.fn(async () => ({ service: {} })),
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService,
+    }));
+
+    let durableResource!: typeof import("../../durable/core/resource").durableResource;
+    jest.isolateModules(() => {
+      ({ durableResource } = require("../../durable/core/resource"));
+    });
+
+    await durableResource.dispose!(
+      { service: {} } as any,
+      {} as any,
+      {} as any,
+      { runtimeConfig: null } as any,
+    );
+
+    expect(disposeDurableService).not.toHaveBeenCalled();
+  });
+
+  it("keeps direct queue transports producer-only by default", async () => {
+    const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
+
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime,
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let durableResource!: typeof import("../../durable/core/resource").durableResource;
+    jest.isolateModules(() => {
+      ({ durableResource } = require("../../durable/core/resource"));
+    });
+
+    const transport = {
+      enqueue: jest.fn(),
+      consume: jest.fn(),
+      ack: jest.fn(),
+      nack: jest.fn(),
+    };
+
+    await durableResource.init!(
+      {
+        store: {} as any,
+        queue: transport,
+      } as any,
+      deps as any,
+      { runtimeConfig: null } as any,
+    );
+
+    expect(createRunnerDurableRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queue: transport,
+      }),
+      expect.anything(),
+    );
+    expect(createRunnerDurableRuntime.mock.calls[0]?.[0].roles).toBeUndefined();
   });
 });

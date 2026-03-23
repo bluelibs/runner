@@ -141,6 +141,7 @@ export class DurableService implements IDurableService {
     this.signalHandler = new SignalHandler(
       config.store,
       this.auditLogger,
+      this.logger,
       config.queue,
       config.execution?.maxAttempts ?? 3,
       {

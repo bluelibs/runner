@@ -55,17 +55,19 @@ export const memoryDurableResource = r
     const shouldCreateQueue =
       config.queue !== undefined ? config.queue.enabled !== false : false;
     const queue = shouldCreateQueue ? new MemoryQueue() : undefined;
-    const consumeQueue = queue ? (config.queue?.consume ?? false) : false;
 
     const runtimeConfig: RunnerDurableRuntimeConfig = {
       ...config,
       logger: durableLogger,
-      consumeQueue,
       store: new MemoryStore(),
       eventBus: new MemoryEventBus({
         logger: durableLogger.with({ source: "durable.bus.memory" }),
       }),
       queue,
+      roles: {
+        ...config.roles,
+        queueConsumer: queue !== undefined && config.queue?.consume === true,
+      },
     };
 
     resourceContext.runtimeConfig = runtimeConfig;

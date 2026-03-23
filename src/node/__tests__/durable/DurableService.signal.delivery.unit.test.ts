@@ -10,8 +10,10 @@ import { signalSetup, Paid } from "./DurableService.signal.test.helpers";
 import { createSignalWaiterSortKey } from "../../durable/core/signalWaiters";
 import {
   createBareStore,
+  createBufferedLogger,
   sleepingExecution,
 } from "./DurableService.unit.helpers";
+import { createSignalWaitCurrent } from "../../durable/core/current";
 
 const TrimmedNote = defineEvent({
   id: "trimmed-note",
@@ -178,6 +180,134 @@ describe("durable: DurableService - signals delivery", () => {
     expect(queue.enqueued).toEqual([
       { type: "resume", payload: { executionId: "e1" } },
     ]);
+  });
+
+  it("keeps a durable retry path when embedded signal resume processing fails", async () => {
+    const { store, service } = await signalSetup({ queue: false });
+    const processExecution = jest
+      .spyOn(service._executionManager, "processExecution")
+      .mockRejectedValueOnce(new Error("transient-process-failure"))
+      .mockResolvedValueOnce(undefined);
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+
+    await expect(service.signal("e1", Paid, { paidAt: 14 })).rejects.toThrow(
+      "transient-process-failure",
+    );
+
+    expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
+      state: "completed",
+      payload: { paidAt: 14 },
+    });
+
+    const retryTimer = (
+      await store.getReadyTimers(new Date(Date.now() + 1_000))
+    ).find(
+      (timer) =>
+        timer.id === "signal_resume:e1:__signal:paid" &&
+        timer.executionId === "e1" &&
+        timer.type === "retry",
+    );
+    expect(retryTimer).toEqual(
+      expect.objectContaining({
+        id: "signal_resume:e1:__signal:paid",
+        executionId: "e1",
+        type: "retry",
+      }),
+    );
+
+    await service.handleTimer(retryTimer!);
+    expect(processExecution).toHaveBeenCalledTimes(2);
+  });
+
+  it("still resumes when signal-current cleanup fails after delivery commits", async () => {
+    class CleanupFailingStore extends MemoryStore {
+      override async saveExecutionIfStatus(
+        execution: Parameters<MemoryStore["saveExecutionIfStatus"]>[0],
+        expectedStatuses: Parameters<MemoryStore["saveExecutionIfStatus"]>[1],
+      ): Promise<boolean> {
+        if (
+          execution.id === "e1" &&
+          expectedStatuses.includes("sleeping") &&
+          execution.current === undefined
+        ) {
+          throw new Error("signal current cleanup failed");
+        }
+
+        return await super.saveExecutionIfStatus(execution, expectedStatuses);
+      }
+    }
+
+    const store = new CleanupFailingStore();
+    const { logger, logs } = createBufferedLogger();
+    const service = new DurableService({
+      store,
+      logger,
+      tasks: [],
+    });
+    const processExecution = jest
+      .spyOn(service._executionManager, "processExecution")
+      .mockResolvedValue(undefined);
+
+    await store.saveExecution(
+      sleepingExecution({
+        current: createSignalWaitCurrent({
+          signalId: "paid",
+          stepId: "__signal:paid",
+          startedAt: new Date(),
+        }),
+      }),
+    );
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+
+    await expect(service.signal("e1", Paid, { paidAt: 15 })).resolves.toBe(
+      undefined,
+    );
+
+    expect(processExecution).toHaveBeenCalledWith("e1");
+    expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
+      state: "completed",
+      payload: { paidAt: 15 },
+    });
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          message:
+            "Durable waitForSignal current cleanup failed; resuming execution anyway.",
+          error: expect.objectContaining({
+            message: "signal current cleanup failed",
+          }),
+          context: expect.objectContaining({
+            executionId: "e1",
+            signalId: "paid",
+            stepId: "__signal:paid",
+          }),
+        }),
+      ]),
+    );
   });
 
   it("delivers indexed waiters directly without legacy rehydration", async () => {
