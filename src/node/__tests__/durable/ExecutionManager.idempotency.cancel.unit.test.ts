@@ -83,10 +83,51 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       saveExecution: async () => {
         throw genericError.new({ message: "should not save execution" });
       },
-      getExecution: async () => {
-        throw genericError.new({ message: "should not load execution" });
-      },
+      getExecution: async () => null,
       updateExecution: async () => {},
+      listIncompleteExecutions: async () => [],
+      createExecutionWithIdempotencyKey: async () => ({
+        created: false as const,
+        executionId: "existing",
+      }),
+    });
+    const queueEnqueue = jest.fn(async () => "queued");
+
+    const manager = createManager({
+      store,
+      queue: {
+        enqueue: queueEnqueue,
+      } as any,
+    });
+
+    await expect(
+      manager.start(task, undefined, {
+        idempotencyKey: IdempotencyKey.K,
+      }),
+    ).resolves.toBe("existing");
+    expect(queueEnqueue).toHaveBeenCalledWith({
+      type: "execute",
+      payload: { executionId: "existing" },
+      maxAttempts: 3,
+    });
+  });
+
+  it("re-kicks existing executions returned by idempotent start", async () => {
+    const store = createStore({
+      saveExecution: async () => {
+        throw genericError.new({ message: "should not save execution" });
+      },
+      getExecution: async () => ({
+        id: "existing",
+        workflowKey: TaskId.T,
+        input: undefined,
+        status: ExecutionStatus.Pending,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
       createExecutionWithIdempotencyKey: async () => ({
         created: false as const,
@@ -96,18 +137,20 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const manager = createManager({
       store,
-      taskExecutor: {
-        run: async () => {
-          throw genericError.new({ message: "should not execute" });
-        },
-      },
+      taskExecutor: createFixedTaskExecutor({ ok: true }),
     });
+    const processExecution = jest
+      .spyOn(manager, "processExecution")
+      .mockResolvedValue(undefined);
 
     await expect(
       manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).resolves.toBe("existing");
+
+    expect(processExecution).toHaveBeenCalledWith("existing");
+    expect(processExecution).toHaveBeenCalledTimes(1);
   });
 
   it("does not persist twice after an atomic idempotent create succeeds", async () => {

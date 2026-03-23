@@ -161,6 +161,7 @@ export class ExecutionManager {
     });
 
     if (!created.created) {
+      await this.kickoffWithFailsafe(created.executionId);
       return created.executionId;
     }
 
