@@ -79,6 +79,11 @@ type TaskAttemptOutcome =
   | { kind: "completed"; result: unknown }
   | { kind: "already-finalized" };
 
+type ResolvedExecutionWaiter = {
+  executionId: string;
+  stepId: string;
+};
+
 /**
  * Runs durable executions (the "workflow engine" for attempts).
  *
@@ -648,13 +653,17 @@ export class ExecutionManager {
   }
 
   private async resolveExecutionWaiters(execution: Execution): Promise<void> {
-    await withExecutionWaitLock({
+    const resolvedWaiters = await withExecutionWaitLock<
+      ResolvedExecutionWaiter[]
+    >({
       store: this.config.store,
       targetExecutionId: execution.id,
       fn: async () => {
+        const resolvedWaiters: ResolvedExecutionWaiter[] = [];
         const waiters = await this.config.store.listExecutionWaiters(
           execution.id,
         );
+
         for (const waiter of waiters) {
           const stepResult = {
             executionId: waiter.executionId,
@@ -690,20 +699,29 @@ export class ExecutionManager {
             continue;
           }
 
-          await this.clearExecutionWaitCurrentBestEffort({
+          resolvedWaiters.push({
             executionId: waiter.executionId,
             stepId: waiter.stepId,
-            targetExecutionId: execution.id,
-          });
-
-          await this.resumeExecutionWaitParentBestEffort({
-            executionId: waiter.executionId,
-            stepId: waiter.stepId,
-            targetExecutionId: execution.id,
           });
         }
+
+        return resolvedWaiters;
       },
     });
+
+    for (const waiter of resolvedWaiters) {
+      await this.clearExecutionWaitCurrentBestEffort({
+        executionId: waiter.executionId,
+        stepId: waiter.stepId,
+        targetExecutionId: execution.id,
+      });
+
+      await this.resumeExecutionWaitParentBestEffort({
+        executionId: waiter.executionId,
+        stepId: waiter.stepId,
+        targetExecutionId: execution.id,
+      });
+    }
   }
 
   private async resumeExecutionWaitParentBestEffort(params: {

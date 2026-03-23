@@ -188,5 +188,21 @@ describe("durable: DurableExecutionRepository", () => {
     ).rejects.toThrow(
       'Durable repository received unsupported date filter operator "$bad". Allowed operators are $gt, $gte, $lt, $lte.',
     );
+
+    await expect(
+      repository.find({
+        createdAt: {} as any,
+      }),
+    ).rejects.toThrow(
+      "Durable repository date range filters must include at least one of $gt, $gte, $lt, or $lte.",
+    );
+
+    await expect(
+      repository.find({
+        createdAt: { $gt: "2025-01-01" as any },
+      }),
+    ).rejects.toThrow(
+      'Durable repository received an invalid $gt value for {"$gt":"2025-01-01"}. Expected a valid Date instance.',
+    );
   });
 });

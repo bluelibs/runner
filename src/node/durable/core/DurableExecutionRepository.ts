@@ -4,6 +4,7 @@ import {
   resolveRequestedIdFromStore,
   toCanonicalDefinitionFromStore,
 } from "../../../models/StoreLookup";
+import { check, Match } from "../../../tools/check";
 import type { ITask } from "../../../types/task";
 import {
   durableWorkflowTag,
@@ -413,11 +414,35 @@ export class DurableExecutionRepository<
   }
 
   private assertValidDateFilter(filter: DurableExecutionDateFilter): void {
+    const entries = Object.entries(filter);
+    if (entries.length === 0) {
+      durableExecutionInvariantError.throw({
+        message:
+          "Durable repository date range filters must include at least one " +
+          "of $gt, $gte, $lt, or $lte.",
+      });
+    }
+
     const allowedKeys = new Set(["$gt", "$gte", "$lt", "$lte"]);
-    for (const key of Object.keys(filter)) {
+    for (const [key, value] of entries) {
       if (!allowedKeys.has(key)) {
         durableExecutionInvariantError.throw({
           message: `Durable repository received unsupported date filter operator "${key}". Allowed operators are $gt, $gte, $lt, $lte.`,
+        });
+      }
+
+      try {
+        check(
+          value,
+          Match.Where((candidate: unknown): candidate is Date =>
+            this.isDateValue(candidate),
+          ),
+        );
+      } catch {
+        durableExecutionInvariantError.throw({
+          message:
+            `Durable repository received an invalid ${key} value for ` +
+            `${JSON.stringify(filter)}. Expected a valid Date instance.`,
         });
       }
     }

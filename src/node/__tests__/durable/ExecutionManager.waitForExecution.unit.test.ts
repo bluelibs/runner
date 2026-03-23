@@ -1,5 +1,6 @@
 import { DurableService } from "../../durable/core/DurableService";
 import { createExecutionWaitCurrent } from "../../durable/core/current";
+import { waitForExecutionDurably } from "../../durable/core/durable-context/DurableContext.waitForExecution";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { createBufferedLogger, SpyQueue } from "./DurableService.unit.helpers";
@@ -83,6 +84,103 @@ describe("durable: ExecutionManager waitForExecution", () => {
       type: "execute",
       payload: { executionId: "parent-execution" },
     });
+  });
+
+  it("releases the target wait lock before resuming parent executions", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({
+      store,
+      tasks: [],
+    });
+
+    await store.saveExecution({
+      id: "parent-a",
+      workflowKey: "parent-task",
+      input: undefined,
+      status: ExecutionStatus.Sleeping,
+      current: createExecutionWaitCurrent({
+        stepId: "__execution:wait-child",
+        targetExecutionId: "child-execution",
+        targetWorkflowKey: "child-task",
+        startedAt: new Date(),
+      }),
+      attempt: 1,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveExecution({
+      id: "child-execution",
+      workflowKey: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      result: { ok: true },
+      attempt: 2,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "parent-a",
+      stepId: "__execution:wait-child",
+      result: {
+        state: "waiting",
+        targetExecutionId: "child-execution",
+      },
+      completedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "parent-a",
+      targetExecutionId: "child-execution",
+      stepId: "__execution:wait-child",
+    });
+
+    let releaseKickoff!: () => void;
+    const kickoffBlocked = new Promise<void>((resolve) => {
+      releaseKickoff = resolve;
+    });
+    let kickoffStartedResolve!: () => void;
+    const kickoffStarted = new Promise<void>((resolve) => {
+      kickoffStartedResolve = resolve;
+    });
+    jest
+      .spyOn(service._executionManager, "processExecution")
+      .mockImplementationOnce(async () => {
+        kickoffStartedResolve();
+        await kickoffBlocked;
+      });
+
+    const notifyPromise = service._executionManager.notifyExecutionFinished({
+      id: "child-execution",
+      workflowKey: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      result: { ok: true },
+      attempt: 2,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    await kickoffStarted;
+
+    try {
+      await expect(
+        waitForExecutionDurably({
+          store,
+          executionId: "parent-b",
+          targetExecutionId: "child-execution",
+          expectedWorkflowKey: "child-task",
+          assertCanContinue: async () => undefined,
+          assertUniqueStepId: () => undefined,
+        }),
+      ).resolves.toEqual({ ok: true });
+    } finally {
+      releaseKickoff();
+      await notifyPromise;
+    }
   });
 
   it("stores failed waiter state when the child ends in compensation_failed", async () => {
