@@ -16,11 +16,14 @@ import {
 } from "./stress.js";
 import type { StressAgentResult } from "./workflow.js";
 
+const SHORT_SIGNAL_TIMEOUT_MS = 100;
+const INTERACTIVE_SIGNAL_TIMEOUT_MS = 1_000;
+
 test("runs a mixed stress batch with published, rejected, aborted, and cancelled outcomes", async () => {
   const results = await runParallelStressScenario({
     count: 12,
-    reviewTimeoutMs: 250,
-    revisionTimeoutMs: 250,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
     waitTimeoutMs: 10_000,
   });
 
@@ -45,8 +48,8 @@ test("runs a mixed stress batch with published, rejected, aborted, and cancelled
 
 test("rolls back compensated steps when a reviewer aborts", async () => {
   const shape = buildMemoryStressAgentApp("stress-abort", {
-    reviewTimeoutMs: 250,
-    revisionTimeoutMs: 250,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -87,8 +90,8 @@ test("rolls back compensated steps when a reviewer aborts", async () => {
 
 test("handles careful-lane revision and then approval", async () => {
   const shape = buildMemoryStressAgentApp("stress-revise", {
-    reviewTimeoutMs: 250,
-    revisionTimeoutMs: 250,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -150,8 +153,8 @@ test("handles careful-lane revision and then approval", async () => {
 
 test("rejects regulated drafts at compliance and rolls back", async () => {
   const shape = buildMemoryStressAgentApp("stress-reject", {
-    reviewTimeoutMs: 250,
-    revisionTimeoutMs: 250,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -203,8 +206,8 @@ test("rejects regulated drafts at compliance and rolls back", async () => {
 
 test("times out when the first stress policy signal never arrives", async () => {
   const shape = buildMemoryStressAgentApp("stress-policy-timeout", {
-    reviewTimeoutMs: 25,
-    revisionTimeoutMs: 25,
+    reviewTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -230,8 +233,8 @@ test("times out when the first stress policy signal never arrives", async () => 
 
 test("times out when a stress revision never arrives", async () => {
   const shape = buildMemoryStressAgentApp("stress-revision-timeout", {
-    reviewTimeoutMs: 25,
-    revisionTimeoutMs: 25,
+    reviewTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -269,8 +272,8 @@ test("times out when a stress revision never arrives", async () => {
 
 test("aborts when the revision budget is exhausted", async () => {
   const shape = buildMemoryStressAgentApp("stress-revision-budget", {
-    reviewTimeoutMs: 250,
-    revisionTimeoutMs: 250,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -332,8 +335,8 @@ test("aborts when the revision budget is exhausted", async () => {
 
 test("rolls back reserved work when stress evidence collection fails", async () => {
   const shape = buildMemoryStressAgentApp("stress-evidence-failure", {
-    reviewTimeoutMs: 250,
-    revisionTimeoutMs: 250,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -364,8 +367,8 @@ test("rolls back reserved work when stress evidence collection fails", async () 
 
 test("rejects regulated drafts when compliance never answers", async () => {
   const shape = buildMemoryStressAgentApp("stress-compliance-timeout", {
-    reviewTimeoutMs: 25,
-    revisionTimeoutMs: 25,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);

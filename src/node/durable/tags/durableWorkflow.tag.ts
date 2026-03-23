@@ -20,11 +20,6 @@ export interface DurableWorkflowTagConfig {
    */
   category?: string;
   /**
-   * Optional default input used by `durable.describe(task)` when no explicit
-   * input argument is provided.
-   */
-  defaults?: Record<string, unknown>;
-  /**
    * Optional metadata for dashboards/tooling.
    */
   metadata?: Record<string, unknown>;
@@ -39,7 +34,6 @@ export interface DurableWorkflowTagConfig {
 const durableWorkflowConfigPattern = Match.compile({
   key: Match.Optional(Match.NonEmptyString),
   category: Match.Optional(String),
-  defaults: Match.Optional(Object),
   metadata: Match.Optional(Object),
   signals: Match.Optional(
     Match.ArrayOf(Match.ObjectIncluding({ id: Match.NonEmptyString })),

@@ -7,7 +7,6 @@ import type {
   StartAndWaitOptions,
 } from "./service";
 import type { DurableOperator } from "../DurableOperator";
-import type { DurableFlowShape } from "../flowShape";
 import type { DurableAuditEntry } from "../audit";
 import type { Execution, ExecutionStatus, StepResult } from "../types";
 
@@ -165,22 +164,6 @@ export interface IDurableResource extends Pick<
    * Throws if called outside of a durable execution.
    */
   use(): IDurableContext;
-
-  /**
-   * Describe a durable workflow task using real runtime dependencies.
-   *
-   * - Non-durable deps are kept as-is (so pre-step control flow can use them).
-   * - Durable deps are shimmed so `durable.use()` returns the recorder context.
-   *
-   * The task must be registered in the runtime store (ie. part of the app tree).
-   *
-   * Accepts any Runner `ITask`. Generic `TInput` is inferred from the task,
-   * or can be specified explicitly: `describe<MyInput>(task, input)`.
-   */
-  describe<TInput>(
-    task: ITask<TInput, any, any, any, any, any>,
-    input?: TInput,
-  ): Promise<DurableFlowShape>;
 
   /**
    * Returns a cached task-scoped repository for durable execution inspection.

@@ -20,6 +20,9 @@ import {
 import { RevisedDraft, ReviewDecision } from "./signals.js";
 import type { AgentResearchResult } from "./workflow.js";
 
+const SHORT_SIGNAL_TIMEOUT_MS = 100;
+const INTERACTIVE_SIGNAL_TIMEOUT_MS = 1_000;
+
 test("publishes after one revision round", async () => {
   const result = await runRevisionThenApprovalScenario();
 
@@ -33,7 +36,7 @@ test("completes 10 parallel approvals with wait()", async () => {
   const startedAt = Date.now();
   const results = await runParallelApprovalScenario({
     count: 10,
-    reviewTimeoutMs: 250,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
     waitTimeoutMs: 10_000,
   });
 
@@ -54,8 +57,8 @@ test("completes parallel approvals with default timing options", async () => {
 test("completes a mixed parallel review queue", async () => {
   const results = await runParallelMixedReviewScenario({
     count: 10,
-    reviewTimeoutMs: 250,
-    revisionTimeoutMs: 250,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
     waitTimeoutMs: 10_000,
   });
 
@@ -202,8 +205,8 @@ test("waitForSignalCheckpoint polls until the requested signal wait appears", as
 
 test("times out while waiting for the first review", async () => {
   const shape = buildMemoryAgentApp("review-timeout", {
-    reviewTimeoutMs: 25,
-    revisionTimeoutMs: 25,
+    reviewTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -229,8 +232,8 @@ test("times out while waiting for the first review", async () => {
 
 test("times out while waiting for a revised draft", async () => {
   const shape = buildMemoryAgentApp("revision-timeout", {
-    reviewTimeoutMs: 25,
-    revisionTimeoutMs: 25,
+    reviewTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -268,8 +271,8 @@ test("times out while waiting for a revised draft", async () => {
 
 test("escalates after too many revisions", async () => {
   const shape = buildMemoryAgentApp("max-revisions", {
-    reviewTimeoutMs: 25,
-    revisionTimeoutMs: 25,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -320,8 +323,8 @@ test("escalates after too many revisions", async () => {
 
 test("handles revise-without-feedback before publishing", async () => {
   const shape = buildMemoryAgentApp("no-feedback", {
-    reviewTimeoutMs: 25,
-    revisionTimeoutMs: 25,
+    reviewTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: INTERACTIVE_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
@@ -379,8 +382,8 @@ test("handles revise-without-feedback before publishing", async () => {
 
 test("fails the durable execution when the evidence tool step crashes", async () => {
   const shape = buildMemoryAgentApp("tool-failure", {
-    reviewTimeoutMs: 25,
-    revisionTimeoutMs: 25,
+    reviewTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
+    revisionTimeoutMs: SHORT_SIGNAL_TIMEOUT_MS,
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);

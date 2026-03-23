@@ -2,10 +2,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Store } from "../../../models/Store";
 import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask, ITask } from "../../../types/task";
-import type {
-  DependencyMapType,
-  DependencyValuesType,
-} from "../../../types/utilities";
 import type { IDurableContext } from "./interfaces/context";
 import type {
   IDurableExecutionRepository,
@@ -24,7 +20,6 @@ import type { Schedule } from "./types";
 import type { IDurableStore } from "./interfaces/store";
 import { DurableOperator } from "./DurableOperator";
 import { DurableExecutionRepository } from "./DurableExecutionRepository";
-import { recordFlowShape, type DurableFlowShape } from "./flowShape";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { durableExecutionInvariantError } from "../../../errors";
 import {
@@ -97,37 +92,6 @@ export class DurableResource implements IDurableResource {
     return durableContext;
   }
 
-  async describe<TInput>(
-    task: ITask<TInput, any, any, any, any, any>,
-    input?: TInput,
-  ): Promise<DurableFlowShape> {
-    const runnerStore = this.requireRunnerStoreForDescribe();
-
-    const storeTask = runnerStore.tasks.get(task.id);
-    this.assertStoreTaskRegistered(task.id, storeTask);
-
-    const effectiveTask = storeTask.task as AnyTask;
-    if (!storeTask.computedDependencies) {
-      durableExecutionInvariantError.throw({
-        message: `Cannot describe task "${task.id}": task dependencies are not available in the runtime store.`,
-      });
-    }
-    const deps = storeTask.computedDependencies as Record<string, unknown>;
-    const resolvedInput = this.resolveDescribeInput(effectiveTask, input);
-
-    return await recordFlowShape(async (recordingContext) => {
-      const describeDeps = this.createDescribeDependencies(
-        effectiveTask.id,
-        deps,
-        recordingContext,
-      );
-      await effectiveTask.run(
-        resolvedInput as TInput,
-        describeDeps as DependencyValuesType<DependencyMapType>,
-      );
-    });
-  }
-
   getWorkflows(): AnyTask[] {
     const runnerStore = this.requireRunnerStoreForWorkflowDiscovery();
     if (typeof runnerStore.getTagAccessor !== "function") {
@@ -176,15 +140,6 @@ export class DurableResource implements IDurableResource {
     return repository;
   }
 
-  private requireRunnerStoreForDescribe(): Store {
-    const runnerStore = this.runnerStore;
-    this.assertRunnerStore(
-      runnerStore,
-      "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) instead of manually constructing DurableResource.",
-    );
-    return runnerStore;
-  }
-
   private requireRunnerStoreForRepository(): Store {
     const runnerStore = this.runnerStore;
     this.assertRunnerStore(
@@ -223,83 +178,6 @@ export class DurableResource implements IDurableResource {
         message,
       });
     }
-  }
-
-  private assertStoreTaskRegistered(
-    taskId: string,
-    storeTask: ReturnType<Store["tasks"]["get"]>,
-  ): asserts storeTask is NonNullable<ReturnType<Store["tasks"]["get"]>> {
-    if (!storeTask) {
-      durableExecutionInvariantError.throw({
-        message: `Cannot describe task "${taskId}": task is not registered in the runtime store.`,
-      });
-    }
-  }
-
-  private createDescribeDependencies(
-    taskId: string,
-    deps: Record<string, unknown>,
-    recordingContext: unknown,
-  ): Record<string, unknown> {
-    const next: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(deps)) {
-      if (value instanceof DurableResource) {
-        next[key] = new Proxy(value, {
-          get(target, prop, receiver) {
-            if (prop === "use") {
-              return () => recordingContext;
-            }
-            return Reflect.get(target, prop, receiver);
-          },
-        });
-        continue;
-      }
-
-      try {
-        next[key] = structuredClone(value);
-      } catch (error) {
-        durableExecutionInvariantError.throw({
-          message:
-            `Cannot describe task "${taskId}": dependency "${key}" is not structured-cloneable. ` +
-            `Describe runs with dependency snapshots to avoid side effects. Original error: ${this.getCloneErrorMessage(error)}`,
-        });
-      }
-    }
-
-    return next;
-  }
-
-  private resolveDescribeInput<TInput>(
-    task: AnyTask,
-    input: TInput | undefined,
-  ): TInput | undefined {
-    if (input !== undefined) {
-      return input;
-    }
-
-    const tagConfig = durableWorkflowTag.extract(task.tags);
-    if (!tagConfig?.defaults) {
-      return undefined;
-    }
-
-    try {
-      return structuredClone(tagConfig.defaults) as TInput;
-    } catch (error) {
-      durableExecutionInvariantError.throw({
-        message:
-          `Cannot describe task "${task.id}": durableWorkflowTag.defaults could not be cloned. ` +
-          `Ensure defaults contain only structured-cloneable values. Original error: ${this.getCloneErrorMessage(error)}`,
-      });
-    }
-  }
-
-  private getCloneErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
-    }
-
-    return String(error);
   }
 
   start<TInput, TResult>(

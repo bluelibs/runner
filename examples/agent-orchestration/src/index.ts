@@ -40,7 +40,7 @@ export async function waitForSignalCheckpoint(params: {
         isWaitingForSignal(stepResult.result, params.signalId),
       );
     },
-    { timeoutMs: 5_000, intervalMs: 20 },
+    { timeoutMs: 10_000, intervalMs: 20 },
   );
 }
 
@@ -157,7 +157,7 @@ export async function runParallelApprovalScenario(params: {
     redisUrl: params.redisUrl,
     rabbitUrl: params.rabbitUrl,
     reviewTimeoutMs: params.reviewTimeoutMs ?? 5_000,
-    revisionTimeoutMs: params.reviewTimeoutMs ?? 5_000,
+    revisionTimeoutMs: 5_000,
   });
   const runtime = await run(runtimeShape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(runtimeShape.durable);

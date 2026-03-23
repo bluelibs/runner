@@ -27,18 +27,6 @@ export { DurableContext } from "./core/DurableContext";
 export { StepBuilder } from "./core/StepBuilder";
 export { DurableOperator } from "./core/DurableOperator";
 export { DurableWorker, initDurableWorker } from "./core/DurableWorker";
-export type {
-  DurableFlowShape,
-  FlowNode,
-  FlowStepNode,
-  FlowSleepNode,
-  FlowSignalNode,
-  FlowEmitNode,
-  FlowWorkflowNode,
-  FlowExecutionNode,
-  FlowSwitchNode,
-  FlowNoteNode,
-} from "./core/flowShape";
 
 export { MemoryStore } from "./store/MemoryStore";
 export { RedisStore } from "./store/RedisStore";

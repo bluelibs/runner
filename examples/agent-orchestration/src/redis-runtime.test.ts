@@ -120,11 +120,6 @@ test(
       assert.ok(
         discovered.some((task) => task.id === runtime.store.findIdByDefinition(shape.workflow)),
       );
-
-      const described = await service.describe(shape.workflow, {
-        topic: "redis workflow discovery",
-      });
-      assert.ok(described);
     } finally {
       await runtime.dispose();
     }

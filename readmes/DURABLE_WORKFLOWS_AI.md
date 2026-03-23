@@ -81,7 +81,6 @@ const onboarding = r
   .tags([
     tags.durableWorkflow.with({
       category: "users",
-      defaults: { invitedBy: "system" },
     }),
   ])
   .run(async (_input, { durable }) => {
@@ -102,9 +101,8 @@ will not be discoverable via `getWorkflows()`. Execution APIs such as `start()`,
 the task is otherwise registered. Register `resources.durable` once in the app so the
 durable tag definition and durable events are available at runtime.
 
-`tags.durableWorkflow` is discovery metadata, and can also carry optional `defaults` for `describe(...)`.
+`tags.durableWorkflow` is discovery metadata.
 The unified response envelope is produced by `startAndWait(...)`: `{ durable: { executionId }, data }`.
-`defaults` are applied only by `describe(task)` when no explicit describe input is passed.
 It can also declare optional workflow-local `signals` to constrain which signal ids the
 workflow may wait for or receive.
 It may also declare `key`, a stable durable workflow identity persisted as `execution.workflowKey`. If omitted, durable falls back to the canonical runtime task id.
@@ -297,38 +295,6 @@ const result = await durableContext.switch(
 - The matched branch `id` + result are persisted; on replay the cached result is returned immediately.
 - Throws if no branch matches and no default is provided.
 - Audit emits a `switch_evaluated` entry with `branchId` and `durationMs`.
-
-## Describing a flow (static shape export)
-
-Use `durable.describe(...)` to export the structure of a workflow in recording mode. Useful for documentation, visualization, and tooling.
-
-**Easiest: pass the task directly** — no refactoring needed:
-
-```ts
-// Get your durable dependency from runtime, then:
-const durableRuntime = runtime.getResourceValue(durable);
-const shape = await durableRuntime.describe(myTask);
-// shape.nodes = [{ kind: "step", stepId: "validate", ... }, ...]
-
-// TInput is inferred from the task, or can be specified explicitly:
-const shape2 = await durableRuntime.describe<{ orderId: string }>(myTask, {
-  orderId: "123",
-});
-```
-
-The recorder runs the task body in a describe-safe mode, shims `durable.use()` inside the task's `run`, snapshots non-durable dependencies with `structuredClone(...)`, and records every `durableContext.*` operation.
-
-If the task uses `tags.durableWorkflow.with({ defaults: {...} })`, `describe(task)` uses those defaults.
-`describe(task, input)` always overrides tag defaults.
-
-Notes:
-
-- The recorder captures each `durableContext.*` call as a `FlowNode`; durable step bodies are never executed.
-- The task body control flow still runs. Keep describe-safe logic around durable primitives, and avoid arbitrary side effects in the task body itself.
-- Non-durable dependencies must be structured-cloneable or `describe()` fails fast.
-- Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
-- `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
-- Conditional logic should be modeled with `durableContext.switch()` (not JS `if/else`) for the shape to capture it.
 
 ## Versioning (don't get burned)
 

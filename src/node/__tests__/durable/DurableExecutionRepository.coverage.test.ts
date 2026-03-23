@@ -5,7 +5,6 @@ import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 import type { ITask } from "../../../types/task";
-import { createBareStore } from "./DurableService.unit.helpers";
 
 function createTask<TInput = unknown, TResult = string>(
   id: string,
@@ -176,6 +175,105 @@ describe("durable: DurableExecutionRepository coverage", () => {
     ]);
   });
 
+  it("uses direct store lookup for exact id filters instead of scanning workflow pages", async () => {
+    const task = createTask("durable-tests-repository-id-fast-path");
+    const store = new MemoryStore();
+    const repository = createRepository(task, "app.tasks.id-fast-path", store);
+
+    await store.saveExecution({
+      id: "exact-match",
+      workflowKey: "app.tasks.id-fast-path",
+      input: undefined,
+      status: "completed",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date("2025-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2025-01-01T00:00:01.000Z"),
+      completedAt: new Date("2025-01-01T00:00:02.000Z"),
+    });
+    await store.saveExecution({
+      id: "other-workflow",
+      workflowKey: "app.tasks.other",
+      input: undefined,
+      status: "completed",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date("2025-01-02T00:00:00.000Z"),
+      updatedAt: new Date("2025-01-02T00:00:01.000Z"),
+      completedAt: new Date("2025-01-02T00:00:02.000Z"),
+    });
+
+    const listExecutionsSpy = jest.spyOn(store, "listExecutions");
+    const getExecutionSpy = jest.spyOn(store, "getExecution");
+
+    await expect(
+      repository.findOneOrFail({ id: "exact-match" }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        execution: expect.objectContaining({ id: "exact-match" }),
+      }),
+    );
+    await expect(repository.findOne({ id: "missing" })).resolves.toBeNull();
+    await expect(repository.find({ id: "other-workflow" })).resolves.toEqual(
+      [],
+    );
+
+    expect(getExecutionSpy).toHaveBeenCalledWith("exact-match");
+    expect(getExecutionSpy).toHaveBeenCalledWith("missing");
+    expect(getExecutionSpy).toHaveBeenCalledWith("other-workflow");
+    expect(listExecutionsSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the paged execution and empty audit when hydration data is unavailable", async () => {
+    const task = createTask("durable-tests-repository-hydration-fallback");
+    const store = new MemoryStore();
+    const getExecutionSpy = jest
+      .spyOn(store, "getExecution")
+      .mockResolvedValue(null);
+    Object.defineProperty(store, "listAuditEntries", {
+      value: undefined,
+      configurable: true,
+    });
+    const repository = createRepository(
+      task,
+      "app.tasks.hydration-fallback",
+      store,
+    );
+    const persistedExecution = {
+      id: "fallback-exec",
+      workflowKey: "app.tasks.hydration-fallback",
+      input: undefined,
+      status: "completed" as const,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date("2025-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2025-01-01T00:00:01.000Z"),
+      completedAt: new Date("2025-01-01T00:00:02.000Z"),
+    };
+
+    await store.saveExecution(persistedExecution);
+    await store.saveStepResult({
+      executionId: "fallback-exec",
+      stepId: "done",
+      result: "ok",
+      completedAt: new Date("2025-01-01T00:00:03.000Z"),
+    });
+
+    await expect(repository.findOneOrFail()).resolves.toEqual(
+      expect.objectContaining({
+        execution: expect.objectContaining({ id: "fallback-exec" }),
+        steps: [
+          expect.objectContaining({
+            stepId: "done",
+            result: "ok",
+          }),
+        ],
+        audit: [],
+      }),
+    );
+    expect(getExecutionSpy).toHaveBeenCalledWith("fallback-exec");
+  });
+
   it("covers paged list loading and date filter branches", async () => {
     const task = createTask("durable-tests-repository-pages");
     const store = new MemoryStore();
@@ -271,7 +369,7 @@ describe("durable: DurableExecutionRepository coverage", () => {
     );
   });
 
-  it("covers input matching branches and tree hydration fallback paths", async () => {
+  it("covers input matching branches and tree hydration", async () => {
     const task = createTask<
       {
         values: string[];
@@ -280,16 +378,11 @@ describe("durable: DurableExecutionRepository coverage", () => {
       },
       string
     >("durable-tests-repository-inputs");
-    const base = new MemoryStore();
-    const store = createBareStore(base, {
-      getExecution: async (id) =>
-        id === "fallback-root" ? null : await base.getExecution(id),
-      listAuditEntries: undefined,
-    });
+    const store = new MemoryStore();
     const repository = createRepository(task, "app.tasks.inputs", store);
 
-    await base.saveExecution({
-      id: "fallback-root",
+    await store.saveExecution({
+      id: "root",
       workflowKey: "app.tasks.inputs",
       input: {
         values: ["a", "b"],
@@ -303,10 +396,10 @@ describe("durable: DurableExecutionRepository coverage", () => {
       updatedAt: new Date("2025-01-01T00:00:01.000Z"),
       completedAt: new Date("2025-01-01T00:00:02.000Z"),
     });
-    await base.saveExecution({
+    await store.saveExecution({
       id: "child",
       workflowKey: "app.tasks.child",
-      parentExecutionId: "fallback-root",
+      parentExecutionId: "root",
       input: {
         values: ["a", "b"],
         timestamp: new Date("2025-01-01T00:00:00.000Z"),
@@ -319,7 +412,7 @@ describe("durable: DurableExecutionRepository coverage", () => {
       updatedAt: new Date("2025-01-01T01:00:01.000Z"),
       completedAt: new Date("2025-01-01T01:00:02.000Z"),
     });
-    await base.saveExecution({
+    await store.saveExecution({
       id: "grandchild",
       workflowKey: "app.tasks.grandchild",
       parentExecutionId: "child",
@@ -335,7 +428,7 @@ describe("durable: DurableExecutionRepository coverage", () => {
       updatedAt: new Date("2025-01-01T02:00:01.000Z"),
       completedAt: new Date("2025-01-01T02:00:02.000Z"),
     });
-    await base.saveExecution({
+    await store.saveExecution({
       id: "object-mismatch",
       workflowKey: "app.tasks.inputs",
       input: {
@@ -361,7 +454,7 @@ describe("durable: DurableExecutionRepository coverage", () => {
       }),
     ).resolves.toEqual([
       expect.objectContaining({
-        execution: expect.objectContaining({ id: "fallback-root" }),
+        execution: expect.objectContaining({ id: "root" }),
         audit: [],
       }),
     ]);
@@ -379,28 +472,30 @@ describe("durable: DurableExecutionRepository coverage", () => {
       repository.find({ input: { meta: { ok: true } } }),
     ).resolves.toEqual([
       expect.objectContaining({
-        execution: expect.objectContaining({ id: "fallback-root" }),
+        execution: expect.objectContaining({ id: "root" }),
       }),
     ]);
 
-    await expect(repository.findTree({ id: "fallback-root" })).resolves.toEqual(
-      [
-        expect.objectContaining({
-          execution: expect.objectContaining({ id: "fallback-root" }),
-          audit: [],
-          children: [
-            expect.objectContaining({
-              execution: expect.objectContaining({ id: "child" }),
-              children: [
-                expect.objectContaining({
-                  execution: expect.objectContaining({ id: "grandchild" }),
-                }),
-              ],
-            }),
-          ],
-        }),
-      ],
-    );
+    await expect(repository.findTree({ id: "root" })).resolves.toEqual([
+      expect.objectContaining({
+        execution: expect.objectContaining({ id: "root" }),
+        audit: [],
+        children: [
+          expect.objectContaining({
+            execution: expect.objectContaining({ id: "child" }),
+            children: [
+              expect.objectContaining({
+                execution: expect.objectContaining({ id: "grandchild" }),
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]);
+
+    await expect(
+      repository.findOne({ id: "missing-root" }),
+    ).resolves.toBeNull();
 
     await expect(
       repository.findTree({ id: "object-mismatch" }),

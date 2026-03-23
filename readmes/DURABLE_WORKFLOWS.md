@@ -24,7 +24,6 @@
 - [Signals (wait for external events)](#signals-wait-for-external-events)
 - [Compensation / Rollback Pattern](#compensation--rollback-pattern)
 - [Branching with durableContext.switch()](#branching-with-durablecontextswitch)
-- [Describing a Flow (Static Shape Export)](#describing-a-flow-static-shape-export)
 - [Scheduling & Cron Jobs](#scheduling--cron-jobs)
 - [Testing Utilities](#testing-utilities)
 - [Operator & Observability](#operator--observability)
@@ -290,7 +289,6 @@ const onboarding = r
   .tags([
     tags.durableWorkflow.with({
       category: "users",
-      defaults: { invitedBy: "system" },
       signals: [],
     }),
   ])
@@ -315,10 +313,6 @@ durable tag definition and durable events are available at runtime.
 `tags.durableWorkflow` is discovery metadata only. The unified response envelope
 is produced by `durable.startAndWait(...)`:
 `{ durable: { executionId }, data }`.
-
-`tags.durableWorkflow` also supports optional `defaults` used by
-`durable.describe(task)` **only when no explicit describe input is provided**.
-This does not affect `start()`, `startAndWait()`, `schedule()`, or `ensureSchedule()`.
 
 `tags.durableWorkflow` can also declare optional workflow-local signals:
 
@@ -1465,10 +1459,10 @@ This is more explicit and readable than an automatic saga system.
 
 ## Branching with durableContext.switch()
 
-`durableContext.switch()` is a replay-safe branching primitive for durable workflows. Instead of using plain `if/else` (which the flow shape exporter can't capture), model conditional logic with `switch` so that:
+`durableContext.switch()` is a replay-safe branching primitive for durable workflows. Instead of relying on ad-hoc branching around persisted workflow state, model conditional logic with `switch` so that:
 
 1. The branch decision is **persisted** — on replay, matchers are skipped and the cached branch result is returned.
-2. The branch structure is **visible** to the flow-shape recorder (via `durable.describe(...)`) for documentation and visualization.
+2. The branch identity is **auditable** — each evaluation records which branch won, which keeps replay behavior inspectable without re-running matchers.
 
 ### API
 
@@ -1552,86 +1546,6 @@ interface SwitchBranch<TValue, TResult> {
   run: (value: TValue) => Promise<TResult>;
 }
 ```
-
----
-
-## Describing a Flow (Static Shape Export)
-
-Use `durable.describe(...)` to capture the **structure** of a durable workflow in recording mode. It returns a serializable `DurableFlowShape` object that you can use for:
-
-- Documentation generation
-- Visual workflow diagrams
-- Tooling and editor plugins
-- API schema exports
-
-### From an existing task (recommended)
-
-Call `describe()` on your durable dependency, then pass your task directly. It runs the task body in a recording mode that shims `durable.use()`, snapshots non-durable dependencies with `structuredClone(...)`, and records every `durableContext.*` operation:
-
-```typescript
-import { r, run } from "@bluelibs/runner";
-import { resources } from "@bluelibs/runner/node";
-
-const durable = resources.memoryWorkflow.fork("app-durable");
-const app = r
-  .resource("app")
-  .register([resources.durable, durable.with({})])
-  .build();
-const runtime = await run(app);
-
-// TInput is inferred from the task:
-const shape = await runtime.getResourceValue(durable).describe(approveOrder);
-
-// Or specify input explicitly:
-const shape2 = await runtime
-  .getResourceValue(durable)
-  .describe<{ orderId: string }>(approveOrder, { orderId: "123" });
-
-console.log(shape.nodes);
-// [
-//   { kind: "step", stepId: "validate", hasCompensation: false },
-//   { kind: "waitForSignal", signalId: "approved", ... },
-//   { kind: "step", stepId: "ship", hasCompensation: false },
-//   { kind: "emit", eventId: "shipped", stepId: "notify" },
-// ]
-```
-
-If your task is tagged with `tags.durableWorkflow.with({ defaults: {...} })`,
-`describe(task)` (without input) uses a cloned copy of those defaults.
-Passing `describe(task, input)` always wins and replaces tag defaults.
-
-That's it. No refactoring — just call `durable.describe(task)` and get the shape.
-
-Important: `describe()` still executes the task body's control flow. Keep describe-safe logic around durable primitives, and avoid arbitrary side effects inside the task body itself. Non-durable dependencies must be structured-cloneable or `describe()` will fail fast.
-
-### Output shape
-
-```typescript
-interface DurableFlowShape {
-  nodes: FlowNode[];
-}
-
-type FlowNode =
-  | { kind: "step"; stepId: string; hasCompensation: boolean }
-  | { kind: "sleep"; durationMs: number; stepId?: string }
-  | {
-      kind: "waitForSignal";
-      signalId: string;
-      timeoutMs?: number;
-      stepId?: string;
-    }
-  | { kind: "emit"; eventId: string; stepId?: string }
-  | { kind: "switch"; stepId: string; branchIds: string[]; hasDefault: boolean }
-  | { kind: "note"; message: string };
-```
-
-### How it works
-
-The recorder runs your task's `run` function with **real runtime dependencies**, but wraps durable resource dependencies so `durable.use()` returns a **recording context**. That context implements `IDurableContext` and captures each `durableContext.*` call as a `FlowNode` instead of executing it.
-
-The step builder API (`.up()` / `.down()`) is also supported: `hasCompensation` reflects whether `.down()` was called.
-
-`rollback()` is a no-op in the recorder (it's a runtime concern, not a structural one).
 
 ---
 

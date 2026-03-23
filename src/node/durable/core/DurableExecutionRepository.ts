@@ -158,6 +158,15 @@ export class DurableExecutionRepository<
     this.assertValidFilters(filters);
     this.assertValidQueryOptions(options);
 
+    if (filters.id !== undefined) {
+      const execution = await this.getMatchingExecutionById(filters.id);
+      if (!execution || !this.matchesFilters(execution, filters)) {
+        return [];
+      }
+
+      return this.applyQueryOptions([execution], options);
+    }
+
     let executions = (await this.listAllExecutions({
       workflowKey: this.workflowKey,
     })) as Array<Execution<TInput, TResult>>;
@@ -167,6 +176,15 @@ export class DurableExecutionRepository<
     );
 
     return this.applyQueryOptions(executions, options);
+  }
+
+  private async getMatchingExecutionById(
+    executionId: string,
+  ): Promise<Execution<TInput, TResult> | null> {
+    const execution = await this.options.store.getExecution(executionId);
+    return execution && execution.workflowKey === this.workflowKey
+      ? (execution as Execution<TInput, TResult>)
+      : null;
   }
 
   private async listAllExecutions(options?: {
@@ -195,9 +213,6 @@ export class DurableExecutionRepository<
     execution: Execution,
     filters: DurableExecutionFilters<TInput>,
   ): boolean {
-    if (filters.id !== undefined && execution.id !== filters.id) {
-      return false;
-    }
     if (
       filters.parentExecutionId !== undefined &&
       execution.parentExecutionId !== filters.parentExecutionId

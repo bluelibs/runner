@@ -87,21 +87,6 @@ describe("durable: DurableResource", () => {
     );
   });
 
-  it("throws when describe() is called without runner store", async () => {
-    const service = createMockService();
-    const storage = new AsyncLocalStorage<IDurableContext>();
-    const durable = new DurableResource(service, storage);
-
-    const task = r
-      .task("durable-tests-resource-describe-task")
-      .run(async () => "ok")
-      .build();
-
-    await expect(durable.describe(task)).rejects.toThrow(
-      "Durable describe API is not available: runner store was not provided to DurableResource.",
-    );
-  });
-
   it("throws when getRepository() is called without runner store", () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
@@ -469,42 +454,6 @@ describe("durable: DurableResource", () => {
 
     expect(() => durable.getWorkflows()).toThrow(
       "Durable workflow discovery requires Store.getTagAccessor(tag).",
-    );
-  });
-
-  it("throws when describe() is called and dependencies are missing in runner store", async () => {
-    const service = createMockService();
-    const storage = new AsyncLocalStorage<IDurableContext>();
-    const task = r
-      .task("durable-tests-resource-describe-task-missing-deps")
-      .run(async () => "ok")
-      .build();
-
-    const runnerStore = {
-      tasks: new Map([[task.id, { task }]]),
-    } as any;
-    const durable = new DurableResource(
-      service,
-      storage,
-      undefined,
-      runnerStore,
-    );
-
-    await expect(durable.describe(task)).rejects.toThrow(
-      'Cannot describe task "durable-tests-resource-describe-task-missing-deps": task dependencies are not available in the runtime store.',
-    );
-  });
-
-  it("formats clone errors consistently for Error and non-Error values", () => {
-    const service = createMockService();
-    const storage = new AsyncLocalStorage<IDurableContext>();
-    const durable = new DurableResource(service, storage);
-
-    expect((durable as any).getCloneErrorMessage(new Error("boom"))).toBe(
-      "boom",
-    );
-    expect((durable as any).getCloneErrorMessage("boom-string")).toBe(
-      "boom-string",
     );
   });
 
