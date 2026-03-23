@@ -132,4 +132,34 @@ describe("durable: DurableOperator", () => {
       ],
     });
   });
+
+  it("returns an empty audit trail when audit listing is unavailable", async () => {
+    const base = new MemoryStore();
+    const store: IDurableStore = createBareStore(base);
+    const operator = new DurableOperator(store);
+
+    await base.saveExecution({
+      id: "e-no-audit",
+      workflowKey: "orders",
+      input: undefined,
+      status: "completed",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+    await base.saveStepResult({
+      executionId: "e-no-audit",
+      stepId: "step-1",
+      result: { ok: true },
+      completedAt: new Date(),
+    });
+
+    await expect(operator.getExecutionDetail("e-no-audit")).resolves.toEqual({
+      execution: expect.objectContaining({ id: "e-no-audit" }),
+      steps: [expect.objectContaining({ stepId: "step-1" })],
+      audit: [],
+    });
+  });
 });
