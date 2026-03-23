@@ -1,5 +1,6 @@
 import { Serializer } from "../../../serializer";
 import { runtimeSource } from "../../../types/runtimeSource";
+import * as laneAuth from "../../remote-lanes/laneAuth";
 import { applyLocalSimulatedModeRouting } from "../../rpc-lanes/rpcLanes.local-simulated";
 import { applyNetworkModeRouting } from "../../rpc-lanes/rpcLanes.network";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
@@ -139,5 +140,143 @@ describe("rpc-lanes interceptor fallback branches", () => {
 
     expect(result).toEqual({ value: 1 });
     expect(run).toHaveBeenCalledWith({ value: 1 }, undefined, undefined);
+  });
+
+  it("issues and verifies bound lane tokens for local-simulated task routing", async () => {
+    const serializer = new Serializer();
+    const lane = {
+      id: "rpc-lanes-local-simulated-auth-task",
+      policy: {},
+    };
+    const replayProtector = { markOrThrow: jest.fn() };
+    const run = jest.fn(async (input: unknown) => input);
+    const canonicalTaskId = "app.tasks.secured";
+    const taskEntry = { task: { id: "secured", run } };
+    const issueSpy = jest.spyOn(laneAuth, "issueRemoteLaneToken");
+    const verifySpy = jest.spyOn(laneAuth, "verifyRemoteLaneToken");
+    const context = {
+      config: {
+        topology: {
+          bindings: [{ lane, auth: { secret: "task-secret" } }],
+        },
+      },
+      resolved: {
+        taskLaneByTaskId: new Map([[canonicalTaskId, lane]]),
+        eventLaneByEventId: new Map(),
+        replayProtector,
+      },
+      dependencies: {
+        store: {
+          tasks: new Map([[canonicalTaskId, taskEntry]]),
+          events: new Map(),
+          asyncContexts: new Map(),
+        },
+        eventManager: { intercept: jest.fn() },
+        serializer,
+      },
+      resourceId: RPC_LANES_RESOURCE_ID,
+    };
+
+    applyLocalSimulatedModeRouting(context as any);
+    await taskEntry.task.run({ value: 1 });
+
+    const expectedPayloadText = serializer.stringify({ input: { value: 1 } });
+    expect(issueSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        laneId: lane.id,
+        bindingAuth: { secret: "task-secret" },
+        capability: "produce",
+        target: {
+          kind: "rpc-task",
+          targetId: canonicalTaskId,
+          payloadHash: laneAuth.hashRemoteLanePayload(expectedPayloadText),
+        },
+      }),
+    );
+    expect(verifySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        laneId: lane.id,
+        bindingAuth: { secret: "task-secret" },
+        requiredCapability: "produce",
+        expectedTarget: {
+          kind: "rpc-task",
+          targetId: canonicalTaskId,
+          payloadHash: laneAuth.hashRemoteLanePayload(expectedPayloadText),
+        },
+        replayProtector,
+      }),
+    );
+  });
+
+  it("issues and verifies bound lane tokens for local-simulated event routing", async () => {
+    const intercept = jest.fn();
+    const serializer = new Serializer();
+    const lane = { id: "rpc-lanes-local-simulated-auth-event" };
+    const replayProtector = { markOrThrow: jest.fn() };
+    const issueSpy = jest.spyOn(laneAuth, "issueRemoteLaneToken");
+    const verifySpy = jest.spyOn(laneAuth, "verifyRemoteLaneToken");
+    const context = {
+      config: {
+        topology: {
+          bindings: [{ lane, auth: { secret: "event-secret" } }],
+        },
+      },
+      resolved: {
+        taskLaneByTaskId: new Map(),
+        eventLaneByEventId: new Map([["app.events.changed", lane]]),
+        replayProtector,
+      },
+      dependencies: {
+        store: {
+          events: new Map(),
+          asyncContexts: new Map(),
+        },
+        eventManager: { intercept },
+        serializer,
+      },
+      resourceId: RPC_LANES_RESOURCE_ID,
+    };
+
+    applyLocalSimulatedModeRouting(context as any);
+    const interceptor = intercept.mock.calls[0][0];
+    const next = jest.fn(async (emission) => {
+      emission.data.value += 1;
+    });
+    const emission = {
+      id: "app.events.changed",
+      data: { value: 1 },
+      source: runtimeSource.task("rpc-lanes-local-simulated-auth-event.source"),
+    };
+
+    await interceptor(next, emission);
+
+    const expectedPayloadText = serializer.stringify({
+      payload: { value: 1 },
+    });
+    expect(issueSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        laneId: lane.id,
+        bindingAuth: { secret: "event-secret" },
+        capability: "produce",
+        target: {
+          kind: "rpc-event",
+          targetId: emission.id,
+          payloadHash: laneAuth.hashRemoteLanePayload(expectedPayloadText),
+        },
+      }),
+    );
+    expect(verifySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        laneId: lane.id,
+        bindingAuth: { secret: "event-secret" },
+        requiredCapability: "produce",
+        expectedTarget: {
+          kind: "rpc-event",
+          targetId: emission.id,
+          payloadHash: laneAuth.hashRemoteLanePayload(expectedPayloadText),
+        },
+        replayProtector,
+      }),
+    );
   });
 });

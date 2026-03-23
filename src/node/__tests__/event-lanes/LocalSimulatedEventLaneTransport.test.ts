@@ -9,7 +9,11 @@ import { EventLanesDiagnostics } from "../../event-lanes/EventLanesDiagnostics";
 import { LocalSimulatedEventLaneTransport } from "../../event-lanes/LocalSimulatedEventLaneTransport";
 import type { EventLanesResourceContext } from "../../event-lanes/EventLanesInternals";
 import type { EventLaneMessage } from "../../event-lanes/types";
-import { issueRemoteLaneToken } from "../../remote-lanes/laneAuth";
+import {
+  createRemoteLaneReplayProtector,
+  hashRemoteLanePayload,
+  issueRemoteLaneToken,
+} from "../../remote-lanes/laneAuth";
 
 function createContext(
   overrides: Partial<
@@ -29,6 +33,7 @@ function createContext(
     managedQueues: new Set(),
     relaySourcePrefix: "runner.event-lanes.relay:",
     profile: "tests",
+    replayProtector: createRemoteLaneReplayProtector(),
     ...overrides,
   };
 }
@@ -242,6 +247,11 @@ describe("LocalSimulatedEventLaneTransport", () => {
       laneId,
       bindingAuth,
       capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: event.id,
+        payloadHash: hashRemoteLanePayload(JSON.stringify({ value: 1 })),
+      },
     });
     const transport = new LocalSimulatedEventLaneTransport(
       {
@@ -264,6 +274,67 @@ describe("LocalSimulatedEventLaneTransport", () => {
       event,
       { value: 1 },
       expect.objectContaining({ kind: "runtime" }),
+    );
+  });
+
+  it("rejects replayed local-simulated messages after the first successful relay", async () => {
+    const logger = createLogger();
+    const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
+    const eventManager = new EventManager();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
+    const diagnostics = new EventLanesDiagnostics(logger, true);
+    const context = createContext();
+    const event = defineEvent<{ value: number }>({
+      id: "tests-local-simulated-replay-event",
+    });
+    context.eventRouteByEventId.set(event.id, {
+      lane: { id: "tests.local-simulated.lane" },
+    } as any);
+    const store = createStore({
+      events: new Map([[event.id, { event }]]),
+    });
+    const bindingAuth = { secret: "replay-secret" };
+    const payload = JSON.stringify({ value: 1 });
+    const token = issueRemoteLaneToken({
+      laneId: "tests.local-simulated.lane",
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: event.id,
+        payloadHash: hashRemoteLanePayload(payload),
+      },
+    });
+    const transport = new LocalSimulatedEventLaneTransport(
+      {
+        eventManager,
+        serializer: new Serializer(),
+        store,
+        logger,
+      },
+      context,
+      diagnostics,
+      new Map([["tests.local-simulated.lane", bindingAuth]]),
+    );
+    const message = {
+      ...createMessage(event.id),
+      payload,
+      authToken: token,
+    };
+
+    await relay(transport, message);
+    await relay(transport, message);
+
+    expect(emitSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Event lane simulated consume failed.",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          name: "remoteLanes-auth-unauthorized",
+        }),
+      }),
     );
   });
 

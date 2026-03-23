@@ -132,7 +132,7 @@ describe("eventLanes auth in network mode", () => {
     });
   });
 
-  it("allows consumer-only profile to start with public-key verifier only", async () => {
+  it("fails fast for consumer-only profile when public verifier material cannot sign local emits", async () => {
     const keys = createAsymmetricKeys();
     const event = defineEvent({
       id: "tests-event-lanes-auth-network-consumer-public-only-event",
@@ -168,11 +168,12 @@ describe("eventLanes auth in network mode", () => {
       ],
     });
 
-    const runtime = await run(app);
-    await runtime.dispose();
+    await expect(run(app)).rejects.toMatchObject({
+      name: "remoteLanes-auth-signerMissing",
+    });
   });
 
-  it("denies producer path on consumer profile that only has public verifier material", async () => {
+  it("fails fast before startup for consumer profile with public verifier material and an assigned event route", async () => {
     const keys = createAsymmetricKeys();
     const event = defineEvent({
       id: "tests-event-lanes-auth-network-consumer-public-only-produce-event",
@@ -216,10 +217,8 @@ describe("eventLanes auth in network mode", () => {
       ],
     });
 
-    const runtime = await run(app);
-    await expect(runtime.runTask(emitTask as any)).rejects.toMatchObject({
+    await expect(run(app)).rejects.toMatchObject({
       name: "remoteLanes-auth-signerMissing",
     });
-    await runtime.dispose();
   });
 });

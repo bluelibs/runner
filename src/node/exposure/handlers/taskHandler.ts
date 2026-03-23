@@ -49,6 +49,11 @@ interface TaskHandlerDeps {
     req: IncomingMessage,
     taskId: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeTaskBody?: (
+    req: IncomingMessage,
+    taskId: string,
+    payloadText?: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
   sourceResourceId?: string;
 }
 
@@ -72,7 +77,12 @@ function resolveAppErrorId(
   store: NodeExposureDeps["store"],
   error: unknown,
 ): string | undefined {
-  for (const [helperId, helper] of store.errors.entries()) {
+  const errorHelpers = store.errors;
+  if (!errorHelpers) {
+    return undefined;
+  }
+
+  for (const [helperId, helper] of errorHelpers.entries()) {
     try {
       if (helper.is(error)) {
         return helperId;
@@ -99,6 +109,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     allowAsyncContext = () => true,
     resolveAsyncContextAllowList = () => undefined,
     authorizeTask = () => null,
+    authorizeTaskBody = () => null,
     sourceResourceId = RPC_LANES_RESOURCE_ID,
   } = deps;
 
@@ -190,6 +201,12 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
           );
           return;
         }
+        const bodyAuthError = await authorizeTaskBody(req, policyTaskId);
+        if (bodyAuthError) {
+          applyCorsActual(req, res, cors);
+          respondJson(res, bodyAuthError, serializer);
+          return;
+        }
         const finalizePromise = multipart.finalize;
         let taskError: unknown = undefined;
         let taskResult: unknown;
@@ -225,6 +242,12 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       // Raw-body streaming mode: when content-type is application/octet-stream
       // we do not pre-consume the request body and allow task to read from context.req
       if (/^application\/octet-stream(?:;|$)/i.test(contentType)) {
+        const bodyAuthError = await authorizeTaskBody(req, policyTaskId);
+        if (bodyAuthError) {
+          applyCorsActual(req, res, cors);
+          respondJson(res, bodyAuthError, serializer);
+          return;
+        }
         const result = await runWithContext(() =>
           taskRunner.run(storeTask.task, undefined, {
             source: exposureSource,
@@ -244,6 +267,16 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       if (!body.ok) {
         applyCorsActual(req, res, cors);
         respondJson(res, body.response, serializer);
+        return;
+      }
+      const bodyAuthError = await authorizeTaskBody(
+        req,
+        policyTaskId,
+        serializer.stringify({ input: body.value?.input }),
+      );
+      if (bodyAuthError) {
+        applyCorsActual(req, res, cors);
+        respondJson(res, bodyAuthError, serializer);
         return;
       }
       const payload = (() => {

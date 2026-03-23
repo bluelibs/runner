@@ -74,6 +74,46 @@ describe("requestHandlers - event handling", () => {
     expect(emitSpy).not.toHaveBeenCalled();
   });
 
+  it("returns authorization error when authorizeEventBody blocks request", async () => {
+    const emitSpy = jest.fn(async () => undefined);
+    const deps = createRequestHandlersDeps(serializer, {
+      store: {
+        events: new Map([["e-authz-body", { event: { id: "e-authz-body" } }]]),
+        errors: new Map(),
+      },
+      taskRunner: {} as any,
+      eventManager: { emit: emitSpy },
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "event", id: "e-authz-body" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+      authorizeEventBody: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+    });
+
+    const { handleEvent } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/e-authz-body",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { x: 1 } }),
+    });
+    await handleEvent(req, res);
+
+    expect(res._status).toBe(401);
+    expect(emitSpy).not.toHaveBeenCalled();
+  });
+
   it("returns not found when event id is allowed but missing from store", async () => {
     const emitSpy = jest.fn(async () => undefined);
     const deps = createRequestHandlersDeps(serializer, {

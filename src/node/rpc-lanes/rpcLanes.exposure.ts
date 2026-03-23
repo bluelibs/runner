@@ -51,7 +51,16 @@ export async function startRpcLanesExposure(
             return null;
           }
           const binding = resolved.bindingsByLaneId.get(lane.id);
-          return authorizeRpcLaneRequest(req, lane, binding?.auth);
+          return authorizeRpcLaneRequest(
+            req,
+            lane,
+            binding?.auth,
+            {
+              kind: "rpc-task",
+              targetId: canonicalTaskId,
+            },
+            { consumeReplay: false },
+          );
         },
         authorizeEvent: async (req, eventId) => {
           const canonicalEventId = eventId;
@@ -60,7 +69,56 @@ export async function startRpcLanesExposure(
             return null;
           }
           const binding = resolved.bindingsByLaneId.get(lane.id);
-          return authorizeRpcLaneRequest(req, lane, binding?.auth);
+          return authorizeRpcLaneRequest(
+            req,
+            lane,
+            binding?.auth,
+            {
+              kind: "rpc-event",
+              targetId: canonicalEventId,
+            },
+            { consumeReplay: false },
+          );
+        },
+        authorizeTaskBody: async (req, taskId, payloadText) => {
+          const lane = resolved.taskLaneByTaskId.get(taskId);
+          if (!lane || !resolved.serveLaneIds.has(lane.id)) {
+            return null;
+          }
+          const binding = resolved.bindingsByLaneId.get(lane.id);
+          return authorizeRpcLaneRequest(
+            req,
+            lane,
+            binding?.auth,
+            {
+              kind: "rpc-task",
+              targetId: taskId,
+            },
+            {
+              payloadText,
+              replayProtector: resolved.replayProtector,
+            },
+          );
+        },
+        authorizeEventBody: async (req, eventId, payloadText) => {
+          const lane = resolved.eventLaneByEventId.get(eventId);
+          if (!lane || !resolved.serveLaneIds.has(lane.id)) {
+            return null;
+          }
+          const binding = resolved.bindingsByLaneId.get(lane.id);
+          return authorizeRpcLaneRequest(
+            req,
+            lane,
+            binding?.auth,
+            {
+              kind: "rpc-event",
+              targetId: eventId,
+            },
+            {
+              payloadText,
+              replayProtector: resolved.replayProtector,
+            },
+          );
         },
       },
     },

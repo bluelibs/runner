@@ -6,6 +6,11 @@ import {
   symbolRpcLaneRoutedBy,
 } from "../../types/symbols";
 import {
+  hashRemoteLanePayload,
+  issueRemoteLaneToken,
+  verifyRemoteLaneToken,
+} from "../remote-lanes/laneAuth";
+import {
   resolveRegistryAsyncContextIds,
   resolveLaneAsyncContextPolicy,
 } from "../remote-lanes/asyncContextAllowlist";
@@ -13,6 +18,7 @@ import {
   assertTaskOwnership,
   type RpcLanesRuntimeContext,
 } from "./rpcLanes.runtime.utils";
+import { getBindingAuthForRpcLane } from "./rpcLanes.auth";
 
 export function applyLocalSimulatedModeRouting(
   context: RpcLanesRuntimeContext,
@@ -38,8 +44,17 @@ export function applyLocalSimulatedModeRouting(
           dependencyBag: unknown,
           contextArg?: unknown,
         ) => Promise<unknown>;
-        const result = await runInLocalSimulatedScope(lane, async () =>
-          localTask(transportedInput, taskDependencies, taskContext),
+        const result = await runInLocalSimulatedScope(
+          lane,
+          {
+            kind: "rpc-task",
+            targetId: taskId,
+            payloadHash: hashRemoteLanePayload(
+              dependencies.serializer.stringify({ input: transportedInput }),
+            ),
+          },
+          async () =>
+            localTask(transportedInput, taskDependencies, taskContext),
         );
         return roundTrip(result);
       }) as typeof taskEntry.task.run,
@@ -57,11 +72,21 @@ export function applyLocalSimulatedModeRouting(
     }
 
     const transportedPayload = roundTrip(emission.data);
-    const resultPayload = await runInLocalSimulatedScope(lane, async () => {
-      emission.data = transportedPayload;
-      await next(emission);
-      return emission.data;
-    });
+    const resultPayload = await runInLocalSimulatedScope(
+      lane,
+      {
+        kind: "rpc-event",
+        targetId: resolvedEmissionEventId,
+        payloadHash: hashRemoteLanePayload(
+          dependencies.serializer.stringify({ payload: transportedPayload }),
+        ),
+      },
+      async () => {
+        emission.data = transportedPayload;
+        await next(emission);
+        return emission.data;
+      },
+    );
     emission.data = roundTrip(resultPayload);
   });
 }
@@ -91,12 +116,24 @@ function createLocalSimulatedScopeRunner(context: RpcLanesRuntimeContext) {
 
   return async <T>(
     lane: IRpcLaneDefinition,
+    target: {
+      kind: "rpc-task" | "rpc-event";
+      targetId: string;
+      payloadHash?: string;
+    },
     fn: () => Promise<T>,
   ): Promise<T> => {
     const policy = resolveLocalSimulatedAsyncContextPolicy(lane);
     const capturedContexts = captureSerializedAsyncContexts({
       allowList: policy.allowList,
       registry: store.asyncContexts,
+    });
+    const bindingAuth = getBindingAuthForRpcLane(config, lane.id);
+    const token = issueRemoteLaneToken({
+      laneId: lane.id,
+      bindingAuth,
+      capability: "produce",
+      target,
     });
 
     return await new Promise<T>((resolve, reject) => {
@@ -105,13 +142,25 @@ function createLocalSimulatedScopeRunner(context: RpcLanesRuntimeContext) {
           "runner.rpcLanes.localSimulated",
         );
         localSimulatedScope.runInAsyncScope(() => {
-          Promise.resolve(
-            applySerializedAsyncContexts(
-              capturedContexts,
-              fn,
-              policy.allowAsyncContext,
-            ),
-          ).then(resolve, reject);
+          Promise.resolve()
+            .then(async () => {
+              if (token) {
+                verifyRemoteLaneToken({
+                  laneId: lane.id,
+                  bindingAuth,
+                  token,
+                  requiredCapability: "produce",
+                  expectedTarget: target,
+                  replayProtector: context.resolved.replayProtector,
+                });
+              }
+              return await applySerializedAsyncContexts(
+                capturedContexts,
+                fn,
+                policy.allowAsyncContext,
+              );
+            })
+            .then(resolve, reject);
         });
       });
     });

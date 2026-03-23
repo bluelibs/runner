@@ -5,6 +5,15 @@ export {
   type RemoteLaneTokenVerifyInput,
 } from "./laneAuth.tokens";
 export {
+  createRemoteLaneReplayProtector,
+  type RemoteLaneReplayProtector,
+} from "./laneAuth.replay";
+export {
+  hashRemoteLanePayload,
+  type RemoteLaneTokenTarget,
+  type RemoteLaneTokenTargetKind,
+} from "./laneAuth.subject";
+export {
   assertRemoteLaneSignerConfigured,
   assertRemoteLaneVerifierConfigured,
   getRemoteLaneAuthHeaderName,

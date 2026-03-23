@@ -11,6 +11,7 @@ import type { EventLanesDiagnostics } from "./EventLanesDiagnostics";
 import type { EventLanesResourceContext } from "./EventLanesInternals";
 import { isRelayEmission } from "./EventLanesInternals";
 import {
+  hashRemoteLanePayload,
   issueRemoteLaneToken,
   verifyRemoteLaneToken,
 } from "../remote-lanes/laneAuth";
@@ -56,16 +57,22 @@ export class LocalSimulatedEventLaneTransport {
 
       emission.stopPropagation();
       const bindingAuth = this.resolveBindingAuth(eventRoute.lane.id);
+      const payload = this.dependencies.serializer.stringify(emission.data);
       const authToken = issueRemoteLaneToken({
         laneId: eventRoute.lane.id,
         bindingAuth,
         capability: "produce",
+        target: {
+          kind: "event-lane",
+          targetId: eventId,
+          payloadHash: hashRemoteLanePayload(payload),
+        },
       });
       const message: EventLaneMessage = {
         id: `sim-${++this.sequence}`,
         laneId: eventRoute.lane.id,
         eventId,
-        payload: this.dependencies.serializer.stringify(emission.data),
+        payload,
         serializedAsyncContexts: buildSerializedEventLaneAsyncContexts({
           lane: eventRoute.lane,
           store: this.dependencies.store,
@@ -117,6 +124,12 @@ export class LocalSimulatedEventLaneTransport {
         bindingAuth: this.resolveBindingAuth(message.laneId),
         token: message.authToken ?? "",
         requiredCapability: "produce",
+        expectedTarget: {
+          kind: "event-lane",
+          targetId: message.eventId,
+          payloadHash: hashRemoteLanePayload(message.payload),
+        },
+        replayProtector: this.context.replayProtector,
       });
 
       const payload = this.dependencies.serializer.parse(message.payload);

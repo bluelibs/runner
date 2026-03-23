@@ -361,6 +361,19 @@ export const remoteLaneAuthUnauthorizedError = error<
   )
   .build();
 
+export const remoteLanesTopologyConflictError = error<
+  { laneId: string } & DefaultErrorType
+>("remoteLanes-topologyConflict")
+  .format(
+    ({ laneId }) =>
+      `Remote lane "${laneId}" was defined multiple times with distinct instances in one topology. Reuse the same lane definition object across bindings and profiles.`,
+  )
+  .remediation(
+    ({ laneId }) =>
+      `Store lane "${laneId}" in a shared constant and reference that exact instance everywhere in the topology.`,
+  )
+  .build();
+
 export const resourceForkNonLeafUnsupportedError = error<
   { id: string } & DefaultErrorType
 >(RunnerErrorId.ResourceForkNonLeafUnsupported)
@@ -583,6 +596,32 @@ export const eventLaneBindingNotFoundError = error<
   .remediation(
     ({ laneId }) =>
       `Add a binding entry for lane "${laneId}" in eventLanesResource.with({ topology: { bindings: [...] } }).`,
+  )
+  .build();
+
+export const eventLaneAssignmentMismatchError = error<
+  { laneId: string; eventId: string } & DefaultErrorType
+>("eventLanes-assignmentMismatch")
+  .format(
+    ({ laneId, eventId }) =>
+      `Event lane message for lane "${laneId}" referenced event "${eventId}", but that event is not assigned to the lane.`,
+  )
+  .remediation(
+    ({ laneId, eventId }) =>
+      `Ensure producers only publish event "${eventId}" through its configured lane, or update the event lane assignment for "${laneId}".`,
+  )
+  .build();
+
+export const eventLanePayloadMalformedError = error<
+  { laneId: string; eventId: string; reason: string } & DefaultErrorType
+>("eventLanes-payloadMalformed")
+  .format(
+    ({ laneId, eventId, reason }) =>
+      `Event lane message for lane "${laneId}" carried malformed payload for event "${eventId}": ${reason}`,
+  )
+  .remediation(
+    ({ laneId, eventId }) =>
+      `Ensure producers serialize event "${eventId}" with the runtime serializer before publishing it onto lane "${laneId}".`,
   )
   .build();
 

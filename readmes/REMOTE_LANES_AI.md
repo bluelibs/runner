@@ -23,8 +23,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - Payload is deserialized with `serializer.parse(...)`, then re-emitted in-process.
   - If `consume[].hooks.only` is configured for that lane, only those hooks run for the relay re-emit.
   - Allowlisted async contexts are serialized on the producer side and rehydrated on the consumer side.
-  - Auth readiness is role-based: consumed lanes require verifier material; non-consumed lanes require signer material.
-  - In `jwt_asymmetric`, this enables producer-only private key and consumer-only public key setups.
+  - Auth readiness is role-based: consumed lanes require verifier material; produced lanes require signer material.
 - `mode: "transparent"`:
   - Lane transport is bypassed.
   - Lane-assigned events execute locally through the normal event pipeline.
@@ -32,19 +31,21 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - Lane-assigned events use an in-memory simulated relay path.
   - Payload crosses a serializer boundary (`stringify -> parse`) before local re-emit.
   - Lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
-  - If `binding.auth` is configured, the simulated path also signs+verifies JWT lane tokens before relay emit.
+  - If `binding.auth` is configured, the simulated path also signs+verifies the same target-bound JWT lane tokens used in network mode.
   - In `jwt_asymmetric`, local-simulated must have both signer and verifier key material available.
 - Local emulation options without extra services:
   - `transparent` for fastest feedback loops.
   - `local-simulated` for serializer-boundary simulation.
 - Runtime guard rails:
   - lane ids must be non-empty strings (`defineEventLane`, `defineRpcLane`)
+  - Reusing the same lane id with different lane instances across `profiles` / `bindings` fails fast; reuse the same lane object.
   - `applyTo` string ids are validated against container definitions and type (event only).
   - Event cannot be on two different `eventLane`s.
   - Event cannot be on both `eventLane` and `rpcLane` via lane assignment.
   - Deprecated `tags.eventLane` and `tags.eventLaneHook` fail fast at startup.
   - Missing signer material fails fast (`remoteLanes-auth-signerMissing`) for producer roles.
   - Missing verifier material fails fast (`remoteLanes-auth-verifierMissing`) for consumer roles.
+  - Invalid auth, replayed auth, wrong-lane event messages, unknown events, and payload deserialization failures are permanent poison (`nack(false)`).
 - In `transparent` and `local-simulated`, profile `consume` does not start network consumers, but it can still declare lane presence and relay hook policy (`hooks.only`).
 - Relay re-emits bypass lane interception to prevent loops.
 - Hooks run based on event subscriptions after relay re-emit.
@@ -142,8 +143,9 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - `serve` lanes derive server allow-list automatically for lane-assigned tasks/events.
   - Auth remains fail-closed unless explicitly configured otherwise.
   - `auth.allowAnonymous` is auth-only; it does not widen the exposure allow-list.
-  - Lane JWT authorization is validated per served lane before task/event execution.
+  - Lane JWT authorization is validated per served lane before task/event execution, and bound to target id plus serialized payload hash.
 - Runtime guard rails:
+  - Reusing the same lane id with different lane instances across `profiles` / `bindings` fails fast; reuse the same lane object.
   - `applyTo` string ids are validated against container definitions and type (task/event).
   - Task/event cannot be on two different `rpcLane`s.
   - Missing signer material fails fast (`remoteLanes-auth-signerMissing`).

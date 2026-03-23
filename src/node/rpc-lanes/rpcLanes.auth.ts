@@ -6,11 +6,14 @@ import type { RpcLanesResourceConfig } from "./types";
 import {
   assertRemoteLaneSignerConfigured,
   assertRemoteLaneVerifierConfigured,
+  hashRemoteLanePayload,
   issueRemoteLaneToken,
+  type RemoteLaneReplayProtector,
   readRemoteLaneTokenFromHeaders,
   verifyRemoteLaneToken,
   writeRemoteLaneTokenToHeaders,
 } from "../remote-lanes/laneAuth";
+import type { RemoteLaneTokenTarget } from "../remote-lanes/laneAuth";
 
 interface RpcLaneAuthResolvedState {
   mode: string;
@@ -79,14 +82,17 @@ export function enforceRpcLaneAuthReadiness(
   }
 }
 
-export function buildRpcLaneAuthHeaders(
-  lane: IRpcLaneDefinition,
-  bindingAuth: RemoteLaneBindingAuth | undefined,
-): Record<string, string> | undefined {
+export function buildRpcLaneAuthHeaders(options: {
+  lane: IRpcLaneDefinition;
+  bindingAuth: RemoteLaneBindingAuth | undefined;
+  target: RemoteLaneTokenTarget;
+}): Record<string, string> | undefined {
+  const { lane, bindingAuth, target } = options;
   const token = issueRemoteLaneToken({
     laneId: lane.id,
     bindingAuth,
     capability: "produce",
+    target,
   });
   if (!token) {
     return undefined;
@@ -101,6 +107,12 @@ export function authorizeRpcLaneRequest(
   req: IncomingMessage,
   lane: IRpcLaneDefinition,
   bindingAuth: RemoteLaneBindingAuth | undefined,
+  target: Pick<RemoteLaneTokenTarget, "kind" | "targetId">,
+  options?: {
+    payloadText?: string;
+    replayProtector?: RemoteLaneReplayProtector;
+    consumeReplay?: boolean;
+  },
 ): JsonResponse | null {
   if (!bindingAuth || bindingAuth.mode === "none") {
     return null;
@@ -117,6 +129,14 @@ export function authorizeRpcLaneRequest(
       bindingAuth,
       token,
       requiredCapability: "produce",
+      expectedTarget: {
+        ...target,
+        payloadHash: options?.payloadText
+          ? hashRemoteLanePayload(options.payloadText)
+          : undefined,
+      },
+      replayProtector: options?.replayProtector,
+      consumeReplay: options?.consumeReplay,
     });
     return null;
   } catch {

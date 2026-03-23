@@ -338,7 +338,7 @@ sequenceDiagram
     EI->>Q: enqueue { laneId, eventId, payload, authToken, attempts }
 
     Q->>C: consume(message)
-    C->>C: verify lane JWT (binding.auth verifier)
+    C->>C: verify lane JWT (lane + eventId + payload hash + jti)
     C->>C: deserialize payload
     C->>EM: relay emit(event, payload, relay source)
     EM-->>C: hooks execute locally
@@ -576,7 +576,7 @@ sequenceDiagram
       RL->>CM: communicator.task/event(...)
       CM->>EX: HTTP request to /__runner/*
       EX->>EX: exposure auth + allow-list check
-      EX->>EX: verify lane JWT (binding.auth verifier)
+      EX->>EX: verify lane JWT (lane + target id + payload hash + jti)
       EX->>SR: execute task/event
       SR-->>EX: serialized result
       EX-->>CM: HTTP response
@@ -710,6 +710,8 @@ await dispose();
 Use `local-simulated` when you want to verify that your event payloads survive serialization. This catches issues with Dates, RegExp, class instances, and other non-JSON-safe types before they hit production.
 
 When binding auth is configured (`binding.auth`), `local-simulated` also enforces JWT signing+verification so local simulation tests both payload shape and lane security behavior.
+
+`local-simulated` uses the same lane-auth contract shape as `network`: tokens are bound to lane id plus the concrete target id (`eventId` / `taskId`) and serialized payload hash. This means local simulation catches wrong-target and tampered-payload auth failures too, not just serializer issues.
 
 ```typescript
 eventLanesResource.with({
@@ -851,6 +853,9 @@ Binding auth (JWT):
 - JWT mode is configured only at `binding.auth`.
 - Supported modes: `none`, `jwt_hmac`, `jwt_asymmetric`.
 - `local-simulated` enforces auth when configured (it does not bypass lane JWT checks).
+- Lane JWTs are target-bound: Runner signs lane id, capability, target kind/id, payload hash, and a per-token `jti`.
+- Replay protection is runtime-instance local: once a consumer runtime accepts a `jti`, it rejects reuse of that same token.
+- Event-lane consumers reject permanent poison immediately (`nack(false)`) for invalid auth, replayed lane JWTs, unknown events, wrong-lane events, and payload parse/deserialization failures.
 - For asymmetric mode (`jwt_asymmetric`), producers sign with **private keys**, consumers verify with **public keys**.
 - This principle is identical for RPC and Event Lanes.
 
@@ -938,6 +943,7 @@ eventLanesResource.with({
 `local-simulated` note:
 
 - Auth is still enforced.
+- Auth is target-bound to the concrete task/event id and serialized payload hash.
 - For `jwt_asymmetric`, the same runtime signs and verifies during simulation, so binding auth must provide both sides of material.
 - Event lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
 - RPC lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
@@ -972,6 +978,7 @@ When routing does not behave as expected, check in this order:
 ### Core Guard Rails
 
 - Lane ids must be non-empty strings.
+- Reuse the exact same lane definition object across `profiles` and `bindings`; repeating the same lane id with different lane instances fails fast.
 - Event definitions must not end up routed through both lane systems (`eventLane` + `rpcLane`).
 - A definition cannot be assigned to two different lanes in the same lane system.
 - `applyTo` supports either:

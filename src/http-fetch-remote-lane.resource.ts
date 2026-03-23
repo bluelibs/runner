@@ -9,6 +9,7 @@ import type {
   ExposureFetchClient,
 } from "./remote-lanes/http/types";
 import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
+import { buildAsyncContextHeader } from "./node/remote-lanes/asyncContextAllowlist";
 import { linkAbortSignals } from "./tools/abortSignals";
 import { RUNNER_ASYNC_CONTEXT_HEADER } from "./remote-lanes/http/constants";
 export { normalizeError } from "./tools/normalizeError";
@@ -162,19 +163,15 @@ export function createExposureFetch(
   }
 
   const buildContextHeader = () => {
-    if (!cfg.contexts || cfg.contexts.length === 0) return undefined;
-    const map: Record<string, string> = {};
-    for (const asyncContext of cfg.contexts) {
-      try {
-        const value = asyncContext.use();
-        map[asyncContext.id] = asyncContext.serialize(value);
-      } catch {
-        // context absent; ignore
-      }
+    if (!cfg.contexts || cfg.contexts.length === 0) {
+      return undefined;
     }
-    const keys = Object.keys(map);
-    if (keys.length === 0) return undefined;
-    return cfg.serializer.stringify(map);
+
+    return buildAsyncContextHeader({
+      allowList: undefined,
+      registry: new Map(cfg.contexts.map((context) => [context.id, context])),
+      serializer: cfg.serializer,
+    });
   };
 
   return {

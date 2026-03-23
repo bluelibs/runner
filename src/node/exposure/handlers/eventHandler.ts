@@ -41,6 +41,11 @@ interface EventHandlerDeps {
     req: IncomingMessage,
     eventId: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeEventBody?: (
+    req: IncomingMessage,
+    eventId: string,
+    payloadText?: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
   sourceResourceId?: string;
 }
 
@@ -73,6 +78,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     allowAsyncContext = () => true,
     resolveAsyncContextAllowList = () => undefined,
     authorizeEvent = () => null,
+    authorizeEventBody = () => null,
     sourceResourceId = RPC_LANES_RESOURCE_ID,
   } = deps;
   const exposureSource = runtimeSource.resource(
@@ -138,6 +144,16 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
       if (!body.ok) {
         applyCorsActual(req, res, cors);
         respondJson(res, body.response, serializer);
+        return;
+      }
+      const bodyAuthError = await authorizeEventBody(
+        req,
+        policyEventId,
+        serializer.stringify({ payload: body.value?.payload }),
+      );
+      if (bodyAuthError) {
+        applyCorsActual(req, res, cors);
+        respondJson(res, bodyAuthError, serializer);
         return;
       }
       const returnPayload = Boolean(body.value?.returnPayload);

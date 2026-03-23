@@ -1,4 +1,7 @@
-import { issueRemoteLaneToken } from "../../remote-lanes/laneAuth";
+import {
+  hashRemoteLanePayload,
+  issueRemoteLaneToken,
+} from "../../remote-lanes/laneAuth";
 import {
   collectBindingAuthByLaneId,
   enforceEventLaneAuthReadiness,
@@ -150,10 +153,20 @@ describe("eventLanes auth helpers", () => {
   it("verifies message token and handles none/missing-token branches", () => {
     const laneId = "lane.verify";
     const bindingAuth = { secret: "verify-secret" };
+    const message = {
+      eventId: "event.verify",
+      payload: JSON.stringify({ value: 1 }),
+      authToken: undefined,
+    };
     const token = issueRemoteLaneToken({
       laneId,
       bindingAuth,
       capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: message.eventId,
+        payloadHash: hashRemoteLanePayload(message.payload),
+      },
     })!;
 
     expect(() =>
@@ -167,7 +180,7 @@ describe("eventLanes auth helpers", () => {
     expectRunnerErrorId(
       () =>
         verifyEventLaneMessageToken({
-          message: { authToken: undefined } as any,
+          message: { ...message, authToken: undefined } as any,
           laneId,
           bindingAuth,
         }),
@@ -176,7 +189,7 @@ describe("eventLanes auth helpers", () => {
 
     expect(() =>
       verifyEventLaneMessageToken({
-        message: { authToken: token } as any,
+        message: { ...message, authToken: token } as any,
         laneId,
         bindingAuth,
       }),

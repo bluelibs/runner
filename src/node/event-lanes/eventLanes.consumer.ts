@@ -1,6 +1,10 @@
 import { events } from "../../index";
 import { runtimeSource } from "../../types/runtimeSource";
-import { eventLaneEventNotRegisteredError } from "../../errors";
+import {
+  eventLaneAssignmentMismatchError,
+  eventLaneEventNotRegisteredError,
+  eventLanePayloadMalformedError,
+} from "../../errors";
 import type { EventManager } from "../../models/EventManager";
 import type { Logger } from "../../models/Logger";
 import type { Store } from "../../models/Store";
@@ -112,6 +116,7 @@ export async function consumeEventLaneQueueMessage(options: {
         context,
         config,
       }),
+      replayProtector: context.replayProtector,
     });
     const resolvedMessageEventId =
       dependencies.store.events.get(message.eventId)?.event.id ??
@@ -122,8 +127,22 @@ export async function consumeEventLaneQueueMessage(options: {
     if (!eventStoreEntry) {
       eventLaneEventNotRegisteredError.throw({ eventId: message.eventId });
     }
+    const assignedRoute = context.eventRouteByEventId.get(
+      resolvedMessageEventId,
+    );
+    if (!assignedRoute || assignedRoute.lane.id !== message.laneId) {
+      eventLaneAssignmentMismatchError.throw({
+        eventId: resolvedMessageEventId,
+        laneId: message.laneId,
+      });
+    }
 
-    const payload = dependencies.serializer.parse(message.payload);
+    const payload = parseEventLanePayload(
+      message.laneId,
+      resolvedMessageEventId,
+      message.payload,
+      dependencies.serializer,
+    );
     const relaySourceId = `${context.relaySourcePrefix}${context.profile}:${message.laneId}`;
     await diagnostics.logRelayEmit({
       messageId: message.id,
@@ -153,6 +172,23 @@ export async function consumeEventLaneQueueMessage(options: {
       error,
       logger: dependencies.logger,
       delay,
+    });
+  }
+}
+
+function parseEventLanePayload(
+  laneId: string,
+  eventId: string,
+  rawPayload: string,
+  serializer: SerializerLike,
+): unknown {
+  try {
+    return serializer.parse(rawPayload);
+  } catch (error) {
+    eventLanePayloadMalformedError.throw({
+      laneId,
+      eventId,
+      reason: error instanceof Error ? error.message : String(error),
     });
   }
 }
