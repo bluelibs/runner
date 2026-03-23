@@ -65,7 +65,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     await runtime.dispose();
   });
 
-  it("executes via queue + embedded worker and resolves tasks via runner store", async () => {
+  it("executes via queue + embedded queue consumer and resolves tasks via runner store", async () => {
     const store = new MemoryStore();
     const queue = new MemoryQueue();
     const bus = new MemoryEventBus();
@@ -75,7 +75,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
       store,
       queue,
       eventBus: bus,
-      worker: true,
+      consumeQueue: true,
       polling: { interval: 5 },
     });
 

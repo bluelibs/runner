@@ -7,6 +7,7 @@ import type {
   SleepOptions,
   StepOptions,
   SwitchBranch,
+  WaitForSignalResult,
   WaitForExecutionOptions,
   WorkflowOptions,
 } from "./interfaces/context";
@@ -313,19 +314,8 @@ export class DurableContext implements IDurableContext {
 
   async waitForSignal<TPayload>(
     signal: IEventDefinition<TPayload>,
-  ): Promise<TPayload>;
-  async waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-    options: SignalOptions & { timeoutMs: number },
-  ): Promise<{ kind: "signal"; payload: TPayload } | { kind: "timeout" }>;
-  async waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-    options: SignalOptions,
-  ): Promise<TPayload>;
-  async waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
     options?: SignalOptions,
-  ): Promise<any> {
+  ): Promise<WaitForSignalResult<TPayload>> {
     if (
       this.declaredSignalIds !== null &&
       !this.declaredSignalIds.has(signal.id)

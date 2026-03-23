@@ -15,7 +15,7 @@ import type { Logger } from "../../../../models/Logger";
 import type { ExecutionManager } from "./ExecutionManager";
 
 export interface RecoveryManagerConfig {
-  enabledOnInit?: boolean;
+  onStartup?: boolean;
   concurrency?: number;
   claimTtlMs?: number;
 }

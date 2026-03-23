@@ -36,7 +36,7 @@ describe("durable: memoryDurableResource (config-only)", () => {
     return { disposeDurableService };
   }
 
-  it("initializes with a queue when worker=true and disposes via stored runtimeConfig", async () => {
+  it("initializes with a queue when queue.consume=true and disposes via stored runtimeConfig", async () => {
     const { createRunnerDurableRuntime, fakeDurable } =
       mockCreateRunnerDurableRuntime();
     const { disposeDurableService } = mockDisposeDurableService();
@@ -60,7 +60,7 @@ describe("durable: memoryDurableResource (config-only)", () => {
     const ctx = { runtimeConfig: null as any };
     const durable = await memoryDurableResource.init!.call(
       { id: "tenantA-durable" },
-      { worker: true },
+      { queue: { consume: true } },
       deps as any,
       ctx as any,
     );
@@ -68,7 +68,7 @@ describe("durable: memoryDurableResource (config-only)", () => {
     expect(durable).toBe(fakeDurable);
     expect(createRunnerDurableRuntime).toHaveBeenCalledTimes(1);
     const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
-    expect(runtimeConfig?.worker).toBe(true);
+    expect(runtimeConfig?.consumeQueue).toBe(true);
     expect(runtimeConfig?.queue).toBeDefined();
     expect(ctx.runtimeConfig).toBe(runtimeConfig);
 
@@ -84,7 +84,7 @@ describe("durable: memoryDurableResource (config-only)", () => {
     );
   });
 
-  it("defaults to no queue and worker=false when not configured", async () => {
+  it("defaults to no queue and consumeQueue=false when not configured", async () => {
     const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
     jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
       createRunnerDurableRuntime,
@@ -109,7 +109,63 @@ describe("durable: memoryDurableResource (config-only)", () => {
 
     const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
     expect(runtimeConfig?.queue).toBeUndefined();
-    expect(runtimeConfig?.worker).toBe(false);
+    expect(runtimeConfig?.consumeQueue).toBe(false);
+  });
+
+  it("creates a queue by default when the queue block is present", async () => {
+    const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime,
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let memoryDurableResource!: typeof import("../../durable/resources/memoryDurableResource").memoryDurableResource;
+    jest.isolateModules(() => {
+      ({
+        memoryDurableResource,
+      } = require("../../durable/resources/memoryDurableResource"));
+    });
+
+    await memoryDurableResource.init!.call(
+      { id: "tenantA-durable" },
+      { queue: {} },
+      deps as any,
+      { runtimeConfig: null } as any,
+    );
+
+    const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
+    expect(runtimeConfig?.queue).toBeDefined();
+    expect(runtimeConfig?.consumeQueue).toBe(false);
+  });
+
+  it("allows queue.enabled=false to disable queue creation explicitly", async () => {
+    const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime,
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let memoryDurableResource!: typeof import("../../durable/resources/memoryDurableResource").memoryDurableResource;
+    jest.isolateModules(() => {
+      ({
+        memoryDurableResource,
+      } = require("../../durable/resources/memoryDurableResource"));
+    });
+
+    await memoryDurableResource.init!.call(
+      { id: "tenantA-durable" },
+      { queue: { enabled: false, consume: true } },
+      deps as any,
+      { runtimeConfig: null } as any,
+    );
+
+    const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
+    expect(runtimeConfig?.queue).toBeUndefined();
+    expect(runtimeConfig?.consumeQueue).toBe(false);
   });
 
   it("dispose is a no-op if init never stored runtimeConfig", async () => {

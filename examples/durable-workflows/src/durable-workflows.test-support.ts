@@ -41,8 +41,8 @@ function createDurableSetup() {
   const durableRegistration = durable.with({
     store,
     eventBus: new MemoryEventBus(),
-    worker: true,
     polling: { interval: IntervalMs.WorkerPolling },
+    recovery: { onStartup: true },
   });
   return { store, durable, durableRegistration };
 }
@@ -83,7 +83,7 @@ export function buildOrderApp(ns: string) {
 
         const shipment = await durableContext.step("shipOrder", async () => ({
           orderId: validated.orderId,
-          transactionId: confirmation.transactionId,
+          transactionId: confirmation.payload.transactionId,
           status: "shipped" as const,
           shippedAt: Date.now(),
         }));

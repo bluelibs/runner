@@ -149,9 +149,9 @@ test("createScenarioRuntimeShape keeps the memory path when explicit timings are
 
 test("durable config builders expose the real backend contract explicitly", () => {
   assert.deepEqual(createMemoryDurableConfig(), {
-    queue: { enabled: true },
-    worker: true,
+    queue: { consume: true },
     polling: { interval: 20 },
+    recovery: { onStartup: true },
     audit: { enabled: true },
   });
 
@@ -164,9 +164,9 @@ test("durable config builders expose the real backend contract explicitly", () =
     {
       namespace: "durable-contract",
       redis: { url: "redis://localhost:6379" },
-      queue: { url: "amqp://localhost", quorum: true },
-      worker: true,
+      queue: { url: "amqp://localhost", quorum: true, consume: true },
       polling: { interval: 20 },
+      recovery: { onStartup: true },
       audit: { enabled: true },
     },
   );
@@ -234,6 +234,7 @@ test("times out while waiting for a revised draft", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {

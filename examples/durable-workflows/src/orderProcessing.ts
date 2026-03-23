@@ -66,7 +66,7 @@ export const processOrder = r
     const shipment = await durableContext.step("shipOrder", async () => {
       return {
         orderId: validated.orderId,
-        transactionId: confirmation.transactionId,
+        transactionId: confirmation.payload.transactionId,
         status: "shipped" as const,
         shippedAt: Date.now(),
       };

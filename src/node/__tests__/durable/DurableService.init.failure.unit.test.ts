@@ -63,7 +63,7 @@ describe("durable: DurableService init failure cleanup", () => {
         store,
         queue,
         eventBus,
-        recovery: { enabledOnInit: true },
+        recovery: { onStartup: true },
       }),
     ).rejects.toThrow("Durable recovery requires store-level locking");
 
@@ -125,7 +125,7 @@ describe("durable: DurableService init failure cleanup", () => {
         store,
         queue,
         eventBus,
-        recovery: { enabledOnInit: true },
+        recovery: { onStartup: true },
       }),
     ).rejects.toThrow(startupError.message);
 

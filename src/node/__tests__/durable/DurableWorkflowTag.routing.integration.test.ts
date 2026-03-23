@@ -5,7 +5,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-missing",
     );
-    const durableRegistration = durable.with({ worker: false });
+    const durableRegistration = durable.with({ consumeQueue: false });
 
     const task = r
       .task("durable-tests-routing-missing-task")
@@ -32,7 +32,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-direct",
     );
-    const durableRegistration = durable.with({ worker: false });
+    const durableRegistration = durable.with({ consumeQueue: false });
 
     const task = r
       .task("durable-tests-routing-direct-task")
@@ -62,7 +62,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-execute",
     );
-    const durableRegistration = durable.with({ worker: false });
+    const durableRegistration = durable.with({ consumeQueue: false });
 
     const task = r
       .task("durable-tests-routing-execute-task")
@@ -110,7 +110,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-start",
     );
-    const durableRegistration = durable.with({ worker: false });
+    const durableRegistration = durable.with({ consumeQueue: false });
 
     const task = r
       .task("durable-tests-routing-start-task")

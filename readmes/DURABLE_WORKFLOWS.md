@@ -122,7 +122,17 @@ The concrete durable backend:
 
 - Executes Runner tasks via DI (`taskRunner.run(...)`).
 - Provides a **per-resource** durable context, accessed via `durable.use()`.
-- Optionally embeds a worker (`worker: true`) to consume the queue, poll timers, and automatically recover orphaned executions in that process.
+- Lets you configure 3 separate background roles explicitly:
+  - `queue.consume: true` on `resources.memoryWorkflow` / `resources.redisWorkflow` to embed a queue consumer in this process
+  - `polling.enabled: true` to drive timers, sleeps, schedules, and timeout wakeups
+  - `recovery.onStartup: true` to run startup orphan recovery automatically
+
+Queue note:
+
+- On `resources.memoryWorkflow` / `resources.redisWorkflow`, providing a `queue` block means the queue transport is enabled by default.
+- `queue.consume: true` means this runtime also consumes from that queue.
+- `queue.enabled: false` is an explicit override for experiments/toggling.
+- Queue-less runtimes simply omit `queue`.
 
 ### 1) Define a durable task (steps + sleep + signal)
 
@@ -135,7 +145,8 @@ const Approved = r.event<{ approvedBy: string }>("approved").build();
 const durable = resources.memoryWorkflow.fork("app-durable");
 
 const durableRegistration = durable.with({
-  worker: true, // single-process dev/tests
+  queue: { consume: true }, // single-process dev/tests
+  recovery: { onStartup: true },
 });
 
 const approveOrder = r
@@ -362,7 +373,11 @@ const approveOrder = r
 
 const api = r
   .resource("api")
-  .register([resources.durable, durable.with({ worker: false }), approveOrder])
+  .register([
+    resources.durable,
+    durable.with({}),
+    approveOrder,
+  ])
   .dependencies({ durable, approveOrder })
   .init(async (_cfg, { durable, approveOrder }) => {
     const app = express();
@@ -394,24 +409,26 @@ const durable = resources.redisWorkflow.fork("app-durable");
 
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
-  queue: { url: process.env.RABBITMQ_URL! },
-  worker: true,
+  queue: { url: process.env.RABBITMQ_URL!, consume: true },
+  recovery: { onStartup: true },
 });
 ```
 
 Isolation note: `resources.redisWorkflow` derives Redis key prefixes, pub/sub prefixes, and default queue names from the durable resource id (the value you pass to `.fork("...")`). Use different ids (or set `{ namespace }`) to run multiple durable "apps" safely on the same Redis/RabbitMQ.
 
-API nodes typically **disable polling and the embedded worker**:
+API nodes typically disable polling and do not consume the durable queue:
 
 ```ts
 const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
-  worker: false,
   polling: { enabled: false },
 });
 ```
+
+This still configures the queue transport for `start()` / `signal()` handoff.
+It just leaves queue consumption to other runtimes.
 
 ### Scaling in production (recommended topology)
 
@@ -430,20 +447,19 @@ const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
-  worker: false,
   polling: { enabled: false },
 });
 ```
 
-**Worker node config (does background work):**
+**Background node config (consumes queue + polls + recovers):**
 
 ```ts
 const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
-  queue: { url: process.env.RABBITMQ_URL! },
-  worker: true,
+  queue: { url: process.env.RABBITMQ_URL!, consume: true },
   polling: { enabled: true, interval: 1000 },
+  recovery: { onStartup: true },
 });
 ```
 
@@ -974,8 +990,9 @@ const durable = resources.memoryWorkflow.fork("app-durable");
 
 // 3. Register durable resource with config
 const durableRegistration = durable.with({
-  worker: true,
+  queue: { consume: true },
   polling: { enabled: true, interval: 1000 }, // Timer polling interval
+  recovery: { onStartup: true },
 });
 
 // 3. Define a task that uses durable context
@@ -1229,9 +1246,11 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - `StepOptions.timeout` and `execution.timeout` bound how long a single step or the whole execution may run.
   - **Global Timeouts**: `execution.timeout` measures the total time from the very first attempt (`createdAt`) and is not reset on retries or resumptions.
 
-- **Queue and worker semantics**
+- **Queue, consumer, and poller semantics**
   - `IDurableQueue` provides **at-least-once** delivery: messages may be delivered more than once but will not be silently dropped.
-  - Workers must treat queue messages as hints to load state from the store, apply `DurableContext` logic, and then `ack` or `nack` the message. Idempotency is achieved by reading/writing through `IDurableStore`, not by trusting the queue alone.
+  - On the built-in `memoryWorkflow` / `redisWorkflow` resources, `queue: { ... }` means "queue enabled"; `queue.consume: true` means "this runtime consumes it too".
+  - Queue consumers must treat queue messages as hints to load state from the store, apply `DurableContext` logic, and then `ack` or `nack` the message. Idempotency is achieved by reading/writing through `IDurableStore`, not by trusting the queue alone.
+  - Queue-less runtimes still execute workflows directly in-process via the internal task executor; they are not queue consumers unless an actual queue is configured and `consumeQueue` / `queue.consume` is explicitly enabled.
 
 - **Multi-node coordination**
   - `IEventBus` is used to reduce `wait()` latency (publish `execution:<id>` completion events) but does not replace the store.
@@ -1259,8 +1278,8 @@ Return shapes:
 
 | Call                                           | Returns                                                |
 | ---------------------------------------------- | ------------------------------------------------------ |
-| `waitForSignal(signal)`                        | `payload` (throws on timeout)                          |
-| `waitForSignal(signal, { stepId })`            | `payload` (throws on timeout)                          |
+| `waitForSignal(signal)`                        | `{ kind: "signal", payload }`                          |
+| `waitForSignal(signal, { stepId })`            | `{ kind: "signal", payload }`                          |
 | `waitForSignal(signal, { timeoutMs })`         | `{ kind: "signal", payload }` or `{ kind: "timeout" }` |
 | `waitForSignal(signal, { timeoutMs, stepId })` | `{ kind: "signal", payload }` or `{ kind: "timeout" }` |
 
@@ -1274,6 +1293,7 @@ Why this shape matters:
 - `workflow(...)` always forwards `parentExecutionId: durableContext.executionId`
 - `workflow(...)` auto-derives a deterministic `idempotencyKey` from `parentExecutionId + stepId` when one is not explicitly provided
 - `waitForExecution(...)` durably suspends until that child reaches a terminal state
+- `waitForExecution(...)` only accepts other execution ids; waiting on the current execution throws immediately to avoid deadlocks
 - the task argument gives type inference and is checked against the stored durable execution identity; runtime waiting is still keyed by `executionId`
 
 Return shapes:
@@ -1327,7 +1347,10 @@ import { resources } from "@bluelibs/runner/node";
 
 const Paid = r.event<{ paidAt: number }>("paid").build();
 const durable = resources.memoryWorkflow.fork("app-durable");
-const durableRegistration = durable.with({ worker: true });
+const durableRegistration = durable.with({
+  queue: { consume: true },
+  recovery: { onStartup: true },
+});
 
 export const processOrder = r
   .task("process-order")
@@ -1344,7 +1367,7 @@ export const processOrder = r
 
     await durableContext.step("ship", async () => {
       // ship only after payment is confirmed
-      return { ok: true, paidAt: payment.paidAt };
+      return { ok: true, paidAt: payment.payload.paidAt };
     });
   })
   .build();
@@ -1361,7 +1384,7 @@ await durableRuntime.signal(executionId, Paid, { paidAt: Date.now() });
 
 ### Whichever comes first: signal or timeout
 
-If you need "wait for payment confirmation or continue after 1 day", use the timeout variant:
+If you need "wait for payment confirmation or continue after 1 day", use the same result shape with a timeout:
 
 ```typescript
 const outcome = await durableContext.waitForSignal(Paid, {
@@ -1381,12 +1404,17 @@ await durableContext.step("ship", async () => ({
 
 ### Stable `stepId` without changing behavior
 
-You can pass a stable step id for replay stability without changing the return type:
+You can pass a stable step id for replay stability without changing the result shape:
 
 ```typescript
 const payment = await durableContext.waitForSignal(Paid, {
   stepId: "stable-paid",
 });
+
+// payment.kind === "signal"
+await durableContext.step("ship", async () => ({
+  paidAt: payment.payload.paidAt,
+}));
 ```
 
 ---
@@ -1942,7 +1970,7 @@ export interface DurableServiceConfig {
     interval?: number; // Default: 1000ms
   };
   recovery?: {
-    enabledOnInit?: boolean; // Default: worker === true
+    onStartup?: boolean; // Default: false
     concurrency?: number; // Default: 10
     claimTtlMs?: number; // Default: 30000ms
   };
@@ -2111,13 +2139,14 @@ const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL || "redis://localhost:6379" },
   queue: {
     url: process.env.RABBITMQ_URL || "amqp://localhost",
+    consume: true,
     name: "durable-executions",
     quorum: true,
     deadLetter: "durable-dlq",
     prefetch: 10,
   },
-  worker: true, // starts queue consumption + timer polling + automatic orphan recovery
   // polling.enabled defaults to true; keep it on for timers/schedules
+  recovery: { onStartup: true },
 });
 ```
 
@@ -2130,7 +2159,6 @@ const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL || "redis://localhost:6379" },
   queue: { url: process.env.RABBITMQ_URL || "amqp://localhost" },
-  worker: false,
   polling: { enabled: false },
 });
 ```
@@ -2289,7 +2317,8 @@ import { resources } from "@bluelibs/runner/node";
 
 const durable = resources.memoryWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
-  worker: true, // single-process: queue consumer + timer poller + startup recovery
+  queue: { consume: true },
+  recovery: { onStartup: true },
 });
 
 const processOrder = r
@@ -2316,10 +2345,12 @@ Runner resources are definitions built at bootstrap time. Pick the durable resou
 const durableRegistration = process.env.REDIS_URL
   ? resources.redisWorkflow.fork("app-durable").with({
       redis: { url: process.env.REDIS_URL! },
-      worker: true,
+      queue: { url: process.env.RABBITMQ_URL!, consume: true },
+      recovery: { onStartup: true },
     })
   : resources.memoryWorkflow.fork("app-durable").with({
-      worker: true,
+      queue: { consume: true },
+      recovery: { onStartup: true },
     });
 ```
 
@@ -2332,7 +2363,10 @@ import { createHttpClient, r } from "@bluelibs/runner";
 import { resources, rpcLanesResource } from "@bluelibs/runner/node";
 
 const durable = resources.memoryWorkflow.fork("app-durable");
-const durableRegistration = durable.with({ worker: true });
+const durableRegistration = durable.with({
+  queue: { consume: true },
+  recovery: { onStartup: true },
+});
 
 const processOrder = r
   .task("process-order")
@@ -2394,7 +2428,7 @@ const report = await durable.recover();
 console.log(report);
 ```
 
-Worker-backed durable runtimes already participate in startup recovery automatically when `worker: true`.
+Durable runtimes participate in startup recovery automatically only when `recovery.onStartup` is explicitly set to `true`.
 Use manual `recover()` when you want an explicit remediation pass or a structured report in tests/operator tooling.
 
 The recovery drain:
@@ -2429,7 +2463,7 @@ const task = r
   .run(async (_input: undefined, { durable, Paid }) => {
     const durableContext = durable.use();
     const payment = await durableContext.waitForSignal(Paid);
-    return { ok: true, paidAt: payment.paidAt };
+    return { ok: true, paidAt: payment.payload.paidAt };
   })
   .build();
 

@@ -816,5 +816,5 @@ Prefer feature-driven folders and naming by Runner item type:
 
 ## See Also
 
-- **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `DurableContext` primitives like `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)`. Store is the durable source of truth; queue/pubsub handles wake-ups and worker handoff. See `readmes/DURABLE_WORKFLOWS.md`.
+- **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `DurableContext` primitives like `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` for other executions only; self-waits are rejected to avoid deadlocks. Store is the durable source of truth; queue/pubsub handles wake-ups and queue-consumer handoff. See `readmes/DURABLE_WORKFLOWS.md`.
 - **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response. Only lane-assigned work is rerouted. See `readmes/REMOTE_LANES.md`.

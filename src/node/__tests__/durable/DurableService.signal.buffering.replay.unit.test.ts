@@ -32,7 +32,7 @@ describe("durable: DurableService signal buffering replay", () => {
         signalIndexes: new Map<string, number>(),
         signal: Paid,
       }),
-    ).resolves.toEqual({ paidAt: 22 });
+    ).resolves.toEqual({ kind: "signal", payload: { paidAt: 22 } });
 
     expect((await base.getStepResult("e1", "__signal:paid"))?.result).toEqual({
       state: "completed",

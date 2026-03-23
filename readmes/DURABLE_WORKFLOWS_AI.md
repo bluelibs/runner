@@ -133,7 +133,11 @@ const approveOrder = r
 
 const api = r
   .resource("api")
-  .register([resources.durable, durable.with({ worker: false }), approveOrder])
+  .register([
+    resources.durable,
+    durable.with({}),
+    approveOrder,
+  ])
   .dependencies({ durable, approveOrder })
   .init(async (_cfg, { durable, approveOrder }) => {
     const app = express();
@@ -160,14 +164,15 @@ import { resources } from "@bluelibs/runner/node";
 
 // dev/tests
 const durable = resources.memoryWorkflow.fork("app-durable").with({
-  worker: true,
+  queue: { consume: true },
+  recovery: { onStartup: true },
 });
 
 // production (Redis + optional RabbitMQ queue)
 const durableProd = resources.redisWorkflow.fork("app-durable").with({
   redis: { url: process.env.REDIS_URL! },
-  queue: { url: process.env.RABBITMQ_URL! },
-  worker: true,
+  queue: { url: process.env.RABBITMQ_URL!, consume: true },
+  recovery: { onStartup: true },
 });
 ```
 
@@ -176,6 +181,12 @@ Production mental model:
 - **Redis store** is the source of truth: execution rows, step results, timers, schedules, signal history/queues, waiter state, and optional audit.
 - **RabbitMQ** distributes `execute` / `resume` work to workers. Queue messages carry `executionId` and delivery metadata, not authoritative workflow state.
 - **Redis pub/sub** is the fast notification path for `wait()` / `startAndWait()` and related wakeups.
+
+Queue config shortcut:
+
+- On `memoryWorkflow` / `redisWorkflow`, `queue: { ... }` means the queue transport is enabled.
+- `queue.consume: true` means this runtime also consumes from that queue.
+- Omit `queue` for queue-less direct execution.
 
 Why this matters:
 
@@ -187,7 +198,7 @@ Rule of thumb: RabbitMQ makes it fast; Redis makes it correct.
 
 `waitForSignal()` return shapes:
 
-- `await durableContext.waitForSignal(Signal)` → `payload` (throws on timeout)
+- `await durableContext.waitForSignal(Signal)` → `{ kind: "signal", payload }`
 - `await durableContext.waitForSignal(Signal, { timeoutMs })` → `{ kind: "signal", payload } | { kind: "timeout" }`
 
 Nested workflow pattern:

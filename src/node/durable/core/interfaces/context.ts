@@ -24,11 +24,15 @@ export interface SleepOptions {
  * Options for waitForSignal operations.
  */
 export interface SignalOptions {
-  /** Timeout in milliseconds. If provided, returns a discriminated union with kind. */
+  /** Timeout in milliseconds. If provided, the wait may resolve as `{ kind: "timeout" }`. */
   timeoutMs?: number;
   /** Explicit step ID for replay stability. If not provided, an auto-indexed ID is used. */
   stepId?: string;
 }
+
+export type WaitForSignalResult<TPayload> =
+  | { kind: "signal"; payload: TPayload }
+  | { kind: "timeout" };
 
 /**
  * Options for waiting on another workflow execution to complete.
@@ -134,15 +138,8 @@ export interface IDurableContext {
    */
   waitForSignal<TPayload>(
     signal: IEventDefinition<TPayload>,
-  ): Promise<TPayload>;
-  waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-    options: SignalOptions & { timeoutMs: number },
-  ): Promise<{ kind: "signal"; payload: TPayload } | { kind: "timeout" }>;
-  waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-    options: SignalOptions,
-  ): Promise<TPayload>;
+    options?: SignalOptions,
+  ): Promise<WaitForSignalResult<TPayload>>;
 
   /**
    * Suspend until another durable execution reaches a terminal state.
@@ -155,6 +152,7 @@ export interface IDurableContext {
    *
    * - completed child executions return their result
    * - failed / cancelled / compensation_failed child executions throw
+   * - waiting on `this.executionId` throws immediately to avoid deadlocks
    * - `timeoutMs` changes the return type to a timeout union
    * - if the parent is already suspended, child completion can still resume the
    *   wait during durable cooldown/drain before final disposal closes adapters

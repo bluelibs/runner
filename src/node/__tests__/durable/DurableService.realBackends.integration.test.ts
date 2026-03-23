@@ -30,7 +30,7 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
       store,
       queue,
       eventBus: bus,
-      worker: true,
+      consumeQueue: true,
     });
 
     let ran = 0;

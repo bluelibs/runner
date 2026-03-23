@@ -21,7 +21,7 @@ export interface DurableTestSetupOptions {
   store?: MemoryStore;
   eventBus?: MemoryEventBus;
   queue?: MemoryQueue;
-  worker?: boolean;
+  consumeQueue?: boolean;
   pollingIntervalMs?: number;
   durableConfig?: Partial<DurableResourceRuntimeConfig>;
 }
@@ -32,7 +32,7 @@ export function createDurableTestSetup(
   const store = options.store ?? new MemoryStore();
   const eventBus = options.eventBus ?? new MemoryEventBus();
   const queue = options.queue;
-  const worker = options.worker ?? Boolean(queue);
+  const consumeQueue = options.consumeQueue ?? Boolean(queue);
   const pollingIntervalMs = options.pollingIntervalMs ?? 5;
 
   const durableConfigOverrides = options.durableConfig ?? {};
@@ -41,7 +41,7 @@ export function createDurableTestSetup(
     store,
     eventBus,
     queue,
-    worker,
+    consumeQueue,
     polling: {
       interval: pollingIntervalMs,
       ...durableConfigOverrides.polling,

@@ -17,7 +17,10 @@ export type MemoryDurableResourceConfig = Omit<
    * Defaults to the resource id (ie. the value passed to `.fork(id)`).
    */
   namespace?: string;
-  queue?: { enabled?: boolean };
+  queue?: {
+    enabled?: boolean;
+    consume?: boolean;
+  };
 };
 
 export interface MemoryDurableResourceContext {
@@ -49,14 +52,15 @@ export const memoryDurableResource = r
       });
     const durableLogger = baseLogger.with({ source: "durable.memory" });
 
-    const shouldCreateQueue = config.queue?.enabled ?? config.worker === true;
+    const shouldCreateQueue =
+      config.queue !== undefined ? config.queue.enabled !== false : false;
     const queue = shouldCreateQueue ? new MemoryQueue() : undefined;
-    const worker = config.worker ?? Boolean(queue);
+    const consumeQueue = queue ? (config.queue?.consume ?? false) : false;
 
     const runtimeConfig: RunnerDurableRuntimeConfig = {
       ...config,
       logger: durableLogger,
-      worker,
+      consumeQueue,
       store: new MemoryStore(),
       eventBus: new MemoryEventBus({
         logger: durableLogger.with({ source: "durable.bus.memory" }),

@@ -50,7 +50,7 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     return { initDurableWorker, fakeWorker };
   }
 
-  it("defaults recovery.enabledOnInit to true when worker=true", async () => {
+  it("starts an embedded queue consumer only when consumeQueue=true", async () => {
     const { initDurableService, fakeService } = mockInitDurableService();
     const { initDurableWorker } = mockInitDurableWorker();
 
@@ -72,28 +72,27 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
       {
         store: {} as any,
         queue: {} as any,
-        worker: true,
+        consumeQueue: true,
       },
       deps,
     );
 
     expect(durable).toBeDefined();
     expect(initDurableService).toHaveBeenCalledTimes(1);
-    expect(initDurableService.mock.calls[0]?.[0].recovery).toEqual({
-      enabledOnInit: true,
-    });
+    expect(initDurableService.mock.calls[0]?.[0].recovery).toEqual({});
     expect(initDurableWorker).toHaveBeenCalledTimes(1);
     expect(fakeService.registerWorker).toHaveBeenCalledTimes(1);
   });
 
-  it("defaults recovery.enabledOnInit to false when worker=false", async () => {
+  it("does not start an embedded queue consumer when consumeQueue=false", async () => {
     const { initDurableService } = mockInitDurableService();
+    const initDurableWorker = jest.fn();
 
     jest.doMock("../../durable/core/DurableService", () => ({
       initDurableService,
     }));
     jest.doMock("../../durable/core/DurableWorker", () => ({
-      initDurableWorker: jest.fn(),
+      initDurableWorker,
     }));
 
     let createRunnerDurableRuntime!: typeof import("../../durable/core/createRunnerDurableRuntime").createRunnerDurableRuntime;
@@ -106,19 +105,19 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     const durable = await createRunnerDurableRuntime(
       {
         store: {} as any,
-        worker: false,
+        queue: {} as any,
+        consumeQueue: false,
       },
       deps,
     );
 
     expect(durable).toBeDefined();
     expect(initDurableService).toHaveBeenCalledTimes(1);
-    expect(initDurableService.mock.calls[0]?.[0].recovery).toEqual({
-      enabledOnInit: false,
-    });
+    expect(initDurableService.mock.calls[0]?.[0].recovery).toEqual({});
+    expect(initDurableWorker).not.toHaveBeenCalled();
   });
 
-  it("respects an explicit recovery.enabledOnInit override", async () => {
+  it("respects an explicit recovery.onStartup override", async () => {
     const { initDurableService } = mockInitDurableService();
 
     jest.doMock("../../durable/core/DurableService", () => ({
@@ -138,8 +137,8 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     const durable = await createRunnerDurableRuntime(
       {
         store: {} as any,
-        worker: true,
-        recovery: { enabledOnInit: false, concurrency: 3 },
+        consumeQueue: true,
+        recovery: { onStartup: false, concurrency: 3 },
       },
       deps,
     );
@@ -147,7 +146,7 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     expect(durable).toBeDefined();
     expect(initDurableService).toHaveBeenCalledTimes(1);
     expect(initDurableService.mock.calls[0]?.[0].recovery).toEqual({
-      enabledOnInit: false,
+      onStartup: false,
       concurrency: 3,
     });
   });
@@ -178,7 +177,7 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     await createRunnerDurableRuntime(
       {
         store: {} as any,
-        worker: false,
+        consumeQueue: false,
       },
       {
         ...deps,
@@ -220,7 +219,7 @@ describe("durable: createRunnerDurableRuntime (config-only)", () => {
     await createRunnerDurableRuntime(
       {
         store: {} as any,
-        worker: false,
+        consumeQueue: false,
       },
       {
         ...deps,

@@ -41,7 +41,7 @@ describe("durable: DurableContext coverage", () => {
 
     const waitForSignalSpy = jest
       .spyOn(waitForSignalModule, "waitForSignalDurably")
-      .mockResolvedValue({ paidAt: 1 });
+      .mockResolvedValue({ kind: "signal", payload: { paidAt: 1 } });
     const waitForExecutionSpy = jest
       .spyOn(waitForExecutionModule, "waitForExecutionDurably")
       .mockResolvedValue({ ok: true });
@@ -90,7 +90,10 @@ describe("durable: DurableContext coverage", () => {
       },
     );
 
-    await expect(ctx.waitForSignal(Paid)).resolves.toEqual({ paidAt: 1 });
+    await expect(ctx.waitForSignal(Paid)).resolves.toEqual({
+      kind: "signal",
+      payload: { paidAt: 1 },
+    });
     expect(waitForSignalSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         executionId: "parent-execution",

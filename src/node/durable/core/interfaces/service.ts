@@ -103,8 +103,8 @@ export interface DurableServiceConfig {
     claimTtlMs?: number;
   };
   recovery?: {
-    /** Automatically starts background orphan recovery on service init. */
-    enabledOnInit?: boolean;
+    /** Automatically starts background orphan recovery when the runtime boots. */
+    onStartup?: boolean;
     /** Maximum number of concurrent recovery attempts per drain. Default: 10. */
     concurrency?: number;
     /** Time-to-live for per-execution recovery claims in milliseconds. Default: 30000. */

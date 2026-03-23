@@ -11,6 +11,7 @@ import type {
   SwitchBranch,
   SleepOptions,
   SignalOptions,
+  WaitForSignalResult,
   EmitOptions,
   StepOptions,
   IStepBuilder,
@@ -161,28 +162,17 @@ class FlowRecorder implements IDurableContext {
     return "__flow_workflow_execution_id__";
   }
 
-  waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-  ): Promise<TPayload>;
-  waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-    options: SignalOptions & { timeoutMs: number },
-  ): Promise<{ kind: "signal"; payload: TPayload } | { kind: "timeout" }>;
-  waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-    options: SignalOptions,
-  ): Promise<TPayload>;
   async waitForSignal<TPayload>(
     signal: IEventDefinition<TPayload>,
     options?: SignalOptions,
-  ): Promise<unknown> {
+  ): Promise<WaitForSignalResult<TPayload>> {
     this.nodes.push({
       kind: "waitForSignal",
       signalId: signal.id,
       timeoutMs: options?.timeoutMs,
       stepId: options?.stepId,
     });
-    return undefined as TPayload;
+    return { kind: "signal", payload: undefined as TPayload };
   }
 
   async emit<TPayload>(

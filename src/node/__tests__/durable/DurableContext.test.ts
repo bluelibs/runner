@@ -654,7 +654,10 @@ describe("durable: DurableContext", () => {
     });
     await store.enqueueQueuedSignalRecord!("e1", Paid.id, queuedRecord);
 
-    await expect(ctx.waitForSignal(Paid)).resolves.toEqual({ paidAt: 7 });
+    await expect(ctx.waitForSignal(Paid)).resolves.toEqual({
+      kind: "signal",
+      payload: { paidAt: 7 },
+    });
     expect(
       (await store.getStepResult("e1", "__signal:durable-tests-paid"))?.result,
     ).toEqual({ state: "completed", payload: { paidAt: 7 } });
@@ -680,7 +683,7 @@ describe("durable: DurableContext", () => {
 
     await expect(
       ctx.waitForSignal(Paid, { stepId: "stable-paid" }),
-    ).resolves.toEqual({ paidAt: 9 });
+    ).resolves.toEqual({ kind: "signal", payload: { paidAt: 9 } });
     expect(
       (await store.getStepResult("e1", "__signal:stable-paid"))?.result,
     ).toEqual({
@@ -766,7 +769,8 @@ describe("durable: DurableContext", () => {
     const replayedCtx = new DurableContext(store, bus, "e1", 1);
 
     await expect(replayedCtx.waitForSignal(Paid)).resolves.toEqual({
-      paidAt: 77,
+      kind: "signal",
+      payload: { paidAt: 77 },
     });
     expect(
       (await store.getStepResult("e1", "__signal:durable-tests-paid"))?.result,
@@ -789,7 +793,7 @@ describe("durable: DurableContext", () => {
     });
 
     const paid = await ctx.waitForSignal(Paid);
-    expect(paid.paidAt).toBe(1);
+    expect(paid).toEqual({ kind: "signal", payload: { paidAt: 1 } });
 
     await expect(ctx.waitForSignal(Paid)).rejects.toBeInstanceOf(
       SuspensionSignal,
@@ -825,7 +829,7 @@ describe("durable: DurableContext", () => {
     });
 
     const paid = await ctx.waitForSignal(PaidSignal);
-    expect(paid.paidAt).toBe(123);
+    expect(paid).toEqual({ kind: "signal", payload: { paidAt: 123 } });
   });
 
   it("supports signal timeout waits (and handles replay + timed_out)", async () => {
@@ -865,7 +869,7 @@ describe("durable: DurableContext", () => {
     });
   });
 
-  it("throws when signal is timed out and no timeout handler is used", async () => {
+  it("returns timeout when signal is timed out without explicit timeout options", async () => {
     const { store, ctx } = createContext();
 
     await store.saveStepResult({
@@ -875,7 +879,9 @@ describe("durable: DurableContext", () => {
       completedAt: new Date(),
     });
 
-    await expect(ctx.waitForSignal(Paid)).rejects.toThrow("timed out");
+    await expect(ctx.waitForSignal(Paid)).resolves.toEqual({
+      kind: "timeout",
+    });
   });
 
   it("creates a timeout timer when replaying a plain waiting signal", async () => {
@@ -1272,7 +1278,8 @@ describe("durable: DurableContext", () => {
     });
     const { ctx: defaultCtx } = createContext("e1", 1, defaultStore);
     await expect(defaultCtx.waitForSignal(Paid)).resolves.toEqual({
-      paidAt: 1,
+      kind: "signal",
+      payload: { paidAt: 1 },
     });
     expect(
       (await defaultStore.getStepResult("e1", `__signal:${Paid.id}`))?.result,
@@ -1893,10 +1900,10 @@ describe("durable: DurableContext", () => {
 
     await expect(
       ctx.waitForSignal(Paid, { stepId: "stable-only" }),
-    ).resolves.toEqual({ paidAt: 9 });
+    ).resolves.toEqual({ kind: "signal", payload: { paidAt: 9 } });
   });
 
-  it("throws on timeout when an explicit step id is used without timeout options", async () => {
+  it("returns timeout when an explicit step id is used without timeout options", async () => {
     const { store, ctx } = createContext();
 
     await store.saveStepResult({
@@ -1908,7 +1915,9 @@ describe("durable: DurableContext", () => {
 
     await expect(
       ctx.waitForSignal(Paid, { stepId: "stable-timeout" }),
-    ).rejects.toThrow("timed out");
+    ).resolves.toEqual({
+      kind: "timeout",
+    });
   });
 
   it("ignores audit emitter failures", async () => {
@@ -2066,6 +2075,36 @@ describe("durable: DurableContext", () => {
     await expect(
       ctx.waitForExecution(ChildTextTask, "child-missing"),
     ).rejects.toThrow("target execution does not exist");
+  });
+
+  it("fails fast when waitForExecution() targets the current execution", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.waitForExecution(ChildTextTask, "e1")).rejects.toThrow(
+      "an execution cannot wait for itself because it would deadlock",
+    );
+    await expect(store.listExecutionWaiters("e1")).resolves.toEqual([]);
+    await expect(
+      store.getReadyTimers(new Date(Date.now() + 10)),
+    ).resolves.toEqual([]);
+    await expect(
+      store.getStepResult("e1", "__execution:e1"),
+    ).resolves.toBeNull();
+    const execution = await store.getExecution("e1");
+    expect(execution).not.toBeNull();
+    expect(execution).not.toHaveProperty("current");
   });
 
   it("throws a durable execution error when the child execution failed", async () => {

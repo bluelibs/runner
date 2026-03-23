@@ -20,10 +20,11 @@ export type RunnerDurableRuntimeConfig = Omit<
   "taskExecutor" | "tasks" | "taskResolver" | "contextProvider"
 > & {
   /**
-   * Starts an embedded worker (queue consumer) in this process.
-   * Has effect only when `queue` is configured.
+   * Starts an embedded durable queue consumer in this process.
+   *
+   * This flag has effect only when `queue` is configured.
    */
-  worker?: boolean;
+  consumeQueue?: boolean;
 };
 
 export interface RunnerDurableDeps {
@@ -99,9 +100,6 @@ export async function createRunnerDurableRuntime(
     : runnerEmitter;
 
   const contextStorage = new AsyncLocalStorage<IDurableContext>();
-  const autoRecoveryEnabled =
-    config.recovery?.enabledOnInit ?? config.worker === true;
-
   const service = await initDurableService({
     ...config,
     logger: durableLogger,
@@ -111,7 +109,6 @@ export async function createRunnerDurableRuntime(
     },
     recovery: {
       ...config.recovery,
-      enabledOnInit: autoRecoveryEnabled,
     },
     taskExecutor: {
       run: async <TInput, TResult>(
@@ -140,7 +137,7 @@ export async function createRunnerDurableRuntime(
       contextStorage.run(durableContext, fn),
   });
 
-  if (config.worker === true && config.queue) {
+  if (config.consumeQueue === true && config.queue) {
     const worker = await initDurableWorker(
       service,
       config.queue,

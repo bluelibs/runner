@@ -72,7 +72,7 @@ describe("durable: DurableService auto recovery (unit)", () => {
     const service = await initDurableService({
       store,
       tasks: [task],
-      recovery: { enabledOnInit: true },
+      recovery: { onStartup: true },
       taskExecutor: {
         run: async <TInput, TResult>(
           _task: unknown,
@@ -108,7 +108,7 @@ describe("durable: DurableService auto recovery (unit)", () => {
     await expect(
       initDurableService({
         store,
-        recovery: { enabledOnInit: true },
+        recovery: { onStartup: true },
       }),
     ).rejects.toThrow("Durable recovery requires store-level locking");
   });
@@ -133,7 +133,7 @@ describe("durable: DurableService auto recovery (unit)", () => {
     const service = await initDurableService({
       store,
       tasks: [task],
-      recovery: { enabledOnInit: true },
+      recovery: { onStartup: true },
       taskExecutor: {
         run: async <TResult>(): Promise<TResult> => {
           return (await runSpy()) as TResult;
@@ -178,12 +178,12 @@ describe("durable: DurableService auto recovery (unit)", () => {
     const service1 = await initDurableService({
       store,
       queue,
-      recovery: { enabledOnInit: true },
+      recovery: { onStartup: true },
     });
     const service2 = await initDurableService({
       store,
       queue,
-      recovery: { enabledOnInit: true },
+      recovery: { onStartup: true },
     });
 
     await waitUntil(() => queue.enqueued.length === 2, {
@@ -271,7 +271,7 @@ describe("durable: DurableService auto recovery (unit)", () => {
     const service = await initDurableService({
       store,
       queue,
-      recovery: { enabledOnInit: true },
+      recovery: { onStartup: true },
     });
 
     await waitUntil(() => enqueueSpy.mock.calls.length === 1, {

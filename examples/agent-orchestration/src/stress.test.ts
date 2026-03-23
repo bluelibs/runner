@@ -235,6 +235,7 @@ test("times out when a stress revision never arrives", async () => {
   });
   const runtime = await run(shape.app, { logs: { printThreshold: null } });
   const service = runtime.getResourceValue(shape.durable);
+  const repository = service.getRepository(shape.workflow);
 
   try {
     const executionId = await service.start(shape.workflow, {

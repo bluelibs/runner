@@ -1,4 +1,4 @@
-import type { SignalOptions } from "../interfaces/context";
+import type { SignalOptions, WaitForSignalResult } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import type { IEventDefinition } from "../../../../types/event";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
@@ -16,14 +16,7 @@ import {
   ensureDurableWaitTimer,
   suspendDurableWait,
 } from "../waiterCore";
-import {
-  durableExecutionInvariantError,
-  durableSignalTimeoutError,
-} from "../../../../errors";
-
-export type WaitForSignalOutcome<TPayload> =
-  | { kind: "signal"; payload: TPayload }
-  | { kind: "timeout" };
+import { durableExecutionInvariantError } from "../../../../errors";
 
 type SignalStepState =
   | { state: "waiting"; signalId?: string; timeoutMs?: number }
@@ -112,24 +105,18 @@ export async function waitForSignalDurably<TPayload>(params: {
   signalIndexes: Map<string, number>;
   signal: SignalInput<TPayload>;
   options?: SignalOptions;
-}): Promise<TPayload | WaitForSignalOutcome<TPayload>> {
+}): Promise<WaitForSignalResult<TPayload>> {
   await params.assertCanContinue();
 
   const signalId = getSignalId(params.signal);
-  const hasTimeout = params.options?.timeoutMs !== undefined;
 
   const resolveCompleted = (
     payload: TPayload,
-  ): TPayload | WaitForSignalOutcome<TPayload> => {
-    return hasTimeout ? { kind: "signal", payload } : payload;
-  };
+  ): WaitForSignalResult<TPayload> => ({ kind: "signal", payload });
 
-  const resolveTimedOut = (): WaitForSignalOutcome<TPayload> => {
-    if (!hasTimeout) {
-      durableSignalTimeoutError.throw({ signalId });
-    }
-    return { kind: "timeout" };
-  };
+  const resolveTimedOut = (): WaitForSignalResult<TPayload> => ({
+    kind: "timeout",
+  });
 
   const writeSignalWaitCurrent = async (options: {
     stepId: string;

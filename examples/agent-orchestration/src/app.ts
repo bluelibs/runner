@@ -16,9 +16,9 @@ import {
 
 export function createMemoryDurableConfig() {
   return {
-    queue: { enabled: true },
-    worker: true,
+    queue: { consume: true },
     polling: { interval: 20 },
+    recovery: { onStartup: true },
     audit: { enabled: true },
   } as const;
 }
@@ -31,9 +31,9 @@ export function createRedisDurableConfig(params: {
   return {
     namespace: params.namespace,
     redis: { url: params.redisUrl },
-    queue: { url: params.rabbitUrl, quorum: true },
-    worker: true,
+    queue: { url: params.rabbitUrl, quorum: true, consume: true },
     polling: { interval: 20 },
+    recovery: { onStartup: true },
     audit: { enabled: true },
   } as const;
 }

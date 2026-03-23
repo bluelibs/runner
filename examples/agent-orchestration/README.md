@@ -61,7 +61,7 @@ The production path uses a real durable runtime:
 - `RedisStore` for authoritative workflow state
 - `RedisEventBus` for fast notifications
 - `RabbitMQQueue` for `execute` and `resume` work distribution
-- an embedded worker with polling enabled so signal timeouts and recovery timers can fire
+- an embedded queue consumer with polling enabled so signal timeouts and recovery timers can fire
 
 That is the same architecture described in the main durable workflow docs. The tests run mostly against an in-memory backend for deterministic coverage, and there is an opt-in Redis + RabbitMQ integration test that boots the real backend, discovers the registered durable workflow, describes it, and runs it end-to-end.
 

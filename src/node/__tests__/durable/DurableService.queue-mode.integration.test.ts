@@ -5,7 +5,7 @@ import { MemoryQueue } from "../../durable/queue/MemoryQueue";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 
 describe("durable: queue mode integration", () => {
-  it("executes via queue + worker", async () => {
+  it("executes via queue + embedded queue consumer", async () => {
     const store = new MemoryStore();
     const queue = new MemoryQueue();
     const bus = new MemoryEventBus();
@@ -15,7 +15,7 @@ describe("durable: queue mode integration", () => {
       store,
       queue,
       eventBus: bus,
-      worker: true,
+      consumeQueue: true,
     });
 
     const task = r

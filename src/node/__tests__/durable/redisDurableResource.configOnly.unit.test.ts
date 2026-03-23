@@ -86,7 +86,7 @@ describe("durable: redisDurableResource (config-only)", () => {
     expect(durable).toBe(fakeDurable);
 
     const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
-    expect(runtimeConfig?.worker).toBe(true);
+    expect(runtimeConfig?.consumeQueue).toBe(false);
 
     expect((runtimeConfig?.store as any).cfg).toEqual(
       expect.objectContaining({ prefix: "durable:tenant%20A%2F1:" }),
@@ -115,7 +115,7 @@ describe("durable: redisDurableResource (config-only)", () => {
     );
   });
 
-  it("defaults to worker=false when no queue is configured", async () => {
+  it("defaults to consumeQueue=false when no queue is configured", async () => {
     class RedisStoreMock {
       constructor(public readonly cfg: unknown) {}
     }
@@ -154,7 +154,52 @@ describe("durable: redisDurableResource (config-only)", () => {
 
     const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
     expect(runtimeConfig?.queue).toBeUndefined();
-    expect(runtimeConfig?.worker).toBe(false);
+    expect(runtimeConfig?.consumeQueue).toBe(false);
+  });
+
+  it("allows queue.enabled=false to disable queue creation explicitly", async () => {
+    class RedisStoreMock {
+      constructor(public readonly cfg: unknown) {}
+    }
+    class RedisEventBusMock {
+      constructor(public readonly cfg: unknown) {}
+    }
+
+    const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
+
+    jest.doMock("../../durable/store/RedisStore", () => ({
+      RedisStore: RedisStoreMock,
+    }));
+    jest.doMock("../../durable/bus/RedisEventBus", () => ({
+      RedisEventBus: RedisEventBusMock,
+    }));
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime,
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let redisDurableResource!: typeof import("../../durable/resources/redisDurableResource").redisDurableResource;
+    jest.isolateModules(() => {
+      ({
+        redisDurableResource,
+      } = require("../../durable/resources/redisDurableResource"));
+    });
+
+    await redisDurableResource.init!.call(
+      { id: "tenantA-durable" },
+      {
+        redis: { url: "redis://x" },
+        queue: { url: "amqp://y", enabled: false, consume: true },
+      },
+      deps as any,
+      { runtimeConfig: null } as any,
+    );
+
+    const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
+    expect(runtimeConfig?.queue).toBeUndefined();
+    expect(runtimeConfig?.consumeQueue).toBe(false);
   });
 
   it("respects explicit namespace and prefix overrides (with normalization)", async () => {

@@ -535,7 +535,7 @@ export async function initDurableService(
       await config.eventBus.init();
       eventBusInitialized = true;
     }
-    if (config.recovery?.enabledOnInit === true) {
+    if (config.recovery?.onStartup === true) {
       service.startRecoveryOnInit();
     }
     if (config.polling?.enabled !== false) {

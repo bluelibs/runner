@@ -153,6 +153,14 @@ export async function waitForExecutionDurably<TResult>(params: {
 }): Promise<TResult | WaitForExecutionOutcome<TResult>> {
   await params.assertCanContinue();
 
+  if (params.executionId === params.targetExecutionId) {
+    return durableExecutionInvariantError.throw({
+      message:
+        `Cannot wait for execution '${params.targetExecutionId}': ` +
+        "an execution cannot wait for itself because it would deadlock.",
+    });
+  }
+
   const hasTimeout = params.options?.timeoutMs !== undefined;
   const stepId = createExecutionStepId(
     params.targetExecutionId,

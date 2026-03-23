@@ -35,9 +35,9 @@ test("buildRedisAgentApp wires the production durable backend shape", () => {
     {
       namespace: "redis-shape",
       redis: { url: "redis://localhost:6379" },
-      queue: { url: "amqp://localhost", quorum: true },
-      worker: true,
+      queue: { url: "amqp://localhost", quorum: true, consume: true },
       polling: { interval: 20 },
+      recovery: { onStartup: true },
       audit: { enabled: true },
     },
   );

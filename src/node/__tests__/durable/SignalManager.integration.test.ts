@@ -26,7 +26,10 @@ describe("durable: signals integration", () => {
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
         const payment = await ctx.waitForSignal(Paid);
-        return { ok: true, paidAt: payment.paidAt };
+        if (payment.kind === "timeout") {
+          return { ok: false, paidAt: -1 };
+        }
+        return { ok: true, paidAt: payment.payload.paidAt };
       })
       .build();
 
@@ -121,8 +124,8 @@ describe("durable: signals integration", () => {
     await expect(
       service.wait(executionId, { timeout: 5_000, waitPollIntervalMs: 5 }),
     ).resolves.toEqual({
-      first: { paidAt: 1 },
-      second: { paidAt: 2 },
+      first: { kind: "signal", payload: { paidAt: 1 } },
+      second: { kind: "signal", payload: { paidAt: 2 } },
     });
 
     await runtime.dispose();
@@ -147,7 +150,10 @@ describe("durable: signals integration", () => {
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
         const payment = await ctx.waitForSignal(Paid);
-        return { ok: true, paidAt: payment.paidAt };
+        if (payment.kind === "timeout") {
+          return { ok: false, paidAt: -1 };
+        }
+        return { ok: true, paidAt: payment.payload.paidAt };
       })
       .build();
 

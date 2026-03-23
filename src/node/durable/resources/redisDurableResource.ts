@@ -22,7 +22,9 @@ export type RedisDurableResourceConfig = Omit<
   store?: { prefix?: string };
   eventBus?: { prefix?: string };
   queue?: {
+    enabled?: boolean;
     url: string;
+    consume?: boolean;
     name?: string;
     deadLetter?: string;
     quorum?: boolean;
@@ -69,25 +71,26 @@ export const redisDurableResource = r
       deadLetterQueueName: config.queue?.deadLetter,
     });
 
-    const queue = config.queue
-      ? new RabbitMQQueue({
-          url: config.queue.url,
-          prefetch: config.queue.prefetch,
-          queue: {
-            name: isolation.queueName,
-            quorum: config.queue.quorum,
-            deadLetter: isolation.deadLetterQueueName,
-            messageTtl: config.queue.messageTtl,
-          },
-        })
-      : undefined;
+    const queue =
+      config.queue && config.queue.enabled !== false
+        ? new RabbitMQQueue({
+            url: config.queue.url,
+            prefetch: config.queue.prefetch,
+            queue: {
+              name: isolation.queueName,
+              quorum: config.queue.quorum,
+              deadLetter: isolation.deadLetterQueueName,
+              messageTtl: config.queue.messageTtl,
+            },
+          })
+        : undefined;
 
-    const worker = config.worker ?? Boolean(queue);
+    const consumeQueue = queue ? (config.queue?.consume ?? false) : false;
 
     const runtimeConfig: RunnerDurableRuntimeConfig = {
       ...config,
       logger: durableLogger,
-      worker,
+      consumeQueue,
       store: new RedisStore({
         redis: config.redis.url,
         prefix: isolation.storePrefix,
