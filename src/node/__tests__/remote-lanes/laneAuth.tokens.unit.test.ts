@@ -1,6 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
 import {
-  createRemoteLaneReplayProtector,
   hashRemoteLanePayload,
   issueRemoteLaneToken,
   verifyRemoteLaneToken,
@@ -184,88 +183,40 @@ describe("laneAuth token flow", () => {
     );
   });
 
-  it("rejects replayed tokens when replay protection is enabled", () => {
-    const replayProtector = createRemoteLaneReplayProtector();
+  it("allows repeated verification of the same token while it remains valid", () => {
     const token = issueRemoteLaneToken({
-      laneId: "lane.replay",
-      bindingAuth: { secret: "replay-secret" },
+      laneId: "lane.reuse",
+      bindingAuth: { secret: "reuse-secret" },
       capability: "produce",
+      nowMs: 1_000,
     })!;
 
     expect(() =>
       verifyRemoteLaneToken({
-        laneId: "lane.replay",
-        bindingAuth: { secret: "replay-secret" },
+        laneId: "lane.reuse",
+        bindingAuth: { secret: "reuse-secret" },
         token,
         requiredCapability: "produce",
-        replayProtector,
+        nowMs: 1_500,
       }),
     ).not.toThrow();
-
-    expectRunnerErrorId(
-      () =>
-        verifyRemoteLaneToken({
-          laneId: "lane.replay",
-          bindingAuth: { secret: "replay-secret" },
-          token,
-          requiredCapability: "produce",
-          replayProtector,
-        }),
-      "remoteLanes-auth-unauthorized",
-    );
-  });
-
-  it("does not consume replay protection for invalid signatures", () => {
-    const replayProtector = createRemoteLaneReplayProtector();
-    const token = issueRemoteLaneToken({
-      laneId: "lane.replay.invalid-signature",
-      bindingAuth: { secret: "replay-secret" },
-      capability: "produce",
-    })!;
-    const [header, payload] = token.split(".");
-    const forgedToken = `${header}.${payload}.forged-signature`;
-
-    expectRunnerErrorId(
-      () =>
-        verifyRemoteLaneToken({
-          laneId: "lane.replay.invalid-signature",
-          bindingAuth: { secret: "replay-secret" },
-          token: forgedToken,
-          requiredCapability: "produce",
-          replayProtector,
-        }),
-      "remoteLanes-auth-unauthorized",
-    );
 
     expect(() =>
       verifyRemoteLaneToken({
-        laneId: "lane.replay.invalid-signature",
-        bindingAuth: { secret: "replay-secret" },
+        laneId: "lane.reuse",
+        bindingAuth: { secret: "reuse-secret" },
         token,
         requiredCapability: "produce",
-        replayProtector,
+        nowMs: 2_000,
       }),
     ).not.toThrow();
-
-    expectRunnerErrorId(
-      () =>
-        verifyRemoteLaneToken({
-          laneId: "lane.replay.invalid-signature",
-          bindingAuth: { secret: "replay-secret" },
-          token,
-          requiredCapability: "produce",
-          replayProtector,
-        }),
-      "remoteLanes-auth-unauthorized",
-    );
   });
 
-  it("accepts legacy verified tokens without replay ids", () => {
-    const replayProtector = createRemoteLaneReplayProtector();
+  it("accepts manually signed verified tokens without nonce claims", () => {
     const token = signLaneJwtWithHmac(
       { alg: "HS256", typ: "JWT" },
       {
-        lane: "lane.replay.legacy",
+        lane: "lane.manual-token",
         cap: "produce",
         iat: 1,
         exp: 60,
@@ -275,11 +226,10 @@ describe("laneAuth token flow", () => {
 
     expect(
       verifyRemoteLaneToken({
-        laneId: "lane.replay.legacy",
+        laneId: "lane.manual-token",
         bindingAuth: { secret: "legacy-secret" },
         token,
         requiredCapability: "produce",
-        replayProtector,
         nowMs: 10_000,
       }),
     ).toBeUndefined();

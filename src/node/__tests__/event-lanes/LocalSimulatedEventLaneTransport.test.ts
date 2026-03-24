@@ -10,7 +10,6 @@ import { LocalSimulatedEventLaneTransport } from "../../event-lanes/LocalSimulat
 import type { EventLanesResourceContext } from "../../event-lanes/EventLanesInternals";
 import type { EventLaneMessage } from "../../event-lanes/types";
 import {
-  createRemoteLaneReplayProtector,
   hashRemoteLanePayload,
   issueRemoteLaneToken,
 } from "../../remote-lanes/laneAuth";
@@ -33,7 +32,6 @@ function createContext(
     managedQueues: new Set(),
     relaySourcePrefix: "runner.event-lanes.relay:",
     profile: "tests",
-    replayProtector: createRemoteLaneReplayProtector(),
     ...overrides,
   };
 }
@@ -277,7 +275,7 @@ describe("LocalSimulatedEventLaneTransport", () => {
     );
   });
 
-  it("rejects replayed local-simulated messages after the first successful relay", async () => {
+  it("accepts repeated local-simulated messages while the token remains valid", async () => {
     const logger = createLogger();
     const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
@@ -287,7 +285,7 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
-      id: "tests-local-simulated-replay-event",
+      id: "tests-local-simulated-repeat-event",
     });
     context.eventRouteByEventId.set(event.id, {
       lane: { id: "tests.local-simulated.lane" },
@@ -295,7 +293,7 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const store = createStore({
       events: new Map([[event.id, { event }]]),
     });
-    const bindingAuth = { secret: "replay-secret" };
+    const bindingAuth = { secret: "repeat-secret" };
     const payload = JSON.stringify({ value: 1 });
     const token = issueRemoteLaneToken({
       laneId: "tests.local-simulated.lane",
@@ -327,15 +325,8 @@ describe("LocalSimulatedEventLaneTransport", () => {
     await relay(transport, message);
     await relay(transport, message);
 
-    expect(emitSpy).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      "Event lane simulated consume failed.",
-      expect.objectContaining({
-        error: expect.objectContaining({
-          name: "remoteLanes-auth-unauthorized",
-        }),
-      }),
-    );
+    expect(emitSpy).toHaveBeenCalledTimes(2);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it("logs enqueue diagnostics with source ids when source paths are absent", async () => {

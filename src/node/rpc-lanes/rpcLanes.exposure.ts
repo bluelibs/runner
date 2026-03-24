@@ -51,16 +51,10 @@ export async function startRpcLanesExposure(
             return null;
           }
           const binding = resolved.bindingsByLaneId.get(lane.id);
-          return authorizeRpcLaneRequest(
-            req,
-            lane,
-            binding?.auth,
-            {
-              kind: "rpc-task",
-              targetId: canonicalTaskId,
-            },
-            { consumeReplay: false },
-          );
+          return authorizeRpcLaneRequest(req, lane, binding?.auth, {
+            kind: "rpc-task",
+            targetId: canonicalTaskId,
+          });
         },
         authorizeEvent: async (req, eventId) => {
           const canonicalEventId = eventId;
@@ -69,16 +63,10 @@ export async function startRpcLanesExposure(
             return null;
           }
           const binding = resolved.bindingsByLaneId.get(lane.id);
-          return authorizeRpcLaneRequest(
-            req,
-            lane,
-            binding?.auth,
-            {
-              kind: "rpc-event",
-              targetId: canonicalEventId,
-            },
-            { consumeReplay: false },
-          );
+          return authorizeRpcLaneRequest(req, lane, binding?.auth, {
+            kind: "rpc-event",
+            targetId: canonicalEventId,
+          });
         },
         authorizeTaskBody: async (req, taskId, payloadText) => {
           const lane = resolved.taskLaneByTaskId.get(taskId);
@@ -94,10 +82,7 @@ export async function startRpcLanesExposure(
               kind: "rpc-task",
               targetId: taskId,
             },
-            {
-              payloadText,
-              replayProtector: resolved.replayProtector,
-            },
+            { payloadText },
           );
         },
         authorizeEventBody: async (req, eventId, payloadText) => {
@@ -114,10 +99,7 @@ export async function startRpcLanesExposure(
               kind: "rpc-event",
               targetId: eventId,
             },
-            {
-              payloadText,
-              replayProtector: resolved.replayProtector,
-            },
+            { payloadText },
           );
         },
       },

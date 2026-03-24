@@ -1,6 +1,5 @@
 import { EventManager } from "../../../models/EventManager";
 import {
-  createRemoteLaneReplayProtector,
   hashRemoteLanePayload,
   issueRemoteLaneToken,
 } from "../../remote-lanes/laneAuth";
@@ -66,7 +65,6 @@ function createBaseOptions(overrides: Record<string, unknown> = {}) {
         ]),
         eventRouteByEventId: new Map([[eventId, { lane: { id: laneId } }]]),
         relaySourcePrefix: "relay:",
-        replayProtector: createRemoteLaneReplayProtector(),
       } as any,
       diagnostics: {
         logRelayEmit: jest.fn(async () => undefined),
@@ -127,7 +125,6 @@ describe("eventLanes.consumer", () => {
           [eventId, { lane: { id: otherLaneId } }],
         ]),
         relaySourcePrefix: "relay:",
-        replayProtector: createRemoteLaneReplayProtector(),
       } as any,
     });
 
@@ -165,7 +162,6 @@ describe("eventLanes.consumer", () => {
         ]),
         eventRouteByEventId: new Map(),
         relaySourcePrefix: "relay:",
-        replayProtector: createRemoteLaneReplayProtector(),
       } as any,
     });
 
@@ -204,7 +200,6 @@ describe("eventLanes.consumer", () => {
         ]),
         eventRouteByEventId: new Map([[eventId, { lane: { id: laneId } }]]),
         relaySourcePrefix: "relay:",
-        replayProtector: createRemoteLaneReplayProtector(),
       } as any,
       config: {
         profile: "worker",
@@ -251,7 +246,7 @@ describe("eventLanes.consumer", () => {
     );
   });
 
-  it("allows a retried delivery to reuse the same verified auth token after emit failure", async () => {
+  it("allows a retried delivery to reuse the same auth token after emit failure", async () => {
     const bindingAuth = { secret: "consumer-secret" };
     const payload = JSON.stringify({ ok: true });
     const authToken = issueRemoteLaneToken({
@@ -283,7 +278,6 @@ describe("eventLanes.consumer", () => {
         ]),
         eventRouteByEventId: new Map([[eventId, { lane: { id: laneId } }]]),
         relaySourcePrefix: "relay:",
-        replayProtector: createRemoteLaneReplayProtector(),
       } as any,
       config: {
         profile: "worker",

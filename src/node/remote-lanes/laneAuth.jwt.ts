@@ -14,7 +14,6 @@ export interface LaneJwtPayload {
   kind?: "rpc-task" | "rpc-event" | "event-lane";
   target?: string;
   hash?: string;
-  jti?: string;
   iat: number;
   exp: number;
 }

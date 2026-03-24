@@ -20,10 +20,6 @@ import { resolveRpcLaneAssignments } from "./RpcLaneAssignments";
 import { resolveLaneAsyncContextPolicy } from "../remote-lanes/asyncContextAllowlist";
 import type { NodeExposurePolicySnapshot } from "../exposure/policy";
 import { collectRemoteLaneResourceDependencies } from "../remote-lanes/resourceDependencies";
-import {
-  createRemoteLaneReplayProtector,
-  type RemoteLaneReplayProtector,
-} from "../remote-lanes/laneAuth";
 
 const RPC_LANE_COMMUNICATOR_DEPENDENCY_PREFIX = "__rpcLaneCommunicator__:";
 
@@ -49,7 +45,6 @@ export interface RpcLaneResolvedState {
   taskAsyncContextAllowList: Map<string, readonly string[] | undefined>;
   eventAsyncContextAllowList: Map<string, readonly string[] | undefined>;
   communicatorByLaneId: Map<string, IRpcLaneCommunicator>;
-  replayProtector: RemoteLaneReplayProtector;
 }
 
 interface RpcLanesExposureSnapshot {
@@ -176,7 +171,6 @@ export function resolveRpcLaneState(
     taskAsyncContextAllowList,
     eventAsyncContextAllowList,
     communicatorByLaneId,
-    replayProtector: createRemoteLaneReplayProtector(),
   };
 }
 

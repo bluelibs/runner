@@ -8,7 +8,6 @@ import {
   assertRemoteLaneVerifierConfigured,
   hashRemoteLanePayload,
   issueRemoteLaneToken,
-  type RemoteLaneReplayProtector,
   readRemoteLaneTokenFromHeaders,
   verifyRemoteLaneToken,
   writeRemoteLaneTokenToHeaders,
@@ -110,8 +109,6 @@ export function authorizeRpcLaneRequest(
   target: Pick<RemoteLaneTokenTarget, "kind" | "targetId">,
   options?: {
     payloadText?: string;
-    replayProtector?: RemoteLaneReplayProtector;
-    consumeReplay?: boolean;
   },
 ): JsonResponse | null {
   if (!bindingAuth || bindingAuth.mode === "none") {
@@ -135,8 +132,6 @@ export function authorizeRpcLaneRequest(
           ? hashRemoteLanePayload(options.payloadText)
           : undefined,
       },
-      replayProtector: options?.replayProtector,
-      consumeReplay: options?.consumeReplay,
     });
     return null;
   } catch {

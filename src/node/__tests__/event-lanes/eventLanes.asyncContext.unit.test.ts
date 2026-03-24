@@ -8,7 +8,6 @@ import { EventLanesDiagnostics } from "../../event-lanes/EventLanesDiagnostics";
 import { LocalSimulatedEventLaneTransport } from "../../event-lanes/LocalSimulatedEventLaneTransport";
 import type { EventLanesResourceContext } from "../../event-lanes/EventLanesInternals";
 import type { EventLaneMessage } from "../../event-lanes/types";
-import { createRemoteLaneReplayProtector } from "../../remote-lanes/laneAuth";
 
 function createLogger() {
   return new Logger({
@@ -33,7 +32,6 @@ function createContext(): EventLanesResourceContext {
     managedQueues: new Set(),
     relaySourcePrefix: "runner.event-lanes.relay:",
     profile: "tests",
-    replayProtector: createRemoteLaneReplayProtector(),
   };
 }
 

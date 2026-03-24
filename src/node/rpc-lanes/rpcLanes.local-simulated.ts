@@ -151,7 +151,6 @@ function createLocalSimulatedScopeRunner(context: RpcLanesRuntimeContext) {
                   token,
                   requiredCapability: "produce",
                   expectedTarget: target,
-                  replayProtector: context.resolved.replayProtector,
                 });
               }
               return await applySerializedAsyncContexts(

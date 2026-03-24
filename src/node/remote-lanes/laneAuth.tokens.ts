@@ -1,4 +1,3 @@
-import * as crypto from "node:crypto";
 import type { RemoteLaneBindingAuth } from "../../defs";
 import {
   remoteLaneAuthSignerMissingError,
@@ -19,7 +18,6 @@ import {
   verifyLaneJwtHmacSignature,
 } from "./laneAuth.jwt";
 import { resolveLaneAuthPolicy } from "./laneAuth.policy";
-import type { RemoteLaneReplayProtector } from "./laneAuth.replay";
 import type { RemoteLaneTokenTarget } from "./laneAuth.subject";
 
 type LaneCapability = "produce" | "consume";
@@ -39,17 +37,6 @@ export interface RemoteLaneTokenVerifyInput {
   requiredCapability: LaneCapability;
   expectedTarget?: Partial<RemoteLaneTokenTarget>;
   nowMs?: number;
-  replayProtector?: RemoteLaneReplayProtector;
-  consumeReplay?: boolean;
-}
-
-/**
- * Replay marker extracted from a verified remote-lane token.
- * It can be committed later once the caller reaches its chosen settlement point.
- */
-export interface VerifiedRemoteLaneReplayState {
-  jti: string;
-  expiresAtMs: number;
 }
 
 export function issueRemoteLaneToken({
@@ -72,7 +59,6 @@ export function issueRemoteLaneToken({
     kind: target?.kind,
     target: target?.targetId,
     hash: target?.payloadHash,
-    jti: crypto.randomUUID(),
     iat,
     exp,
   } as const;
@@ -115,9 +101,7 @@ export function verifyRemoteLaneToken({
   requiredCapability,
   expectedTarget,
   nowMs = Date.now(),
-  replayProtector,
-  consumeReplay = true,
-}: RemoteLaneTokenVerifyInput): VerifiedRemoteLaneReplayState | undefined {
+}: RemoteLaneTokenVerifyInput): void {
   const resolvedPolicy = resolveLaneAuthPolicy(bindingAuth);
   if (resolvedPolicy.mode === "none") {
     return;
@@ -232,37 +216,4 @@ export function verifyRemoteLaneToken({
       });
     }
   }
-
-  const replayState = payload.jti
-    ? {
-        jti: payload.jti,
-        expiresAtMs: (payload.exp + skewSeconds) * 1000,
-      }
-    : undefined;
-
-  if (consumeReplay) {
-    consumeVerifiedRemoteLaneReplay({
-      laneId,
-      replayProtector,
-      replayState,
-    });
-  }
-
-  return replayState;
-}
-
-/**
- * Consumes replay protection for a token that has already been fully verified.
- */
-export function consumeVerifiedRemoteLaneReplay(options: {
-  laneId: string;
-  replayProtector?: RemoteLaneReplayProtector;
-  replayState?: VerifiedRemoteLaneReplayState;
-}): void {
-  const { laneId, replayProtector, replayState } = options;
-  if (!replayProtector || !replayState) {
-    return;
-  }
-
-  replayProtector.markOrThrow(replayState.jti, replayState.expiresAtMs, laneId);
 }

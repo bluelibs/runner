@@ -22,10 +22,6 @@ import type {
 } from "./types";
 import { resolveRemoteLanesMode } from "../remote-lanes/mode";
 import { collectRemoteLaneResourceDependencies } from "../remote-lanes/resourceDependencies";
-import {
-  createRemoteLaneReplayProtector,
-  type RemoteLaneReplayProtector,
-} from "../remote-lanes/laneAuth";
 
 const EVENT_LANE_QUEUE_DEPENDENCY_PREFIX = "__eventLaneQueue__:";
 export const DEFAULT_RELAY_SOURCE_PREFIX = "runner.event-lanes.relay:";
@@ -47,7 +43,6 @@ export interface EventLanesResourceContext {
   managedQueues: Set<IEventLaneQueue>;
   relaySourcePrefix: string;
   profile: string;
-  replayProtector: RemoteLaneReplayProtector;
 }
 
 export type EventLanesLifecycleContext = {
@@ -284,7 +279,6 @@ function buildContext(
     relaySourcePrefix:
       config.topology.relaySourcePrefix ?? DEFAULT_RELAY_SOURCE_PREFIX,
     profile: config.profile,
-    replayProtector: createRemoteLaneReplayProtector(),
   };
 }
 

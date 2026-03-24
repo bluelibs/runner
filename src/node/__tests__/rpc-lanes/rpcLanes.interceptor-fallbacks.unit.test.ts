@@ -148,7 +148,6 @@ describe("rpc-lanes interceptor fallback branches", () => {
       id: "rpc-lanes-local-simulated-auth-task",
       policy: {},
     };
-    const replayProtector = { markOrThrow: jest.fn() };
     const run = jest.fn(async (input: unknown) => input);
     const canonicalTaskId = "app.tasks.secured";
     const taskEntry = { task: { id: "secured", run } };
@@ -163,7 +162,6 @@ describe("rpc-lanes interceptor fallback branches", () => {
       resolved: {
         taskLaneByTaskId: new Map([[canonicalTaskId, lane]]),
         eventLaneByEventId: new Map(),
-        replayProtector,
       },
       dependencies: {
         store: {
@@ -203,7 +201,6 @@ describe("rpc-lanes interceptor fallback branches", () => {
           targetId: canonicalTaskId,
           payloadHash: laneAuth.hashRemoteLanePayload(expectedPayloadText),
         },
-        replayProtector,
       }),
     );
   });
@@ -212,7 +209,6 @@ describe("rpc-lanes interceptor fallback branches", () => {
     const intercept = jest.fn();
     const serializer = new Serializer();
     const lane = { id: "rpc-lanes-local-simulated-auth-event" };
-    const replayProtector = { markOrThrow: jest.fn() };
     const issueSpy = jest.spyOn(laneAuth, "issueRemoteLaneToken");
     const verifySpy = jest.spyOn(laneAuth, "verifyRemoteLaneToken");
     const context = {
@@ -224,7 +220,6 @@ describe("rpc-lanes interceptor fallback branches", () => {
       resolved: {
         taskLaneByTaskId: new Map(),
         eventLaneByEventId: new Map([["app.events.changed", lane]]),
-        replayProtector,
       },
       dependencies: {
         store: {
@@ -275,7 +270,6 @@ describe("rpc-lanes interceptor fallback branches", () => {
           targetId: emission.id,
           payloadHash: laneAuth.hashRemoteLanePayload(expectedPayloadText),
         },
-        replayProtector,
       }),
     );
   });

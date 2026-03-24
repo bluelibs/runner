@@ -43,7 +43,6 @@ describe("rpcLanes.exposure", () => {
         taskAsyncContextAllowList: new Map(),
         eventAsyncContextAllowList: new Map(),
         communicatorByLaneId: new Map(),
-        replayProtector: { markOrThrow: () => undefined },
       },
       dependencies: {
         store: {

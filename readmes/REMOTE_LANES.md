@@ -338,7 +338,7 @@ sequenceDiagram
     EI->>Q: enqueue { laneId, eventId, payload, authToken, attempts }
 
     Q->>C: consume(message)
-    C->>C: verify lane JWT (lane + eventId + payload hash + jti)
+    C->>C: verify lane JWT (lane + eventId + payload hash + time window)
     C->>C: deserialize payload
     C->>EM: relay emit(event, payload, relay source)
     EM-->>C: hooks execute locally
@@ -576,7 +576,7 @@ sequenceDiagram
       RL->>CM: communicator.task/event(...)
       CM->>EX: HTTP request to /__runner/*
       EX->>EX: exposure auth + allow-list check
-      EX->>EX: verify lane JWT (lane + target id + payload hash + jti)
+      EX->>EX: verify lane JWT (lane + target id + payload hash + time window)
       EX->>SR: execute task/event
       SR-->>EX: serialized result
       EX-->>CM: HTTP response
@@ -853,11 +853,13 @@ Binding auth (JWT):
 - JWT mode is configured only at `binding.auth`.
 - Supported modes: `none`, `jwt_hmac`, `jwt_asymmetric`.
 - `local-simulated` enforces auth when configured (it does not bypass lane JWT checks).
-- Lane JWTs are target-bound: Runner signs lane id, capability, target kind/id, payload hash, and a per-token `jti`.
-- Replay protection is runtime-instance local: once a consumer runtime accepts a `jti`, it rejects reuse of that same token.
-- Event-lane consumers reject permanent poison immediately (`nack(false)`) for invalid auth, replayed lane JWTs, unknown events, wrong-lane events, and payload parse/deserialization failures.
+- Lane JWTs are target-bound and time-bound: Runner signs lane id, capability, target kind/id, payload hash, `iat`, and `exp`.
+- Runner validates lane JWT signature and claims on each receive path. It does not keep a replay cache, so the same unexpired token remains valid until it expires.
+- Event-lane consumers reject permanent poison immediately (`nack(false)`) for invalid auth, unknown events, wrong-lane events, and payload parse/deserialization failures.
 - For asymmetric mode (`jwt_asymmetric`), producers sign with **private keys**, consumers verify with **public keys**.
 - This principle is identical for RPC and Event Lanes.
+
+> **Note:** Lane JWTs are short-lived bearer auth tokens. Verification proves the token is authentic, unexpired, and bound to the expected lane/target/payload.
 
 Asymmetric JWT should prove these two properties in your setup:
 

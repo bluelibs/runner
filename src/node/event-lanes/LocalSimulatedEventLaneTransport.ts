@@ -129,7 +129,6 @@ export class LocalSimulatedEventLaneTransport {
           targetId: message.eventId,
           payloadHash: hashRemoteLanePayload(message.payload),
         },
-        replayProtector: this.context.replayProtector,
       });
 
       const payload = this.dependencies.serializer.parse(message.payload);

@@ -45,7 +45,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - Deprecated `tags.eventLane` and `tags.eventLaneHook` fail fast at startup.
   - Missing signer material fails fast (`remoteLanes-auth-signerMissing`) for producer roles.
   - Missing verifier material fails fast (`remoteLanes-auth-verifierMissing`) for consumer roles.
-  - Invalid auth, replayed auth, wrong-lane event messages, unknown events, and payload deserialization failures are permanent poison (`nack(false)`).
+  - Invalid auth, wrong-lane event messages, unknown events, and payload deserialization failures are permanent poison (`nack(false)`).
 - In `transparent` and `local-simulated`, profile `consume` does not start network consumers, but it can still declare lane presence and relay hook policy (`hooks.only`).
 - Relay re-emits bypass lane interception to prevent loops.
 - Hooks run based on event subscriptions after relay re-emit.
@@ -144,6 +144,7 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - Auth remains fail-closed unless explicitly configured otherwise.
   - `auth.allowAnonymous` is auth-only; it does not widen the exposure allow-list.
   - Lane JWT authorization is validated per served lane before task/event execution, and bound to target id plus serialized payload hash.
+  - Lane JWTs are short-lived signed bearer tokens; Runner validates signature and claims on receipt and does not keep a replay cache.
 - Runtime guard rails:
   - Reusing the same lane id with different lane instances across `profiles` / `bindings` fails fast; reuse the same lane object.
   - `applyTo` string ids are validated against container definitions and type (task/event).

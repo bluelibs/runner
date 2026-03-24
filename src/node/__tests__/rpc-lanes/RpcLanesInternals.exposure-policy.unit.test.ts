@@ -3,7 +3,6 @@ import {
   toRpcLanesResourceValue,
   type RpcLaneResolvedState,
 } from "../../rpc-lanes/RpcLanesInternals";
-import { createRemoteLaneReplayProtector } from "../../remote-lanes/laneAuth";
 
 function createResolvedState(
   partial: Partial<RpcLaneResolvedState>,
@@ -22,8 +21,6 @@ function createResolvedState(
     taskAsyncContextAllowList: new Map(),
     eventAsyncContextAllowList: new Map(),
     communicatorByLaneId: new Map(),
-    replayProtector:
-      partial.replayProtector ?? createRemoteLaneReplayProtector(),
     ...partial,
   };
 }
