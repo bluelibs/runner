@@ -167,14 +167,6 @@ export function verifyRemoteLaneToken({
     });
   }
 
-  if (consumeReplay && replayProtector && payload.jti) {
-    replayProtector.markOrThrow(
-      payload.jti,
-      (payload.exp + skewSeconds) * 1000,
-      laneId,
-    );
-  }
-
   if (resolvedPolicy.mode === "jwt_hmac") {
     if (header.alg !== "HS256") {
       remoteLaneAuthUnauthorizedError.throw({
@@ -200,36 +192,43 @@ export function verifyRemoteLaneToken({
         reason: "invalid signature",
       });
     }
-    return;
+  } else {
+    if (header.alg !== resolvedPolicy.algorithm) {
+      remoteLaneAuthUnauthorizedError.throw({
+        laneId,
+        reason: `unexpected JWT alg "${header.alg}"`,
+      });
+    }
+    const publicKey = resolveAsymmetricPublicKey({
+      bindingAuth,
+      kid: header.kid,
+    });
+    if (!publicKey) {
+      remoteLaneAuthVerifierMissingError.throw({
+        laneId,
+        mode: resolvedPolicy.mode,
+      });
+    }
+
+    const verified = verifyLaneJwtAsymmetricSignature({
+      encoded,
+      signature,
+      publicKey: publicKey!,
+      algorithm: resolvedPolicy.algorithm,
+    });
+    if (!verified) {
+      remoteLaneAuthUnauthorizedError.throw({
+        laneId,
+        reason: "invalid signature",
+      });
+    }
   }
 
-  if (header.alg !== resolvedPolicy.algorithm) {
-    remoteLaneAuthUnauthorizedError.throw({
+  if (consumeReplay && replayProtector && payload.jti) {
+    replayProtector.markOrThrow(
+      payload.jti,
+      (payload.exp + skewSeconds) * 1000,
       laneId,
-      reason: `unexpected JWT alg "${header.alg}"`,
-    });
-  }
-  const publicKey = resolveAsymmetricPublicKey({
-    bindingAuth,
-    kid: header.kid,
-  });
-  if (!publicKey) {
-    remoteLaneAuthVerifierMissingError.throw({
-      laneId,
-      mode: resolvedPolicy.mode,
-    });
-  }
-
-  const verified = verifyLaneJwtAsymmetricSignature({
-    encoded,
-    signature,
-    publicKey: publicKey!,
-    algorithm: resolvedPolicy.algorithm,
-  });
-  if (!verified) {
-    remoteLaneAuthUnauthorizedError.throw({
-      laneId,
-      reason: "invalid signature",
-    });
+    );
   }
 }
