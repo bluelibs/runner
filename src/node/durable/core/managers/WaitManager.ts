@@ -19,6 +19,8 @@ export interface WaitConfig {
  *
  * The durable store remains the source of truth; this manager is purely a convenience layer
  * for callers that want `await durable.wait(...)` / `await durable.startAndWait(...)`.
+ * Event-bus notifications are only lightweight nudges; the waiter always re-reads the store
+ * for the terminal result or error payload.
  */
 export class WaitManager {
   constructor(

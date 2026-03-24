@@ -126,7 +126,7 @@ export class DurableService implements IDurableService {
       {
         store: config.store,
         queue: config.queue,
-        eventBus: config.eventBus ?? new NoopEventBus(),
+        eventBus: config.eventBus,
         taskExecutor: config.taskExecutor,
         contextProvider: config.contextProvider,
         logger: this.logger,
@@ -176,6 +176,10 @@ export class DurableService implements IDurableService {
       this.logger,
       config.recovery,
     );
+
+    this.stopHandlers.push(async () => {
+      await this.executionManager.stopLiveCancellationListener();
+    });
   }
 
   // ─── Public API (delegating to managers) ───────────────────────────────────
@@ -264,6 +268,11 @@ export class DurableService implements IDurableService {
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
     await this.executionManager.cancelExecution(executionId, reason);
+  }
+
+  /** @internal */
+  async startLiveCancellationListener(): Promise<void> {
+    await this.executionManager.startLiveCancellationListener();
   }
 
   startAndWait<TInput, TResult>(
@@ -554,6 +563,7 @@ export async function initDurableService(
       await config.eventBus.init();
       eventBusInitialized = true;
     }
+    await service.startLiveCancellationListener();
     if (config.recovery?.onStartup === true) {
       service.startRecoveryOnInit();
     }

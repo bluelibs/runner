@@ -277,8 +277,10 @@ export interface IDurableService {
    * Request cancellation for an execution.
    * Cancellation is cooperative and cannot preempt arbitrary in-process async work.
    * Running executions first move into a non-terminal cancellation-requested state
-   * so the active step can observe its AbortSignal; waiters unblock once the attempt
-   * exits and the execution becomes terminal `cancelled`.
+   * so the active step can observe its AbortSignal; live propagation uses the
+   * durable event bus when configured, with polling fallback for runtimes that
+   * do not provide one. Waiters unblock once the attempt exits and the execution
+   * becomes terminal `cancelled`.
    */
   cancelExecution(executionId: string, reason?: string): Promise<void>;
 

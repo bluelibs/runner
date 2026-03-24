@@ -35,7 +35,9 @@ import {
   type ExecutionCancellationState,
   resolveCancellationReason,
   getCancellationState,
-  startExecutionCancellationWatcher,
+  publishExecutionCancellationRequested,
+  startExecutionCancellationPollingFallback,
+  startLiveExecutionCancellationListener,
   finalizeCancellationIfRequested,
   transitionRunningExecutionToCancelled as transitionRunningToCancelledFn,
 } from "./ExecutionManager.cancellation";
@@ -89,7 +91,9 @@ export class ExecutionManager {
     string,
     AbortController
   >();
+  private liveCancellationListenerStop: (() => Promise<void>) | null = null;
   private readonly eventBus: IEventBus;
+  private readonly liveCancellationEventBus: IEventBus | null;
   private readonly logger: Logger;
 
   constructor(
@@ -99,6 +103,10 @@ export class ExecutionManager {
     private readonly waitManager: WaitManager,
   ) {
     this.eventBus = this.config.eventBus ?? new NoopEventBus();
+    this.liveCancellationEventBus =
+      this.config.eventBus && !(this.config.eventBus instanceof NoopEventBus)
+        ? this.config.eventBus
+        : null;
     const baseLogger =
       this.config.logger ??
       new Logger({
@@ -110,6 +118,42 @@ export class ExecutionManager {
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
+
+  async startLiveCancellationListener(): Promise<void> {
+    const eventBus = this.liveCancellationEventBus;
+    if (!eventBus || this.liveCancellationListenerStop) {
+      return;
+    }
+
+    try {
+      this.liveCancellationListenerStop =
+        await startLiveExecutionCancellationListener({
+          eventBus,
+          abortActiveAttempt: (executionId, reason) =>
+            this.abortActiveAttempt(executionId, reason),
+        });
+    } catch (error) {
+      this.liveCancellationListenerStop = null;
+      try {
+        await this.logger.warn(
+          "Durable live cancellation listener failed to start; falling back to per-attempt polling.",
+          { error },
+        );
+      } catch {
+        // Logging must not fail service startup; registration falls back to polling.
+      }
+    }
+  }
+
+  async stopLiveCancellationListener(): Promise<void> {
+    const stop = this.liveCancellationListenerStop;
+    this.liveCancellationListenerStop = null;
+    if (!stop) {
+      return;
+    }
+
+    await stop();
+  }
 
   async start(
     taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
@@ -191,6 +235,10 @@ export class ExecutionManager {
       this.abortActiveAttempt(executionId, cancellationReason);
 
       if (execution.status === ExecutionStatus.Running) {
+        await this.publishLiveCancellationRequested(
+          executionId,
+          cancellationReason,
+        );
         return;
       }
 
@@ -304,7 +352,10 @@ export class ExecutionManager {
     try {
       await this.eventBus.publish(`execution:${execution.id}`, {
         type: "finished",
-        payload: execution,
+        payload: {
+          executionId: execution.id,
+          status: execution.status,
+        },
         timestamp: new Date(),
       });
     } catch (error) {
@@ -421,7 +472,7 @@ export class ExecutionManager {
       (await this.transitionExecutionToRunning(execution)) ?? null;
     if (!runningExecution) return;
 
-    const attemptCancellation = this.registerAttemptCancellation({
+    const attemptCancellation = await this.registerAttemptCancellation({
       executionId: runningExecution.id,
     });
 
@@ -674,11 +725,11 @@ export class ExecutionManager {
 
   // ─── Internal utilities ────────────────────────────────────────────────────
 
-  private startExecutionCancellationWatcher(params: {
+  private startExecutionCancellationPollingFallback(params: {
     executionId: string;
     controller: AbortController;
   }): () => void {
-    return startExecutionCancellationWatcher({
+    return startExecutionCancellationPollingFallback({
       ...params,
       store: this.config.store,
       abortActiveAttempt: (id, r) => this.abortActiveAttempt(id, r),
@@ -691,21 +742,56 @@ export class ExecutionManager {
     controller.abort(reason);
   }
 
-  private registerAttemptCancellation(params: { executionId: string }): {
+  private async registerAttemptCancellation(params: {
+    executionId: string;
+  }): Promise<{
     signal: AbortSignal;
     stop: () => void;
-  } {
+  }> {
     const controller = new AbortController();
     this.activeAttemptControllers.set(params.executionId, controller);
-    const stopWatcher = this.startExecutionCancellationWatcher({
-      executionId: params.executionId,
-      controller,
-    });
+    let stopWatcher: (() => void) | undefined;
+
+    if (this.liveCancellationListenerStop) {
+      try {
+        const execution = await this.config.store.getExecution(
+          params.executionId,
+        );
+        const cancellationState = this.getCancellationState(execution);
+        if (cancellationState) {
+          this.abortActiveAttempt(params.executionId, cancellationState.reason);
+        }
+      } catch (error) {
+        try {
+          await this.logger.warn(
+            "Durable live cancellation recheck failed; falling back to per-attempt polling.",
+            {
+              executionId: params.executionId,
+              error,
+            },
+          );
+        } catch {
+          // Logging must not affect cancellation propagation fallback.
+        }
+
+        if (!controller.signal.aborted) {
+          stopWatcher = this.startExecutionCancellationPollingFallback({
+            executionId: params.executionId,
+            controller,
+          });
+        }
+      }
+    } else {
+      stopWatcher = this.startExecutionCancellationPollingFallback({
+        executionId: params.executionId,
+        controller,
+      });
+    }
 
     return {
       signal: controller.signal,
       stop: () => {
-        stopWatcher();
+        stopWatcher?.();
         if (
           this.activeAttemptControllers.get(params.executionId) === controller
         ) {
@@ -737,6 +823,36 @@ export class ExecutionManager {
     task: ITask<any, Promise<any>, any, any, any, any>,
   ): string {
     return this.taskRegistry.getWorkflowKey(task);
+  }
+
+  private async publishLiveCancellationRequested(
+    executionId: string,
+    reason: string,
+  ): Promise<void> {
+    const eventBus = this.liveCancellationEventBus;
+    if (!eventBus) {
+      return;
+    }
+
+    try {
+      await publishExecutionCancellationRequested({
+        eventBus,
+        executionId,
+        reason,
+      });
+    } catch (error) {
+      try {
+        await this.logger.warn(
+          "Durable live cancellation publish failed; relying on local abort or polling fallback.",
+          {
+            executionId,
+            error,
+          },
+        );
+      } catch {
+        // Logging must not affect durable cancellation semantics.
+      }
+    }
   }
 
   private resolveTaskReference(

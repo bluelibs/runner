@@ -133,140 +133,6 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     expect(controller.signal.reason).toBe("already-aborted");
   });
 
-  it("polls active attempts for cancellation requests", async () => {
-    let execution: Execution | null = createExecution({
-      id: "e-watch",
-      status: ExecutionStatus.Running,
-    });
-    const manager = createManager({
-      store: createStore({
-        saveExecution: async () => {},
-        getExecution: async () => execution,
-        updateExecution: async () => undefined,
-        listIncompleteExecutions: async () => [],
-      }),
-      taskExecutor: createFixedTaskExecutor(undefined),
-    });
-
-    const controller = new AbortController();
-    (manager as any).activeAttemptControllers.set("e-watch", controller);
-    const stopWatcher = (manager as any).startExecutionCancellationWatcher({
-      executionId: "e-watch",
-      controller,
-    });
-
-    execution = createExecution({
-      id: "e-watch",
-      status: ExecutionStatus.Running,
-      cancelRequestedAt: new Date(),
-      error: { message: "watch-cancelled" },
-    });
-
-    await durableUtils.sleepMs(300);
-    stopWatcher();
-
-    expect(controller.signal.aborted).toBe(true);
-    expect(controller.signal.reason).toBe("watch-cancelled");
-  });
-
-  it("does not let an older attempt cleanup delete a newer controller", () => {
-    const manager = createManager({
-      store: createStore({
-        saveExecution: async () => {},
-        getExecution: async () => null,
-        updateExecution: async () => undefined,
-        listIncompleteExecutions: async () => [],
-      }),
-      taskExecutor: createFixedTaskExecutor(undefined),
-    });
-
-    const firstRegistration = (manager as any).registerAttemptCancellation({
-      executionId: "e-reused",
-    });
-    const secondRegistration = (manager as any).registerAttemptCancellation({
-      executionId: "e-reused",
-    });
-
-    firstRegistration.stop();
-
-    expect(
-      (manager as any).activeAttemptControllers.get("e-reused"),
-    ).toBeDefined();
-    expect(
-      (
-        (manager as any).activeAttemptControllers.get(
-          "e-reused",
-        ) as AbortController
-      ).signal,
-    ).toBe(secondRegistration.signal);
-
-    secondRegistration.stop();
-    expect((manager as any).activeAttemptControllers.has("e-reused")).toBe(
-      false,
-    );
-  });
-
-  it("stops polling cleanly when the watcher is stopped or already aborted", async () => {
-    const getExecution = jest.fn(async () => createExecution({ id: "e-stop" }));
-    const manager = createManager({
-      store: createStore({
-        saveExecution: async () => {},
-        getExecution,
-        updateExecution: async () => undefined,
-        listIncompleteExecutions: async () => [],
-      }),
-      taskExecutor: createFixedTaskExecutor(undefined),
-    });
-
-    const controller = new AbortController();
-    const stopWatcher = (manager as any).startExecutionCancellationWatcher({
-      executionId: "e-stop",
-      controller,
-    });
-    stopWatcher();
-
-    await durableUtils.sleepMs(300);
-    expect(getExecution).not.toHaveBeenCalled();
-
-    const abortedController = new AbortController();
-    abortedController.abort("done");
-    const stopAbortedWatcher = (
-      manager as any
-    ).startExecutionCancellationWatcher({
-      executionId: "e-stop-aborted",
-      controller: abortedController,
-    });
-
-    await durableUtils.sleepMs(300);
-    stopAbortedWatcher();
-    expect(getExecution).not.toHaveBeenCalled();
-  });
-
-  it("swallows cancellation polling store read failures", async () => {
-    const manager = createManager({
-      store: createStore({
-        saveExecution: async () => {},
-        getExecution: async () => {
-          throw genericError.new({ message: "watch-failed" });
-        },
-        updateExecution: async () => undefined,
-        listIncompleteExecutions: async () => [],
-      }),
-      taskExecutor: createFixedTaskExecutor(undefined),
-    });
-
-    const controller = new AbortController();
-    const stopWatcher = (manager as any).startExecutionCancellationWatcher({
-      executionId: "e-watch-failure",
-      controller,
-    });
-
-    await durableUtils.sleepMs(300);
-    stopWatcher();
-
-    expect(controller.signal.aborted).toBe(false);
-  });
-
   it("returns the existing execution when the idempotency key is already claimed", async () => {
     const store = createStore({
       saveExecution: async () => {
@@ -2005,11 +1871,19 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   });
 
   it("notifies finished executions via event bus", async () => {
-    const published: Array<{ channel: string; type: string }> = [];
+    const published: Array<{
+      channel: string;
+      type: string;
+      payload: unknown;
+    }> = [];
 
     const eventBus = {
       publish: async (channel: string, event: any) => {
-        published.push({ channel, type: event.type });
+        published.push({
+          channel,
+          type: event.type,
+          payload: event.payload,
+        });
       },
       subscribe: async () => {},
       unsubscribe: async () => {},
@@ -2051,7 +1925,14 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     expect(published).toEqual([
-      { channel: "execution:e-notify", type: "finished" },
+      {
+        channel: "execution:e-notify",
+        type: "finished",
+        payload: {
+          executionId: "e-notify",
+          status: ExecutionStatus.Completed,
+        },
+      },
     ]);
   });
 

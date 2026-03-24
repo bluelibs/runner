@@ -1,9 +1,43 @@
+import type { BusEvent, BusEventHandler, IEventBus } from "../interfaces/bus";
 import type { IDurableStore } from "../interfaces/store";
 import { ExecutionStatus, type Execution } from "../types";
 
 export type ExecutionCancellationState = {
   reason: string;
 };
+
+export const DURABLE_EXECUTION_CONTROL_CHANNEL = "durable:execution-control";
+export const DurableExecutionControlEventType = {
+  CancellationRequested: "cancellation_requested",
+} as const;
+
+type CancellationRequestedPayload = {
+  executionId: string;
+  reason: string;
+};
+
+function isCancellationRequestedPayload(
+  value: unknown,
+): value is CancellationRequestedPayload {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "executionId" in value &&
+    typeof value.executionId === "string" &&
+    "reason" in value &&
+    typeof value.reason === "string"
+  );
+}
+
+function parseCancellationRequestedEvent(
+  event: BusEvent,
+): CancellationRequestedPayload | null {
+  if (event.type !== DurableExecutionControlEventType.CancellationRequested) {
+    return null;
+  }
+
+  return isCancellationRequestedPayload(event.payload) ? event.payload : null;
+}
 
 export function resolveCancellationReason(
   execution: Execution<unknown, unknown>,
@@ -36,7 +70,48 @@ export function getCancellationState(
   };
 }
 
-export function startExecutionCancellationWatcher(params: {
+export async function startLiveExecutionCancellationListener(params: {
+  eventBus: IEventBus;
+  abortActiveAttempt: (executionId: string, reason: string) => void;
+}): Promise<() => Promise<void>> {
+  const handler: BusEventHandler = async (event) => {
+    const cancellationRequested = parseCancellationRequestedEvent(event);
+    if (!cancellationRequested) {
+      return;
+    }
+
+    params.abortActiveAttempt(
+      cancellationRequested.executionId,
+      cancellationRequested.reason,
+    );
+  };
+
+  await params.eventBus.subscribe(DURABLE_EXECUTION_CONTROL_CHANNEL, handler);
+
+  return async () => {
+    await params.eventBus.unsubscribe(
+      DURABLE_EXECUTION_CONTROL_CHANNEL,
+      handler,
+    );
+  };
+}
+
+export async function publishExecutionCancellationRequested(params: {
+  eventBus: IEventBus;
+  executionId: string;
+  reason: string;
+}): Promise<void> {
+  await params.eventBus.publish(DURABLE_EXECUTION_CONTROL_CHANNEL, {
+    type: DurableExecutionControlEventType.CancellationRequested,
+    payload: {
+      executionId: params.executionId,
+      reason: params.reason,
+    },
+    timestamp: new Date(),
+  });
+}
+
+export function startExecutionCancellationPollingFallback(params: {
   executionId: string;
   controller: AbortController;
   store: IDurableStore;
