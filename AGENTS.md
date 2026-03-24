@@ -43,8 +43,8 @@
 
 - Prefer to use type strings instead of enums
 - When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
-- Code retain 100% test coverage.
-- Use check() as much as you can for runtime constraints, it's very useful (and powerful) and avoids typeof hell. (hint: Custom WithMessage error h)
+- Code retains 100% test coverage.
+- Use check() as much as you can for runtime constraints, it's very useful (and powerful) and avoids typeof hell. (hint: Custom WithMessage error helper)
 - Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
 - Use runner errors instead of 'throw new Error()' for better error handling and consistency.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.

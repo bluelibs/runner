@@ -8,6 +8,7 @@ import type {
   RecoverReportType,
   ScheduleOptions,
   StartAndWaitOptions,
+  UpdateScheduleOptions,
   WaitOptions,
 } from "./interfaces/service";
 import type { Schedule } from "./types";
@@ -427,7 +428,7 @@ export class DurableService implements IDurableService {
 
   async updateSchedule(
     id: string,
-    updates: { cron?: string; interval?: number; input?: unknown },
+    updates: UpdateScheduleOptions,
   ): Promise<void> {
     await this.scheduleManager.update(id, updates);
   }

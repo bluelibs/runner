@@ -67,12 +67,16 @@ type ExecutionAttemptGuards = {
   assertLockOwnership: () => void;
   raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
   canPersistOutcome: () => Promise<boolean>;
-  isCancelled: () => Promise<boolean>;
+  getCancellationState: () => Promise<ExecutionCancellationState | null>;
 };
 
 type ExecutionErrorInfo = {
   message: string;
   stack?: string;
+};
+
+type ExecutionCancellationState = {
+  reason: string;
 };
 
 type TaskAttemptOutcome =
@@ -96,6 +100,10 @@ type ResolvedExecutionWaiter = {
  * - update execution status/result/error and notify waiters (`WaitManager`)
  */
 export class ExecutionManager {
+  private readonly activeAttemptControllers = new Map<
+    string,
+    AbortController
+  >();
   private readonly eventBus: IEventBus;
   private readonly logger: Logger;
 
@@ -114,6 +122,119 @@ export class ExecutionManager {
         bufferLogs: false,
       });
     this.logger = baseLogger.with({ source: "durable.execution" });
+  }
+
+  private resolveCancellationReason(
+    execution: Execution<unknown, unknown>,
+    requestedReason?: string,
+  ): string {
+    if (execution.cancelRequestedAt && execution.error?.message) {
+      return execution.error.message;
+    }
+
+    return requestedReason ?? "Execution cancelled";
+  }
+
+  private getCancellationState(
+    execution: Execution<unknown, unknown> | null,
+  ): ExecutionCancellationState | null {
+    if (!execution) {
+      return null;
+    }
+
+    if (
+      execution.status !== ExecutionStatus.Cancelled &&
+      execution.status !== ExecutionStatus.Cancelling &&
+      execution.cancelRequestedAt === undefined
+    ) {
+      return null;
+    }
+
+    return {
+      reason: this.resolveCancellationReason(execution),
+    };
+  }
+
+  private abortActiveAttempt(executionId: string, reason: string): void {
+    const controller = this.activeAttemptControllers.get(executionId);
+    if (!controller || controller.signal.aborted) {
+      return;
+    }
+
+    controller.abort(reason);
+  }
+
+  private startExecutionCancellationWatcher(params: {
+    executionId: string;
+    controller: AbortController;
+  }): () => void {
+    const intervalMs = 250;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleNextPoll = () => {
+      timer = setTimeout(() => {
+        timer = null;
+        if (stopped || params.controller.signal.aborted) {
+          return;
+        }
+
+        void this.config.store
+          .getExecution(params.executionId)
+          .then((execution) => {
+            const cancellationState = this.getCancellationState(execution);
+            if (cancellationState) {
+              this.abortActiveAttempt(
+                params.executionId,
+                cancellationState.reason,
+              );
+            }
+          })
+          .catch(() => {
+            // Cancellation polling is best-effort; durable boundaries still re-check store state.
+          })
+          .finally(() => {
+            if (!stopped && !params.controller.signal.aborted) {
+              scheduleNextPoll();
+            }
+          });
+      }, intervalMs);
+      timer.unref?.();
+    };
+
+    scheduleNextPoll();
+
+    return () => {
+      stopped = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+  }
+
+  private registerAttemptCancellation(params: { executionId: string }): {
+    signal: AbortSignal;
+    stop: () => void;
+  } {
+    const controller = new AbortController();
+    this.activeAttemptControllers.set(params.executionId, controller);
+    const stopWatcher = this.startExecutionCancellationWatcher({
+      executionId: params.executionId,
+      controller,
+    });
+
+    return {
+      signal: controller.signal,
+      stop: () => {
+        stopWatcher();
+        if (
+          this.activeAttemptControllers.get(params.executionId) === controller
+        ) {
+          this.activeAttemptControllers.delete(params.executionId);
+        }
+      },
+    };
   }
 
   async start(
@@ -289,27 +410,47 @@ export class ExecutionManager {
       const execution = await this.config.store.getExecution(executionId);
       if (!execution) return;
       if (this.isExecutionTerminal(execution.status)) return;
+      if (execution.status === ExecutionStatus.Cancelling) return;
 
       const now = new Date();
-      const cancelledExecution: Execution = {
-        ...execution,
-        status: ExecutionStatus.Cancelled,
-        current: undefined,
-        cancelRequestedAt: execution.cancelRequestedAt ?? now,
-        cancelledAt: now,
-        completedAt: now,
-        error: { message: reason ?? "Execution cancelled" },
-        updatedAt: now,
-      };
-      const cancelled = await this.config.store.saveExecutionIfStatus(
-        cancelledExecution,
+      const cancellationReason = this.resolveCancellationReason(
+        execution,
+        reason,
+      );
+      const nextExecution: Execution =
+        execution.status === ExecutionStatus.Running
+          ? {
+              ...execution,
+              status: ExecutionStatus.Cancelling,
+              cancelRequestedAt: execution.cancelRequestedAt ?? now,
+              error: { message: cancellationReason },
+              updatedAt: now,
+            }
+          : {
+              ...execution,
+              status: ExecutionStatus.Cancelled,
+              current: undefined,
+              cancelRequestedAt: execution.cancelRequestedAt ?? now,
+              cancelledAt: now,
+              completedAt: now,
+              error: { message: cancellationReason },
+              updatedAt: now,
+            };
+      const saved = await this.config.store.saveExecutionIfStatus(
+        nextExecution,
         [execution.status],
       );
-      if (!cancelled) {
+      if (!saved) {
         if (attempt < maxAttempts) {
           await sleepMs(Math.min(2 ** (attempt - 1), 25));
         }
         continue;
+      }
+
+      this.abortActiveAttempt(executionId, cancellationReason);
+
+      if (execution.status === ExecutionStatus.Running) {
+        return;
       }
 
       await this.auditLogger.log({
@@ -321,7 +462,7 @@ export class ExecutionManager {
         to: ExecutionStatus.Cancelled,
         reason: "cancelled",
       });
-      await this.notifyExecutionFinished(cancelledExecution);
+      await this.notifyExecutionFinished(nextExecution);
       return;
     }
 
@@ -877,10 +1018,11 @@ export class ExecutionManager {
           throw error;
         }
       },
-      isCancelled: async (): Promise<boolean> => {
-        const current = await this.config.store.getExecution(executionId);
-        return current?.status === ExecutionStatus.Cancelled;
-      },
+      getCancellationState:
+        async (): Promise<ExecutionCancellationState | null> =>
+          this.getCancellationState(
+            await this.config.store.getExecution(executionId),
+          ),
     };
   }
 
@@ -946,6 +1088,7 @@ export class ExecutionManager {
     runningExecution: Execution<unknown, unknown>,
     task: ITask<unknown, Promise<unknown>, any, any, any, any>,
     assertLockOwnership: () => void,
+    cancellationSignal: AbortSignal,
   ): DurableContext {
     return new DurableContext(
       this.config.store,
@@ -959,6 +1102,7 @@ export class ExecutionManager {
           this.config.determinism?.implicitInternalStepIds,
         declaredSignalIds: getDeclaredDurableWorkflowSignalIds(task),
         assertLockOwnership,
+        cancellationSignal,
         startWorkflowExecution: async (childTask, input, options) =>
           await this.start(childTask, input, options),
         getTaskPersistenceId: (childTask) => this.getTaskWorkflowKey(childTask),
@@ -1036,6 +1180,10 @@ export class ExecutionManager {
       [ExecutionStatus.Running],
     );
     if (!completed) {
+      await this.finalizeCancellationIfRequested(
+        runningExecution,
+        canPersistOutcome,
+      );
       return;
     }
 
@@ -1046,6 +1194,79 @@ export class ExecutionManager {
       reason: "completed",
     });
     await this.notifyExecutionFinished(finishedExecution);
+  }
+
+  private async finalizeCancellationIfRequested(
+    runningExecution: Execution<unknown, unknown>,
+    canPersistOutcome?: () => Promise<boolean>,
+  ): Promise<boolean> {
+    const current = await this.config.store.getExecution(runningExecution.id);
+    const cancellationState = this.getCancellationState(current);
+    if (!cancellationState) {
+      return false;
+    }
+
+    if (current?.status === ExecutionStatus.Cancelled) {
+      return true;
+    }
+
+    await this.transitionRunningExecutionToCancelled({
+      execution: runningExecution,
+      reason: cancellationState.reason,
+      canPersistOutcome,
+    });
+    return true;
+  }
+
+  private async transitionRunningExecutionToCancelled(params: {
+    execution: Execution<unknown, unknown>;
+    reason: string;
+    canPersistOutcome?: () => Promise<boolean>;
+  }): Promise<void> {
+    if (params.canPersistOutcome && !(await params.canPersistOutcome())) {
+      return;
+    }
+
+    const current = await this.config.store.getExecution(params.execution.id);
+    if (!current || current.status === ExecutionStatus.Cancelled) {
+      return;
+    }
+
+    const cancellationState = this.getCancellationState(current);
+    if (!cancellationState) {
+      return;
+    }
+
+    const now = new Date();
+    const cancelledExecution: Execution = {
+      ...current,
+      status: ExecutionStatus.Cancelled,
+      current: undefined,
+      cancelRequestedAt: current.cancelRequestedAt ?? now,
+      cancelledAt: now,
+      completedAt: now,
+      error: { message: cancellationState.reason },
+      updatedAt: now,
+    };
+    const expectedStatus =
+      current.status === ExecutionStatus.Cancelling
+        ? ExecutionStatus.Cancelling
+        : ExecutionStatus.Running;
+    const cancelled = await this.config.store.saveExecutionIfStatus(
+      cancelledExecution,
+      [expectedStatus],
+    );
+    if (!cancelled) {
+      return;
+    }
+
+    await this.logExecutionStatusChange({
+      execution: current,
+      from: current.status,
+      to: ExecutionStatus.Cancelled,
+      reason: "cancelled",
+    });
+    await this.notifyExecutionFinished(cancelledExecution);
   }
 
   private async suspendExecutionAttempt(
@@ -1067,6 +1288,10 @@ export class ExecutionManager {
       [ExecutionStatus.Running],
     );
     if (!suspended) {
+      await this.finalizeCancellationIfRequested(
+        runningExecution,
+        canPersistOutcome,
+      );
       return;
     }
 
@@ -1130,6 +1355,10 @@ export class ExecutionManager {
       } catch {
         // Best-effort cleanup; ignore.
       }
+      await this.finalizeCancellationIfRequested(
+        params.runningExecution,
+        params.canPersistOutcome,
+      );
       return;
     }
 
@@ -1154,8 +1383,15 @@ export class ExecutionManager {
       return;
     }
 
+    const cancellationState = await params.guards.getCancellationState();
+
     if (params.error instanceof SuspensionSignal) {
-      if (await params.guards.isCancelled()) {
+      if (cancellationState) {
+        await this.transitionRunningExecutionToCancelled({
+          execution: params.runningExecution,
+          reason: cancellationState.reason,
+          canPersistOutcome: params.guards.canPersistOutcome,
+        });
         return;
       }
       await this.suspendExecutionAttempt(
@@ -1170,7 +1406,12 @@ export class ExecutionManager {
       return;
     }
 
-    if (await params.guards.isCancelled()) {
+    if (cancellationState) {
+      await this.transitionRunningExecutionToCancelled({
+        execution: params.runningExecution,
+        reason: cancellationState.reason,
+        canPersistOutcome: params.guards.canPersistOutcome,
+      });
       return;
     }
 
@@ -1210,7 +1451,20 @@ export class ExecutionManager {
     );
     guards.assertLockOwnership();
 
-    if (await guards.isCancelled()) return;
+    const initialCancellationState = await guards.getCancellationState();
+    if (initialCancellationState) {
+      if (
+        execution.status === ExecutionStatus.Running ||
+        execution.status === ExecutionStatus.Cancelling
+      ) {
+        await this.transitionRunningExecutionToCancelled({
+          execution,
+          reason: initialCancellationState.reason,
+          canPersistOutcome: guards.canPersistOutcome,
+        });
+      }
+      return;
+    }
 
     this.assertTaskExecutorConfigured();
 
@@ -1220,10 +1474,15 @@ export class ExecutionManager {
       return;
     }
 
+    const attemptCancellation = this.registerAttemptCancellation({
+      executionId: runningExecution.id,
+    });
+
     const context = this.createExecutionContext(
       runningExecution,
       task,
       guards.assertLockOwnership,
+      attemptCancellation.signal,
     );
 
     try {
@@ -1239,8 +1498,15 @@ export class ExecutionManager {
         return;
       }
 
-      // Cancellation wins over completion.
-      if (await guards.isCancelled()) return;
+      const cancellationState = await guards.getCancellationState();
+      if (cancellationState) {
+        await this.transitionRunningExecutionToCancelled({
+          execution: runningExecution,
+          reason: cancellationState.reason,
+          canPersistOutcome: guards.canPersistOutcome,
+        });
+        return;
+      }
 
       await this.completeExecutionAttempt(
         runningExecution,
@@ -1254,6 +1520,8 @@ export class ExecutionManager {
         guards,
         executionLockState,
       });
+    } finally {
+      attemptCancellation.stop();
     }
   }
 
@@ -1312,6 +1580,9 @@ export class ExecutionManager {
       [params.from],
     );
     if (!failed) {
+      if (params.from === ExecutionStatus.Running) {
+        await this.finalizeCancellationIfRequested(params.execution);
+      }
       return;
     }
     await this.logExecutionStatusChange({

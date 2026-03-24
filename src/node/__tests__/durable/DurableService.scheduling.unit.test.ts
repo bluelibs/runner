@@ -29,10 +29,11 @@ describe("durable: DurableService — scheduling (unit)", () => {
     const cronId = await service.schedule(
       task,
       { a: 1 },
-      { id: "cron-1", cron: "*/5 * * * *" },
+      { id: "cron-1", cron: "*/5 * * * *", timezone: "UTC" },
     );
     expect(cronId).toBe("cron-1");
     expect((await store.getSchedule("cron-1"))?.status).toBe("active");
+    expect((await store.getSchedule("cron-1"))?.timezone).toBe("UTC");
   });
 
   it("supports schedule lifecycle helpers", async () => {
@@ -89,7 +90,9 @@ describe("durable: DurableService — scheduling (unit)", () => {
     const service = new DurableService({
       store,
       taskExecutor: createTaskExecutor({}),
-      schedules: [{ id: "s1", task, interval: 1000, input: {} }],
+      schedules: [
+        { id: "s1", task, cron: "0 9 * * *", timezone: "UTC", input: {} },
+      ],
     });
 
     expect(service.findTask(task.id)).toBeDefined();
@@ -242,10 +245,127 @@ describe("durable: DurableService — scheduling (unit)", () => {
 
     expect(schedule?.type).toBe("cron");
     expect(schedule?.pattern).toBe("*/5 * * * *");
+    expect(schedule?.timezone).toBeUndefined();
     expect(afterTimer?.fireAt.getTime()).not.toBe(
       beforeTimer?.fireAt.getTime(),
     );
     expect(afterTimer?.fireAt.getTime()).toBe(schedule?.nextRun?.getTime());
+  });
+
+  it("updates cron timezones when cron is provided", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-update-timezone");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    await service.schedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "UTC",
+    });
+
+    const beforeTimer = (await futureTimers(store)).find(
+      (entry) => entry.id === "sched:s1",
+    );
+    expect(beforeTimer).toBeDefined();
+
+    await service.updateSchedule("s1", {
+      cron: "0 9 * * *",
+      timezone: "America/New_York",
+    });
+
+    const schedule = await store.getSchedule("s1");
+    const afterTimer = (await futureTimers(store)).find(
+      (entry) => entry.id === "sched:s1",
+    );
+
+    expect(schedule?.pattern).toBe("0 9 * * *");
+    expect(schedule?.timezone).toBe("America/New_York");
+    expect(afterTimer?.fireAt.getTime()).toBe(schedule?.nextRun?.getTime());
+  });
+
+  it("preserves timezone when only cron schedule input changes", async () => {
+    const store = new MemoryStore();
+    const task = r
+      .task<{ version: number }>("t-cron-input-update")
+      .run(async () => "ok")
+      .build();
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    await service.schedule(
+      task,
+      { version: 1 },
+      {
+        id: "s1",
+        cron: "0 9 * * *",
+        timezone: "UTC",
+      },
+    );
+
+    const beforeTimer = (await futureTimers(store)).find(
+      (entry) => entry.id === "sched:s1",
+    );
+    expect(beforeTimer).toBeDefined();
+
+    await service.updateSchedule("s1", { input: { version: 2 } });
+
+    const schedule = await store.getSchedule("s1");
+    const afterTimer = (await futureTimers(store)).find(
+      (entry) => entry.id === "sched:s1",
+    );
+
+    expect(schedule?.input).toEqual({ version: 2 });
+    expect(schedule?.timezone).toBe("UTC");
+    expect(afterTimer?.fireAt.getTime()).toBe(beforeTimer?.fireAt.getTime());
+  });
+
+  it("clears timezone when only the cron expression changes", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-preserve-timezone");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    await service.schedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "UTC",
+    });
+
+    await service.updateSchedule("s1", { cron: "0 10 * * *" });
+
+    expect((await store.getSchedule("s1"))?.timezone).toBeUndefined();
+  });
+
+  it("clears timezone when switching a cron schedule to interval cadence", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-clear-timezone");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    await service.schedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "UTC",
+    });
+
+    await service.updateSchedule("s1", { interval: 1000 });
+
+    const schedule = await store.getSchedule("s1");
+    expect(schedule?.type).toBe("interval");
+    expect(schedule?.timezone).toBeUndefined();
   });
 
   it("allows clearing scheduled input and no-ops when updating a missing schedule", async () => {

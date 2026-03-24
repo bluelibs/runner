@@ -1,5 +1,6 @@
 import type { IEventBus } from "./interfaces/bus";
 import type {
+  DurableStepRunContext,
   EmitOptions,
   IDurableContext,
   IStepBuilder,
@@ -98,6 +99,7 @@ export class DurableContext implements IDurableContext {
   private readonly getTaskPersistenceId: (
     task: ITask<any, Promise<any>, any, any, any, any>,
   ) => string;
+  private readonly cancellationSignal: AbortSignal;
 
   constructor(
     private readonly store: IDurableStore,
@@ -123,6 +125,7 @@ export class DurableContext implements IDurableContext {
       getTaskPersistenceId?: (
         task: ITask<any, Promise<any>, any, any, any, any>,
       ) => string;
+      cancellationSignal?: AbortSignal;
     } = {},
   ) {
     this.auditEnabled = options.auditEnabled ?? false;
@@ -139,6 +142,8 @@ export class DurableContext implements IDurableContext {
         }));
     this.getTaskPersistenceId =
       options.getTaskPersistenceId ?? ((task) => task.id);
+    this.cancellationSignal =
+      options.cancellationSignal ?? new AbortController().signal;
 
     this.audit = createDurableContextAudit({
       store: this.store,
@@ -165,9 +170,25 @@ export class DurableContext implements IDurableContext {
     }
   }
 
-  private async assertCanContinue(): Promise<void> {
+  private async assertCanContinue(
+    options: { allowCancellationRequested?: boolean } = {},
+  ): Promise<void> {
     this.assertLockOwnership();
     await this.assertNotCancelled();
+
+    if (options.allowCancellationRequested) {
+      return;
+    }
+
+    const exec = await this.store.getExecution(this.executionId);
+    if (
+      exec?.status === ExecutionStatus.Cancelling ||
+      exec?.cancelRequestedAt !== undefined
+    ) {
+      durableContextCancelledError.throw({
+        message: exec.error?.message || "Execution cancelled",
+      });
+    }
   }
 
   private getStepId(stepId: string | DurableStepId<unknown>): string {
@@ -178,7 +199,7 @@ export class DurableContext implements IDurableContext {
     stepId: string,
     options: StepOptions = {},
   ): StepBuilder<T> {
-    return new StepBuilder<T>(this, stepId, options);
+    return new StepBuilder<T>(this, stepId, options, true);
   }
 
   private resolveWorkflowStartOptions(
@@ -196,16 +217,21 @@ export class DurableContext implements IDurableContext {
 
   step<T>(stepId: string): IStepBuilder<T>;
   step<T>(stepId: DurableStepId<T>): IStepBuilder<T>;
-  step<T>(stepId: string | DurableStepId<T>, fn: () => Promise<T>): Promise<T>;
   step<T>(
     stepId: string | DurableStepId<T>,
-    options: StepOptions,
-    fn: () => Promise<T>,
+    fn: (context: DurableStepRunContext) => Promise<T>,
   ): Promise<T>;
   step<T>(
     stepId: string | DurableStepId<T>,
-    optionsOrFn?: StepOptions | (() => Promise<T>),
-    fn?: () => Promise<T>,
+    options: StepOptions,
+    fn: (context: DurableStepRunContext) => Promise<T>,
+  ): Promise<T>;
+  step<T>(
+    stepId: string | DurableStepId<T>,
+    optionsOrFn?:
+      | StepOptions
+      | ((context: DurableStepRunContext) => Promise<T>),
+    fn?: (context: DurableStepRunContext) => Promise<T>,
   ): IStepBuilder<T> | Promise<T> {
     const resolvedStepId = this.getStepId(stepId);
     this.determinism.assertUserStepId(resolvedStepId);
@@ -224,14 +250,16 @@ export class DurableContext implements IDurableContext {
   async _executeStep<T>(
     stepId: string,
     options: StepOptions,
-    upFn: () => Promise<T>,
+    upFn: (context: DurableStepRunContext) => Promise<T>,
     downFn?: (result: T) => Promise<void>,
     currentMeta?: DurableExecutionCurrentWorkflowMeta,
+    allowCancellationRequested = false,
   ): Promise<T> {
     return await executeDurableStep({
       store: this.store,
       executionId: this.executionId,
-      assertCanContinue: this.assertCanContinue.bind(this),
+      assertCanContinue: async () =>
+        await this.assertCanContinue({ allowCancellationRequested }),
       appendAuditEntry: this.audit.append,
       setCurrent: async () =>
         await setExecutionCurrent(
@@ -251,6 +279,7 @@ export class DurableContext implements IDurableContext {
       stepId,
       options,
       upFn,
+      signal: this.cancellationSignal,
       downFn,
       compensations: this.compensations,
     });

@@ -15,11 +15,39 @@ export interface ITaskExecutor {
   ): Promise<TResult>;
 }
 
+export interface CronScheduleOptions {
+  id?: string;
+  cron: string;
+  timezone?: string;
+  at?: never;
+  delay?: never;
+  interval?: never;
+}
+
+export interface IntervalScheduleOptions {
+  id?: string;
+  interval: number;
+  at?: never;
+  delay?: never;
+  cron?: never;
+  timezone?: never;
+}
+
+export interface OneTimeScheduleOptions {
+  id?: string;
+  at?: Date;
+  delay?: number;
+  cron?: never;
+  interval?: never;
+  timezone?: never;
+}
+
 export type RecurringScheduleConfig<TInput = unknown> =
   | {
       id: string;
       task: ITask<TInput, Promise<any>, any, any, any, any> | string;
       cron: string;
+      timezone?: string;
       interval?: never;
       input: TInput;
     }
@@ -33,17 +61,34 @@ export type RecurringScheduleConfig<TInput = unknown> =
 
 export type ScheduleConfig<TInput = unknown> = RecurringScheduleConfig<TInput>;
 
-export interface ScheduleOptions {
-  id?: string;
-  at?: Date;
-  delay?: number;
-  cron?: string;
-  interval?: number;
-}
+export type ScheduleOptions =
+  | OneTimeScheduleOptions
+  | CronScheduleOptions
+  | IntervalScheduleOptions;
 
 export type EnsureScheduleOptions =
-  | (ScheduleOptions & { cron: string; interval?: undefined })
-  | (ScheduleOptions & { interval: number; cron?: undefined });
+  | CronScheduleOptions
+  | IntervalScheduleOptions;
+
+export type UpdateScheduleOptions =
+  | {
+      input?: unknown;
+      cron?: never;
+      interval?: never;
+      timezone?: never;
+    }
+  | {
+      cron: string;
+      timezone?: string;
+      interval?: never;
+      input?: unknown;
+    }
+  | {
+      interval: number;
+      cron?: never;
+      timezone?: never;
+      input?: unknown;
+    };
 
 export interface DurableServiceConfig {
   store: IDurableStore;
@@ -225,8 +270,10 @@ export interface IDurableService {
 
   /**
    * Request cancellation for an execution.
-   * Cancellation is cooperative: it marks the execution as cancelled and unblocks waiters,
-   * but cannot preempt arbitrary in-process async work.
+   * Cancellation is cooperative and cannot preempt arbitrary in-process async work.
+   * Running executions first move into a non-terminal cancellation-requested state
+   * so the active step can observe its AbortSignal; waiters unblock once the attempt
+   * exits and the execution becomes terminal `cancelled`.
    */
   cancelExecution(executionId: string, reason?: string): Promise<void>;
 
@@ -294,7 +341,7 @@ export interface IDurableService {
   listSchedules(): Promise<Schedule[]>;
   updateSchedule(
     scheduleId: string,
-    updates: { cron?: string; interval?: number; input?: unknown },
+    updates: UpdateScheduleOptions,
   ): Promise<void>;
   removeSchedule(scheduleId: string): Promise<void>;
 

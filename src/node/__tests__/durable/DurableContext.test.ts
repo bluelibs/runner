@@ -57,6 +57,7 @@ describe("durable: DurableContext", () => {
       getTaskPersistenceId?: (
         task: ITask<any, Promise<any>, any, any, any, any>,
       ) => string;
+      cancellationSignal?: AbortSignal;
     } = {},
   ) => {
     const bus = new MemoryEventBus();
@@ -84,6 +85,98 @@ describe("durable: DurableContext", () => {
     );
   });
 
+  it("fails fast when cancellation was requested before the next durable boundary", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      cancelRequestedAt: new Date(),
+      error: { message: "User requested" },
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.sleep(1, { stepId: "stable" })).rejects.toThrow(
+      "User requested",
+    );
+  });
+
+  it("uses the default cancellation message when a cancellation request has no error payload", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: ExecutionStatus.Cancelling,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      cancelRequestedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.sleep(1, { stepId: "stable" })).rejects.toThrow(
+      "Execution cancelled",
+    );
+  });
+
+  it("passes an AbortSignal into step callbacks", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.step(
+        "with-signal",
+        async ({ signal }) => signal instanceof AbortSignal,
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it("normalizes aborted step failures into cancellation errors", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const controller = new AbortController();
+    const { ctx } = createContext("e1", 1, store, {
+      cancellationSignal: controller.signal,
+    });
+
+    await expect(
+      ctx.step("abort-normalized", async () => {
+        controller.abort("Step aborted");
+        throw genericError.new({ message: "boom" });
+      }),
+    ).rejects.toThrow("Step aborted");
+  });
+
   it("supports explicit compensation via rollback()", async () => {
     const { ctx } = createContext();
 
@@ -102,6 +195,69 @@ describe("durable: DurableContext", () => {
     await ctx.rollback();
 
     expect(actions).toEqual(["up", "down"]);
+  });
+
+  it("allows rollback to run after cancellation was requested", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+    const actions: string[] = [];
+
+    await ctx
+      .step<string>("create")
+      .up(async () => {
+        actions.push("up");
+        return "ok";
+      })
+      .down(async () => {
+        actions.push("down");
+      });
+
+    await store.updateExecution("e1", {
+      cancelRequestedAt: new Date(),
+      error: { message: "cancel requested" },
+    });
+
+    await ctx.rollback();
+
+    expect(actions).toEqual(["up", "down"]);
+    await expect(store.getStepResult("e1", "rollback:create")).resolves.toEqual(
+      expect.objectContaining({
+        result: { rolledBack: true },
+      }),
+    );
+  });
+
+  it("passes an AbortSignal into builder up() callbacks", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.step("builder-signal").up(async ({ signal }) => {
+        return signal instanceof AbortSignal;
+      }),
+    ).resolves.toBe(true);
   });
 
   it("clears stale current when replay returns a cached step result", async () => {

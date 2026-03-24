@@ -15,6 +15,7 @@ import type {
   RecoverReportType,
   ScheduleOptions,
   StartAndWaitOptions,
+  UpdateScheduleOptions,
 } from "./interfaces/service";
 import type { Schedule } from "./types";
 import type { IDurableStore } from "./interfaces/store";
@@ -284,7 +285,7 @@ export class DurableResource implements IDurableResource {
 
   updateSchedule(
     scheduleId: string,
-    updates: { cron?: string; interval?: number; input?: unknown },
+    updates: UpdateScheduleOptions,
   ): Promise<void> {
     return this.service.updateSchedule(scheduleId, updates);
   }

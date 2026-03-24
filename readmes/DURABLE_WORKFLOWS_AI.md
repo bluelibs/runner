@@ -75,6 +75,12 @@ const order = await d.step("validate", async () => {
   return await db.orders.find(input.orderId);
 });
 
+// Cancellation-aware
+await d.step("ship", async ({ signal }) => {
+  signal.throwIfAborted();
+  return await shippingApi.createLabel(orderId, { signal });
+});
+
 // With options
 await d.step("charge", { retries: 3, timeout: 30_000 }, async () => {
   return await payments.charge(customerId, amount);
@@ -91,6 +97,9 @@ const payment = await d
   .up(async () => payments.charge(customerId, amount))
   .down(async (p) => payments.refund(p.chargeId));
 ```
+
+Step callbacks receive `{ signal: AbortSignal }`. Replay hits return cached results and do not re-run the callback.
+Cancellation-driven aborts do not consume step retries.
 
 ### sleep()
 
@@ -232,9 +241,11 @@ const result = await durableRuntime.wait(executionId, { timeout: 30_000 });
 // Deliver signal
 await durableRuntime.signal(executionId, Paid, { paidAt: Date.now() });
 
-// Cancel (cooperative — stops at next checkpoint)
+// Cancel (cooperative)
 await durableRuntime.cancelExecution(executionId, "User requested");
 ```
+
+If a step is actively running, cancellation sets `cancelRequestedAt` immediately, aborts the step signal, and marks the execution `cancelled` once that attempt exits. Sleeping or waiting executions still cancel immediately.
 
 ### Scheduling
 
@@ -249,6 +260,7 @@ await durableRuntime.schedule(task, input, { delay: 24 * 60 * 60 * 1000 }); // 2
 await durableRuntime.ensureSchedule(task, input, {
   id: "daily-report",
   cron: "0 9 * * *", // 9am daily
+  timezone: "UTC",
 });
 
 // Recurring interval
@@ -262,9 +274,14 @@ await durableRuntime.pauseSchedule("daily-report");
 await durableRuntime.resumeSchedule("daily-report");
 const schedule = await durableRuntime.getSchedule("daily-report");
 const all = await durableRuntime.listSchedules();
-await durableRuntime.updateSchedule("daily-report", { cron: "0 10 * * *" });
+await durableRuntime.updateSchedule("daily-report", {
+  cron: "0 10 * * *",
+  timezone: "UTC",
+});
 await durableRuntime.removeSchedule("daily-report");
 ```
+
+Cron schedules use the process local timezone when `timezone` is omitted. Set an explicit IANA timezone for business-facing wall-clock schedules so DST behavior is predictable.
 
 ### Repository (Task-Scoped Queries)
 
@@ -374,8 +391,8 @@ const processOrder = r
 ### How It Works
 
 ```
-ensureSchedule(task, input, { id, cron })
-    → Persists Schedule { id, workflowKey, input, type, pattern, active }
+ensureSchedule(task, input, { id, cron, timezone? })
+    → Persists Schedule { id, workflowKey, input, type, pattern, timezone?, active }
     → Computes nextRun
     → Persists Timer { id: "sched:id", fireAt, scheduleId }
 
@@ -398,7 +415,7 @@ Polling Loop (every 1s, when polling.enabled: true)
 | Type               | API                                             | Use Case                      |
 | ------------------ | ----------------------------------------------- | ----------------------------- |
 | One-time           | `schedule(task, input, { at } \| { delay })`    | Reminders, delayed actions    |
-| Recurring cron     | `ensureSchedule(task, input, { id, cron })`     | Daily reports, weekly cleanup |
+| Recurring cron     | `ensureSchedule(task, input, { id, cron, timezone? })` | Daily reports, weekly cleanup |
 | Recurring interval | `ensureSchedule(task, input, { id, interval })` | Health checks, polling        |
 
 ### Interval Behavior
@@ -428,7 +445,7 @@ const bootstrap = r
     await durable.ensureSchedule(
       dailyCleanup,
       {},
-      { id: "daily-cleanup", cron: "0 3 * * *" },
+      { id: "daily-cleanup", cron: "0 3 * * *", timezone: "UTC" },
     );
     await durable.ensureSchedule(
       healthCheck,
@@ -560,6 +577,7 @@ interface Schedule<TInput = unknown> {
   workflowKey: string;
   type: "cron" | "interval";
   pattern: string;
+  timezone?: string;
   input: TInput | undefined;
   status: "active" | "paused";
   lastRun?: Date;

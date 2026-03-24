@@ -85,7 +85,7 @@ You can use durable workflows standalone—no need to port your entire app to Ru
 import { r, run } from "@bluelibs/runner";
 import { resources, tags } from "@bluelibs/runner/node";
 
-const durable = resources.memoryWorkflow.fork("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable"); // forking is just making a copy
 
 const durableRegistration = durable.with({
   queue: { consume: true }, // Optional: test queue-mode semantics
@@ -199,6 +199,12 @@ await d.step("validate", async () => {
   return await db.orders.find(input.orderId);
 });
 
+// Cancellation-aware form
+await d.step("ship", async ({ signal }) => {
+  signal.throwIfAborted();
+  return await shippingApi.createLabel(orderId, { signal });
+});
+
 // With options
 await d.step("charge", { retries: 3, timeout: 30_000 }, async () => {
   return await payments.charge(customerId, amount);
@@ -211,10 +217,10 @@ const reservation = await d
   .down(async (res) => inventory.release(res.reservationId));
 ```
 
-| Option    | Description                            |
-| --------- | -------------------------------------- |
-| `retries` | Retry attempts on failure (default: 0) |
-| `timeout` | Step-level timeout in ms               |
+| Option    | Description                                                          |
+| --------- | -------------------------------------------------------------------- |
+| `retries` | Retry attempts on non-cancellation failures (default: 0)             |
+| `timeout` | Step-level timeout in ms                                             |
 
 **Builder methods**:
 
@@ -222,6 +228,10 @@ const reservation = await d
 | ----------- | -------------------------------- |
 | `.up(fn)`   | Forward action (required)        |
 | `.down(fn)` | Compensation/rollback (optional) |
+
+Step callbacks receive `{ signal: AbortSignal }`.
+Replay hits return the cached step result immediately, so the callback is not re-run and the signal is only relevant when the step executes live.
+Cancellation-driven aborts are treated as cooperative cancellation, not retryable step failures.
 
 ### `sleep()` — Durable Suspension
 
@@ -384,6 +394,14 @@ await durable.signal(executionId, Paid, { paidAt: Date.now() });
 await durable.cancelExecution(executionId, "User requested");
 ```
 
+If the execution is currently running inside a step, cancellation becomes a live request first:
+
+- `cancelRequestedAt` is stored immediately
+- the step's `AbortSignal` flips to `aborted`
+- the execution becomes terminal `cancelled` once the running attempt exits
+
+Suspended executions (`sleep()`, waits, pending/retrying) still cancel immediately.
+
 ### Scheduling
 
 ```ts
@@ -399,6 +417,7 @@ const executionId = await durable.schedule(task, input, {
 await durable.ensureSchedule(task, input, {
   id: "daily-cleanup",
   cron: "0 3 * * *",
+  timezone: "UTC",
 });
 
 // Recurring interval
@@ -412,7 +431,10 @@ await durable.pauseSchedule("daily-cleanup");
 await durable.resumeSchedule("daily-cleanup");
 const schedule = await durable.getSchedule("daily-cleanup");
 const schedules = await durable.listSchedules();
-await durable.updateSchedule("daily-cleanup", { cron: "0 4 * * *" });
+await durable.updateSchedule("daily-cleanup", {
+  cron: "0 4 * * *",
+  timezone: "UTC",
+});
 await durable.removeSchedule("daily-cleanup");
 ```
 
@@ -639,10 +661,13 @@ Durable scheduling persists schedule definitions and timers in the store. The po
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│ ensureSchedule(task, input, { id: "daily", cron: "0 9 * * *" })│
+│ ensureSchedule(task, input, {                                  │
+│   id: "daily", cron: "0 9 * * *", timezone: "UTC"              │
+│ })                                                             │
 │                                                                │
 │ 1. Persists Schedule record:                                   │
-│    { id, workflowKey, input, type: "cron", pattern, active }   │
+│    { id, workflowKey, input, type: "cron", pattern,            │
+│      timezone, active }                                        │
 │                                                                │
 │ 2. Computes next run: 2025-03-25 09:00:00                      │
 │                                                                │
@@ -693,6 +718,7 @@ Creates a single timer. No schedule record. Timer fires once, execution runs, do
 await durable.ensureSchedule(task, input, {
   id: "daily-report",
   cron: "0 9 * * *", // 9am daily
+  timezone: "UTC",
 });
 
 // Interval (fixed delay between kickoffs)
@@ -711,6 +737,8 @@ await durable.ensureSchedule(task, input, {
 
 **Interval caveat**: Measured from kickoff time, not completion. Long-running tasks may overlap. Use `d.sleep()` at the end of the workflow for completion-based spacing.
 
+**Timezone note**: Cron schedules use the process local timezone when `timezone` is omitted. Set an explicit IANA timezone such as `"UTC"` or `"America/New_York"` for user-facing schedules so DST shifts stay intentional.
+
 ### Schedule Management
 
 ```ts
@@ -718,7 +746,10 @@ await durable.pauseSchedule("daily-report"); // Stop scheduling new runs
 await durable.resumeSchedule("daily-report"); // Resume
 const schedule = await durable.getSchedule("daily-report");
 const all = await durable.listSchedules();
-await durable.updateSchedule("daily-report", { cron: "0 10 * * *" });
+await durable.updateSchedule("daily-report", {
+  cron: "0 10 * * *",
+  timezone: "UTC",
+});
 await durable.removeSchedule("daily-report"); // Delete schedule + timer
 ```
 
@@ -735,6 +766,18 @@ await durable.removeSchedule("daily-report"); // Delete schedule + timer
 ```
 
 Common patterns: `0 * * * *` (hourly), `0 0 * * *` (daily midnight), `0 9 * * MON-FRI` (weekdays 9am).
+
+DST example with explicit timezone:
+
+```ts
+await durable.ensureSchedule(task, input, {
+  id: "daily-ny-report",
+  cron: "0 9 * * *",
+  timezone: "America/New_York",
+});
+```
+
+This keeps the schedule at 9:00 AM New York time across DST. On March 13, 2027 it resolves to `2027-03-13T14:00:00.000Z`; on March 14, 2027 it resolves to `2027-03-14T13:00:00.000Z`.
 
 ---
 
@@ -800,10 +843,10 @@ Resource IDs derive key prefixes. Use different `.fork("id")` values to run mult
 ```
 ┌───────────────────────────────────────────────────────────┐
 │                        Clients                            │
-│                 ┌─────────────────────┐                    │
-│                 │     API Nodes       │                    │
-│                 │  start/signal/wait  │                    │
-│                 └──────────┬──────────┘                    │
+│                 ┌─────────────────────┐                   │
+│                 │     API Nodes       │                   │
+│                 │  start/signal/wait  │                   │
+│                 └──────────┬──────────┘                   │
 │                            │                              │
 └────────────────────────────┼──────────────────────────────┘
                              │
@@ -1095,6 +1138,7 @@ interface Schedule<TInput = unknown> {
   workflowKey: string;
   type: ScheduleType;
   pattern: string;
+  timezone?: string;
   input: TInput | undefined;
   status: "active" | "paused";
   lastRun?: Date;

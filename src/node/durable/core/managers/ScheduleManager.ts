@@ -2,6 +2,7 @@ import type { IDurableStore } from "../interfaces/store";
 import type {
   EnsureScheduleOptions,
   ScheduleOptions,
+  UpdateScheduleOptions,
 } from "../interfaces/service";
 import {
   ScheduleStatus,
@@ -66,6 +67,7 @@ export class ScheduleManager {
 
         const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
         const pattern = options.cron ?? String(options.interval);
+        const timezone = options.cron ? options.timezone : undefined;
 
         if (existing) {
           if (existing.workflowKey !== workflowKey) {
@@ -78,6 +80,7 @@ export class ScheduleManager {
             ...existing,
             type,
             pattern,
+            timezone,
             input,
             status: ScheduleStatus.Active,
             updatedAt: new Date(),
@@ -91,6 +94,7 @@ export class ScheduleManager {
           workflowKey,
           input,
           pattern,
+          timezone,
           type,
           status: ScheduleStatus.Active,
           createdAt: new Date(),
@@ -120,6 +124,7 @@ export class ScheduleManager {
         workflowKey,
         input,
         pattern: options.cron ?? String(options.interval),
+        timezone: options.cron ? options.timezone : undefined,
         type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
         status: ScheduleStatus.Active,
         createdAt: new Date(),
@@ -182,26 +187,34 @@ export class ScheduleManager {
     return this.store.listSchedules();
   }
 
-  async update(
-    id: string,
-    updates: { cron?: string; interval?: number; input?: unknown },
-  ): Promise<void> {
+  async update(id: string, updates: UpdateScheduleOptions): Promise<void> {
     const existing = await this.store.getSchedule(id);
     if (!existing) return;
     const hasInputUpdate = Object.prototype.hasOwnProperty.call(
       updates,
       "input",
     );
+    const hasTimezoneUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      "timezone",
+    );
+    this.assertValidScheduleUpdate(existing, updates, hasTimezoneUpdate);
 
-    const { type, pattern } = this.resolveUpdatedCadence(existing, updates);
+    const { type, pattern, timezone } = this.resolveUpdatedCadence(
+      existing,
+      updates,
+    );
     const input = hasInputUpdate ? updates.input : existing.input;
     const updatedAt = new Date();
     const cadenceChanged =
-      type !== existing.type || pattern !== existing.pattern;
+      type !== existing.type ||
+      pattern !== existing.pattern ||
+      timezone !== existing.timezone;
     const updatedSchedule: Schedule = {
       ...existing,
       type,
       pattern,
+      timezone,
       input,
       updatedAt,
     };
@@ -215,6 +228,7 @@ export class ScheduleManager {
       await this.store.updateSchedule(id, {
         type,
         pattern,
+        timezone,
         input,
         updatedAt,
       });
@@ -237,6 +251,7 @@ export class ScheduleManager {
     await this.store.updateSchedule(id, {
       type,
       pattern,
+      timezone,
       input,
       updatedAt,
     });
@@ -244,7 +259,11 @@ export class ScheduleManager {
 
   private computeNextRun(schedule: Schedule): Date {
     if (schedule.type === ScheduleType.Cron) {
-      return CronParser.getNextRun(schedule.pattern);
+      return CronParser.getNextRun(
+        schedule.pattern,
+        new Date(),
+        schedule.timezone,
+      );
     }
 
     const intervalMs = Number(schedule.pattern);
@@ -293,12 +312,13 @@ export class ScheduleManager {
 
   private resolveUpdatedCadence(
     existing: Schedule,
-    updates: { cron?: string; interval?: number },
-  ): Pick<Schedule, "type" | "pattern"> {
+    updates: UpdateScheduleOptions,
+  ): Pick<Schedule, "type" | "pattern" | "timezone"> {
     if (updates.cron !== undefined) {
       return {
         type: ScheduleType.Cron,
         pattern: updates.cron,
+        timezone: updates.timezone,
       };
     }
 
@@ -306,13 +326,44 @@ export class ScheduleManager {
       return {
         type: ScheduleType.Interval,
         pattern: String(updates.interval),
+        timezone: undefined,
       };
     }
 
     return {
       type: existing.type,
       pattern: existing.pattern,
+      timezone:
+        existing.type === ScheduleType.Cron ? existing.timezone : undefined,
     };
+  }
+
+  private assertValidScheduleUpdate(
+    existing: Schedule,
+    updates: UpdateScheduleOptions,
+    hasTimezoneUpdate: boolean,
+  ): void {
+    if (updates.cron !== undefined && updates.interval !== undefined) {
+      durableScheduleConfigError.throw({
+        message: "updateSchedule() accepts cron or interval, not both",
+      });
+    }
+
+    if (!hasTimezoneUpdate) return;
+
+    if (updates.cron === undefined) {
+      durableScheduleConfigError.throw({
+        message:
+          "updateSchedule() cannot set timezone without cron. Timezone is only supported for cron schedules.",
+      });
+    }
+
+    if (existing.type === ScheduleType.Interval && updates.cron === undefined) {
+      durableScheduleConfigError.throw({
+        message:
+          "updateSchedule() cannot set timezone without cron. Timezone is only supported for cron schedules.",
+      });
+    }
   }
 
   private resolveTaskReference(

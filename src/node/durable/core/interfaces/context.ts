@@ -12,6 +12,13 @@ export interface StepOptions {
 }
 
 /**
+ * Live execution controls available to a running durable step body.
+ */
+export interface DurableStepRunContext {
+  signal: AbortSignal;
+}
+
+/**
  * Options for sleep operations.
  * Use `stepId` to provide a stable identifier that survives code refactoring.
  */
@@ -87,7 +94,7 @@ export interface SwitchBranch<TValue, TResult> {
 }
 
 export interface IStepBuilder<T> extends PromiseLike<T> {
-  up(fn: () => Promise<T>): this;
+  up(fn: (context: DurableStepRunContext) => Promise<T>): this;
   down(fn: (result: T) => Promise<void>): this;
 }
 
@@ -97,17 +104,23 @@ export interface IDurableContext {
 
   step<T>(stepId: string): IStepBuilder<T>;
   step<T>(stepId: DurableStepId<T>): IStepBuilder<T>;
-  step<T>(stepId: string, fn: () => Promise<T>): Promise<T>;
-  step<T>(stepId: DurableStepId<T>, fn: () => Promise<T>): Promise<T>;
+  step<T>(
+    stepId: string,
+    fn: (context: DurableStepRunContext) => Promise<T>,
+  ): Promise<T>;
+  step<T>(
+    stepId: DurableStepId<T>,
+    fn: (context: DurableStepRunContext) => Promise<T>,
+  ): Promise<T>;
   step<T>(
     stepId: string,
     options: StepOptions,
-    fn: () => Promise<T>,
+    fn: (context: DurableStepRunContext) => Promise<T>,
   ): Promise<T>;
   step<T>(
     stepId: DurableStepId<T>,
     options: StepOptions,
-    fn: () => Promise<T>,
+    fn: (context: DurableStepRunContext) => Promise<T>,
   ): Promise<T>;
 
   sleep(durationMs: number, options?: SleepOptions): Promise<void>;

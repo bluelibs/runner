@@ -1,6 +1,7 @@
 export const ExecutionStatus = {
   Pending: "pending",
   Running: "running",
+  Cancelling: "cancelling",
   Retrying: "retrying",
   Sleeping: "sleeping",
   Completed: "completed",
@@ -271,6 +272,7 @@ export interface Schedule<TInput = unknown> {
   workflowKey: string;
   type: ScheduleType;
   pattern: string;
+  timezone?: string;
   input: TInput | undefined;
   status: ScheduleStatus;
   lastRun?: Date;

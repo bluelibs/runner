@@ -78,6 +78,195 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       ) => result,
     ) as SaveExecutionIfStatusMock;
 
+  const createExecution = (overrides: Partial<Execution> = {}): Execution => ({
+    id: "e-test",
+    workflowKey: TaskId.T,
+    input: undefined,
+    status: ExecutionStatus.Running,
+    attempt: 1,
+    maxAttempts: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  });
+
+  it("returns null cancellation state for active or missing executions", () => {
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () => null,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    expect((manager as any).getCancellationState(null)).toBeNull();
+    expect(
+      (manager as any).getCancellationState(
+        createExecution({ status: ExecutionStatus.Running }),
+      ),
+    ).toBeNull();
+  });
+
+  it("does not re-abort missing or already-aborted active attempts", () => {
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () => null,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    expect(() =>
+      (manager as any).abortActiveAttempt("missing", "ignored"),
+    ).not.toThrow();
+
+    const controller = new AbortController();
+    controller.abort("already-aborted");
+    (manager as any).activeAttemptControllers.set("e-aborted", controller);
+
+    (manager as any).abortActiveAttempt("e-aborted", "ignored");
+
+    expect(controller.signal.reason).toBe("already-aborted");
+  });
+
+  it("polls active attempts for cancellation requests", async () => {
+    let execution: Execution | null = createExecution({
+      id: "e-watch",
+      status: ExecutionStatus.Running,
+    });
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () => execution,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    const controller = new AbortController();
+    (manager as any).activeAttemptControllers.set("e-watch", controller);
+    const stopWatcher = (manager as any).startExecutionCancellationWatcher({
+      executionId: "e-watch",
+      controller,
+    });
+
+    execution = createExecution({
+      id: "e-watch",
+      status: ExecutionStatus.Running,
+      cancelRequestedAt: new Date(),
+      error: { message: "watch-cancelled" },
+    });
+
+    await durableUtils.sleepMs(300);
+    stopWatcher();
+
+    expect(controller.signal.aborted).toBe(true);
+    expect(controller.signal.reason).toBe("watch-cancelled");
+  });
+
+  it("does not let an older attempt cleanup delete a newer controller", () => {
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () => null,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    const firstRegistration = (manager as any).registerAttemptCancellation({
+      executionId: "e-reused",
+    });
+    const secondRegistration = (manager as any).registerAttemptCancellation({
+      executionId: "e-reused",
+    });
+
+    firstRegistration.stop();
+
+    expect(
+      (manager as any).activeAttemptControllers.get("e-reused"),
+    ).toBeDefined();
+    expect(
+      (
+        (manager as any).activeAttemptControllers.get(
+          "e-reused",
+        ) as AbortController
+      ).signal,
+    ).toBe(secondRegistration.signal);
+
+    secondRegistration.stop();
+    expect((manager as any).activeAttemptControllers.has("e-reused")).toBe(
+      false,
+    );
+  });
+
+  it("stops polling cleanly when the watcher is stopped or already aborted", async () => {
+    const getExecution = jest.fn(async () => createExecution({ id: "e-stop" }));
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    const controller = new AbortController();
+    const stopWatcher = (manager as any).startExecutionCancellationWatcher({
+      executionId: "e-stop",
+      controller,
+    });
+    stopWatcher();
+
+    await durableUtils.sleepMs(300);
+    expect(getExecution).not.toHaveBeenCalled();
+
+    const abortedController = new AbortController();
+    abortedController.abort("done");
+    const stopAbortedWatcher = (
+      manager as any
+    ).startExecutionCancellationWatcher({
+      executionId: "e-stop-aborted",
+      controller: abortedController,
+    });
+
+    await durableUtils.sleepMs(300);
+    stopAbortedWatcher();
+    expect(getExecution).not.toHaveBeenCalled();
+  });
+
+  it("swallows cancellation polling store read failures", async () => {
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () => {
+          throw genericError.new({ message: "watch-failed" });
+        },
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    const controller = new AbortController();
+    const stopWatcher = (manager as any).startExecutionCancellationWatcher({
+      executionId: "e-watch-failure",
+      controller,
+    });
+
+    await durableUtils.sleepMs(300);
+    stopWatcher();
+
+    expect(controller.signal.aborted).toBe(false);
+  });
+
   it("returns the existing execution when the idempotency key is already claimed", async () => {
     const store = createStore({
       saveExecution: async () => {
@@ -286,6 +475,30 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     expect(saveExecutionIfStatus).not.toHaveBeenCalled();
   });
 
+  it("cancelExecution is a no-op when execution is already cancelling", async () => {
+    const exec = createExecution({
+      id: "e-already-cancelling",
+      status: ExecutionStatus.Cancelling,
+      cancelRequestedAt: new Date(),
+      error: { message: "already cancelling" },
+    });
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => exec,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+    await expect(manager.cancelExecution(exec.id)).resolves.toBeUndefined();
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
+  });
+
   it("cancelExecution backs off between conflicting retries", async () => {
     const exec: Execution = {
       id: "e-cancel-retries",
@@ -373,7 +586,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     }
   });
 
-  it("cancelExecution preserves existing cancelRequestedAt and defaults the reason", async () => {
+  it("cancelExecution preserves existing cancelRequestedAt and marks running attempts as cancelling", async () => {
     const requestedAt = new Date("2024-01-01T00:00:00.000Z");
 
     const exec: Execution = {
@@ -406,12 +619,381 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     expect(saveExecutionIfStatus).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: ExecutionStatus.Cancelled,
+        status: ExecutionStatus.Cancelling,
         cancelRequestedAt: requestedAt,
         error: { message: "Execution cancelled" },
       }),
       [ExecutionStatus.Running],
     );
+  });
+
+  it("defaults the running cancellation reason when no request exists yet", async () => {
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
+    const execution = createExecution({ id: "e-cancel-default-running" });
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => execution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+    await manager.cancelExecution(execution.id);
+
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: ExecutionStatus.Cancelling,
+        error: { message: "Execution cancelled" },
+      }),
+      [ExecutionStatus.Running],
+    );
+  });
+
+  it("preserves the original cancelRequestedAt when finalizing running cancellation", async () => {
+    const requestedAt = new Date("2024-01-01T00:00:00.000Z");
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () =>
+        createExecution({
+          id: "e-finalize-cancel",
+          status: ExecutionStatus.Cancelling,
+          cancelRequestedAt: requestedAt,
+          error: { message: "cancel me" },
+        }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).transitionRunningExecutionToCancelled({
+      execution: createExecution({
+        id: "e-finalize-cancel",
+        cancelRequestedAt: new Date("2024-02-01T00:00:00.000Z"),
+      }),
+      reason: "cancel me",
+      canPersistOutcome: async () => true,
+    });
+
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: ExecutionStatus.Cancelled,
+        cancelRequestedAt: requestedAt,
+      }),
+      [ExecutionStatus.Cancelling],
+    );
+  });
+
+  it("finalizes legacy running cancellation records using the running status CAS", async () => {
+    const requestedAt = new Date("2024-01-01T00:00:00.000Z");
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () =>
+        createExecution({
+          id: "e-legacy-running-cancel",
+          status: ExecutionStatus.Running,
+          cancelRequestedAt: requestedAt,
+          error: { message: "cancel me" },
+        }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).transitionRunningExecutionToCancelled({
+      execution: createExecution({ id: "e-legacy-running-cancel" }),
+      reason: "cancel me",
+      canPersistOutcome: async () => true,
+    });
+
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: ExecutionStatus.Cancelled,
+        cancelRequestedAt: requestedAt,
+      }),
+      [ExecutionStatus.Running],
+    );
+  });
+
+  it("fills cancelRequestedAt when finalizing a cancelling record that lacks it", async () => {
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () =>
+        createExecution({
+          id: "e-missing-requested-at",
+          status: ExecutionStatus.Cancelling,
+          error: { message: "cancel me" },
+        }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).transitionRunningExecutionToCancelled({
+      execution: createExecution({ id: "e-missing-requested-at" }),
+      reason: "cancel me",
+      canPersistOutcome: async () => true,
+    });
+
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: ExecutionStatus.Cancelled,
+        cancelRequestedAt: expect.any(Date),
+      }),
+      [ExecutionStatus.Cancelling],
+    );
+  });
+
+  it("finalizes cancellation instead of silently losing to a failed completion save", async () => {
+    const requestedAt = new Date("2024-01-01T00:00:00.000Z");
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async (id: string) =>
+        id === "e-complete-cancel-race"
+          ? createExecution({
+              id,
+              status: ExecutionStatus.Cancelling,
+              cancelRequestedAt: requestedAt,
+              error: { message: "cancel me" },
+            })
+          : null,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).completeExecutionAttempt(
+      createExecution({ id: "e-complete-cancel-race" }),
+      { ok: true },
+      async () => true,
+    );
+
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        status: ExecutionStatus.Completed,
+      }),
+      [ExecutionStatus.Running],
+    );
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        status: ExecutionStatus.Cancelled,
+        cancelRequestedAt: requestedAt,
+      }),
+      [ExecutionStatus.Cancelling],
+    );
+  });
+
+  it("returns early when cancellation finalization cannot load an execution", async () => {
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () => null,
+        saveExecutionIfStatus,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).transitionRunningExecutionToCancelled({
+      execution: createExecution({ id: "e-missing-cancel" }),
+      reason: "cancel me",
+      canPersistOutcome: async () => true,
+    });
+
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
+  });
+
+  it("returns early when the final cancellation CAS loses", async () => {
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false);
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () =>
+          createExecution({
+            id: "e-cancel-cas-lost",
+            status: ExecutionStatus.Cancelling,
+            cancelRequestedAt: new Date(),
+            error: { message: "cancel me" },
+          }),
+        saveExecutionIfStatus,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).transitionRunningExecutionToCancelled({
+      execution: createExecution({ id: "e-cancel-cas-lost" }),
+      reason: "cancel me",
+      canPersistOutcome: async () => true,
+    });
+
+    expect(saveExecutionIfStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns early when cancellation finalization sees no cancellation request", async () => {
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () => createExecution({ id: "e-no-cancel" }),
+        saveExecutionIfStatus,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).transitionRunningExecutionToCancelled({
+      execution: createExecution({ id: "e-no-cancel" }),
+      reason: "cancel me",
+      canPersistOutcome: async () => true,
+    });
+
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
+  });
+
+  it("returns false when cancellation finalization finds no request", async () => {
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () =>
+          createExecution({ id: "e-no-cancel-request" }),
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await expect(
+      (manager as any).finalizeCancellationIfRequested(
+        createExecution({ id: "e-no-cancel-request" }),
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it("returns true when cancellation finalization sees an already cancelled execution", async () => {
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () =>
+          createExecution({
+            id: "e-already-cancelled",
+            status: ExecutionStatus.Cancelled,
+            cancelRequestedAt: new Date(),
+            cancelledAt: new Date(),
+            completedAt: new Date(),
+            error: { message: "done" },
+          }),
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await expect(
+      (manager as any).finalizeCancellationIfRequested(
+        createExecution({ id: "e-already-cancelled" }),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it("falls back to cancellation finalization when a failure CAS loses to cancellation", async () => {
+    const requestedAt = new Date("2024-01-01T00:00:00.000Z");
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () =>
+        createExecution({
+          id: "e-failed-cancel-race",
+          status: ExecutionStatus.Cancelling,
+          cancelRequestedAt: requestedAt,
+          error: { message: "cancel me" },
+        }),
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).transitionExecutionToFailed({
+      execution: createExecution({ id: "e-failed-cancel-race" }),
+      from: ExecutionStatus.Running,
+      reason: "failed",
+      error: { message: "boom" },
+    });
+
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        status: ExecutionStatus.Failed,
+      }),
+      [ExecutionStatus.Running],
+    );
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        status: ExecutionStatus.Cancelled,
+        cancelRequestedAt: requestedAt,
+      }),
+      [ExecutionStatus.Cancelling],
+    );
+  });
+
+  it("skips running cancellation finalization when the attempt can no longer persist", async () => {
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
+    const manager = createManager({
+      store: createStore({
+        saveExecution: async () => {},
+        getExecution: async () => null,
+        saveExecutionIfStatus,
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+      }),
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+
+    await (manager as any).transitionRunningExecutionToCancelled({
+      execution: createExecution({ id: "e-no-persist" }),
+      reason: "late-cancel",
+      canPersistOutcome: async () => false,
+    });
+
+    expect(saveExecutionIfStatus).not.toHaveBeenCalled();
   });
 
   it("retries cancellation when compare-and-save loses the first race", async () => {
@@ -497,11 +1079,42 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution("e1");
 
-    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ status: ExecutionStatus.Running }),
       [ExecutionStatus.Pending],
     );
     expect(saveExecutionIfStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("finalizes running executions that were already cancellation-requested before the attempt body runs", async () => {
+    const saveExecutionIfStatus = createSaveExecutionIfStatusMock(true);
+    const execution = createExecution({
+      id: "e-running-cancel-requested",
+      cancelRequestedAt: new Date(),
+      error: { message: "Already requested" },
+    });
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution: async () => execution,
+      saveExecutionIfStatus,
+      updateExecution: async () => undefined,
+      listIncompleteExecutions: async () => [],
+    });
+
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor(undefined),
+    });
+    await manager.processExecution(execution.id);
+
+    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: ExecutionStatus.Cancelled,
+        error: { message: "Already requested" },
+      }),
+      [ExecutionStatus.Running],
+    );
   });
 
   it("bails out early when the execution is already cancelled before attempting", async () => {
@@ -720,7 +1333,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution("e2");
 
-    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ status: ExecutionStatus.Running }),
       [ExecutionStatus.Pending],
     );
@@ -781,7 +1395,8 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
     await manager.processExecution("e3");
 
-    expect(saveExecutionIfStatus).toHaveBeenCalledWith(
+    expect(saveExecutionIfStatus).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ status: ExecutionStatus.Running }),
       [ExecutionStatus.Pending],
     );

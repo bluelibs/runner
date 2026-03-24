@@ -40,6 +40,23 @@ describe("ensureSchedule()", () => {
     expect(timers.some((t) => t.id === "sched:s1")).toBe(true);
   });
 
+  it("persists timezone for cron schedules created via ensureSchedule()", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const task = r
+      .task("t-ensure-cron-timezone")
+      .run(async () => "ok")
+      .build();
+
+    await service.ensureSchedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "UTC",
+    });
+
+    expect((await store.getSchedule("s1"))?.timezone).toBe("UTC");
+  });
+
   it("updates an existing schedule (same id/task) and re-arms its timer", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
@@ -60,6 +77,28 @@ describe("ensureSchedule()", () => {
     const timers = await futureTimers(store);
     const timer = timers.find((t) => t.id === "sched:s1");
     expect(timer?.scheduleId).toBe("s1");
+  });
+
+  it("replaces timezone when ensureSchedule() updates an existing cron schedule", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const task = r
+      .task("t-ensure-timezone-update")
+      .run(async () => "ok")
+      .build();
+
+    await service.ensureSchedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "UTC",
+    });
+    await service.ensureSchedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "America/New_York",
+    });
+
+    expect((await store.getSchedule("s1"))?.timezone).toBe("America/New_York");
   });
 
   it("rejects rebinding an existing schedule id to a different workflow", async () => {

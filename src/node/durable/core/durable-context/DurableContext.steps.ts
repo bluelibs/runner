@@ -1,12 +1,17 @@
 import type { DurableAuditEntryInput } from "../audit";
 import { DurableAuditEntryKind, isDurableInternalStepId } from "../audit";
 import { SuspensionSignal } from "../interfaces/context";
-import type { IStepBuilder, StepOptions } from "../interfaces/context";
+import type {
+  DurableStepRunContext,
+  IStepBuilder,
+  StepOptions,
+} from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { clearExecutionCurrent } from "../current";
 import { ExecutionStatus } from "../types";
 import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
+import { createCancellationErrorFromSignal } from "../../../../tools/abortSignals";
 
 export type DurableCompensation = {
   stepId: string;
@@ -33,7 +38,8 @@ export async function executeDurableStep<T>(params: {
   setCurrent: () => Promise<void>;
   stepId: string;
   options: StepOptions;
-  upFn: () => Promise<T>;
+  upFn: (context: DurableStepRunContext) => Promise<T>;
+  signal: AbortSignal;
   downFn?: (result: T) => Promise<void>;
   compensations: DurableCompensation[];
 }): Promise<T> {
@@ -65,15 +71,23 @@ export async function executeDurableStep<T>(params: {
 
   const executeWithRetry = async (): Promise<T> => {
     try {
+      const context: DurableStepRunContext = { signal: params.signal };
       if (params.options.timeout) {
         return await withTimeout(
-          params.upFn(),
+          params.upFn(context),
           params.options.timeout,
           `Step ${params.stepId} timed out`,
         );
       }
-      return await params.upFn();
+      return await params.upFn(context);
     } catch (error) {
+      if (params.signal.aborted) {
+        throw createCancellationErrorFromSignal(
+          params.signal,
+          `Durable step '${params.stepId}' cancelled`,
+        );
+      }
+
       if (isTimeoutExceededError(error)) {
         throw error;
       }
