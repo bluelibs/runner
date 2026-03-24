@@ -20,22 +20,42 @@ import type { TaskRegistry } from "./TaskRegistry";
 import type { AuditLogger } from "./AuditLogger";
 import type { WaitManager } from "./WaitManager";
 import { Logger } from "../../../../models/Logger";
-import { DurableContext } from "../DurableContext";
-import { clearExecutionCurrentIfSuspendedOnStep } from "../current";
-import { SuspensionSignal } from "../interfaces/context";
-import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.tag";
+import type { DurableContext } from "../DurableContext";
 import { acquireStoreLock } from "../locking";
-import { withExecutionWaitLock } from "../executionWaiters";
-import { createExecutionWaitCompletionState } from "../executionWaitState";
-import { commitDurableWaitCompletion } from "../waiterCore";
-import {
-  createExecutionId,
-  isTimeoutExceededError,
-  sleepMs,
-  withTimeout,
-} from "../utils";
+import { createExecutionId, sleepMs } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { NoopEventBus } from "../../bus/NoopEventBus";
+import {
+  type ExecutionLockState,
+  createExecutionLockState,
+  assertStoreLockOwnership,
+  startLockHeartbeat,
+} from "./ExecutionManager.locking";
+import {
+  type ExecutionCancellationState,
+  resolveCancellationReason,
+  getCancellationState,
+  startExecutionCancellationWatcher,
+  finalizeCancellationIfRequested,
+  transitionRunningExecutionToCancelled as transitionRunningToCancelledFn,
+} from "./ExecutionManager.cancellation";
+import { resolveExecutionWaiters } from "./ExecutionManager.waiters";
+import {
+  transitionExecutionToRunning as transitionToRunningFn,
+  transitionExecutionToFailed as transitionToFailedFn,
+  completeExecutionAttempt as completeAttemptFn,
+  suspendExecutionAttempt as suspendAttemptFn,
+  scheduleExecutionRetry as scheduleRetryFn,
+} from "./ExecutionManager.transitions";
+import {
+  type ExecutionAttemptGuards,
+  type TaskAttemptOutcome,
+  type ExecutionErrorInfo,
+  createExecutionAttemptGuards as createGuardsFn,
+  createExecutionContext as createContextFn,
+  runTaskAttempt as runTaskAttemptFn,
+  handleExecutionAttemptError as handleAttemptErrorFn,
+} from "./ExecutionManager.attempt";
 
 export interface ExecutionManagerConfig {
   store: IDurableStore;
@@ -52,41 +72,6 @@ export interface ExecutionManagerConfig {
     kickoffFailsafeDelayMs?: number;
   };
 }
-
-type ExecutionLockState = {
-  lost: boolean;
-  lossError: Error | null;
-  lockId: string | "no-lock" | undefined;
-  lockResource: string | undefined;
-  lockTtlMs: number | undefined;
-  triggerLoss: (error: Error) => void;
-  waitForLoss: Promise<never>;
-};
-
-type ExecutionAttemptGuards = {
-  assertLockOwnership: () => void;
-  raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
-  canPersistOutcome: () => Promise<boolean>;
-  getCancellationState: () => Promise<ExecutionCancellationState | null>;
-};
-
-type ExecutionErrorInfo = {
-  message: string;
-  stack?: string;
-};
-
-type ExecutionCancellationState = {
-  reason: string;
-};
-
-type TaskAttemptOutcome =
-  | { kind: "completed"; result: unknown }
-  | { kind: "already-finalized" };
-
-type ResolvedExecutionWaiter = {
-  executionId: string;
-  stepId: string;
-};
 
 /**
  * Runs durable executions (the "workflow engine" for attempts).
@@ -124,118 +109,7 @@ export class ExecutionManager {
     this.logger = baseLogger.with({ source: "durable.execution" });
   }
 
-  private resolveCancellationReason(
-    execution: Execution<unknown, unknown>,
-    requestedReason?: string,
-  ): string {
-    if (execution.cancelRequestedAt && execution.error?.message) {
-      return execution.error.message;
-    }
-
-    return requestedReason ?? "Execution cancelled";
-  }
-
-  private getCancellationState(
-    execution: Execution<unknown, unknown> | null,
-  ): ExecutionCancellationState | null {
-    if (!execution) {
-      return null;
-    }
-
-    if (
-      execution.status !== ExecutionStatus.Cancelled &&
-      execution.status !== ExecutionStatus.Cancelling &&
-      execution.cancelRequestedAt === undefined
-    ) {
-      return null;
-    }
-
-    return {
-      reason: this.resolveCancellationReason(execution),
-    };
-  }
-
-  private abortActiveAttempt(executionId: string, reason: string): void {
-    const controller = this.activeAttemptControllers.get(executionId);
-    if (!controller || controller.signal.aborted) {
-      return;
-    }
-
-    controller.abort(reason);
-  }
-
-  private startExecutionCancellationWatcher(params: {
-    executionId: string;
-    controller: AbortController;
-  }): () => void {
-    const intervalMs = 250;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const scheduleNextPoll = () => {
-      timer = setTimeout(() => {
-        timer = null;
-        if (stopped || params.controller.signal.aborted) {
-          return;
-        }
-
-        void this.config.store
-          .getExecution(params.executionId)
-          .then((execution) => {
-            const cancellationState = this.getCancellationState(execution);
-            if (cancellationState) {
-              this.abortActiveAttempt(
-                params.executionId,
-                cancellationState.reason,
-              );
-            }
-          })
-          .catch(() => {
-            // Cancellation polling is best-effort; durable boundaries still re-check store state.
-          })
-          .finally(() => {
-            if (!stopped && !params.controller.signal.aborted) {
-              scheduleNextPoll();
-            }
-          });
-      }, intervalMs);
-      timer.unref?.();
-    };
-
-    scheduleNextPoll();
-
-    return () => {
-      stopped = true;
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    };
-  }
-
-  private registerAttemptCancellation(params: { executionId: string }): {
-    signal: AbortSignal;
-    stop: () => void;
-  } {
-    const controller = new AbortController();
-    this.activeAttemptControllers.set(params.executionId, controller);
-    const stopWatcher = this.startExecutionCancellationWatcher({
-      executionId: params.executionId,
-      controller,
-    });
-
-    return {
-      signal: controller.signal,
-      stop: () => {
-        stopWatcher();
-        if (
-          this.activeAttemptControllers.get(params.executionId) === controller
-        ) {
-          this.activeAttemptControllers.delete(params.executionId);
-        }
-      },
-    };
-  }
+  // ─── Public API ────────────────────────────────────────────────────────────
 
   async start(
     taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
@@ -260,152 +134,17 @@ export class ExecutionManager {
     return executionId;
   }
 
-  // ─── Idempotent start ──────────────────────────────────────────────────────
-
-  /**
-   * Start a workflow with deduplication: if the same (workflowKey, idempotencyKey)
-   * was already started, returns the existing executionId instead of creating
-   * a duplicate. Existing executions are only re-admitted when they are still
-   * pending kickoff or already in retry backoff; actively running or intentionally
-   * parked workflows are left alone. Relies on an atomic store primitive so
-   * create + dedupe claim happen in one transaction.
-   */
-  private async startWithIdempotencyKey(
-    task: ITask<any, Promise<any>, any, any, any, any>,
-    input: unknown | undefined,
-    idempotencyKey: string,
-    options: ExecuteOptions | undefined,
-  ): Promise<string> {
-    const execution = this.createPendingExecution(task, input, options);
-    const created = await this.config.store.createExecutionWithIdempotencyKey({
-      execution,
-      workflowKey: this.getTaskWorkflowKey(task),
-      idempotencyKey,
+  async startAndWait(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
+    options?: StartAndWaitOptions,
+  ): Promise<DurableStartAndWaitResult<unknown>> {
+    const executionId = await this.start(taskRef, input, options);
+    const data = await this.waitManager.waitForResult(executionId, {
+      timeout: options?.waitTimeout,
+      waitPollIntervalMs: options?.waitPollIntervalMs,
     });
-
-    if (!created.created) {
-      const existing = await this.config.store.getExecution(
-        created.executionId,
-      );
-      if (
-        existing &&
-        this.shouldKickoffExistingIdempotentExecution(existing.status)
-      ) {
-        await this.kickoffWithFailsafe(created.executionId);
-      }
-      return created.executionId;
-    }
-
-    await this.logCreatedExecution(execution);
-    await this.kickoffWithFailsafe(execution.id);
-    return execution.id;
-  }
-
-  private assertCanExecute(): void {
-    if (!this.config.queue && !this.config.taskExecutor) {
-      durableExecutionInvariantError.throw({
-        message:
-          "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use a Runner durable workflow resource such as `resources.memoryWorkflow.fork(...).with(...)` or provide a custom executor in config.",
-      });
-    }
-  }
-
-  // ─── Execution persistence ─────────────────────────────────────────────────
-
-  private getTaskWorkflowKey(
-    task: ITask<any, Promise<any>, any, any, any, any>,
-  ): string {
-    return this.taskRegistry.getWorkflowKey(task);
-  }
-
-  private createPendingExecution(
-    task: ITask<any, Promise<any>, any, any, any, any>,
-    input: unknown | undefined,
-    options: ExecuteOptions | undefined,
-    executionId?: string,
-  ): Execution<unknown, unknown> {
-    return {
-      id: executionId ?? createExecutionId(),
-      workflowKey: this.getTaskWorkflowKey(task),
-      parentExecutionId: options?.parentExecutionId,
-      input,
-      status: ExecutionStatus.Pending,
-      attempt: 1,
-      maxAttempts: this.config.execution?.maxAttempts ?? 3,
-      timeout: options?.timeout ?? this.config.execution?.timeout,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-  }
-
-  private async logCreatedExecution(execution: Execution): Promise<void> {
-    await this.auditLogger.log({
-      kind: DurableAuditEntryKind.ExecutionStatusChanged,
-      executionId: execution.id,
-      workflowKey: execution.workflowKey,
-      attempt: execution.attempt,
-      from: null,
-      to: ExecutionStatus.Pending,
-      reason: "created",
-    });
-  }
-
-  /**
-   * Creates a new execution record, persists it to the store, and logs an
-   * audit entry. Returns the executionId.
-   */
-  private async persistNewExecution(
-    task: ITask<any, Promise<any>, any, any, any, any>,
-    input: unknown | undefined,
-    options: ExecuteOptions | undefined,
-    executionId?: string,
-  ): Promise<string> {
-    const execution = this.createPendingExecution(
-      task,
-      input,
-      options,
-      executionId,
-    );
-
-    await this.config.store.saveExecution(execution);
-    await this.logCreatedExecution(execution);
-
-    return execution.id;
-  }
-
-  /**
-   * Kicks off an execution with a failsafe timer for queue mode.
-   * If the queue enqueue succeeds, the timer is cleaned up immediately.
-   * If enqueue fails, the timer remains so the polling loop can retry later.
-   */
-  private async kickoffWithFailsafe(executionId: string): Promise<void> {
-    const failsafeDelayMs =
-      this.config.execution?.kickoffFailsafeDelayMs ?? 10_000;
-    const shouldArmFailsafe = Boolean(this.config.queue) && failsafeDelayMs > 0;
-
-    if (shouldArmFailsafe) {
-      const timerId = `kickoff:${executionId}`;
-      await this.config.store.createTimer({
-        id: timerId,
-        executionId,
-        type: TimerType.Retry,
-        fireAt: new Date(Date.now() + failsafeDelayMs),
-        status: TimerStatus.Pending,
-      });
-
-      // If kickoffExecution throws (eg. broker outage), the failsafe timer
-      // stays in the store so the polling loop can retry.
-      await this.kickoffExecution(executionId);
-
-      try {
-        await this.config.store.deleteTimer(timerId);
-      } catch {
-        // Best-effort timer cleanup; ignore.
-      }
-      return;
-    }
-
-    await this.kickoffExecution(executionId);
+    return { durable: { executionId }, data };
   }
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
@@ -418,10 +157,7 @@ export class ExecutionManager {
       if (execution.status === ExecutionStatus.Cancelling) return;
 
       const now = new Date();
-      const cancellationReason = this.resolveCancellationReason(
-        execution,
-        reason,
-      );
+      const cancellationReason = resolveCancellationReason(execution, reason);
       const nextExecution: Execution =
         execution.status === ExecutionStatus.Running
           ? {
@@ -458,11 +194,8 @@ export class ExecutionManager {
         return;
       }
 
-      await this.auditLogger.log({
-        kind: DurableAuditEntryKind.ExecutionStatusChanged,
-        executionId,
-        workflowKey: execution.workflowKey,
-        attempt: execution.attempt,
+      await this.logExecutionStatusChange({
+        execution,
         from: execution.status,
         to: ExecutionStatus.Cancelled,
         reason: "cancelled",
@@ -481,22 +214,6 @@ export class ExecutionManager {
     });
   }
 
-  async startAndWait(
-    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: StartAndWaitOptions,
-  ): Promise<DurableStartAndWaitResult<unknown>> {
-    const executionId = await this.start(taskRef, input, options);
-    const data = await this.waitManager.waitForResult(executionId, {
-      timeout: options?.waitTimeout,
-      waitPollIntervalMs: options?.waitPollIntervalMs,
-    });
-    return {
-      durable: { executionId },
-      data,
-    };
-  }
-
   async processExecution(executionId: string): Promise<void> {
     const snapshot = await this.config.store.getExecution(executionId);
     if (!snapshot) return;
@@ -513,15 +230,15 @@ export class ExecutionManager {
 
     if (acquiredLock === null) return;
 
-    const executionLockState = this.createExecutionLockState();
-    executionLockState.lockId = acquiredLock.lockId;
-    executionLockState.lockResource = lockResource;
-    executionLockState.lockTtlMs = lockTtlMs;
-    const stopLockHeartbeat = this.startLockHeartbeat({
+    const lockState = this.createExecutionLockState();
+    lockState.lockId = acquiredLock.lockId;
+    lockState.lockResource = lockResource;
+    lockState.lockTtlMs = lockTtlMs;
+    const stopHeartbeat = this.startLockHeartbeat({
       lockResource,
       lockId: acquiredLock.lockId,
       lockTtlMs,
-      lockState: executionLockState,
+      lockState,
     });
 
     try {
@@ -552,89 +269,58 @@ export class ExecutionManager {
         return;
       }
 
-      await this.runExecutionAttempt(execution, task, executionLockState);
+      await this.runExecutionAttempt(execution, task, lockState);
     } finally {
-      stopLockHeartbeat();
+      stopHeartbeat();
       await acquiredLock.release();
     }
   }
 
-  private createExecutionLockState(): ExecutionLockState {
-    let didLoseLock = false;
-    let rejectLoss: ((error: Error) => void) | null = null;
-    const waitForLoss = new Promise<never>((_, reject) => {
-      rejectLoss = reject;
-    });
-    void waitForLoss.catch(() => {});
-
-    return {
-      lost: false,
-      lossError: null,
-      lockId: undefined,
-      lockResource: undefined,
-      lockTtlMs: undefined,
-      triggerLoss: (error) => {
-        if (didLoseLock || rejectLoss === null) return;
-        didLoseLock = true;
-        rejectLoss(error);
-      },
-      waitForLoss,
-    };
-  }
-
-  private markExecutionLockLost(
-    executionLockState: ExecutionLockState,
-    lockResource: string,
-  ): Error {
-    if (executionLockState.lossError) {
-      executionLockState.lost = true;
-      return executionLockState.lossError;
-    }
-
-    const lossError = durableExecutionInvariantError.new({
-      message: `Execution lock lost for '${lockResource}' while the attempt was still running.`,
-    });
-    executionLockState.lost = true;
-    executionLockState.lossError = lossError;
-    executionLockState.triggerLoss(lossError);
-    return lossError;
-  }
-
-  private async assertStoreLockOwnership(
-    executionLockState: ExecutionLockState,
-  ): Promise<void> {
-    const lockId = executionLockState.lockId;
-    const lockResource = executionLockState.lockResource;
-    const lockTtlMs = executionLockState.lockTtlMs;
-
-    if (
-      executionLockState.lost ||
-      lockId === undefined ||
-      lockResource === undefined ||
-      lockTtlMs === undefined ||
-      lockId === "no-lock" ||
-      !this.config.store.renewLock
-    ) {
-      if (executionLockState.lost) {
-        throw executionLockState.lossError;
-      }
+  async kickoffExecution(executionId: string): Promise<void> {
+    if (this.config.queue) {
+      await this.config.queue.enqueue({
+        type: "execute",
+        payload: { executionId },
+        maxAttempts: this.config.execution?.maxAttempts ?? 3,
+      });
       return;
     }
 
-    try {
-      const renewed = await this.config.store.renewLock(
-        lockResource,
-        lockId,
-        lockTtlMs,
-      );
-      if (renewed) {
-        return;
-      }
-    } catch {
-      // Failing closed avoids persisting an outcome after ownership may be lost.
-    }
+    await this.processExecution(executionId);
+  }
 
-    throw this.markExecutionLockLost(executionLockState, lockResource);
+  async recoverExecution(executionId: string): Promise<void> {
+    await this.kickoffWithFailsafe(executionId);
+  }
+
+  async notifyExecutionFinished(execution: Execution): Promise<void> {
+    await resolveExecutionWaiters({
+      store: this.config.store,
+      execution,
+      kickoffExecution: (id) => this.kickoffExecution(id),
+      logger: this.logger,
+    });
+
+    try {
+      await this.eventBus.publish(`execution:${execution.id}`, {
+        type: "finished",
+        payload: execution,
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      try {
+        await this.logger.error(
+          "Durable execution finished notification failed.",
+          {
+            executionId: execution.id,
+            status: execution.status,
+            error,
+          },
+        );
+      } catch {
+        // Logging must not affect durable terminal state handling.
+      }
+    }
   }
 
   async failExecutionDeliveryExhausted(
@@ -701,751 +387,9 @@ export class ExecutionManager {
     });
   }
 
-  private startLockHeartbeat(params: {
-    lockResource: string;
-    lockId: string | "no-lock";
-    lockTtlMs: number;
-    lockState: ExecutionLockState;
-  }): () => void {
-    if (params.lockId === "no-lock") return () => {};
-    if (!this.config.store.renewLock) return () => {};
+  // ─── Execution attempt orchestration ───────────────────────────────────────
 
-    const intervalMs = Math.max(1_000, Math.floor(params.lockTtlMs / 3));
-    let stopped = false;
-    let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const scheduleRenewal = () => {
-      heartbeatTimer = setTimeout(() => {
-        heartbeatTimer = null;
-        if (stopped) return;
-        void this.config.store.renewLock!(
-          params.lockResource,
-          params.lockId,
-          params.lockTtlMs,
-        )
-          .then((renewed) => {
-            if (!renewed) {
-              this.markExecutionLockLost(params.lockState, params.lockResource);
-            }
-          })
-          .catch(() => {
-            // A transient renew failure should not abandon the attempt outright;
-            // outcome writes still re-check ownership against the store.
-          })
-          .finally(() => {
-            if (!stopped && !params.lockState.lost) {
-              scheduleRenewal();
-            }
-          });
-      }, intervalMs);
-      heartbeatTimer.unref?.();
-    };
-
-    scheduleRenewal();
-
-    return () => {
-      stopped = true;
-      if (heartbeatTimer) {
-        clearTimeout(heartbeatTimer);
-        heartbeatTimer = null;
-      }
-    };
-  }
-
-  async kickoffExecution(executionId: string): Promise<void> {
-    if (this.config.queue) {
-      await this.config.queue.enqueue({
-        type: "execute",
-        payload: { executionId },
-        maxAttempts: this.config.execution?.maxAttempts ?? 3,
-      });
-      return;
-    }
-
-    await this.processExecution(executionId);
-  }
-
-  /**
-   * Recovery should reuse the same queue-mode failsafe as normal starts so a
-   * broker outage does not strand recovered executions without a retry path.
-   */
-  async recoverExecution(executionId: string): Promise<void> {
-    await this.kickoffWithFailsafe(executionId);
-  }
-
-  async notifyExecutionFinished(execution: Execution): Promise<void> {
-    await this.resolveExecutionWaiters(execution);
-
-    try {
-      await this.eventBus.publish(`execution:${execution.id}`, {
-        type: "finished",
-        payload: execution,
-        timestamp: new Date(),
-      });
-    } catch (error) {
-      // Completion state lives in the durable store; pub/sub notification is best-effort.
-      try {
-        await this.logger.error(
-          "Durable execution finished notification failed.",
-          {
-            executionId: execution.id,
-            status: execution.status,
-            error,
-          },
-        );
-      } catch {
-        // Logging must not affect durable terminal state handling.
-      }
-    }
-  }
-
-  private async resolveExecutionWaiters(execution: Execution): Promise<void> {
-    const resolvedWaiters = await withExecutionWaitLock<
-      ResolvedExecutionWaiter[]
-    >({
-      store: this.config.store,
-      targetExecutionId: execution.id,
-      fn: async () => {
-        const resolvedWaiters: ResolvedExecutionWaiter[] = [];
-        const waiters = await this.config.store.listExecutionWaiters(
-          execution.id,
-        );
-
-        for (const waiter of waiters) {
-          const stepResult = {
-            executionId: waiter.executionId,
-            stepId: waiter.stepId,
-            result: createExecutionWaitCompletionState(execution),
-            completedAt: new Date(),
-          };
-
-          const completed = await commitDurableWaitCompletion({
-            store: this.config.store,
-            stepResult,
-            timerId: waiter.timerId,
-            commitAtomically: this.config.store.commitExecutionWaiterCompletion
-              ? async () =>
-                  await this.config.store.commitExecutionWaiterCompletion!({
-                    targetExecutionId: execution.id,
-                    executionId: waiter.executionId,
-                    stepId: waiter.stepId,
-                    stepResult,
-                    timerId: waiter.timerId,
-                  })
-              : undefined,
-            onFallbackCommitted: async () => {
-              await this.config.store.deleteExecutionWaiter(
-                execution.id,
-                waiter.executionId,
-                waiter.stepId,
-              );
-            },
-          });
-
-          if (!completed) {
-            continue;
-          }
-
-          resolvedWaiters.push({
-            executionId: waiter.executionId,
-            stepId: waiter.stepId,
-          });
-        }
-
-        return resolvedWaiters;
-      },
-    });
-
-    for (const waiter of resolvedWaiters) {
-      await this.clearExecutionWaitCurrentBestEffort({
-        executionId: waiter.executionId,
-        stepId: waiter.stepId,
-        targetExecutionId: execution.id,
-      });
-
-      await this.resumeExecutionWaitParentBestEffort({
-        executionId: waiter.executionId,
-        stepId: waiter.stepId,
-        targetExecutionId: execution.id,
-      });
-    }
-  }
-
-  private async resumeExecutionWaitParentBestEffort(params: {
-    executionId: string;
-    stepId: string;
-    targetExecutionId: string;
-  }): Promise<void> {
-    const timerId = `wait_execution_resume:${params.executionId}:${params.stepId}`;
-    let retryTimerArmed = false;
-    let retryTimerError: unknown;
-
-    try {
-      await this.config.store.createTimer({
-        id: timerId,
-        executionId: params.executionId,
-        type: TimerType.Retry,
-        fireAt: new Date(),
-        status: TimerStatus.Pending,
-      });
-      retryTimerArmed = true;
-    } catch (error) {
-      retryTimerError = error;
-    }
-
-    try {
-      await this.kickoffExecution(params.executionId);
-    } catch (error) {
-      if (!retryTimerArmed) {
-        try {
-          await this.config.store.createTimer({
-            id: timerId,
-            executionId: params.executionId,
-            type: TimerType.Retry,
-            fireAt: new Date(),
-            status: TimerStatus.Pending,
-          });
-          retryTimerArmed = true;
-          retryTimerError = undefined;
-        } catch (timerError) {
-          retryTimerError = retryTimerError ?? timerError;
-        }
-      }
-
-      try {
-        await this.logger.warn(
-          "Durable waitForExecution parent kickoff failed; relying on retry handling instead.",
-          {
-            executionId: params.executionId,
-            stepId: params.stepId,
-            targetExecutionId: params.targetExecutionId,
-            retryTimerArmed,
-            retryTimerError,
-            error,
-          },
-        );
-      } catch {
-        // Logging must stay best-effort after the wait completion is durable.
-      }
-      return;
-    }
-
-    if (retryTimerArmed) {
-      try {
-        await this.config.store.deleteTimer(timerId);
-      } catch {
-        // Best-effort timer cleanup; duplicate resumes stay replay-safe.
-      }
-    }
-  }
-
-  /**
-   * The durable completion is already persisted before this cleanup runs.
-   * If clearing `execution.current` fails, we still need to kick the parent so
-   * replay can observe the completed wait state and continue.
-   */
-  private async clearExecutionWaitCurrentBestEffort(params: {
-    executionId: string;
-    stepId: string;
-    targetExecutionId: string;
-  }): Promise<void> {
-    try {
-      await clearExecutionCurrentIfSuspendedOnStep(
-        this.config.store,
-        params.executionId,
-        {
-          stepId: params.stepId,
-          kinds: ["waitForExecution"],
-        },
-      );
-    } catch (error) {
-      try {
-        await this.logger.warn(
-          "Durable waitForExecution current cleanup failed; resuming parent execution anyway.",
-          {
-            executionId: params.executionId,
-            stepId: params.stepId,
-            targetExecutionId: params.targetExecutionId,
-            error,
-          },
-        );
-      } catch {
-        // Logging must not block wait completion recovery.
-      }
-    }
-  }
-
-  private async logExecutionStatusChange(params: {
-    execution: Execution<unknown, unknown>;
-    from: ExecutionStatus | null;
-    to: ExecutionStatus;
-    reason: string;
-  }): Promise<void> {
-    await this.auditLogger.log({
-      kind: DurableAuditEntryKind.ExecutionStatusChanged,
-      executionId: params.execution.id,
-      workflowKey: params.execution.workflowKey,
-      attempt: params.execution.attempt,
-      from: params.from,
-      to: params.to,
-      reason: params.reason,
-    });
-  }
-
-  private createExecutionAttemptGuards(
-    executionId: string,
-    executionLockState: ExecutionLockState,
-  ): ExecutionAttemptGuards {
-    const assertLockOwnership = (): void => {
-      if (executionLockState.lost) {
-        durableExecutionInvariantError.throw({
-          message: `Execution lock lost for '${executionId}' while the attempt was still running.`,
-        });
-      }
-    };
-
-    return {
-      assertLockOwnership,
-      raceWithLockLoss: async <T>(promise: Promise<T>): Promise<T> =>
-        await Promise.race([promise, executionLockState.waitForLoss]),
-      canPersistOutcome: async (): Promise<boolean> => {
-        try {
-          assertLockOwnership();
-          await this.assertStoreLockOwnership(executionLockState);
-          return true;
-        } catch (error) {
-          if (
-            error === executionLockState.lossError ||
-            executionLockState.lost
-          ) {
-            return false;
-          }
-          throw error;
-        }
-      },
-      getCancellationState:
-        async (): Promise<ExecutionCancellationState | null> =>
-          this.getCancellationState(
-            await this.config.store.getExecution(executionId),
-          ),
-    };
-  }
-
-  private assertTaskExecutorConfigured(): void {
-    if (!this.config.taskExecutor) {
-      durableExecutionInvariantError.throw({
-        message:
-          "DurableService cannot run executions without `taskExecutor` in config.",
-      });
-    }
-  }
-
-  private async transitionExecutionToRunning(
-    execution: Execution<unknown, unknown>,
-  ): Promise<Execution<unknown, unknown> | null> {
-    if (execution.status === ExecutionStatus.Running) {
-      if (execution.current === undefined) {
-        return execution;
-      }
-
-      const resumedExecution: Execution = {
-        ...execution,
-        current: undefined,
-        updatedAt: new Date(),
-      };
-      const resumed = await this.config.store.saveExecutionIfStatus(
-        resumedExecution,
-        [ExecutionStatus.Running],
-      );
-
-      return resumed ? resumedExecution : null;
-    }
-
-    const now = new Date();
-    const runningExecution: Execution = {
-      ...execution,
-      status: ExecutionStatus.Running,
-      current: undefined,
-      result: undefined,
-      error: undefined,
-      completedAt: undefined,
-      updatedAt: now,
-    };
-    const started = await this.config.store.saveExecutionIfStatus(
-      runningExecution,
-      [execution.status],
-    );
-    if (!started) {
-      return null;
-    }
-
-    await this.logExecutionStatusChange({
-      execution,
-      from: execution.status,
-      to: ExecutionStatus.Running,
-      reason: "start_attempt",
-    });
-
-    return runningExecution;
-  }
-
-  private createExecutionContext(
-    runningExecution: Execution<unknown, unknown>,
-    task: ITask<unknown, Promise<unknown>, any, any, any, any>,
-    assertLockOwnership: () => void,
-    cancellationSignal: AbortSignal,
-  ): DurableContext {
-    return new DurableContext(
-      this.config.store,
-      this.eventBus,
-      runningExecution.id,
-      runningExecution.attempt,
-      {
-        auditEnabled: this.config.audit?.enabled === true,
-        auditEmitter: this.config.audit?.emitter,
-        implicitInternalStepIds:
-          this.config.determinism?.implicitInternalStepIds,
-        declaredSignalIds: getDeclaredDurableWorkflowSignalIds(task),
-        assertLockOwnership,
-        cancellationSignal,
-        startWorkflowExecution: async (childTask, input, options) =>
-          await this.start(childTask, input, options),
-        getTaskPersistenceId: (childTask) => this.getTaskWorkflowKey(childTask),
-      },
-    );
-  }
-
-  private async runTaskAttempt(params: {
-    task: ITask<unknown, Promise<unknown>, any, any, any, any>;
-    input: unknown;
-    context: DurableContext;
-    execution: Execution<unknown, unknown>;
-    raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
-    canPersistOutcome: () => Promise<boolean>;
-  }): Promise<TaskAttemptOutcome> {
-    const contextProvider = this.config.contextProvider ?? ((_ctx, fn) => fn());
-    const taskPromise = Promise.resolve(
-      contextProvider(params.context, () =>
-        this.config.taskExecutor!.run(params.task, params.input),
-      ),
-    );
-
-    if (!params.execution.timeout) {
-      return {
-        kind: "completed",
-        result: await params.raceWithLockLoss(taskPromise),
-      };
-    }
-
-    const timeoutMessage = `Execution ${params.execution.id} timed out`;
-    const elapsed = Date.now() - params.execution.createdAt.getTime();
-    const remainingTimeout = Math.max(0, params.execution.timeout - elapsed);
-
-    if (remainingTimeout === 0 && params.execution.timeout > 0) {
-      if (!(await params.canPersistOutcome())) {
-        return { kind: "already-finalized" };
-      }
-      await this.transitionExecutionToFailed({
-        execution: params.execution,
-        from: ExecutionStatus.Running,
-        reason: "timed_out",
-        error: { message: timeoutMessage },
-      });
-      return { kind: "already-finalized" };
-    }
-
-    return {
-      kind: "completed",
-      result: await params.raceWithLockLoss(
-        withTimeout(taskPromise, remainingTimeout, timeoutMessage),
-      ),
-    };
-  }
-
-  private async completeExecutionAttempt(
-    runningExecution: Execution<unknown, unknown>,
-    result: unknown,
-    canPersistOutcome?: () => Promise<boolean>,
-  ): Promise<void> {
-    if (canPersistOutcome && !(await canPersistOutcome())) {
-      return;
-    }
-
-    const finishedExecution: Execution = {
-      ...runningExecution,
-      status: ExecutionStatus.Completed,
-      current: undefined,
-      result,
-      error: undefined,
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    };
-    const completed = await this.config.store.saveExecutionIfStatus(
-      finishedExecution,
-      [ExecutionStatus.Running],
-    );
-    if (!completed) {
-      await this.finalizeCancellationIfRequested(
-        runningExecution,
-        canPersistOutcome,
-      );
-      return;
-    }
-
-    await this.logExecutionStatusChange({
-      execution: runningExecution,
-      from: ExecutionStatus.Running,
-      to: ExecutionStatus.Completed,
-      reason: "completed",
-    });
-    await this.notifyExecutionFinished(finishedExecution);
-  }
-
-  private async finalizeCancellationIfRequested(
-    runningExecution: Execution<unknown, unknown>,
-    canPersistOutcome?: () => Promise<boolean>,
-  ): Promise<boolean> {
-    const current = await this.config.store.getExecution(runningExecution.id);
-    const cancellationState = this.getCancellationState(current);
-    if (!cancellationState) {
-      return false;
-    }
-
-    if (current?.status === ExecutionStatus.Cancelled) {
-      return true;
-    }
-
-    await this.transitionRunningExecutionToCancelled({
-      execution: runningExecution,
-      reason: cancellationState.reason,
-      canPersistOutcome,
-    });
-    return true;
-  }
-
-  private async transitionRunningExecutionToCancelled(params: {
-    execution: Execution<unknown, unknown>;
-    reason: string;
-    canPersistOutcome?: () => Promise<boolean>;
-  }): Promise<void> {
-    if (params.canPersistOutcome && !(await params.canPersistOutcome())) {
-      return;
-    }
-
-    const current = await this.config.store.getExecution(params.execution.id);
-    if (!current || current.status === ExecutionStatus.Cancelled) {
-      return;
-    }
-
-    const cancellationState = this.getCancellationState(current);
-    if (!cancellationState) {
-      return;
-    }
-
-    const now = new Date();
-    const cancelledExecution: Execution = {
-      ...current,
-      status: ExecutionStatus.Cancelled,
-      current: undefined,
-      cancelRequestedAt: current.cancelRequestedAt ?? now,
-      cancelledAt: now,
-      completedAt: now,
-      error: { message: cancellationState.reason },
-      updatedAt: now,
-    };
-    const expectedStatus =
-      current.status === ExecutionStatus.Cancelling
-        ? ExecutionStatus.Cancelling
-        : ExecutionStatus.Running;
-    const cancelled = await this.config.store.saveExecutionIfStatus(
-      cancelledExecution,
-      [expectedStatus],
-    );
-    if (!cancelled) {
-      return;
-    }
-
-    await this.logExecutionStatusChange({
-      execution: current,
-      from: current.status,
-      to: ExecutionStatus.Cancelled,
-      reason: "cancelled",
-    });
-    await this.notifyExecutionFinished(cancelledExecution);
-  }
-
-  private async suspendExecutionAttempt(
-    runningExecution: Execution<unknown, unknown>,
-    reason: string,
-    canPersistOutcome?: () => Promise<boolean>,
-  ): Promise<void> {
-    if (canPersistOutcome && !(await canPersistOutcome())) {
-      return;
-    }
-
-    const sleepingExecution: Execution = {
-      ...runningExecution,
-      status: ExecutionStatus.Sleeping,
-      updatedAt: new Date(),
-    };
-    const suspended = await this.config.store.saveExecutionIfStatus(
-      sleepingExecution,
-      [ExecutionStatus.Running],
-    );
-    if (!suspended) {
-      await this.finalizeCancellationIfRequested(
-        runningExecution,
-        canPersistOutcome,
-      );
-      return;
-    }
-
-    await this.logExecutionStatusChange({
-      execution: runningExecution,
-      from: ExecutionStatus.Running,
-      to: ExecutionStatus.Sleeping,
-      reason: `suspend:${reason}`,
-    });
-  }
-
-  private toExecutionErrorInfo(error: unknown): ExecutionErrorInfo {
-    return {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    };
-  }
-
-  private isCompensationFailure(error: unknown): boolean {
-    return (
-      error instanceof Error && error.message.startsWith("Compensation failed")
-    );
-  }
-
-  private async scheduleExecutionRetry(params: {
-    runningExecution: Execution<unknown, unknown>;
-    error: ExecutionErrorInfo;
-    canPersistOutcome?: () => Promise<boolean>;
-  }): Promise<void> {
-    if (params.canPersistOutcome && !(await params.canPersistOutcome())) {
-      return;
-    }
-
-    const delayMs = Math.pow(2, params.runningExecution.attempt) * 1000;
-    const fireAt = new Date(Date.now() + delayMs);
-    const retryTimerId = `retry:${params.runningExecution.id}:${params.runningExecution.attempt}`;
-
-    await this.config.store.createTimer({
-      id: retryTimerId,
-      executionId: params.runningExecution.id,
-      type: TimerType.Retry,
-      fireAt,
-      status: TimerStatus.Pending,
-    });
-
-    const retryingExecution: Execution = {
-      ...params.runningExecution,
-      status: ExecutionStatus.Retrying,
-      current: undefined,
-      attempt: params.runningExecution.attempt + 1,
-      error: params.error,
-      updatedAt: new Date(),
-    };
-    const scheduledRetry = await this.config.store.saveExecutionIfStatus(
-      retryingExecution,
-      [ExecutionStatus.Running],
-    );
-    if (!scheduledRetry) {
-      try {
-        await this.config.store.deleteTimer(retryTimerId);
-      } catch {
-        // Best-effort cleanup; ignore.
-      }
-      await this.finalizeCancellationIfRequested(
-        params.runningExecution,
-        params.canPersistOutcome,
-      );
-      return;
-    }
-
-    await this.logExecutionStatusChange({
-      execution: params.runningExecution,
-      from: ExecutionStatus.Running,
-      to: ExecutionStatus.Retrying,
-      reason: "retry_scheduled",
-    });
-  }
-
-  private async handleExecutionAttemptError(params: {
-    error: unknown;
-    runningExecution: Execution<unknown, unknown>;
-    guards: ExecutionAttemptGuards;
-    executionLockState: ExecutionLockState;
-  }): Promise<void> {
-    if (
-      params.error === params.executionLockState.lossError ||
-      params.executionLockState.lost
-    ) {
-      return;
-    }
-
-    const cancellationState = await params.guards.getCancellationState();
-
-    if (params.error instanceof SuspensionSignal) {
-      if (cancellationState) {
-        await this.transitionRunningExecutionToCancelled({
-          execution: params.runningExecution,
-          reason: cancellationState.reason,
-          canPersistOutcome: params.guards.canPersistOutcome,
-        });
-        return;
-      }
-      await this.suspendExecutionAttempt(
-        params.runningExecution,
-        params.error.reason,
-        params.guards.canPersistOutcome,
-      );
-      return;
-    }
-
-    if (this.isCompensationFailure(params.error)) {
-      return;
-    }
-
-    if (cancellationState) {
-      await this.transitionRunningExecutionToCancelled({
-        execution: params.runningExecution,
-        reason: cancellationState.reason,
-        canPersistOutcome: params.guards.canPersistOutcome,
-      });
-      return;
-    }
-
-    const errorInfo = this.toExecutionErrorInfo(params.error);
-    const timedOut = isTimeoutExceededError(params.error);
-    const exhaustedAttempts =
-      params.runningExecution.attempt >= params.runningExecution.maxAttempts;
-
-    if (timedOut || exhaustedAttempts) {
-      if (!(await params.guards.canPersistOutcome())) {
-        return;
-      }
-      await this.transitionExecutionToFailed({
-        execution: params.runningExecution,
-        from: ExecutionStatus.Running,
-        reason: timedOut ? "timed_out" : "failed",
-        error: errorInfo,
-      });
-      return;
-    }
-
-    await this.scheduleExecutionRetry({
-      runningExecution: params.runningExecution,
-      error: errorInfo,
-      canPersistOutcome: params.guards.canPersistOutcome,
-    });
-  }
-
-  private async runExecutionAttempt(
+  async runExecutionAttempt(
     execution: Execution<unknown, unknown>,
     task: ITask<unknown, Promise<unknown>, any, any, any, any>,
     executionLockState: ExecutionLockState,
@@ -1456,15 +400,15 @@ export class ExecutionManager {
     );
     guards.assertLockOwnership();
 
-    const initialCancellationState = await guards.getCancellationState();
-    if (initialCancellationState) {
+    const initialCancellation = await guards.getCancellationState();
+    if (initialCancellation) {
       if (
         execution.status === ExecutionStatus.Running ||
         execution.status === ExecutionStatus.Cancelling
       ) {
         await this.transitionRunningExecutionToCancelled({
           execution,
-          reason: initialCancellationState.reason,
+          reason: initialCancellation.reason,
           canPersistOutcome: guards.canPersistOutcome,
         });
       }
@@ -1475,9 +419,7 @@ export class ExecutionManager {
 
     const runningExecution =
       (await this.transitionExecutionToRunning(execution)) ?? null;
-    if (!runningExecution) {
-      return;
-    }
+    if (!runningExecution) return;
 
     const attemptCancellation = this.registerAttemptCancellation({
       executionId: runningExecution.id,
@@ -1499,9 +441,7 @@ export class ExecutionManager {
         raceWithLockLoss: guards.raceWithLockLoss,
         canPersistOutcome: guards.canPersistOutcome,
       });
-      if (outcome.kind === "already-finalized") {
-        return;
-      }
+      if (outcome.kind === "already-finalized") return;
 
       const cancellationState = await guards.getCancellationState();
       if (cancellationState) {
@@ -1530,38 +470,112 @@ export class ExecutionManager {
     }
   }
 
-  private resolveTaskReference(
-    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
-    apiMethod: string,
-  ): ITask<any, Promise<any>, any, any, any, any> {
-    if (typeof taskRef !== "string") {
-      return taskRef;
-    }
+  // ─── Delegate wrappers (preserve internal method names for testability) ────
 
-    const resolved = this.taskRegistry.find(taskRef);
-    if (!resolved) {
-      durableExecutionInvariantError.throw({
-        message: `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
-      });
-    }
-    return resolved!;
+  private createExecutionLockState(): ExecutionLockState {
+    return createExecutionLockState();
   }
 
-  private shouldKickoffExistingIdempotentExecution(
-    status: ExecutionStatus,
-  ): boolean {
-    return (
-      status === ExecutionStatus.Pending || status === ExecutionStatus.Retrying
-    );
+  private async assertStoreLockOwnership(
+    lockState: ExecutionLockState,
+  ): Promise<void> {
+    await assertStoreLockOwnership({
+      store: this.config.store,
+      lockState,
+    });
   }
 
-  private isExecutionTerminal(status: ExecutionStatus): boolean {
-    return (
-      status === ExecutionStatus.Completed ||
-      status === ExecutionStatus.Failed ||
-      status === ExecutionStatus.CompensationFailed ||
-      status === ExecutionStatus.Cancelled
-    );
+  private startLockHeartbeat(params: {
+    lockResource: string;
+    lockId: string | "no-lock";
+    lockTtlMs: number;
+    lockState: ExecutionLockState;
+  }): () => void {
+    return startLockHeartbeat({ store: this.config.store, ...params });
+  }
+
+  private getCancellationState(
+    execution: Execution<unknown, unknown> | null,
+  ): ExecutionCancellationState | null {
+    return getCancellationState(execution);
+  }
+
+  private createExecutionAttemptGuards(
+    executionId: string,
+    lockState: ExecutionLockState,
+  ): ExecutionAttemptGuards {
+    return createGuardsFn({
+      executionId,
+      lockState,
+      store: this.config.store,
+      assertStoreLockOwnership: (ls) => this.assertStoreLockOwnership(ls),
+      getCancellationState: (exec) => this.getCancellationState(exec),
+    });
+  }
+
+  private createExecutionContext(
+    execution: Execution<unknown, unknown>,
+    task: ITask<unknown, Promise<unknown>, any, any, any, any>,
+    assertLockOwnership: () => void,
+    cancellationSignal: AbortSignal,
+  ): DurableContext {
+    return createContextFn({
+      store: this.config.store,
+      eventBus: this.eventBus,
+      execution,
+      task,
+      assertLockOwnership,
+      cancellationSignal,
+      auditConfig: this.config.audit,
+      determinismConfig: this.config.determinism,
+      startExecution: (childTask, input, options) =>
+        this.start(childTask, input, options),
+      getTaskWorkflowKey: (t) => this.getTaskWorkflowKey(t),
+    });
+  }
+
+  private async runTaskAttempt(params: {
+    task: ITask<unknown, Promise<unknown>, any, any, any, any>;
+    input: unknown;
+    context: DurableContext;
+    execution: Execution<unknown, unknown>;
+    raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
+    canPersistOutcome: () => Promise<boolean>;
+  }): Promise<TaskAttemptOutcome> {
+    this.assertTaskExecutorConfigured();
+    return runTaskAttemptFn({
+      ...params,
+      taskExecutor: this.config.taskExecutor!,
+      contextProvider: this.config.contextProvider,
+      transitionToFailed: (p) => this.transitionExecutionToFailed(p),
+    });
+  }
+
+  private async handleExecutionAttemptError(params: {
+    error: unknown;
+    runningExecution: Execution<unknown, unknown>;
+    guards: ExecutionAttemptGuards;
+    executionLockState: ExecutionLockState;
+  }): Promise<void> {
+    await handleAttemptErrorFn({
+      ...params,
+      transitionToCancelled: (p) =>
+        this.transitionRunningExecutionToCancelled(p),
+      transitionToFailed: (p) => this.transitionExecutionToFailed(p),
+      suspendAttempt: (exec, reason, can) =>
+        this.suspendExecutionAttempt(exec, reason, can),
+      scheduleRetry: (p) => this.scheduleExecutionRetry(p),
+    });
+  }
+
+  private async transitionExecutionToRunning(
+    execution: Execution<unknown, unknown>,
+  ): Promise<Execution<unknown, unknown> | null> {
+    return transitionToRunningFn({
+      store: this.config.store,
+      execution,
+      logStatusChange: (p) => this.logExecutionStatusChange(p),
+    });
   }
 
   private async transitionExecutionToFailed(params: {
@@ -1573,37 +587,316 @@ export class ExecutionManager {
       | "workflow_key_missing"
       | "task_not_registered"
       | "delivery_attempts_exhausted";
-    error: {
-      message: string;
-      stack?: string;
-    };
+    error: { message: string; stack?: string };
   }): Promise<void> {
-    const completedAt = new Date();
-    const failedExecution: Execution = {
-      ...params.execution,
-      status: ExecutionStatus.Failed,
-      current: undefined,
-      error: params.error,
-      completedAt,
-      updatedAt: completedAt,
-    };
+    await transitionToFailedFn({
+      store: this.config.store,
+      ...params,
+      logStatusChange: (p) => this.logExecutionStatusChange(p),
+      notifyFinished: (e) => this.notifyExecutionFinished(e),
+      finalizeCancellation: (exec, can) =>
+        this.finalizeCancellationIfRequested(exec, can),
+    });
+  }
 
-    const failed = await this.config.store.saveExecutionIfStatus(
-      failedExecution,
-      [params.from],
+  private async transitionRunningExecutionToCancelled(params: {
+    execution: Execution<unknown, unknown>;
+    reason: string;
+    canPersistOutcome?: () => Promise<boolean>;
+  }): Promise<void> {
+    await transitionRunningToCancelledFn({
+      store: this.config.store,
+      ...params,
+      logStatusChange: (p) => this.logExecutionStatusChange(p),
+      notifyFinished: (e) => this.notifyExecutionFinished(e),
+    });
+  }
+
+  private async completeExecutionAttempt(
+    execution: Execution<unknown, unknown>,
+    result: unknown,
+    canPersistOutcome?: () => Promise<boolean>,
+  ): Promise<void> {
+    await completeAttemptFn({
+      store: this.config.store,
+      execution,
+      result,
+      canPersistOutcome,
+      logStatusChange: (p) => this.logExecutionStatusChange(p),
+      notifyFinished: (e) => this.notifyExecutionFinished(e),
+      finalizeCancellation: (exec, can) =>
+        this.finalizeCancellationIfRequested(exec, can),
+    });
+  }
+
+  private async suspendExecutionAttempt(
+    execution: Execution<unknown, unknown>,
+    reason: string,
+    canPersistOutcome?: () => Promise<boolean>,
+  ): Promise<void> {
+    await suspendAttemptFn({
+      store: this.config.store,
+      execution,
+      reason,
+      canPersistOutcome,
+      logStatusChange: (p) => this.logExecutionStatusChange(p),
+      finalizeCancellation: (exec, can) =>
+        this.finalizeCancellationIfRequested(exec, can),
+    });
+  }
+
+  private async scheduleExecutionRetry(params: {
+    runningExecution: Execution<unknown, unknown>;
+    error: ExecutionErrorInfo;
+    canPersistOutcome?: () => Promise<boolean>;
+  }): Promise<void> {
+    await scheduleRetryFn({
+      store: this.config.store,
+      ...params,
+      logStatusChange: (p) => this.logExecutionStatusChange(p),
+      finalizeCancellation: (exec, can) =>
+        this.finalizeCancellationIfRequested(exec, can),
+    });
+  }
+
+  private async finalizeCancellationIfRequested(
+    execution: Execution<unknown, unknown>,
+    canPersistOutcome?: () => Promise<boolean>,
+  ): Promise<boolean> {
+    return finalizeCancellationIfRequested({
+      store: this.config.store,
+      executionId: execution.id,
+      canPersistOutcome,
+      transitionToCancelled: (p) =>
+        this.transitionRunningExecutionToCancelled(p),
+    });
+  }
+
+  // ─── Internal utilities ────────────────────────────────────────────────────
+
+  private startExecutionCancellationWatcher(params: {
+    executionId: string;
+    controller: AbortController;
+  }): () => void {
+    return startExecutionCancellationWatcher({
+      ...params,
+      store: this.config.store,
+      abortActiveAttempt: (id, r) => this.abortActiveAttempt(id, r),
+    });
+  }
+
+  private abortActiveAttempt(executionId: string, reason: string): void {
+    const controller = this.activeAttemptControllers.get(executionId);
+    if (!controller || controller.signal.aborted) return;
+    controller.abort(reason);
+  }
+
+  private registerAttemptCancellation(params: { executionId: string }): {
+    signal: AbortSignal;
+    stop: () => void;
+  } {
+    const controller = new AbortController();
+    this.activeAttemptControllers.set(params.executionId, controller);
+    const stopWatcher = this.startExecutionCancellationWatcher({
+      executionId: params.executionId,
+      controller,
+    });
+
+    return {
+      signal: controller.signal,
+      stop: () => {
+        stopWatcher();
+        if (
+          this.activeAttemptControllers.get(params.executionId) === controller
+        ) {
+          this.activeAttemptControllers.delete(params.executionId);
+        }
+      },
+    };
+  }
+
+  private assertCanExecute(): void {
+    if (!this.config.queue && !this.config.taskExecutor) {
+      durableExecutionInvariantError.throw({
+        message:
+          "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use a Runner durable workflow resource such as `resources.memoryWorkflow.fork(...).with(...)` or provide a custom executor in config.",
+      });
+    }
+  }
+
+  private assertTaskExecutorConfigured(): void {
+    if (!this.config.taskExecutor) {
+      durableExecutionInvariantError.throw({
+        message:
+          "DurableService cannot run executions without `taskExecutor` in config.",
+      });
+    }
+  }
+
+  private getTaskWorkflowKey(
+    task: ITask<any, Promise<any>, any, any, any, any>,
+  ): string {
+    return this.taskRegistry.getWorkflowKey(task);
+  }
+
+  private resolveTaskReference(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    apiMethod: string,
+  ): ITask<any, Promise<any>, any, any, any, any> {
+    if (typeof taskRef !== "string") return taskRef;
+
+    const resolved = this.taskRegistry.find(taskRef);
+    if (!resolved) {
+      durableExecutionInvariantError.throw({
+        message: `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
+      });
+    }
+    return resolved!;
+  }
+
+  private isExecutionTerminal(status: ExecutionStatus): boolean {
+    return (
+      status === ExecutionStatus.Completed ||
+      status === ExecutionStatus.Failed ||
+      status === ExecutionStatus.CompensationFailed ||
+      status === ExecutionStatus.Cancelled
     );
-    if (!failed) {
-      if (params.from === ExecutionStatus.Running) {
-        await this.finalizeCancellationIfRequested(params.execution);
+  }
+
+  private shouldKickoffExistingIdempotentExecution(
+    status: ExecutionStatus,
+  ): boolean {
+    return (
+      status === ExecutionStatus.Pending || status === ExecutionStatus.Retrying
+    );
+  }
+
+  // ─── Execution persistence ─────────────────────────────────────────────────
+
+  private createPendingExecution(
+    task: ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown | undefined,
+    options: ExecuteOptions | undefined,
+    executionId?: string,
+  ): Execution<unknown, unknown> {
+    return {
+      id: executionId ?? createExecutionId(),
+      workflowKey: this.getTaskWorkflowKey(task),
+      parentExecutionId: options?.parentExecutionId,
+      input,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: this.config.execution?.maxAttempts ?? 3,
+      timeout: options?.timeout ?? this.config.execution?.timeout,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
+  private async logCreatedExecution(execution: Execution): Promise<void> {
+    await this.auditLogger.log({
+      kind: DurableAuditEntryKind.ExecutionStatusChanged,
+      executionId: execution.id,
+      workflowKey: execution.workflowKey,
+      attempt: execution.attempt,
+      from: null,
+      to: ExecutionStatus.Pending,
+      reason: "created",
+    });
+  }
+
+  private async persistNewExecution(
+    task: ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown | undefined,
+    options: ExecuteOptions | undefined,
+    executionId?: string,
+  ): Promise<string> {
+    const execution = this.createPendingExecution(
+      task,
+      input,
+      options,
+      executionId,
+    );
+    await this.config.store.saveExecution(execution);
+    await this.logCreatedExecution(execution);
+    return execution.id;
+  }
+
+  private async logExecutionStatusChange(params: {
+    execution: Execution<unknown, unknown>;
+    from: ExecutionStatus | null;
+    to: ExecutionStatus;
+    reason: string;
+  }): Promise<void> {
+    await this.auditLogger.log({
+      kind: DurableAuditEntryKind.ExecutionStatusChanged,
+      executionId: params.execution.id,
+      workflowKey: params.execution.workflowKey,
+      attempt: params.execution.attempt,
+      from: params.from,
+      to: params.to,
+      reason: params.reason,
+    });
+  }
+
+  // ─── Kickoff & idempotency ─────────────────────────────────────────────────
+
+  private async kickoffWithFailsafe(executionId: string): Promise<void> {
+    const failsafeDelayMs =
+      this.config.execution?.kickoffFailsafeDelayMs ?? 10_000;
+    const shouldArmFailsafe = Boolean(this.config.queue) && failsafeDelayMs > 0;
+
+    if (shouldArmFailsafe) {
+      const timerId = `kickoff:${executionId}`;
+      await this.config.store.createTimer({
+        id: timerId,
+        executionId,
+        type: TimerType.Retry,
+        fireAt: new Date(Date.now() + failsafeDelayMs),
+        status: TimerStatus.Pending,
+      });
+
+      await this.kickoffExecution(executionId);
+
+      try {
+        await this.config.store.deleteTimer(timerId);
+      } catch {
+        // Best-effort timer cleanup; ignore.
       }
       return;
     }
-    await this.logExecutionStatusChange({
-      execution: params.execution,
-      from: params.from,
-      to: ExecutionStatus.Failed,
-      reason: params.reason,
+
+    await this.kickoffExecution(executionId);
+  }
+
+  private async startWithIdempotencyKey(
+    task: ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown | undefined,
+    idempotencyKey: string,
+    options: ExecuteOptions | undefined,
+  ): Promise<string> {
+    const execution = this.createPendingExecution(task, input, options);
+    const created = await this.config.store.createExecutionWithIdempotencyKey({
+      execution,
+      workflowKey: this.getTaskWorkflowKey(task),
+      idempotencyKey,
     });
-    await this.notifyExecutionFinished(failedExecution);
+
+    if (!created.created) {
+      const existing = await this.config.store.getExecution(
+        created.executionId,
+      );
+      if (
+        existing &&
+        this.shouldKickoffExistingIdempotentExecution(existing.status)
+      ) {
+        await this.kickoffWithFailsafe(created.executionId);
+      }
+      return created.executionId;
+    }
+
+    await this.logCreatedExecution(execution);
+    await this.kickoffWithFailsafe(execution.id);
+    return execution.id;
   }
 }

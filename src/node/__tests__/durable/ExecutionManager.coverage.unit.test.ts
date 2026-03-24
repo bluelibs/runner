@@ -5,6 +5,10 @@ import type { Execution } from "../../durable/core/types";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import {
+  toExecutionErrorInfo,
+  isCompensationFailure,
+} from "../../durable/core/managers/ExecutionManager.attempt";
+import {
   SpyQueue,
   createBufferedLogger,
   createTaskExecutor,
@@ -82,7 +86,6 @@ type TestExecutionManager = {
     reason: string,
     canPersistOutcome?: () => Promise<boolean>,
   ) => Promise<void>;
-  toExecutionErrorInfo: (error: unknown) => { message: string; stack?: string };
   transitionExecutionToFailed: (params: {
     execution: Execution;
     from: ExecutionStatus;
@@ -96,7 +99,6 @@ type TestExecutionManager = {
   transitionExecutionToRunning: (
     execution: Execution,
   ) => Promise<Execution | null>;
-  isCompensationFailure: (error: unknown) => boolean;
   isExecutionTerminal: (status: ExecutionStatus) => boolean;
 };
 
@@ -324,11 +326,11 @@ describe("durable: ExecutionManager coverage", () => {
     );
     expect(manager.isExecutionTerminal(ExecutionStatus.Completed)).toBe(true);
     expect(manager.isExecutionTerminal(ExecutionStatus.Pending)).toBe(false);
-    expect(
-      manager.isCompensationFailure(new Error("Compensation failed: x")),
-    ).toBe(true);
-    expect(manager.isCompensationFailure(new Error("boom"))).toBe(false);
-    expect(manager.toExecutionErrorInfo("boom")).toEqual({
+    expect(isCompensationFailure(new Error("Compensation failed: x"))).toBe(
+      true,
+    );
+    expect(isCompensationFailure(new Error("boom"))).toBe(false);
+    expect(toExecutionErrorInfo("boom")).toEqual({
       message: "boom",
       stack: undefined,
     });

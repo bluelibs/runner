@@ -1,6 +1,7 @@
 import { DurableService } from "../../durable/core/DurableService";
 import type { Execution } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { markExecutionLockLost } from "../../durable/core/managers/ExecutionManager.locking";
 import {
   advanceTimers,
   captureScheduledTimeout,
@@ -20,18 +21,12 @@ type TestExecutionManager = {
   createExecutionLockState: () => {
     lost: boolean;
     lossError: Error | null;
+    lockId: string | "no-lock" | undefined;
+    lockResource: string | undefined;
+    lockTtlMs: number | undefined;
     triggerLoss: (error: Error) => void;
     waitForLoss: Promise<never>;
   };
-  markExecutionLockLost: (
-    lockState: {
-      lost: boolean;
-      lossError: Error | null;
-      triggerLoss: (error: Error) => void;
-      waitForLoss: Promise<never>;
-    },
-    lockResource: string,
-  ) => Error;
   runExecutionAttempt: (
     execution: Execution,
     taskDef: ReturnType<typeof okTask>,
@@ -351,11 +346,11 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
     const manager = getTestExecutionManager(service);
     const lockState = manager.createExecutionLockState();
 
-    const firstError = manager.markExecutionLockLost(
+    const firstError = markExecutionLockLost(
       lockState,
       "execution:e-duplicate-loss",
     );
-    const secondError = manager.markExecutionLockLost(
+    const secondError = markExecutionLockLost(
       lockState,
       "execution:e-duplicate-loss",
     );
