@@ -5,7 +5,7 @@ import type { IStepBuilder, StepOptions } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { clearExecutionCurrent } from "../current";
 import { ExecutionStatus } from "../types";
-import { sleepMs, withTimeout } from "../utils";
+import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 
 export type DurableCompensation = {
@@ -45,6 +45,7 @@ export async function executeDurableStep<T>(params: {
   );
   if (cached) {
     const result = cached.result as T;
+    await clearExecutionCurrent(params.store, params.executionId);
     if (params.downFn) {
       registerCompensation(
         params.compensations,
@@ -73,10 +74,16 @@ export async function executeDurableStep<T>(params: {
       }
       return await params.upFn();
     } catch (error) {
+      if (isTimeoutExceededError(error)) {
+        throw error;
+      }
+
       if (attempts < maxRetries) {
         attempts += 1;
+        await params.assertCanContinue();
         const delay = Math.pow(2, attempts) * 100;
         await sleepMs(delay);
+        await params.assertCanContinue();
         return executeWithRetry();
       }
       throw error;

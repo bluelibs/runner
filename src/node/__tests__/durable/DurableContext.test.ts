@@ -104,6 +104,35 @@ describe("durable: DurableContext", () => {
     expect(actions).toEqual(["up", "down"]);
   });
 
+  it("clears stale current when replay returns a cached step result", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      current: {
+        kind: "step",
+        stepId: "cached",
+        startedAt: new Date(),
+      },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "cached",
+      result: "ok",
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+    await expect(ctx.step("cached", async () => "nope")).resolves.toBe("ok");
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
+  });
+
   it("tracks active step current state before executing new work", async () => {
     const store = new MemoryStore();
     await store.saveExecution({
@@ -278,6 +307,51 @@ describe("durable: DurableContext", () => {
 
     expect((await store.getReadyTimers(new Date(Date.now() + 10))).length).toBe(
       1,
+    );
+  });
+
+  it("cleans up a freshly created sleep timer when persisting the sleep checkpoint fails", async () => {
+    class SleepCheckpointFailingStore extends MemoryStore {
+      override async saveStepResult(
+        stepResult: Parameters<MemoryStore["saveStepResult"]>[0],
+      ): Promise<void> {
+        if (stepResult.stepId === "__sleep:stable-sleep") {
+          throw new Error("sleep checkpoint write failed");
+        }
+
+        await super.saveStepResult(stepResult);
+      }
+    }
+
+    const store = new SleepCheckpointFailingStore();
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.sleep(10_000, { stepId: "stable-sleep" })).rejects.toThrow(
+      "sleep checkpoint write failed",
+    );
+
+    expect(await store.getStepResult("e1", "__sleep:stable-sleep")).toBeNull();
+    expect(await store.getReadyTimers(new Date(Date.now() + 60_000))).toEqual(
+      [],
+    );
+  });
+
+  it("fails fast when replay finds an invalid persisted sleep state", async () => {
+    const store = new MemoryStore();
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__sleep:stable-sleep",
+      result: {
+        state: "sleeping",
+        fireAtMs: Date.now() + 10_000,
+      },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.sleep(10_000, { stepId: "stable-sleep" })).rejects.toThrow(
+      "Invalid sleep step state",
     );
   });
 
@@ -527,6 +601,23 @@ describe("durable: DurableContext", () => {
           ),
       ),
     ).rejects.toThrow("timed out");
+  });
+
+  it("does not retry a step after a timeout because the original body may still be running", async () => {
+    const { ctx } = createContext();
+
+    let attempts = 0;
+
+    await expect(
+      ctx.step("timeout-no-retry", { timeout: 1, retries: 3 }, async () => {
+        attempts += 1;
+        return await new Promise<string>((resolve) => {
+          setTimeout(() => resolve("late"), 25);
+        });
+      }),
+    ).rejects.toThrow("timed out");
+
+    expect(attempts).toBe(1);
   });
 
   it("clears timeout timers when a step resolves or rejects quickly", async () => {
@@ -901,6 +992,33 @@ describe("durable: DurableContext", () => {
 
     const timers = await store.getReadyTimers(new Date(Date.now() + 60_000));
     expect(timers.some((t) => t.type === "signal_timeout")).toBe(true);
+  });
+
+  it("preserves the original signal-timeout deadline when replayed waiting state lacks timer metadata", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+    const recordedAt = new Date(Date.now() - 4_000);
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:durable-tests-paid",
+      result: {
+        state: "waiting",
+        signalId: Paid.id,
+        timeoutMs: 10_000,
+      },
+      completedAt: recordedAt,
+    });
+
+    const ctx = new DurableContext(store, bus, "e1", 1);
+    await expect(
+      ctx.waitForSignal(Paid, { timeoutMs: 10_000 }),
+    ).rejects.toBeInstanceOf(SuspensionSignal);
+
+    const timers = await store.getReadyTimers(new Date(Date.now() + 60_000));
+    const timer = timers.find((entry) => entry.type === "signal_timeout");
+    expect(timer?.id).toBe("signal_timeout:e1:__signal:durable-tests-paid");
+    expect(timer?.fireAt.getTime()).toBe(recordedAt.getTime() + 10_000);
   });
 
   it("consumes a buffered signal before re-registering a timeout-backed replayed waiting step", async () => {

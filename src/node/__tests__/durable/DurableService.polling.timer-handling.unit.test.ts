@@ -164,6 +164,26 @@ describe("durable: DurableService polling timer handling (unit)", () => {
     await store.saveExecution(
       sleepingExecution({ attempt: 3, maxAttempts: 3 }),
     );
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "sleep:1",
+      result: {
+        state: "sleeping",
+        timerId: "t1",
+        fireAtMs: Date.now() + 1_000,
+      },
+      completedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e-missing",
+      stepId: "sleep:missing-exec",
+      result: {
+        state: "sleeping",
+        timerId: "t4",
+        fireAtMs: Date.now() + 1_000,
+      },
+      completedAt: new Date(),
+    });
 
     await handleTimer(service, {
       id: "t1",
@@ -205,6 +225,14 @@ describe("durable: DurableService polling timer handling (unit)", () => {
 
     expect(audit.some((entry) => entry.kind === "sleep_completed")).toBe(true);
     expect(missingAudit[0]?.attempt).toBe(0);
+    expect(
+      (
+        await store.getStepResult(
+          "missing-execution",
+          "sleep:missing-execution",
+        )
+      )?.result,
+    ).toBeUndefined();
   });
 
   it("skips timers when claimTimer returns false", async () => {

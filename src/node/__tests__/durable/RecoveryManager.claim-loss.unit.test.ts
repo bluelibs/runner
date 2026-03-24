@@ -91,6 +91,59 @@ describe("durable: RecoveryManager claim loss", () => {
     scheduledTimeout.restore();
   });
 
+  it("reports recovery as completed when recovery wins the race before a same-turn claim-loss microtask", async () => {
+    let rejectLoss!: (error: Error) => void;
+    const claimState = {
+      lost: false,
+      lossError: new Error("claim-lost"),
+      waitForLoss: new Promise<never>((_, reject) => {
+        rejectLoss = reject;
+      }),
+      markLost: () => {
+        if (claimState.lost) {
+          return;
+        }
+        claimState.lost = true;
+        rejectLoss(claimState.lossError);
+      },
+    };
+    void claimState.waitForLoss.catch(() => {});
+
+    const store = {
+      acquireLock: jest.fn(async () => "lock-1"),
+      releaseLock: jest.fn(async () => {}),
+      renewLock: jest.fn(async () => true),
+    };
+    const manager = new RecoveryManager(
+      store as any,
+      {
+        recoverExecution: jest.fn(() => {
+          const recovery = Promise.resolve();
+          void recovery.then(() => {
+            queueMicrotask(() => {
+              claimState.markLost();
+            });
+          });
+          return recovery;
+        }),
+      } as any,
+      { error: jest.fn(async () => {}) } as any,
+      { claimTtlMs: 3_000 },
+    );
+
+    jest
+      .spyOn(manager as any, "createClaimState")
+      .mockReturnValue(claimState as any);
+    jest.spyOn(manager as any, "startClaimHeartbeat").mockReturnValue(() => {});
+
+    await expect(
+      (manager as any).tryRecoverExecution({
+        id: "e-race",
+        status: ExecutionStatus.Pending,
+      }),
+    ).resolves.toEqual({ kind: "recovered" });
+  });
+
   it("supports detached and duplicate claim-loss notifications", async () => {
     const manager = new RecoveryManager(
       {} as any,

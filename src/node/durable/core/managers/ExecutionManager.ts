@@ -161,7 +161,12 @@ export class ExecutionManager {
     });
 
     if (!created.created) {
-      await this.kickoffWithFailsafe(created.executionId);
+      const existing = await this.config.store.getExecution(
+        created.executionId,
+      );
+      if (existing && !this.isExecutionTerminal(existing.status)) {
+        await this.kickoffWithFailsafe(created.executionId);
+      }
       return created.executionId;
     }
 
@@ -435,6 +440,11 @@ export class ExecutionManager {
     executionLockState: ExecutionLockState,
     lockResource: string,
   ): Error {
+    if (executionLockState.lossError) {
+      executionLockState.lost = true;
+      return executionLockState.lossError;
+    }
+
     const lossError = durableExecutionInvariantError.new({
       message: `Execution lock lost for '${lockResource}' while the attempt was still running.`,
     });
@@ -577,7 +587,7 @@ export class ExecutionManager {
             // outcome writes still re-check ownership against the store.
           })
           .finally(() => {
-            if (!stopped) {
+            if (!stopped && !params.lockState.lost) {
               scheduleRenewal();
             }
           });

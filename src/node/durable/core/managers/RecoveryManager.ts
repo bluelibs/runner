@@ -108,12 +108,12 @@ export class RecoveryManager {
     const skipped = new Map<string, RecoverSkippedReportType>();
     const failures = new Map<string, RecoverFailureReportType>();
     const attemptedExecutionIds = new Set<string>();
+    const claimElsewhere = new Map<string, RecoverSkippedReportType>();
 
     while (!signal?.aborted) {
       const incomplete = await this.store.listIncompleteExecutions();
       const pendingTimerTypesByExecutionId =
         await this.getPendingTimerTypesByExecutionId();
-      const claimElsewhere = new Map<string, RecoverSkippedReportType>();
       let claimedInPass = 0;
 
       await Promise.all(
@@ -154,6 +154,7 @@ export class RecoveryManager {
             attemptedExecutionIds.add(execution.id);
             claimedInPass += 1;
             skipped.delete(execution.id);
+            claimElsewhere.delete(execution.id);
 
             if (claimedOutcome.kind === "recovered") {
               recovered.set(execution.id, {
@@ -289,17 +290,16 @@ export class RecoveryManager {
         execution.id,
       );
       void recoverExecution.catch(() => undefined);
-      await Promise.race([recoverExecution, claimState.waitForLoss]);
-      if (claimState.lost || signal?.aborted) {
-        return null;
+      const winner = await Promise.race([
+        recoverExecution.then(() => "recovered" as const),
+        claimState.waitForLoss.catch(() => "claim_lost" as const),
+      ]);
+      if (winner === "recovered") {
+        return { kind: "recovered" };
       }
-      return { kind: "recovered" };
+      return null;
     } catch (error) {
-      if (
-        error === claimState.lossError ||
-        claimState.lost ||
-        signal?.aborted
-      ) {
+      if (claimState.lost || signal?.aborted) {
         return null;
       }
       return {
@@ -337,7 +337,8 @@ export class RecoveryManager {
             }
           })
           .catch(() => {
-            claimState.markLost();
+            // A transient renew failure should not abandon recovery outright;
+            // the next renew or store-backed ownership check can still fail closed.
           })
           .finally(() => {
             if (!stopped && !claimState.lost) {

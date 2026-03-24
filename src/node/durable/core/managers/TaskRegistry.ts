@@ -44,6 +44,13 @@ export class TaskRegistry {
       });
     }
 
+    const existingTaskId = this.tasks.get(task.id);
+    if (existingTaskId && existingTaskId.id !== task.id) {
+      durableExecutionInvariantError.throw({
+        message: `Durable task id '${task.id}' collides with an existing workflow alias for task '${existingTaskId.id}'.`,
+      });
+    }
+
     this.tasks.set(task.id, task);
     if (workflowKey !== task.id) {
       this.tasks.set(workflowKey, task);

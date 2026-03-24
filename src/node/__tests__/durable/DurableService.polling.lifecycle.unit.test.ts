@@ -4,6 +4,7 @@ import {
   disposeDurableService,
   initDurableService,
 } from "../../durable/core/DurableService";
+import { DurableWorker } from "../../durable/core/DurableWorker";
 import type { IDurableQueue } from "../../durable/core/interfaces/queue";
 import type { Schedule, Timer } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
@@ -578,6 +579,35 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     resolveTimer();
     await stopPromise;
     expect(stopped).toBe(true);
+  });
+
+  it("coalesces concurrent stop() calls into a single shutdown pass", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+    });
+
+    const worker = new DurableWorker(
+      {
+        processExecution: jest.fn(async () => undefined),
+        failExecutionDeliveryExhausted: jest.fn(async () => undefined),
+      },
+      {
+        enqueue: jest.fn(async () => "m1"),
+        consume: jest.fn(async () => undefined),
+        ack: jest.fn(async () => undefined),
+        nack: jest.fn(async () => undefined),
+      },
+    );
+    jest.spyOn(worker, "cooldown").mockResolvedValue(undefined);
+    jest.spyOn(worker, "stop").mockResolvedValue(undefined);
+    service.registerWorker(worker);
+
+    await Promise.all([service.stop(), service.stop()]);
+
+    expect(worker.cooldown).toHaveBeenCalledTimes(1);
+    expect(worker.stop).toHaveBeenCalledTimes(1);
   });
 
   it("initializes and disposes adapters via initDurableService/disposeDurableService", async () => {

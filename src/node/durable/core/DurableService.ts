@@ -62,6 +62,7 @@ export class DurableService implements IDurableService {
   private readonly cooldownHandlers: Array<() => Promise<void> | void> = [];
   private readonly stopHandlers: Array<() => Promise<void>> = [];
   private recoveryStopRegistered = false;
+  private stopPromise: Promise<void> | null = null;
 
   /** Unique worker ID for distributed timer coordination */
   private readonly workerId: string;
@@ -334,46 +335,55 @@ export class DurableService implements IDurableService {
     if (this.lifecycleState === "disposed") {
       return;
     }
-
-    let firstError: unknown = null;
-
-    try {
-      await this.cooldown();
-    } catch (error) {
-      firstError ??= error;
+    if (this.stopPromise) {
+      return await this.stopPromise;
     }
 
-    this.lifecycleState = "disposing";
+    this.stopPromise = (async () => {
+      let firstError: unknown = null;
 
-    while (this.stopHandlers.length > 0) {
-      const stop = this.stopHandlers.pop()!;
       try {
-        await stop();
+        await this.cooldown();
+      } catch (error) {
+        firstError ??= error;
+      }
+
+      this.lifecycleState = "disposing";
+
+      while (this.stopHandlers.length > 0) {
+        const stop = this.stopHandlers.pop()!;
+        try {
+          await stop();
+        } catch (error) {
+          firstError ??= error;
+          try {
+            await this.logger.error("Durable stop handler failed.", { error });
+          } catch {
+            // Logging must not mask shutdown.
+          }
+        }
+      }
+
+      try {
+        await this.pollingManager.stop();
       } catch (error) {
         firstError ??= error;
         try {
-          await this.logger.error("Durable stop handler failed.", { error });
+          await this.logger.error("Durable polling shutdown failed.", {
+            error,
+          });
         } catch {
           // Logging must not mask shutdown.
         }
       }
-    }
 
-    try {
-      await this.pollingManager.stop();
-    } catch (error) {
-      firstError ??= error;
-      try {
-        await this.logger.error("Durable polling shutdown failed.", { error });
-      } catch {
-        // Logging must not mask shutdown.
+      this.lifecycleState = "disposed";
+      if (firstError) {
+        throw firstError;
       }
-    }
+    })();
 
-    this.lifecycleState = "disposed";
-    if (firstError) {
-      throw firstError;
-    }
+    return await this.stopPromise;
   }
 
   /** @internal - used by Runner runtime wiring to stop embedded workers */

@@ -147,6 +147,39 @@ describe("durable: DurableContext.switch", () => {
     expect(matcherCalled).toBe(false);
   });
 
+  it("clears stale current when replay returns a cached switch result", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      current: {
+        kind: "switch",
+        stepId: "route",
+        startedAt: new Date(),
+      },
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "route",
+      result: { branchId: "alpha", result: "cached" },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+    await expect(
+      ctx.switch("route", "ignored", [
+        { id: "beta", match: () => true, run: async () => "fresh" },
+      ]),
+    ).resolves.toBe("cached");
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
+  });
+
   it("falls back to the default branch when no matcher hits", async () => {
     const { ctx } = createContext();
 

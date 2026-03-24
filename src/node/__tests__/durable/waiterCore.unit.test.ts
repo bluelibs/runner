@@ -195,6 +195,29 @@ describe("durable: waiter core helpers", () => {
     });
   });
 
+  it("cleans up a freshly created wait timer when persisting the waiting state fails", async () => {
+    const store = createStoreMock({
+      createTimer: jest.fn(async () => undefined),
+      deleteTimer: jest.fn(async () => undefined),
+    });
+
+    await expect(
+      ensureDurableWaitTimer({
+        store,
+        executionId: "parent",
+        stepId: "step",
+        timerType: TimerType.Timeout,
+        timeoutMs: 5,
+        createTimerId: () => "timer-cleanup",
+        persistWaitingState: jest.fn(async () => {
+          throw new Error("persist-failed");
+        }),
+      }),
+    ).rejects.toThrow("persist-failed");
+
+    expect(store.deleteTimer).toHaveBeenCalledWith("timer-cleanup");
+  });
+
   it("persists optional waiting state, registers waiters, and suspends", async () => {
     const store = createStoreMock();
     const registerWaiter = jest.fn(async () => undefined);

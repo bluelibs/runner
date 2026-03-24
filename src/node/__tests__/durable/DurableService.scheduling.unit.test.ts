@@ -53,6 +53,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
       pattern: "1000",
       input: undefined,
       status: "active",
+      lastRun: new Date("2026-01-01T00:00:00.000Z"),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -66,6 +67,9 @@ describe("durable: DurableService — scheduling (unit)", () => {
 
     await service.resumeSchedule("s1");
     expect((await store.getSchedule("s1"))?.status).toBe("active");
+    expect((await store.getSchedule("s1"))?.lastRun?.toISOString()).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
 
     await service.updateSchedule("s1", { input: { a: 1 } });
     expect((await store.getSchedule("s1"))?.pattern).toBe("1000");
@@ -143,6 +147,37 @@ describe("durable: DurableService — scheduling (unit)", () => {
 
     await service.updateSchedule("s1", { interval: 2000 });
     expect((await store.getSchedule("s1"))?.pattern).toBe("2000");
+  });
+
+  it("keeps interval cadence anchored to the intended fire time instead of drifting from now", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-interval-anchor");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+    });
+
+    const scheduledNextRun = new Date(Date.now() - 250);
+    await store.createSchedule({
+      id: "s-anchor",
+      workflowKey: task.id,
+      type: "interval",
+      pattern: "1000",
+      input: undefined,
+      status: "paused",
+      createdAt: new Date(Date.now() - 5_000),
+      updatedAt: new Date(Date.now() - 5_000),
+      nextRun: scheduledNextRun,
+      lastRun: new Date(scheduledNextRun.getTime() - 1_000),
+    });
+
+    await service.resumeSchedule("s-anchor");
+
+    const updated = await store.getSchedule("s-anchor");
+    expect(updated?.nextRun?.getTime()).toBe(
+      scheduledNextRun.getTime() + 1_000,
+    );
   });
 
   it("preserves cadence and pending fire time when only schedule input changes", async () => {

@@ -34,6 +34,16 @@ describe("durable: DurableService handleTimer audit branches", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await store.saveStepResult({
+      executionId: "exec-1",
+      stepId: "sleep:1",
+      result: {
+        state: "sleeping",
+        timerId: "t-claim",
+        fireAtMs: Date.now() + 1_000,
+      },
+      completedAt: new Date(),
+    });
 
     await store.createTimer({
       id: "t-claim",
@@ -123,6 +133,16 @@ describe("durable: DurableService handleTimer audit branches", () => {
       stepId: "sleep:1",
       fireAt: new Date(0),
       status: "pending",
+    });
+    await store.saveStepResult({
+      executionId: "missing-exec",
+      stepId: "sleep:1",
+      result: {
+        state: "sleeping",
+        timerId: "t1",
+        fireAtMs: Date.now() + 1_000,
+      },
+      completedAt: new Date(),
     });
 
     service.start();

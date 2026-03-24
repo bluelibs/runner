@@ -322,4 +322,97 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
       ),
     ).toBe(true);
   });
+
+  it("finalizes stale sleep timers without waking the execution", async () => {
+    const store = new MemoryStore();
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    const taskRegistry = new TaskRegistry();
+    const auditLogger = new AuditLogger({ enabled: false }, store);
+    const scheduleManager = new ScheduleManager(store, taskRegistry);
+    const processExecution = jest.fn(async () => {});
+    const pollingManager = new PollingManager(
+      "worker-1",
+      { interval: 1 },
+      store,
+      undefined,
+      3,
+      undefined,
+      taskRegistry,
+      auditLogger,
+      scheduleManager,
+      {
+        processExecution,
+        kickoffExecution: jest.fn(async () => {}),
+      },
+      logger,
+    );
+
+    await store.saveExecution(
+      sleepingExecution({
+        id: "e-stale-sleep",
+        current: {
+          kind: "sleep",
+          stepId: "__sleep:nap",
+          startedAt: new Date(),
+          waitingFor: {
+            type: "sleep",
+            params: {
+              fireAtMs: Date.now() + 1_000,
+              timerId: "sleep:e-stale-sleep:__sleep:nap:new",
+            },
+          },
+        },
+      }),
+    );
+    await store.saveStepResult({
+      executionId: "e-stale-sleep",
+      stepId: "__sleep:nap",
+      result: {
+        state: "sleeping",
+        timerId: "sleep:e-stale-sleep:__sleep:nap:new",
+        fireAtMs: Date.now() + 1_000,
+      },
+      completedAt: new Date(),
+    });
+    await store.createTimer({
+      id: "sleep:e-stale-sleep:__sleep:nap:old",
+      executionId: "e-stale-sleep",
+      stepId: "__sleep:nap",
+      type: TimerType.Sleep,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    });
+
+    await pollingManager.handleTimer({
+      id: "sleep:e-stale-sleep:__sleep:nap:old",
+      executionId: "e-stale-sleep",
+      stepId: "__sleep:nap",
+      type: TimerType.Sleep,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    });
+
+    expect(processExecution).not.toHaveBeenCalled();
+    expect(
+      await store.getStepResult("e-stale-sleep", "__sleep:nap"),
+    ).toMatchObject({
+      result: {
+        state: "sleeping",
+        timerId: "sleep:e-stale-sleep:__sleep:nap:new",
+      },
+    });
+    expect((await store.getExecution("e-stale-sleep"))?.current).toMatchObject({
+      kind: "sleep",
+      stepId: "__sleep:nap",
+    });
+    expect(
+      (await futureTimers(store)).some(
+        (timer) => timer.id === "sleep:e-stale-sleep:__sleep:nap:old",
+      ),
+    ).toBe(false);
+  });
 });

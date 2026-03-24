@@ -208,4 +208,38 @@ describe("durable: SignalHandler error paths", () => {
       }),
     ]);
   });
+
+  it("fails fast when atomic signal delivery keeps reporting conflicts forever", async () => {
+    const store = new MemoryStore();
+    const customStore = Object.create(store) as MemoryStore & {
+      commitSignalDelivery: jest.MockedFunction<
+        NonNullable<MemoryStore["commitSignalDelivery"]>
+      >;
+    };
+    customStore.commitSignalDelivery = jest.fn(async (_params) => false);
+    const service = new DurableService({
+      store: customStore,
+      tasks: [],
+      polling: { enabled: false },
+    });
+
+    await store.saveExecution(sleepingExecution());
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+    await store.upsertSignalWaiter({
+      executionId: "e1",
+      signalId: "paid",
+      stepId: "__signal:paid",
+      sortKey: createSignalWaiterSortKey("paid", "__signal:paid"),
+    });
+
+    await expect(service.signal("e1", Paid, { paidAt: 5 })).rejects.toThrow(
+      "exceeded the atomic commit retry budget",
+    );
+    expect(customStore.commitSignalDelivery).toHaveBeenCalledTimes(10);
+  });
 });

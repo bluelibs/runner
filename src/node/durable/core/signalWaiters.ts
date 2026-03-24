@@ -74,7 +74,19 @@ export function getSignalIdFromStepId(stepId: string): string | null {
   if (!stepId.startsWith("__signal:")) return null;
   const suffix = stepId.slice("__signal:".length);
   if (suffix.length === 0) return null;
-  return suffix.split(":")[0];
+
+  const lastColonIndex = suffix.lastIndexOf(":");
+  if (lastColonIndex === -1) {
+    return suffix;
+  }
+
+  const possibleIndex = suffix.slice(lastColonIndex + 1);
+  const parsedIndex = Number(possibleIndex);
+  if (Number.isInteger(parsedIndex) && parsedIndex >= 0) {
+    return suffix.slice(0, lastColonIndex);
+  }
+
+  return suffix;
 }
 
 export async function withSignalLock<TPayload>(params: {

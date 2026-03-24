@@ -215,12 +215,16 @@ export class PollingManager {
       assertTimerClaimIsStillOwned();
 
       if (timer.type === TimerType.Sleep && timer.executionId && timer.stepId) {
-        await handleSleepTimer({
+        const completedSleep = await handleSleepTimer({
           store: this.store,
           auditLogger: this.auditLogger,
           timer,
         });
         safeToFinalizeCurrentTimer = true;
+        if (!completedSleep) {
+          await finalizeTimer();
+          return;
+        }
       }
 
       assertTimerClaimIsStillOwned();

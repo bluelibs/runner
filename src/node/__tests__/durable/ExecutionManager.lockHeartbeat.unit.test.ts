@@ -23,6 +23,15 @@ type TestExecutionManager = {
     triggerLoss: (error: Error) => void;
     waitForLoss: Promise<never>;
   };
+  markExecutionLockLost: (
+    lockState: {
+      lost: boolean;
+      lossError: Error | null;
+      triggerLoss: (error: Error) => void;
+      waitForLoss: Promise<never>;
+    },
+    lockResource: string,
+  ) => Error;
   runExecutionAttempt: (
     execution: Execution,
     taskDef: ReturnType<typeof okTask>,
@@ -199,7 +208,9 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
 
     try {
       const store = new MemoryStore();
-      jest.spyOn(store, "renewLock").mockResolvedValueOnce(false);
+      const renewLockSpy = jest
+        .spyOn(store, "renewLock")
+        .mockResolvedValueOnce(false);
       const task = okTask("t-lock-lost");
       const service = new DurableService({
         store,
@@ -221,6 +232,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
       await advanceTimers(10_000);
       await processing;
 
+      expect(renewLockSpy).toHaveBeenCalledTimes(1);
       expect((await store.getExecution("e-lock-lost"))?.status).toBe("running");
     } finally {
       jest.useRealTimers();
@@ -331,6 +343,25 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
     lockState.triggerLoss(new Error("second"));
 
     await expect(lockState.waitForLoss).rejects.toBe(firstError);
+  });
+
+  it("keeps the first lock-loss error stable across duplicate lock-loss markings", () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const manager = getTestExecutionManager(service);
+    const lockState = manager.createExecutionLockState();
+
+    const firstError = manager.markExecutionLockLost(
+      lockState,
+      "execution:e-duplicate-loss",
+    );
+    const secondError = manager.markExecutionLockLost(
+      lockState,
+      "execution:e-duplicate-loss",
+    );
+
+    expect(secondError).toBe(firstError);
+    expect(lockState.lossError).toBe(firstError);
   });
 
   it("throws immediately when an attempt starts with a lost lock", async () => {

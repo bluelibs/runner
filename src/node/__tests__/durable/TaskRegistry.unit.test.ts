@@ -47,4 +47,16 @@ describe("durable: TaskRegistry", () => {
     );
     expect(registry.find("shared")?.id).toBe("task-a");
   });
+
+  it("rejects collisions when a new task id would overwrite an existing workflow alias", () => {
+    const registry = new TaskRegistry(undefined, (task) =>
+      task.id === "task-a" ? "task-b" : "workflow-b",
+    );
+
+    registry.register({ id: "task-a" } as any);
+    expect(() => registry.register({ id: "task-b" } as any)).toThrow(
+      "collides with an existing workflow alias",
+    );
+    expect(registry.find("task-b")?.id).toBe("task-a");
+  });
 });

@@ -6,7 +6,11 @@ import { clearExecutionCurrentIfSuspendedOnStep } from "../current";
 import type { AuditLogger } from "./AuditLogger";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ScheduleManager } from "./ScheduleManager";
-import { parseExecutionWaitState, parseSignalState } from "../utils";
+import {
+  parseExecutionWaitState,
+  parseSignalState,
+  parseSleepState,
+} from "../utils";
 import { withExecutionWaitLock } from "../executionWaiters";
 import {
   deleteSignalWaiter,
@@ -20,13 +24,22 @@ export async function handleSleepTimer(params: {
   store: IDurableStore;
   auditLogger: AuditLogger;
   timer: Timer;
-}): Promise<void> {
+}): Promise<boolean> {
   if (
     params.timer.type !== TimerType.Sleep ||
     !params.timer.executionId ||
     !params.timer.stepId
   ) {
-    return;
+    return false;
+  }
+
+  const existing = await params.store.getStepResult(
+    params.timer.executionId,
+    params.timer.stepId,
+  );
+  const state = parseSleepState(existing?.result);
+  if (state?.state !== "sleeping" || state.timerId !== params.timer.id) {
+    return false;
   }
 
   await params.store.saveStepResult({
@@ -53,6 +66,8 @@ export async function handleSleepTimer(params: {
     stepId: params.timer.stepId,
     timerId: params.timer.id,
   });
+
+  return true;
 }
 
 export async function handleSignalTimeoutTimer(params: {
@@ -98,56 +113,88 @@ export async function handleSignalTimeoutTimer(params: {
     }
   }
 
-  return await withSignalLock({
-    store: params.store,
-    executionId: params.timer.executionId,
-    signalId: lockSignalId,
-    fn: async () => {
-      const existing = await params.store.getStepResult(
-        params.timer.executionId!,
-        params.timer.stepId!,
-      );
-      const state = parseSignalState(existing?.result);
-      if (state?.state !== "waiting") {
-        return null;
-      }
+  let signalIdForActiveLock = lockSignalId;
 
-      const signalId = state.signalId ?? fallbackSignalId;
-      if (!signalId) {
-        return durableExecutionInvariantError.throw({
-          message: `Invalid signal timeout step id '${params.timer.stepId}' for timer '${params.timer.id}'`,
-        });
-      }
+  while (true) {
+    const locked = await withSignalLock<
+      | {
+          kind: "done";
+          signalId: string;
+        }
+      | {
+          kind: "retry";
+          retryWithSignalId: string;
+        }
+      | null
+    >({
+      store: params.store,
+      executionId: params.timer.executionId,
+      signalId: signalIdForActiveLock,
+      fn: async () => {
+        const existing = await params.store.getStepResult(
+          params.timer.executionId!,
+          params.timer.stepId!,
+        );
+        const state = parseSignalState(existing?.result);
+        if (state?.state !== "waiting") {
+          return null;
+        }
+        if (state.timerId !== undefined && state.timerId !== params.timer.id) {
+          return null;
+        }
+        if (state.signalId && state.signalId !== signalIdForActiveLock) {
+          return {
+            kind: "retry" as const,
+            retryWithSignalId: state.signalId,
+          };
+        }
 
-      await deleteSignalWaiter({
-        store: params.store,
-        executionId: params.timer.executionId!,
-        signalId,
-        stepId: params.timer.stepId!,
-      });
+        const signalId = state.signalId ?? fallbackSignalId;
+        if (!signalId) {
+          return durableExecutionInvariantError.throw({
+            message: `Invalid signal timeout step id '${params.timer.stepId}' for timer '${params.timer.id}'`,
+          });
+        }
 
-      const timedOutState =
-        state.signalId !== undefined
-          ? { state: "timed_out" as const, signalId: state.signalId }
-          : { state: "timed_out" as const };
-      await params.store.saveStepResult({
-        executionId: params.timer.executionId!,
-        stepId: params.timer.stepId!,
-        result: timedOutState,
-        completedAt: new Date(),
-      });
-      await clearExecutionCurrentIfSuspendedOnStep(
-        params.store,
-        params.timer.executionId!,
-        {
+        await deleteSignalWaiter({
+          store: params.store,
+          executionId: params.timer.executionId!,
+          signalId,
           stepId: params.timer.stepId!,
-          kinds: ["waitForSignal"],
-        },
-      );
+        });
 
-      return signalId;
-    },
-  });
+        const timedOutState =
+          state.signalId !== undefined
+            ? { state: "timed_out" as const, signalId: state.signalId }
+            : { state: "timed_out" as const };
+        await params.store.saveStepResult({
+          executionId: params.timer.executionId!,
+          stepId: params.timer.stepId!,
+          result: timedOutState,
+          completedAt: new Date(),
+        });
+        await clearExecutionCurrentIfSuspendedOnStep(
+          params.store,
+          params.timer.executionId!,
+          {
+            stepId: params.timer.stepId!,
+            kinds: ["waitForSignal"],
+          },
+        );
+
+        return { kind: "done" as const, signalId };
+      },
+    });
+
+    if (locked === null) {
+      return null;
+    }
+    if (locked.kind === "retry") {
+      signalIdForActiveLock = locked.retryWithSignalId;
+      continue;
+    }
+    return locked.signalId;
+  }
 }
 
 export async function handleExecutionWaitTimeoutTimer(params: {
@@ -184,6 +231,9 @@ export async function handleExecutionWaitTimeoutTimer(params: {
       );
       const state = parseExecutionWaitState(existing?.result);
       if (state?.state !== "waiting") {
+        return false;
+      }
+      if (state.timerId !== undefined && state.timerId !== params.timer.id) {
         return false;
       }
 

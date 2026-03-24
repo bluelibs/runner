@@ -411,6 +411,50 @@ describe("durable: waitForExecutionDurably", () => {
   });
 
   it("creates a fresh timeout timer when replayed waiting state lacks timer metadata", async () => {
+    const recordedAt = new Date("2026-01-01T00:00:00.000Z");
+    const store = createStoreMock({
+      getStepResult: jest.fn().mockResolvedValue({
+        executionId: "parent",
+        stepId: "__execution:child-step",
+        result: {
+          state: "waiting",
+          targetExecutionId: "child",
+          timeoutMs: 5,
+        },
+        completedAt: recordedAt,
+      }),
+      getExecution: jest.fn().mockResolvedValue({
+        id: "child",
+        workflowKey: "child-task",
+        input: undefined,
+        status: ExecutionStatus.Running,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    });
+
+    await expect(
+      waitForExecutionDurably({
+        ...baseParams,
+        store,
+        options: { stepId: "child-step", timeoutMs: 5 },
+      }),
+    ).rejects.toBeInstanceOf(SuspensionSignal);
+
+    expect(store.createTimer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "execution_timeout:parent:__execution:child-step",
+        stepId: "__execution:child-step",
+        type: "timeout",
+        fireAt: new Date(recordedAt.getTime() + 5),
+      }),
+    );
+    expect(store.saveStepResult).not.toHaveBeenCalled();
+  });
+
+  it("re-persists timeout metadata when a replayed waiting state has no persisted timeout details at all", async () => {
     const store = createStoreMock({
       getStepResult: jest.fn().mockResolvedValue({
         executionId: "parent",
@@ -441,13 +485,6 @@ describe("durable: waitForExecutionDurably", () => {
       }),
     ).rejects.toBeInstanceOf(SuspensionSignal);
 
-    expect(store.createTimer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "execution_timeout:parent:__execution:child-step",
-        stepId: "__execution:child-step",
-        type: "timeout",
-      }),
-    );
     expect(store.saveStepResult).toHaveBeenCalledWith(
       expect.objectContaining({
         result: expect.objectContaining({

@@ -49,6 +49,7 @@ export async function switchDurably<TValue, TResult>(params: {
   );
   if (cached) {
     const persisted = cached.result as SwitchStepResult<TResult>;
+    await clearExecutionCurrent(params.store, params.executionId);
     return persisted.result;
   }
 

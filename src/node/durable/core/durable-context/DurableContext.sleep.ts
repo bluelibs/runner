@@ -8,6 +8,9 @@ import {
 import type { IDurableStore } from "../interfaces/store";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
 import { TimerStatus, TimerType } from "../types";
+import { durableExecutionInvariantError } from "../../../../errors";
+import { parseSleepState } from "../utils";
+import { deleteWaitTimerBestEffort } from "../waiterCore";
 
 export async function sleepDurably(params: {
   store: IDurableStore;
@@ -41,16 +44,14 @@ export async function sleepDurably(params: {
     params.executionId,
     sleepStepId,
   );
+  const existingState =
+    existing == null ? undefined : parseSleepState(existing.result);
 
-  const existingState = existing?.result as
-    | {
-        state: "sleeping";
-        timerId: string;
-        fireAtMs: number;
-        durationMs?: number;
-      }
-    | { state: "completed" }
-    | undefined;
+  if (existing != null && !existingState) {
+    return durableExecutionInvariantError.throw({
+      message: `Invalid sleep step state at '${sleepStepId}' for execution '${params.executionId}'.`,
+    });
+  }
 
   if (existingState?.state === "completed") {
     await clearExecutionCurrent(params.store, params.executionId);
@@ -93,17 +94,22 @@ export async function sleepDurably(params: {
     status: TimerStatus.Pending,
   });
 
-  await params.store.saveStepResult({
-    executionId: params.executionId,
-    stepId: sleepStepId,
-    result: {
-      state: "sleeping",
-      timerId,
-      fireAtMs,
-      durationMs: params.durationMs,
-    },
-    completedAt: recordedAt,
-  });
+  try {
+    await params.store.saveStepResult({
+      executionId: params.executionId,
+      stepId: sleepStepId,
+      result: {
+        state: "sleeping",
+        timerId,
+        fireAtMs,
+        durationMs: params.durationMs,
+      },
+      completedAt: recordedAt,
+    });
+  } catch (error) {
+    await deleteWaitTimerBestEffort(params.store, timerId);
+    throw error;
+  }
 
   await setExecutionCurrent(
     params.store,

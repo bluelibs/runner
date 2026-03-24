@@ -81,4 +81,34 @@ describe("durable: RecoveryManager coverage", () => {
       setTimeoutSpy.mockRestore();
     }
   });
+
+  it("returns null when recovery throws after the caller has already been aborted", async () => {
+    const store = {
+      acquireLock: jest.fn(async () => "lock-3"),
+      releaseLock: jest.fn(async () => {}),
+      renewLock: jest.fn(async () => true),
+    };
+    const controller = new AbortController();
+    const manager = new RecoveryManager(
+      store as any,
+      {
+        recoverExecution: jest.fn(async () => {
+          controller.abort();
+          throw new Error("late-recovery-error");
+        }),
+      } as any,
+      { error: jest.fn(async () => {}) } as any,
+      { claimTtlMs: 3_000 },
+    );
+
+    await expect(
+      (manager as any).tryRecoverExecution(
+        {
+          id: "e-aborted-recovery",
+          status: ExecutionStatus.Pending,
+        },
+        controller.signal,
+      ),
+    ).resolves.toBeNull();
+  });
 });

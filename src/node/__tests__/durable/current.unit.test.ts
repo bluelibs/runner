@@ -486,6 +486,7 @@ describe("durable: current helpers", () => {
     ).toEqual({
       state: "waiting",
       targetExecutionId: "child-timeout",
+      timeoutMs: 2000,
     });
   });
 

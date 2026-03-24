@@ -65,8 +65,11 @@ function parseSignalStepState(value: unknown): SignalStepState | null {
         timerId,
       };
     }
-    void timeoutMs;
-    return { state: "waiting", signalId };
+    return {
+      state: "waiting",
+      signalId,
+      timeoutMs: typeof timeoutMs === "number" ? timeoutMs : undefined,
+    };
   }
   if (state === "completed") {
     return { state: "completed", payload: value.payload, signalId };
@@ -91,6 +94,34 @@ function createCompletedSignalState(stepId: string, signalId: string) {
         payload: undefined as unknown,
       }
     : { state: "completed" as const, payload: undefined as unknown };
+}
+
+function getReplayedSignalTimeoutState(params: {
+  executionId: string;
+  completedAt: Date;
+  stepId: string;
+  state: Extract<SignalStepState, { state: "waiting" }>;
+}): { timeoutAtMs: number; timerId: string } | undefined {
+  if (
+    "timeoutAtMs" in params.state &&
+    typeof params.state.timeoutAtMs === "number" &&
+    "timerId" in params.state &&
+    typeof params.state.timerId === "string"
+  ) {
+    return {
+      timeoutAtMs: params.state.timeoutAtMs,
+      timerId: params.state.timerId,
+    };
+  }
+
+  if (typeof params.state.timeoutMs !== "number") {
+    return undefined;
+  }
+
+  return {
+    timeoutAtMs: params.completedAt.getTime() + params.state.timeoutMs,
+    timerId: `signal_timeout:${params.executionId}:${params.stepId}`,
+  };
 }
 
 export async function waitForSignalDurably<TPayload>(params: {
@@ -197,14 +228,19 @@ export async function waitForSignalDurably<TPayload>(params: {
         }
 
         let waitingRecordedAt: Date | undefined;
+        const replayedTimeout = getReplayedSignalTimeoutState({
+          executionId: params.executionId,
+          completedAt: existing.completedAt,
+          stepId,
+          state,
+        });
         const timeout = await ensureDurableWaitTimer({
           store: params.store,
           executionId: params.executionId,
           stepId,
           timerType: TimerType.SignalTimeout,
           timeoutMs: params.options?.timeoutMs,
-          existing:
-            "timeoutAtMs" in state && "timerId" in state ? state : undefined,
+          existing: replayedTimeout,
           createTimerId: () => `signal_timeout:${params.executionId}:${stepId}`,
           persistWaitingState: async (timeoutAtMs, timerId) => {
             waitingRecordedAt = new Date();

@@ -50,6 +50,8 @@ describe("durable: signalWaiters helpers", () => {
     expect(getSignalIdFromStepId("__signal:")).toBeNull();
     expect(getSignalIdFromStepId("__signal:paid")).toBe("paid");
     expect(getSignalIdFromStepId("__signal:paid:1")).toBe("paid");
+    expect(getSignalIdFromStepId("__signal:order:paid")).toBe("order:paid");
+    expect(getSignalIdFromStepId("__signal:order:paid:2")).toBe("order:paid");
   });
 
   it("ranks base, indexed, and custom waiter slots deterministically", () => {

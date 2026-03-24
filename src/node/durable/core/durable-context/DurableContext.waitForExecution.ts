@@ -142,6 +142,35 @@ function resolveTimedOut<TResult>(
   return { kind: "timeout" };
 }
 
+function getReplayedExecutionTimeoutState(params: {
+  executionId: string;
+  completedAt: Date;
+  stepId: string;
+  state: Extract<
+    ReturnType<typeof parseExecutionWaitState>,
+    { state: "waiting"; targetExecutionId: string }
+  >;
+}): { timeoutAtMs: number; timerId: string } | undefined {
+  if (
+    typeof params.state.timeoutAtMs === "number" &&
+    typeof params.state.timerId === "string"
+  ) {
+    return {
+      timeoutAtMs: params.state.timeoutAtMs,
+      timerId: params.state.timerId,
+    };
+  }
+
+  if (typeof params.state.timeoutMs !== "number") {
+    return undefined;
+  }
+
+  return {
+    timeoutAtMs: params.completedAt.getTime() + params.state.timeoutMs,
+    timerId: `execution_timeout:${params.executionId}:${params.stepId}`,
+  };
+}
+
 export async function waitForExecutionDurably<TResult>(params: {
   store: IDurableStore;
   executionId: string;
@@ -286,13 +315,19 @@ export async function waitForExecutionDurably<TResult>(params: {
         }
 
         let waitingRecordedAt: Date | undefined;
+        const replayedTimeout = getReplayedExecutionTimeoutState({
+          executionId: params.executionId,
+          completedAt: existing.completedAt,
+          stepId,
+          state: waitingState,
+        });
         const timeout = await ensureDurableWaitTimer({
           store: params.store,
           executionId: params.executionId,
           stepId,
           timerType: TimerType.Timeout,
           timeoutMs: params.options?.timeoutMs,
-          existing: waitingState,
+          existing: replayedTimeout,
           createTimerId: () =>
             `execution_timeout:${params.executionId}:${stepId}`,
           persistWaitingState: async (timeoutAtMs, timerId) => {

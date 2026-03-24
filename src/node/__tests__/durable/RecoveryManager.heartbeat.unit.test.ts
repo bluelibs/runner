@@ -100,6 +100,38 @@ describe("durable: RecoveryManager heartbeat (unit)", () => {
     await flushMicrotasks();
   });
 
+  it("keeps retrying recovery-heartbeat renewals after a transient renew failure", async () => {
+    jest.useFakeTimers();
+
+    const renewLock = jest
+      .fn(async () => true)
+      .mockRejectedValueOnce(new Error("renew failed"))
+      .mockResolvedValueOnce(true);
+    const manager = new RecoveryManager(
+      {
+        acquireLock: jest.fn(async () => "lock-transient"),
+        releaseLock: jest.fn(async () => {}),
+        renewLock,
+      } as any,
+      { recoverExecution: jest.fn(async () => {}) } as any,
+      { error: jest.fn(async () => {}) } as any,
+    );
+
+    const stop = (manager as any).startClaimHeartbeat(
+      "recovery:execution:e-transient",
+      "lock-transient",
+      3_000,
+    );
+
+    jest.advanceTimersByTime(1_000);
+    await flushMicrotasks();
+    jest.advanceTimersByTime(1_000);
+    await flushMicrotasks();
+
+    expect(renewLock).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
   it("clears scheduled heartbeats when stopped", () => {
     const originalSetTimeout = global.setTimeout;
     const originalClearTimeout = global.clearTimeout;

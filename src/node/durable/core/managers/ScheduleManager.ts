@@ -152,7 +152,7 @@ export class ScheduleManager {
     const nextRun = this.computeNextRun(schedule);
     await this.saveScheduleWithTimer({
       ...schedule,
-      lastRun: options?.lastRunAt,
+      lastRun: options?.lastRunAt ?? schedule.lastRun,
       nextRun,
       updatedAt: new Date(),
     });
@@ -253,7 +253,19 @@ export class ScheduleManager {
         message: `Schedule '${schedule.id}' has invalid interval '${schedule.pattern}'`,
       });
     }
-    return new Date(Date.now() + intervalMs);
+
+    const nowMs = Date.now();
+    const anchorMs =
+      schedule.nextRun?.getTime() ??
+      schedule.lastRun?.getTime() ??
+      schedule.createdAt.getTime();
+    const firstCandidateMs = anchorMs + intervalMs;
+    if (firstCandidateMs > nowMs) {
+      return new Date(firstCandidateMs);
+    }
+
+    const intervalsBehind = Math.floor((nowMs - anchorMs) / intervalMs) + 1;
+    return new Date(anchorMs + intervalsBehind * intervalMs);
   }
 
   private async saveScheduleWithTimer(schedule: Schedule): Promise<void> {

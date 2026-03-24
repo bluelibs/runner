@@ -97,6 +97,42 @@ export function parseSignalState(value: unknown): {
   return null;
 }
 
+export function parseSleepState(value: unknown):
+  | {
+      state: "sleeping";
+      timerId: string;
+      fireAtMs: number;
+      durationMs?: number;
+    }
+  | {
+      state: "completed";
+    }
+  | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (value.state === "completed") {
+    return { state: "completed" };
+  }
+
+  if (
+    value.state === "sleeping" &&
+    typeof value.timerId === "string" &&
+    typeof value.fireAtMs === "number"
+  ) {
+    return {
+      state: "sleeping",
+      timerId: value.timerId,
+      fireAtMs: value.fireAtMs,
+      durationMs:
+        typeof value.durationMs === "number" ? value.durationMs : undefined,
+    };
+  }
+
+  return null;
+}
+
 export function parseExecutionWaitState(value: unknown):
   | {
       state: "waiting";
@@ -142,8 +178,11 @@ export function parseExecutionWaitState(value: unknown):
         timerId,
       };
     }
-    void timeoutMs;
-    return { state, targetExecutionId };
+    return {
+      state,
+      targetExecutionId,
+      timeoutMs: typeof timeoutMs === "number" ? timeoutMs : undefined,
+    };
   }
 
   if (state === "completed") {

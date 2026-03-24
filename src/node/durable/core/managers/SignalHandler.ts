@@ -250,6 +250,7 @@ export class SignalHandler {
 
       let completedStepId: string | null = null;
       let shouldResume = false;
+      let commitConflictCount = 0;
 
       while (true) {
         const waiter = await this.store.peekNextSignalWaiter(
@@ -306,6 +307,12 @@ export class SignalHandler {
           timerId: waiterState.timerId ?? waiter.timerId,
         });
         if (!committed) {
+          commitConflictCount += 1;
+          if (commitConflictCount >= 10) {
+            return durableExecutionInvariantError.throw({
+              message: `Signal '${signalId}' delivery for execution '${executionId}' exceeded the atomic commit retry budget.`,
+            });
+          }
           continue;
         }
         await this.clearSignalWaitCurrentBestEffort({

@@ -118,10 +118,15 @@ export async function ensureDurableWaitTimer(params: {
     status: TimerStatus.Pending,
   });
 
-  await params.persistWaitingState(timeoutAtMs, timerId);
+  try {
+    await params.persistWaitingState(timeoutAtMs, timerId);
 
-  if (params.onTimerCreated) {
-    await params.onTimerCreated(timeoutAtMs, timerId);
+    if (params.onTimerCreated) {
+      await params.onTimerCreated(timeoutAtMs, timerId);
+    }
+  } catch (error) {
+    await deleteWaitTimerBestEffort(params.store, timerId);
+    throw error;
   }
 
   return {
