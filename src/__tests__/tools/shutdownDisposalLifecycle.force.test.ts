@@ -394,6 +394,37 @@ describe("runShutdownDisposalLifecycle force handling", () => {
     expect(context.store.abortInFlightTaskSignals).not.toHaveBeenCalled();
   });
 
+  it("skips the abort window when the drain wait uses up the remaining disposal budget", async () => {
+    jest.useFakeTimers();
+
+    const context = createLifecycleInput({
+      dispose: {
+        totalBudgetMs: 20,
+        drainingBudgetMs: 20,
+        abortWindowMs: 20,
+      },
+    });
+
+    context.store.waitForDrain.mockImplementation(async () => {
+      context.calls.push("waitForDrain");
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return false;
+    });
+
+    const shutdownPromise = runShutdownDisposalLifecycle(context.input);
+    await jest.advanceTimersByTimeAsync(25);
+    await shutdownPromise;
+
+    expect(context.calls).toContain("waitForDrain");
+    expect(context.calls).toContain(`emit:${globalEvents.disposing.id}`);
+    expect(context.calls).toContain(`emit:${globalEvents.drained.id}`);
+    expect(context.calls).toContain("disposeAll");
+    expect(
+      context.calls.filter((call) => call === "waitForDrain"),
+    ).toHaveLength(1);
+    expect(context.store.abortInFlightTaskSignals).not.toHaveBeenCalled();
+  });
+
   it("does not start an abort window when drain completes gracefully", async () => {
     const context = createLifecycleInput({
       dispose: {
