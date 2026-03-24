@@ -152,14 +152,18 @@ export type DisposeOptions = {
    * Drain budget (milliseconds) used while waiting for in-flight business work
    * (tasks + event listeners) after entering `disposing`.
    * Effective wait is capped by remaining `dispose.totalBudgetMs`.
-   * Set to `0` to skip drain waiting.
+   * Set to `0` to skip drain waiting. Runner still performs an immediate drain
+   * check, so when work remains in flight and `abortWindowMs > 0`, shutdown can
+   * enter the cooperative-abort phase right away.
    */
   drainingBudgetMs?: number;
   /**
    * Optional bounded cooperative-abort window after graceful drain expires.
    * Runner aborts its tracked task-local signals, then waits up to this window
    * for in-flight business work to settle. Effective wait is capped by
-   * remaining `dispose.totalBudgetMs`. Set to `0` to skip this phase.
+   * remaining `dispose.totalBudgetMs`. When `drainingBudgetMs` is `0`, this can
+   * still run immediately after the initial drain check. Set to `0` to skip
+   * this phase.
    */
   abortWindowMs?: number;
   /**

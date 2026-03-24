@@ -242,6 +242,42 @@ describe("runShutdownDisposalLifecycle force handling", () => {
     ]);
   });
 
+  it("enters the abort window immediately when drain waiting is disabled", async () => {
+    const context = createLifecycleInput({
+      dispose: {
+        drainingBudgetMs: 0,
+        abortWindowMs: 20,
+      },
+    });
+
+    context.store.waitForDrain
+      .mockImplementationOnce(async (...args: [number?]) => {
+        const timeoutMs = args[0];
+        context.calls.push(`waitForDrain:${timeoutMs}`);
+        return false;
+      })
+      .mockImplementationOnce(async (...args: [number?]) => {
+        const timeoutMs = args[0];
+        context.calls.push(`waitForDrain:${timeoutMs}`);
+        return true;
+      });
+
+    await runShutdownDisposalLifecycle(context.input);
+
+    expect(context.calls).toEqual([
+      "beginCoolingDown",
+      "cooldown",
+      "beginDisposing",
+      `emit:${globalEvents.disposing.id}`,
+      "waitForDrain:0",
+      "abort:Runtime shutdown drain budget expired",
+      "waitForDrain:20",
+      "beginDrained",
+      `emit:${globalEvents.drained.id}`,
+      "disposeAll",
+    ]);
+  });
+
   it("switches to direct disposal when force is requested after events.drained", async () => {
     const context = createLifecycleInput();
 
@@ -387,6 +423,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       "cooldown",
       "beginDisposing",
       `emit:${globalEvents.disposing.id}`,
+      "waitForDrain",
       "beginDrained",
       `emit:${globalEvents.drained.id}`,
       "disposeAll",
@@ -471,6 +508,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       "cooldown",
       "beginDisposing",
       `emit:${globalEvents.disposing.id}`,
+      "waitForDrain",
       "beginDrained",
       `emit:${globalEvents.drained.id}`,
       "disposeAll",

@@ -114,6 +114,66 @@ describe("run shutdown drain abort", () => {
     expect(aborted).toBe(false);
   });
 
+  it("aborts in-flight task signals when drain waiting is disabled but abort window is enabled", async () => {
+    const abortReasons: string[] = [];
+
+    const cooperativeTask = defineTask({
+      id: "tests-shutdown-drain-abort-zero-drain-task",
+      middleware: [timeoutTaskMiddleware.with({ ttl: 1_000 })],
+      async run(_input, _deps, context) {
+        const signal = context?.signal;
+
+        return await new Promise<never>((_resolve, reject) => {
+          if (!signal) {
+            reject(new Error("Expected task signal"));
+            return;
+          }
+
+          signal.addEventListener(
+            "abort",
+            () => {
+              abortReasons.push(String(signal.reason));
+              reject(
+                createCancellationErrorFromSignal(
+                  signal,
+                  "Shutdown abort without graceful drain wait",
+                ),
+              );
+            },
+            { once: true },
+          );
+        });
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-shutdown-drain-abort-zero-drain-app",
+      register: [cooperativeTask],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      dispose: {
+        drainingBudgetMs: 0,
+        abortWindowMs: 20,
+      },
+    });
+
+    const taskPromise = runtime.runTask(cooperativeTask);
+    await tick();
+
+    await runtime.dispose();
+
+    await expect(taskPromise).rejects.toThrow(
+      /Runtime shutdown drain budget expired/,
+    );
+    expect(abortReasons).toEqual(["Runtime shutdown drain budget expired"]);
+  });
+
   it("reuses the forwarded journal abort controller for nested task trees", async () => {
     const seenSignals: AbortSignal[] = [];
 

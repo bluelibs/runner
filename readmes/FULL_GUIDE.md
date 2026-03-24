@@ -3536,6 +3536,7 @@ Practical effect for HTTP resources:
 - Let already in-flight request work finish during the drain budget window.
 - If the drain budget expires first and `dispose.abortWindowMs > 0`, Runner aborts its active task signals and waits that extra bounded window before continuing into `drained`.
   These are the task-local cooperative `AbortSignal`s Runner created for currently in-flight task trees, not arbitrary external caller signals.
+- If `dispose.drainingBudgetMs` is `0`, Runner skips the graceful wait but still checks whether business work is already drained; when it is not and `dispose.abortWindowMs > 0`, the cooperative-abort window starts immediately.
 - In `drained`, business admissions are fully closed; resource cleanup/disposal starts.
 
 ```mermaid
@@ -3560,6 +3561,7 @@ stateDiagram-v2
 - It can be async, but keep it fast and return promptly. Let Runner's drain phase wait for business work.
 - After all cooldown hooks finish, Runner keeps the broader `coolingDown` admission policy open for `dispose.cooldownWindowMs` only when that value is greater than `0`. Once `disposing` begins, fresh admissions narrow to allowlisted resource-origin calls and in-flight continuations.
 - Do not use `cooldown()` as "wait until all work is done"; that is the runtime drain phase (`dispose.drainingBudgetMs`).
+- `dispose.drainingBudgetMs: 0` means "do not wait gracefully", not "pretend in-flight work does not exist". Runner still probes the current drain state before deciding whether to enter `dispose.abortWindowMs`.
 - Apply `cooldown()` primarily to ingress/front-door resources that admit external work into Runner (HTTP APIs, tRPC gateways, queue consumers, websocket gateways).
 - Supporting resources that in-flight tasks depend on (for example: database pools, cache clients, message producers) should usually not perform teardown in `cooldown()`. Keep them available until `dispose()`.
 - Execution order mirrors resource disposal: reverse dependency waves, with same-wave parallelism when `lifecycleMode: "parallel"` is enabled.

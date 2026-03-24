@@ -250,7 +250,10 @@ async function waitForDrainWithinBudget(
   effectiveDrainBudgetMs: number,
 ): Promise<ShutdownDrainWaitResult> {
   if (effectiveDrainBudgetMs <= 0) {
-    return { completed: false };
+    return {
+      completed: true,
+      drained: await waitForDisposeDrainBudget(store, 0),
+    };
   }
 
   return {
