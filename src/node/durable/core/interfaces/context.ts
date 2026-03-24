@@ -196,13 +196,13 @@ export interface IDurableContext {
    * The matched branch's `id` and result are persisted; on replay the matchers
    * are skipped and the cached result is returned directly.
    *
-   * Throws if no branch matches and no `defaultBranch` is provided.
+   * Throws if no branch matches and no `fallbackBranch` is provided.
    */
   switch<TValue, TResult>(
     stepId: string,
     value: TValue,
     branches: SwitchBranch<TValue, TResult>[],
-    defaultBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
+    fallbackBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
   ): Promise<TResult>;
 
   rollback(): Promise<void>;

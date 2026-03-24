@@ -36,7 +36,7 @@ export async function switchDurably<TValue, TResult>(params: {
   stepId: string;
   value: TValue;
   branches: SwitchBranch<TValue, TResult>[];
-  defaultBranch?: Omit<SwitchBranch<TValue, TResult>, "match">;
+  fallbackBranch?: Omit<SwitchBranch<TValue, TResult>, "match">;
 }): Promise<TResult> {
   await params.assertCanContinue();
 
@@ -73,11 +73,11 @@ export async function switchDurably<TValue, TResult>(params: {
     }
   }
 
-  // Fall back to defaultBranch if no matcher hit
-  if (!matchedBranch && params.defaultBranch) {
+  // Fall back to fallbackBranch if no matcher hit
+  if (!matchedBranch && params.fallbackBranch) {
     matchedBranch = {
-      id: params.defaultBranch.id,
-      run: params.defaultBranch.run,
+      id: params.fallbackBranch.id,
+      run: params.fallbackBranch.run,
     };
   }
 

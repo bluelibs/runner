@@ -395,7 +395,7 @@ export class DurableContext implements IDurableContext {
     stepId: string,
     value: TValue,
     branches: SwitchBranch<TValue, TResult>[],
-    defaultBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
+    fallbackBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
   ): Promise<TResult> {
     this.determinism.assertUserStepId(stepId);
 
@@ -408,7 +408,7 @@ export class DurableContext implements IDurableContext {
       stepId,
       value,
       branches,
-      defaultBranch,
+      fallbackBranch,
     });
   }
 
