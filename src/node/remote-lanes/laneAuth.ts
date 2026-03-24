@@ -1,7 +1,9 @@
 export {
+  consumeVerifiedRemoteLaneReplay,
   issueRemoteLaneToken,
   verifyRemoteLaneToken,
   type RemoteLaneTokenIssueInput,
+  type VerifiedRemoteLaneReplayState,
   type RemoteLaneTokenVerifyInput,
 } from "./laneAuth.tokens";
 export {

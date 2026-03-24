@@ -169,6 +169,87 @@ describe("durable: RedisStore signal waiters (mock)", () => {
     ).resolves.toBeNull();
   });
 
+  it("consumes buffered signal records for implicit signal ids ending in numeric suffixes", async () => {
+    const { redisMock, store } = harness;
+    const redisState = new Map<string, string>();
+    const stepResults = new Map<string, string>();
+
+    redisMock.get.mockImplementation(async (key: unknown) => {
+      return typeof key === "string" ? (redisState.get(key) ?? null) : null;
+    });
+    redisMock.hget.mockImplementation(
+      async (bucket: unknown, stepId: unknown) => {
+        return stepResults.get(`${String(bucket)}:${String(stepId)}`) ?? null;
+      },
+    );
+    redisMock.eval.mockImplementation(
+      async (
+        scriptUnknown: unknown,
+        _keyCountUnknown: unknown,
+        signalKeyUnknown: unknown,
+        arg4?: unknown,
+        arg5?: unknown,
+        arg6?: unknown,
+      ) => {
+        const script = String(scriptUnknown);
+        const signalKey = String(signalKeyUnknown);
+
+        if (!script.includes("stepResult.result.payload = record.payload")) {
+          return 1;
+        }
+
+        const state = serializer.parse(redisState.get(signalKey)!) as {
+          queued: Array<{ payload: unknown }>;
+          history: unknown[];
+        };
+        const record = state.queued.shift() ?? null;
+        redisState.set(signalKey, serializer.stringify(state));
+        if (!record) {
+          return null;
+        }
+
+        const stepResult = serializer.parse(String(arg6)) as {
+          result: Record<string, unknown>;
+        };
+        stepResult.result.payload = record.payload;
+        stepResults.set(
+          `${String(arg4)}:${String(arg5)}`,
+          serializer.stringify(stepResult),
+        );
+        return serializer.stringify(record);
+      },
+    );
+
+    redisState.set(
+      "durable:signal:e1:order%3A1",
+      serializer.stringify({
+        executionId: "e1",
+        signalId: "order:1",
+        queued: [
+          {
+            id: "sig-order-1",
+            payload: { version: 1 },
+            receivedAt: new Date("2024-01-01T00:00:00.000Z"),
+          },
+        ],
+        history: [],
+      }),
+    );
+
+    await expect(
+      store.consumeBufferedSignalForStep({
+        executionId: "e1",
+        stepId: "__signal:order:1",
+        result: {
+          state: "completed",
+          signalId: "order:1",
+          payload: undefined,
+        },
+        completedAt: new Date(),
+      }),
+    ).resolves.toEqual(expect.objectContaining({ payload: { version: 1 } }));
+  });
+
   it("commits live signal delivery atomically", async () => {
     const { redisMock, store } = harness;
     redisMock.eval.mockResolvedValueOnce(1 as any);

@@ -49,10 +49,3 @@ npm install
 cp .env.example .env
 npm run dev
 ```
-
-## Skill usage
-
-```text
-GET https://ask-runner.bluelibs.com/?query=How%20does%20Runner%20handle%20resource%20lifecycle%3F
-GET https://ask-runner.bluelibs.com/stream-html?query=How%20does%20Runner%20handle%20resource%20lifecycle%3F
-```

@@ -3,7 +3,9 @@ import { remoteLaneAuthUnauthorizedError } from "../../errors";
 import {
   assertRemoteLaneSignerConfigured,
   assertRemoteLaneVerifierConfigured,
+  consumeVerifiedRemoteLaneReplay,
   hashRemoteLanePayload,
+  type VerifiedRemoteLaneReplayState,
   verifyRemoteLaneToken,
 } from "../remote-lanes/laneAuth";
 import { resolveLaneAuthPolicy } from "../remote-lanes/laneAuth.policy";
@@ -98,8 +100,15 @@ export function verifyEventLaneMessageToken(options: {
   laneId: string;
   bindingAuth: RemoteLaneBindingAuth | undefined;
   replayProtector?: EventLanesResourceContext["replayProtector"];
-}): void {
-  const { message, laneId, bindingAuth, replayProtector } = options;
+  consumeReplay?: boolean;
+}): VerifiedRemoteLaneReplayState | undefined {
+  const {
+    message,
+    laneId,
+    bindingAuth,
+    replayProtector,
+    consumeReplay = true,
+  } = options;
   if (resolveLaneAuthPolicy(bindingAuth).mode === "none") {
     return;
   }
@@ -111,7 +120,7 @@ export function verifyEventLaneMessageToken(options: {
     });
   }
 
-  verifyRemoteLaneToken({
+  return verifyRemoteLaneToken({
     laneId,
     bindingAuth,
     token: authToken,
@@ -122,5 +131,19 @@ export function verifyEventLaneMessageToken(options: {
       payloadHash: hashRemoteLanePayload(message.payload),
     },
     replayProtector,
+    consumeReplay,
+  });
+}
+
+export function consumeVerifiedEventLaneMessageReplay(options: {
+  laneId: string;
+  replayProtector?: EventLanesResourceContext["replayProtector"];
+  replayState?: VerifiedRemoteLaneReplayState;
+}): void {
+  const { laneId, replayProtector, replayState } = options;
+  consumeVerifiedRemoteLaneReplay({
+    laneId,
+    replayProtector,
+    replayState,
   });
 }

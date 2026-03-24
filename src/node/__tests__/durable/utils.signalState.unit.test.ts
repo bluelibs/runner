@@ -133,6 +133,9 @@ describe("durable: signal state utils", () => {
   it("persists stable signal ids only for non-canonical step ids", () => {
     expect(shouldPersistStableSignalId("__signal:paid", "paid")).toBe(false);
     expect(shouldPersistStableSignalId("__signal:paid:1", "paid")).toBe(false);
+    expect(shouldPersistStableSignalId("__signal:order:1", "order:1")).toBe(
+      true,
+    );
     expect(shouldPersistStableSignalId("__signal:stable-paid", "paid")).toBe(
       true,
     );

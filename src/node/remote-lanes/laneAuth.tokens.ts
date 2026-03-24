@@ -43,6 +43,15 @@ export interface RemoteLaneTokenVerifyInput {
   consumeReplay?: boolean;
 }
 
+/**
+ * Replay marker extracted from a verified remote-lane token.
+ * It can be committed later once the caller reaches its chosen settlement point.
+ */
+export interface VerifiedRemoteLaneReplayState {
+  jti: string;
+  expiresAtMs: number;
+}
+
 export function issueRemoteLaneToken({
   laneId,
   bindingAuth,
@@ -108,7 +117,7 @@ export function verifyRemoteLaneToken({
   nowMs = Date.now(),
   replayProtector,
   consumeReplay = true,
-}: RemoteLaneTokenVerifyInput): void {
+}: RemoteLaneTokenVerifyInput): VerifiedRemoteLaneReplayState | undefined {
   const resolvedPolicy = resolveLaneAuthPolicy(bindingAuth);
   if (resolvedPolicy.mode === "none") {
     return;
@@ -224,11 +233,36 @@ export function verifyRemoteLaneToken({
     }
   }
 
-  if (consumeReplay && replayProtector && payload.jti) {
-    replayProtector.markOrThrow(
-      payload.jti,
-      (payload.exp + skewSeconds) * 1000,
+  const replayState = payload.jti
+    ? {
+        jti: payload.jti,
+        expiresAtMs: (payload.exp + skewSeconds) * 1000,
+      }
+    : undefined;
+
+  if (consumeReplay) {
+    consumeVerifiedRemoteLaneReplay({
       laneId,
-    );
+      replayProtector,
+      replayState,
+    });
   }
+
+  return replayState;
+}
+
+/**
+ * Consumes replay protection for a token that has already been fully verified.
+ */
+export function consumeVerifiedRemoteLaneReplay(options: {
+  laneId: string;
+  replayProtector?: RemoteLaneReplayProtector;
+  replayState?: VerifiedRemoteLaneReplayState;
+}): void {
+  const { laneId, replayProtector, replayState } = options;
+  if (!replayProtector || !replayState) {
+    return;
+  }
+
+  replayProtector.markOrThrow(replayState.jti, replayState.expiresAtMs, laneId);
 }

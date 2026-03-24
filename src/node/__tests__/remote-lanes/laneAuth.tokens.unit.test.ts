@@ -5,6 +5,7 @@ import {
   issueRemoteLaneToken,
   verifyRemoteLaneToken,
 } from "../../remote-lanes/laneAuth";
+import { signLaneJwtWithHmac } from "../../remote-lanes/laneAuth.jwt";
 
 function expectRunnerErrorId(fn: () => unknown, errorId: string): void {
   try {
@@ -257,6 +258,31 @@ describe("laneAuth token flow", () => {
         }),
       "remoteLanes-auth-unauthorized",
     );
+  });
+
+  it("accepts legacy verified tokens without replay ids", () => {
+    const replayProtector = createRemoteLaneReplayProtector();
+    const token = signLaneJwtWithHmac(
+      { alg: "HS256", typ: "JWT" },
+      {
+        lane: "lane.replay.legacy",
+        cap: "produce",
+        iat: 1,
+        exp: 60,
+      },
+      "legacy-secret",
+    );
+
+    expect(
+      verifyRemoteLaneToken({
+        laneId: "lane.replay.legacy",
+        bindingAuth: { secret: "legacy-secret" },
+        token,
+        requiredCapability: "produce",
+        replayProtector,
+        nowMs: 10_000,
+      }),
+    ).toBeUndefined();
   });
 
   it("rejects lane-only tokens when target claims are required", () => {

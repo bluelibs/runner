@@ -237,7 +237,18 @@ export function shouldPersistStableSignalId(
   signalId: string,
 ): boolean {
   const baseStepId = `__signal:${signalId}`;
-  return stepId !== baseStepId && !stepId.startsWith(`${baseStepId}:`);
+  if (stepId !== baseStepId && !stepId.startsWith(`${baseStepId}:`)) {
+    return true;
+  }
+
+  const lastColonIndex = signalId.lastIndexOf(":");
+  if (stepId !== baseStepId || lastColonIndex === -1) {
+    return false;
+  }
+
+  const possibleIndex = signalId.slice(lastColonIndex + 1);
+  const parsedIndex = Number(possibleIndex);
+  return Number.isInteger(parsedIndex) && parsedIndex >= 0;
 }
 
 /**

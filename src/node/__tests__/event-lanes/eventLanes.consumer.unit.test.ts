@@ -1,5 +1,9 @@
 import { EventManager } from "../../../models/EventManager";
-import { createRemoteLaneReplayProtector } from "../../remote-lanes/laneAuth";
+import {
+  createRemoteLaneReplayProtector,
+  hashRemoteLanePayload,
+  issueRemoteLaneToken,
+} from "../../remote-lanes/laneAuth";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { consumeEventLaneQueueMessage } from "../../event-lanes/eventLanes.consumer";
 
@@ -244,6 +248,97 @@ describe("eventLanes.consumer", () => {
           name: "remoteLanes-auth-unauthorized",
         }),
       }),
+    );
+  });
+
+  it("allows a retried delivery to reuse the same verified auth token after emit failure", async () => {
+    const bindingAuth = { secret: "consumer-secret" };
+    const payload = JSON.stringify({ ok: true });
+    const authToken = issueRemoteLaneToken({
+      laneId,
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: eventId,
+        payloadHash: hashRemoteLanePayload(payload),
+      },
+    })!;
+    const emitError = new Error("emit failed once");
+    const { queue, logger, eventManager, options } = createBaseOptions({
+      context: {
+        profile: "worker",
+        coolingDown: false,
+        disposed: false,
+        bindingsByLaneId: new Map([
+          [
+            laneId,
+            {
+              lane: { id: laneId },
+              auth: bindingAuth,
+              retryDelayMs: 1,
+              maxAttempts: 3,
+            },
+          ],
+        ]),
+        eventRouteByEventId: new Map([[eventId, { lane: { id: laneId } }]]),
+        relaySourcePrefix: "relay:",
+        replayProtector: createRemoteLaneReplayProtector(),
+      } as any,
+      config: {
+        profile: "worker",
+        mode: "network",
+        topology: {
+          profiles: {
+            worker: { consume: [] },
+          },
+          bindings: [
+            {
+              lane: { id: laneId },
+              queue: {},
+              auth: bindingAuth,
+            },
+          ],
+        },
+      } as any,
+      message: {
+        id: "tests-event-lanes-consumer-message",
+        laneId,
+        eventId,
+        payload,
+        authToken,
+        source: runtimeSource.runtime("tests.event-lanes.consumer"),
+        createdAt: new Date(),
+        attempts: 1,
+      },
+    });
+
+    jest
+      .spyOn(eventManager, "emit")
+      .mockRejectedValueOnce(emitError)
+      .mockResolvedValueOnce(undefined);
+
+    await consumeEventLaneQueueMessage(options as any);
+    await consumeEventLaneQueueMessage({
+      ...(options as any),
+      message: {
+        ...(options as any).message,
+        attempts: 2,
+      },
+    });
+
+    expect(eventManager.emit).toHaveBeenCalledTimes(2);
+    expect(queue.nack).toHaveBeenCalledTimes(1);
+    expect(queue.nack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+      true,
+    );
+    expect(queue.ack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+    );
+    expect(logger.error).not.toHaveBeenCalledWith(
+      "Event lane consumer rejected a permanent message.",
+      expect.anything(),
     );
   });
 

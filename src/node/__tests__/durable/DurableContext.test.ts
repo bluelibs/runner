@@ -873,6 +873,42 @@ describe("durable: DurableContext", () => {
     expect((await store.getSignalState("e1", Paid.id))?.queued).toEqual([]);
   });
 
+  it("replays buffered signals for implicit signal ids ending in numeric suffixes", async () => {
+    const { store, bus } = createContext();
+    const VersionedSignal = defineEvent<{ version: number }>({
+      id: "order:1",
+    });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:order:1",
+      result: { state: "waiting", signalId: VersionedSignal.id },
+      completedAt: new Date(),
+    });
+    await store.bufferSignalRecord("e1", VersionedSignal.id, {
+      id: "sig-order-1",
+      payload: { version: 1 },
+      receivedAt: new Date(),
+    });
+
+    const replayedCtx = new DurableContext(store, bus, "e1", 1);
+
+    await expect(replayedCtx.waitForSignal(VersionedSignal)).resolves.toEqual({
+      kind: "signal",
+      payload: { version: 1 },
+    });
+    expect(
+      (await store.getStepResult("e1", "__signal:order:1"))?.result,
+    ).toEqual({
+      state: "completed",
+      signalId: VersionedSignal.id,
+      payload: { version: 1 },
+    });
+    expect(
+      (await store.getSignalState("e1", VersionedSignal.id))?.queued,
+    ).toEqual([]);
+  });
+
   it("returns signal payload when completed and supports multiple waits", async () => {
     const { store, ctx } = createContext();
 

@@ -521,6 +521,9 @@ describe("durable: current helpers", () => {
 
     expect(shouldPersistStableSignalId("__signal:paid", "paid")).toBe(false);
     expect(shouldPersistStableSignalId("__signal:paid:1", "paid")).toBe(false);
+    expect(shouldPersistStableSignalId("__signal:order:1", "order:1")).toBe(
+      true,
+    );
     expect(shouldPersistStableSignalId("__signal:custom", "paid")).toBe(true);
 
     const error = new DurableExecutionError("boom", "exec-1", "task-1", 2, {

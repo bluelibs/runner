@@ -18,6 +18,7 @@ import {
   type QueueLikeWithAck,
 } from "./eventLanes.routing";
 import {
+  consumeVerifiedEventLaneMessageReplay,
   resolveEventLaneBindingAuth,
   verifyEventLaneMessageToken,
 } from "./eventLanes.auth";
@@ -108,7 +109,7 @@ export async function consumeEventLaneQueueMessage(options: {
   const binding = context.bindingsByLaneId.get(message.laneId)!;
 
   try {
-    verifyEventLaneMessageToken({
+    const replayState = verifyEventLaneMessageToken({
       message,
       laneId: binding.lane.id,
       bindingAuth: resolveEventLaneBindingAuth({
@@ -117,6 +118,7 @@ export async function consumeEventLaneQueueMessage(options: {
         config,
       }),
       replayProtector: context.replayProtector,
+      consumeReplay: false,
     });
     const resolvedMessageEventId =
       dependencies.store.events.get(message.eventId)?.event.id ??
@@ -162,6 +164,13 @@ export async function consumeEventLaneQueueMessage(options: {
           payload,
           runtimeSource.runtime(relaySourceId),
         ),
+    });
+    // Only consume replay protection after relay work succeeds so retryable
+    // delivery failures can safely reuse the same queue envelope.
+    consumeVerifiedEventLaneMessageReplay({
+      laneId: binding.lane.id,
+      replayProtector: context.replayProtector,
+      replayState,
     });
     await queue.ack(message.id);
   } catch (error) {
