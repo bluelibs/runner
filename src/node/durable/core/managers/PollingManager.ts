@@ -23,6 +23,7 @@ import { durableExecutionInvariantError } from "../../../../errors";
 export interface PollingConfig {
   enabled?: boolean;
   interval?: number;
+  concurrency?: number;
   claimTtlMs?: number;
 }
 
@@ -35,17 +36,20 @@ export interface PollingManagerCallbacks {
  * Timer/tick driver for durable workflows.
  *
  * The durable store is the source of truth, but time needs an active driver:
- * `PollingManager` periodically scans ready timers and performs the appropriate action:
+ * `PollingManager` periodically claims ready timers and performs the
+ * appropriate action:
  *
  * - complete `sleep()` steps by marking their step result as completed
  * - resume executions after signal timeouts / scheduled kickoffs / retries
- * - coordinate multi-worker polling via optional `store.claimTimer(...)`
+ * - coordinate multi-worker polling via bounded `store.claimReadyTimers(...)`
+ *   plus per-timer claim renewal/finalization
  *
  * In production topologies you typically enable polling on worker nodes only.
  */
 export class PollingManager {
   private readonly inFlightTimers = new Set<Promise<void>>();
   private isRunning = false;
+  private pollRequested = false;
   private pollingTimer: ReturnType<typeof setTimeout> | null = null;
   private pollingWake: (() => void) | null = null;
   private readonly logger: Logger;
@@ -75,21 +79,18 @@ export class PollingManager {
 
   start(): void {
     if (this.isRunning) return;
+    this.assertClaimBasedPollingSupport();
+    this.getPollingIntervalMs();
+    this.getConcurrency();
+    this.getClaimTtlMs();
     this.isRunning = true;
+    this.pollRequested = false;
     void this.poll();
   }
 
   async cooldown(): Promise<void> {
     this.isRunning = false;
-    if (this.pollingTimer) {
-      clearTimeout(this.pollingTimer);
-      this.pollingTimer = null;
-    }
-    if (this.pollingWake) {
-      const wake = this.pollingWake;
-      this.pollingWake = null;
-      wake();
-    }
+    this.wakePollingLoop();
   }
 
   async stop(): Promise<void> {
@@ -98,16 +99,11 @@ export class PollingManager {
   }
 
   private async poll(): Promise<void> {
-    const intervalMs = this.config.interval ?? 1000;
+    const intervalMs = this.getPollingIntervalMs();
 
     while (this.isRunning) {
       try {
-        const ready = await this.store.getReadyTimers();
-        await Promise.allSettled(
-          ready.map((timer) =>
-            this.trackInFlightTimer(this.handleTimer(timer)),
-          ),
-        );
+        await this.fillAvailableTimerSlots();
       } catch (error) {
         try {
           await this.logger.error("Durable polling loop failed.", { error });
@@ -118,21 +114,23 @@ export class PollingManager {
 
       if (!this.isRunning) return;
 
-      await new Promise<void>((resolve) => {
-        this.pollingWake = resolve;
-        const pollingTimer = setTimeout(() => {
-          this.pollingTimer = null;
-          this.pollingWake = null;
-          resolve();
-        }, intervalMs);
-        this.pollingTimer = pollingTimer;
-        pollingTimer.unref();
-      });
+      await this.waitForPollingWake(intervalMs);
     }
   }
 
   /** @internal - public for testing */
   async handleTimer(timer: Timer): Promise<void> {
+    return await this.handleTimerInternal(timer, false);
+  }
+
+  private async handleClaimedTimer(timer: Timer): Promise<void> {
+    return await this.handleTimerInternal(timer, true);
+  }
+
+  private async handleTimerInternal(
+    timer: Timer,
+    alreadyClaimed: boolean,
+  ): Promise<void> {
     let stopClaimHeartbeat = () => {};
     let timerClaimState: TimerClaimState | null = null;
     let safeToFinalizeCurrentTimer = false;
@@ -193,9 +191,16 @@ export class PollingManager {
     };
 
     // Distributed timer coordination. Failures must not drop timers (at-least-once).
-    if (this.store.claimTimer) {
-      const defaultClaimTtlMs = this.queue ? 5_000 : 30_000;
-      const claimTtlMs = this.config.claimTtlMs ?? defaultClaimTtlMs;
+    if (alreadyClaimed) {
+      const claimTtlMs = this.getClaimTtlMs();
+      timerClaimState = { lossError: null };
+      stopClaimHeartbeat = this.startTimerClaimHeartbeat(
+        timer.id,
+        claimTtlMs,
+        timerClaimState,
+      );
+    } else if (this.store.claimTimer) {
+      const claimTtlMs = this.getClaimTtlMs();
       const claimed = await this.store.claimTimer(
         timer.id,
         this.workerId,
@@ -376,10 +381,128 @@ export class PollingManager {
     });
   }
 
+  private getConcurrency(): number {
+    return this.getPositiveIntegerConfig("polling.concurrency", {
+      configuredValue: this.config.concurrency,
+      defaultValue: 10,
+    });
+  }
+
+  private getClaimTtlMs(): number {
+    const defaultClaimTtlMs = this.queue ? 5_000 : 30_000;
+    return this.getPositiveIntegerConfig("polling.claimTtlMs", {
+      configuredValue: this.config.claimTtlMs,
+      defaultValue: defaultClaimTtlMs,
+    });
+  }
+
+  private getPollingIntervalMs(): number {
+    return this.getPositiveIntegerConfig("polling.interval", {
+      configuredValue: this.config.interval,
+      defaultValue: 1_000,
+    });
+  }
+
+  private getPositiveIntegerConfig(
+    configName:
+      | "polling.interval"
+      | "polling.concurrency"
+      | "polling.claimTtlMs",
+    params: {
+      configuredValue: number | undefined;
+      defaultValue: number;
+    },
+  ): number {
+    const value = params.configuredValue ?? params.defaultValue;
+    if (!Number.isInteger(value) || value <= 0) {
+      durableExecutionInvariantError.throw({
+        message: `${configName} must be a positive integer. Received ${String(value)}.`,
+      });
+    }
+
+    return value;
+  }
+
+  private assertClaimBasedPollingSupport(): void {
+    if (typeof this.store.claimReadyTimers !== "function") {
+      durableExecutionInvariantError.throw({
+        message:
+          "Durable polling requires store.claimReadyTimers() so ready timers can be claimed with bounded concurrency.",
+      });
+    }
+  }
+
+  private async fillAvailableTimerSlots(): Promise<void> {
+    const availableSlots = Math.max(
+      0,
+      this.getConcurrency() - this.inFlightTimers.size,
+    );
+
+    if (availableSlots === 0) {
+      return;
+    }
+
+    const claimedTimers = await this.store.claimReadyTimers(
+      new Date(),
+      availableSlots,
+      this.workerId,
+      this.getClaimTtlMs(),
+    );
+
+    claimedTimers.forEach((timer) => {
+      this.trackInFlightTimer(this.handleClaimedTimer(timer));
+    });
+  }
+
+  private wakePollingLoop(): void {
+    this.pollRequested = true;
+
+    if (this.pollingTimer) {
+      clearTimeout(this.pollingTimer);
+      this.pollingTimer = null;
+    }
+
+    if (this.pollingWake) {
+      const wake = this.pollingWake;
+      this.pollingWake = null;
+      wake();
+    }
+  }
+
+  private async waitForPollingWake(intervalMs: number): Promise<void> {
+    if (this.pollRequested) {
+      this.pollRequested = false;
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        this.pollRequested = false;
+        this.pollingTimer = null;
+        this.pollingWake = null;
+        resolve();
+      };
+
+      this.pollingWake = finish;
+      const pollingTimer = setTimeout(finish, intervalMs);
+      this.pollingTimer = pollingTimer;
+      pollingTimer.unref();
+    });
+  }
+
   private trackInFlightTimer(handling: Promise<void>): Promise<void> {
     this.inFlightTimers.add(handling);
     void handling.finally(() => {
       this.inFlightTimers.delete(handling);
+      if (this.isRunning) {
+        this.wakePollingLoop();
+      }
     });
     return handling;
   }

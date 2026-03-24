@@ -264,12 +264,17 @@ describe("durable: DurableService polling timer handling (unit)", () => {
     class ExplodingStore extends MemoryStore {
       public shouldThrow = false;
 
-      override async getReadyTimers(now?: Date) {
+      override async claimReadyTimers(
+        now: Date,
+        limit: number,
+        workerId: string,
+        ttlMs: number,
+      ) {
         if (this.shouldThrow) {
           throw genericError.new({ message: "boom" });
         }
 
-        return await super.getReadyTimers(now);
+        return await super.claimReadyTimers(now, limit, workerId, ttlMs);
       }
     }
 

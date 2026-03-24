@@ -89,7 +89,7 @@ const durable = resources.memoryWorkflow.fork("app-durable"); // forking is just
 
 const durableRegistration = durable.with({
   queue: { consume: true }, // Optional: test queue-mode semantics
-  polling: { enabled: true }, // Drive timers/sleeps/timeouts
+  polling: { enabled: true }, // Drive timers/sleeps/timeouts with bounded fan-out
   recovery: { onStartup: true }, // Recover orphaned executions on boot
 });
 ```
@@ -678,10 +678,10 @@ Durable scheduling persists schedule definitions and timers in the store. The po
                                │
                                ▼
 ┌────────────────────────────────────────────────────────────────┐
-│ Polling Loop (enabled: true, interval: 1000ms)                 │
+│ Polling Loop (enabled: true, interval: 1000ms, concurrency: 10)│
 │                                                                │
-│ Every tick:                                                    │
-│ 1. getReadyTimers() → timers with fireAt <= now                │
+│ Every tick / wake:                                             │
+│ 1. claimReadyTimers(now, availableSlots, workerId, ttlMs)      │
 │ 2. handleScheduledTaskTimer(timer):                            │
 │    - Create execution (idempotencyKey: "timer:sched:daily:...")│
 │    - kickoffExecution() → run workflow                         │
@@ -696,8 +696,26 @@ Durable scheduling persists schedule definitions and timers in the store. The po
 | --------------- | ------------------------------------------------------------------------------------- |
 | Idempotent      | Safe to call on every boot. Updates existing schedule if `id` matches.                |
 | Crash-safe      | Schedule + timer in store. Process restart → polling continues.                       |
+| Backpressured   | Workers claim only up to local polling concurrency instead of draining the whole ready set at once. |
 | Deduped         | Uses `idempotencyKey: timer:sched:ID:fireAt` to prevent duplicate runs for same tick. |
 | Rebinding guard | Cannot change `workflowKey` on existing schedule (throws).                            |
+
+### Polling Backpressure
+
+`polling.concurrency` is a per-worker cap, not a global cap.
+
+- One worker with `concurrency: 10` handles up to 10 timers at a time.
+- Four workers with `concurrency: 10` can drain up to about 40 timers at a
+  time across the cluster.
+- This is intentional: backlog recovery after downtime or a cron burst happens
+  in controlled waves instead of one unbounded stampede.
+
+Start with the default `10` unless you have measurements showing the store,
+queue, and workflow handlers can comfortably sustain more.
+
+> **Note:** When polling is enabled, the durable store must implement
+> `claimReadyTimers(...)`. The poller will fail fast on startup rather than
+> silently falling back to full ready-set scans.
 
 ### One-Time Execution
 
@@ -804,10 +822,14 @@ const durableRegistration = durable.with({
     quorum: true,
     deadLetter: "durable-dlq",
   },
-  polling: { enabled: true, interval: 1000 },
+  polling: { enabled: true, interval: 1000, concurrency: 10 }, // per worker
   recovery: { onStartup: true },
 });
 ```
+
+`concurrency: 10` is a conservative default meant to smooth backlog recovery.
+Raise it only after measuring durable store pressure, queue pressure, and timer
+handler cost in your own topology.
 
 ### Role Separation
 
@@ -827,7 +849,7 @@ const durableRegistration = durable.with({
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL!, consume: true },
-  polling: { enabled: true, interval: 1000 },
+  polling: { enabled: true, interval: 1000, concurrency: 10 }, // per worker
   recovery: { onStartup: true },
 });
 ```
@@ -1023,6 +1045,7 @@ interface IDurableStore {
   // Timers
   createTimer(timer: Timer): Promise<void>;
   getReadyTimers(now?: Date): Promise<Timer[]>;
+  claimReadyTimers(now: Date, limit: number, workerId: string, ttlMs: number): Promise<Timer[]>;
   markTimerFired(timerId: string): Promise<void>;
 
   // Schedules
@@ -1040,6 +1063,10 @@ interface IDurableStore {
   // ... see interfaces/store.ts for full contract
 }
 ```
+
+`getReadyTimers()` remains useful for inspection and recovery-style queries.
+The live poller uses `claimReadyTimers(...)` so each worker only claims the
+number of ready timers it can currently process.
 
 ### IDurableQueue
 

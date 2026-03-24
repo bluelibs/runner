@@ -9,7 +9,11 @@ import type { IDurableQueue } from "../../durable/core/interfaces/queue";
 import type { Schedule, Timer } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { waitUntil } from "../../durable/test-utils";
-import { createTaskExecutor, okTask } from "./DurableService.unit.helpers";
+import {
+  createBareStore,
+  createTaskExecutor,
+  okTask,
+} from "./DurableService.unit.helpers";
 import { genericError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
 
@@ -457,6 +461,23 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     await service.stop();
   });
 
+  it("fails service startup when polling is enabled without claim-ready support", async () => {
+    const store = createBareStore(new MemoryStore());
+    Object.defineProperty(store, "claimReadyTimers", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+
+    await expect(
+      initDurableService({
+        store,
+        taskExecutor: createTaskExecutor({}),
+        polling: { interval: 1 },
+      }),
+    ).rejects.toThrow("store.claimReadyTimers()");
+  });
+
   it("uses the default polling interval when polling.interval is not provided", async () => {
     const store = new MemoryStore();
     const service = await initDurableService({ store });
@@ -475,7 +496,12 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     class BlockingStore extends MemoryStore {
       private callCount = 0;
 
-      override async getReadyTimers(_now?: Date): Promise<Timer[]> {
+      override async claimReadyTimers(
+        _now: Date,
+        _limit: number,
+        _workerId: string,
+        _ttlMs: number,
+      ): Promise<Timer[]> {
         this.callCount += 1;
         if (this.callCount === 1) {
           return await new Promise<Timer[]>((resolve) => {
@@ -485,7 +511,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
         }
 
         throw genericError.new({
-          message: "getReadyTimers should not be called after stop",
+          message: "claimReadyTimers should not be called after stop",
         });
       }
     }
@@ -519,7 +545,12 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     class BlockingStore extends MemoryStore {
       private delivered = false;
 
-      override async getReadyTimers(): Promise<Timer[]> {
+      override async claimReadyTimers(
+        _now: Date,
+        _limit: number,
+        _workerId: string,
+        _ttlMs: number,
+      ): Promise<Timer[]> {
         if (this.delivered) {
           return [];
         }
@@ -544,24 +575,28 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
       taskExecutor: createTaskExecutor({}),
       polling: { interval: 5 },
     });
-    const originalHandleTimer = (
+    const originalHandleClaimedTimer = (
       service as unknown as {
-        pollingManager: { handleTimer: (timer: Timer) => Promise<void> };
+        pollingManager: { handleClaimedTimer: (timer: Timer) => Promise<void> };
       }
-    ).pollingManager.handleTimer.bind(
+    ).pollingManager.handleClaimedTimer.bind(
       (
         service as unknown as {
-          pollingManager: { handleTimer: (timer: Timer) => Promise<void> };
+          pollingManager: {
+            handleClaimedTimer: (timer: Timer) => Promise<void>;
+          };
         }
       ).pollingManager,
     );
     (
       service as unknown as {
-        pollingManager: { handleTimer: (timer: Timer) => Promise<void> };
+        pollingManager: {
+          handleClaimedTimer: (timer: Timer) => Promise<void>;
+        };
       }
-    ).pollingManager.handleTimer = jest.fn(async (timer: Timer) => {
+    ).pollingManager.handleClaimedTimer = jest.fn(async (timer: Timer) => {
       await timerBlocked;
-      await originalHandleTimer(timer);
+      await originalHandleClaimedTimer(timer);
     });
 
     service.start();
@@ -579,6 +614,84 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     resolveTimer();
     await stopPromise;
     expect(stopped).toBe(true);
+  });
+
+  it("caps polling concurrency and refills slots as claimed timers finish", async () => {
+    const store = new MemoryStore();
+    const now = Date.now();
+
+    await store.createTimer({
+      id: "t1",
+      executionId: "e1",
+      type: "retry",
+      fireAt: new Date(now - 30),
+      status: "pending",
+    });
+    await store.createTimer({
+      id: "t2",
+      executionId: "e2",
+      type: "retry",
+      fireAt: new Date(now - 20),
+      status: "pending",
+    });
+    await store.createTimer({
+      id: "t3",
+      executionId: "e3",
+      type: "retry",
+      fireAt: new Date(now - 10),
+      status: "pending",
+    });
+
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      polling: { interval: 1000, concurrency: 2 },
+    });
+    const pollingManager = (
+      service as unknown as {
+        pollingManager: { handleClaimedTimer: (timer: Timer) => Promise<void> };
+      }
+    ).pollingManager;
+    const originalHandleClaimedTimer =
+      pollingManager.handleClaimedTimer.bind(pollingManager);
+    const releaseByTimerId = new Map<string, () => void>();
+    let activeHandlers = 0;
+    let maxActiveHandlers = 0;
+
+    pollingManager.handleClaimedTimer = jest.fn(async (timer: Timer) => {
+      activeHandlers += 1;
+      maxActiveHandlers = Math.max(maxActiveHandlers, activeHandlers);
+
+      await new Promise<void>((resolve) => {
+        releaseByTimerId.set(timer.id, resolve);
+      });
+
+      activeHandlers -= 1;
+      releaseByTimerId.delete(timer.id);
+      await originalHandleClaimedTimer(timer);
+    });
+
+    service.start();
+
+    await waitUntil(() => activeHandlers === 2, {
+      timeoutMs: 250,
+      intervalMs: 1,
+    });
+    expect(maxActiveHandlers).toBe(2);
+    expect(Array.from(releaseByTimerId.keys()).sort()).toEqual(["t1", "t2"]);
+
+    releaseByTimerId.get("t1")!();
+
+    await waitUntil(() => activeHandlers === 2 && releaseByTimerId.has("t3"), {
+      timeoutMs: 250,
+      intervalMs: 1,
+    });
+    expect(maxActiveHandlers).toBe(2);
+
+    releaseByTimerId.get("t2")!();
+    releaseByTimerId.get("t3")!();
+
+    await service.stop();
   });
 
   it("coalesces concurrent stop() calls into a single shutdown pass", async () => {

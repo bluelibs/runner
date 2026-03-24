@@ -71,6 +71,15 @@ const cloneExecutionWaiter = (
 const cloneExecution = (execution: Execution): Execution =>
   structuredClone(execution);
 
+const compareTimersByReadyOrder = (left: Timer, right: Timer): number => {
+  const fireAtDiff = left.fireAt.getTime() - right.fireAt.getTime();
+  if (fireAtDiff !== 0) {
+    return fireAtDiff;
+  }
+
+  return left.id.localeCompare(right.id);
+};
+
 function getSignalIdFromStepResult(result: StepResult): string {
   const state = result.result;
   if (
@@ -692,10 +701,54 @@ export class MemoryStore implements IDurableStore {
     this.timers.set(timer.id, { ...timer });
   }
 
-  async getReadyTimers(now: Date = new Date()): Promise<Timer[]> {
+  private listReadyPendingTimers(now: Date): Timer[] {
     return Array.from(this.timers.values())
-      .filter((t) => t.status === TimerStatus.Pending && t.fireAt <= now)
-      .map((timer) => ({ ...timer }));
+      .filter(
+        (timer) => timer.status === TimerStatus.Pending && timer.fireAt <= now,
+      )
+      .sort(compareTimersByReadyOrder);
+  }
+
+  async getReadyTimers(now: Date = new Date()): Promise<Timer[]> {
+    return this.listReadyPendingTimers(now).map((timer) => ({ ...timer }));
+  }
+
+  async claimReadyTimers(
+    now: Date,
+    limit: number,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<Timer[]> {
+    if (limit <= 0) {
+      return [];
+    }
+
+    const claimedTimers: Timer[] = [];
+
+    for (const timer of this.listReadyPendingTimers(now)) {
+      if (claimedTimers.length >= limit) {
+        break;
+      }
+
+      const claimed = await this.claimTimer(timer.id, workerId, ttlMs);
+      if (!claimed) {
+        continue;
+      }
+
+      const current = this.timers.get(timer.id);
+      if (
+        !current ||
+        current.status !== TimerStatus.Pending ||
+        current.fireAt > now
+      ) {
+        await this.releaseTimerClaim(timer.id, workerId);
+        continue;
+      }
+
+      claimedTimers.push({ ...current });
+    }
+
+    return claimedTimers;
   }
 
   async markTimerFired(timerId: string): Promise<void> {

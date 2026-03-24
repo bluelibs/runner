@@ -182,6 +182,23 @@ export interface IDurableStore {
 
   createTimer(timer: Timer): Promise<void>;
   getReadyTimers(now?: Date): Promise<Timer[]>;
+  /**
+   * Atomically claims up to `limit` ready timers for the given worker and
+   * returns their payloads in ready-order.
+   *
+   * Intended for bounded polling loops so multiple workers do not all fan out
+   * over the same full ready set before claims are applied.
+   *
+   * This is part of the required store contract when durable polling is
+   * enabled. `PollingManager` uses it to refill only the worker's available
+   * local slots instead of draining the entire ready backlog at once.
+   */
+  claimReadyTimers(
+    now: Date,
+    limit: number,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<Timer[]>;
   markTimerFired(timerId: string): Promise<void>;
   /**
    * Atomically claim a timer for processing. Returns true if claimed, false if already claimed.

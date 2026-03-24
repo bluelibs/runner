@@ -151,6 +151,97 @@ describe("durable: MemoryStore runtime surfaces", () => {
     );
   });
 
+  it("claims ready timers in bounded ready-order without duplicating leases", async () => {
+    const store = new MemoryStore();
+    const now = new Date();
+
+    await store.createTimer({
+      id: "t3",
+      executionId: "e3",
+      stepId: "s3",
+      type: "sleep",
+      fireAt: new Date(now.getTime() - 5),
+      status: "pending",
+    });
+    await store.createTimer({
+      id: "t1",
+      executionId: "e1",
+      stepId: "s1",
+      type: "sleep",
+      fireAt: new Date(now.getTime() - 20),
+      status: "pending",
+    });
+    await store.createTimer({
+      id: "t2",
+      executionId: "e2",
+      stepId: "s2",
+      type: "sleep",
+      fireAt: new Date(now.getTime() - 20),
+      status: "pending",
+    });
+    await store.createTimer({
+      id: "future",
+      executionId: "ef",
+      stepId: "sf",
+      type: "sleep",
+      fireAt: new Date(now.getTime() + 60_000),
+      status: "pending",
+    });
+
+    const claimedByWorker1 = await store.claimReadyTimers(
+      now,
+      2,
+      "worker-1",
+      1_000,
+    );
+    expect(claimedByWorker1.map((timer) => timer.id)).toEqual(["t1", "t2"]);
+
+    const claimedByWorker2 = await store.claimReadyTimers(
+      now,
+      2,
+      "worker-2",
+      1_000,
+    );
+    expect(claimedByWorker2.map((timer) => timer.id)).toEqual(["t3"]);
+    await expect(
+      store.claimReadyTimers(now, 0, "worker-3", 1_000),
+    ).resolves.toEqual([]);
+  });
+
+  it("releases claims when a ready timer disappears during claimReadyTimers()", async () => {
+    class VolatileClaimStore extends MemoryStore {
+      override async claimTimer(
+        timerId: string,
+        workerId: string,
+        ttlMs: number,
+      ): Promise<boolean> {
+        const claimed = await super.claimTimer(timerId, workerId, ttlMs);
+        if (claimed) {
+          await this.deleteTimer(timerId);
+        }
+        return claimed;
+      }
+    }
+
+    const store = new VolatileClaimStore();
+    const now = new Date();
+    await store.createTimer({
+      id: "volatile",
+      executionId: "e1",
+      stepId: "s1",
+      type: "sleep",
+      fireAt: new Date(now.getTime() - 10),
+      status: "pending",
+    });
+
+    await expect(
+      store.claimReadyTimers(now, 1, "worker-1", 1_000),
+    ).resolves.toEqual([]);
+    await expect(store.claimTimer("volatile", "worker-2", 1_000)).resolves.toBe(
+      true,
+    );
+  });
+
   it("finalizes claimed timers even if the timer row was already removed", async () => {
     const store = new MemoryStore();
     const now = new Date();

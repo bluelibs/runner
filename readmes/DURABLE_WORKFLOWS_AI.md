@@ -396,8 +396,9 @@ ensureSchedule(task, input, { id, cron, timezone? })
     → Computes nextRun
     → Persists Timer { id: "sched:id", fireAt, scheduleId }
 
-Polling Loop (every 1s, when polling.enabled: true)
-    → getReadyTimers() finds timers with fireAt <= now
+Polling Loop (when polling.enabled: true)
+    → claimReadyTimers(now, availableSlots, workerId, claimTtlMs)
+      claims only as many ready timers as this worker can process now
     → handleScheduledTaskTimer()
         → Create execution (idempotencyKey: "timer:sched:ID:fireAt")
         → kickoffExecution() → run workflow
@@ -409,6 +410,14 @@ Polling Loop (every 1s, when polling.enabled: true)
 - Idempotent — safe to call on every boot
 - Crash-safe — schedule + timer in store
 - Deduped — same tick uses same `idempotencyKey`
+- Backpressured — polling drains ready timers in bounded waves instead of
+  releasing the whole backlog at once
+
+`polling.concurrency` is per worker.
+
+- `10` means one worker handles up to 10 timers at a time
+- total cluster drain capacity scales with worker count
+- keep the default unless you have measurements proving a higher value is safe
 
 ### One-Time vs Recurring
 
@@ -478,7 +487,7 @@ const workerConfig = durable.with({
     quorum: true,
     deadLetter: "durable-dlq",
   },
-  polling: { enabled: true, interval: 1000 },
+  polling: { enabled: true, interval: 1000, concurrency: 10 }, // per worker
   recovery: { onStartup: true },
 });
 
@@ -489,6 +498,10 @@ const apiConfig = durable.with({
   polling: { enabled: false },
 });
 ```
+
+When polling is enabled, the durable store must support
+`claimReadyTimers(...)` so workers can split timer backlogs safely. Polling
+fails fast at startup if that contract is missing.
 
 ### Architecture
 

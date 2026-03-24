@@ -28,6 +28,111 @@ describe("durable: RedisStore timers and schedules (mock)", () => {
     await store.deleteTimer("t1");
   });
 
+  it("claims ready timers through a single eval-backed round trip", async () => {
+    const { redisMock, store } = harness;
+    const timerA: Timer = {
+      id: "t1",
+      type: "sleep",
+      fireAt: new Date(),
+      status: "pending",
+    };
+    const timerB: Timer = {
+      id: "t2",
+      type: "retry",
+      fireAt: new Date(),
+      status: "pending",
+    };
+
+    redisMock.eval.mockResolvedValueOnce([
+      serializer.stringify(timerA),
+      serializer.stringify(timerB),
+    ]);
+
+    await expect(
+      store.claimReadyTimers(
+        new Date("2024-01-01T00:00:00.000Z"),
+        2,
+        "w1",
+        5000,
+      ),
+    ).resolves.toEqual([timerA, timerB]);
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('"zrangebyscore"'),
+      2,
+      "durable:timers_schedule",
+      "durable:timers",
+      `${new Date("2024-01-01T00:00:00.000Z").getTime()}`,
+      "2024-01-01T00:00:00.000Z",
+      "2",
+      "w1",
+      "5000",
+      "50",
+      "durable:timer:claim:",
+      "pending",
+    );
+    const claimReadyTimersScript = redisMock.eval.mock.calls[0]?.[0];
+    expect(claimReadyTimersScript).toEqual(
+      expect.stringContaining("local limit = tonumber(ARGV[3]) or 0"),
+    );
+    expect(claimReadyTimersScript).toEqual(
+      expect.stringContaining("local nowIso = ARGV[2]"),
+    );
+  });
+
+  it("fails fast on malformed claim-ready responses", async () => {
+    const { redisMock, store } = harness;
+
+    await expect(
+      store.claimReadyTimers(
+        new Date("2024-01-01T00:00:00.000Z"),
+        0,
+        "w1",
+        5000,
+      ),
+    ).resolves.toEqual([]);
+
+    redisMock.eval.mockResolvedValueOnce("bad" as any);
+    await expect(
+      store.claimReadyTimers(
+        new Date("2024-01-01T00:00:00.000Z"),
+        1,
+        "w1",
+        5000,
+      ),
+    ).rejects.toThrow("Unexpected Redis claimed timer response shape");
+  });
+
+  it("fails fast when claimed timer entries are malformed or not pending", async () => {
+    const { redisMock, store } = harness;
+
+    redisMock.eval.mockResolvedValueOnce([123 as any]);
+    await expect(
+      store.claimReadyTimers(
+        new Date("2024-01-01T00:00:00.000Z"),
+        1,
+        "w1",
+        5000,
+      ),
+    ).rejects.toThrow("Unexpected Redis claimed timer payload shape");
+
+    redisMock.eval.mockResolvedValueOnce([
+      serializer.stringify({
+        id: "t-fired",
+        type: "sleep",
+        fireAt: new Date("2024-01-01T00:00:00.000Z"),
+        status: "fired",
+      } satisfies Timer),
+    ]);
+    await expect(
+      store.claimReadyTimers(
+        new Date("2024-01-01T00:00:00.000Z"),
+        1,
+        "w1",
+        5000,
+      ),
+    ).rejects.toThrow("Unexpected claimed timer status 'fired'");
+  });
+
   it("handles empty and malformed timer lookups", async () => {
     const { redisMock, store } = harness;
     redisMock.zrangebyscore.mockResolvedValue([]);

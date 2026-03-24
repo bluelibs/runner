@@ -1,5 +1,44 @@
+import { durableStoreShapeError } from "../../../errors";
 import { TimerStatus, type Timer } from "../core/types";
 import { serializer, type RedisStoreRuntime } from "./RedisStore.runtime";
+
+function parsePendingTimerPayloads(payloads: unknown[]): Timer[] {
+  return payloads
+    .map((payload) =>
+      typeof payload === "string" ? (serializer.parse(payload) as Timer) : null,
+    )
+    .filter(
+      (timer): timer is Timer =>
+        timer !== null && timer.status === TimerStatus.Pending,
+    );
+}
+
+function parseClaimedTimerPayloads(payloads: unknown): Timer[] {
+  if (!Array.isArray(payloads)) {
+    durableStoreShapeError.throw({
+      message: "Unexpected Redis claimed timer response shape",
+    });
+  }
+
+  const claimedPayloads = payloads as unknown[];
+
+  return claimedPayloads.map((payload: unknown) => {
+    if (typeof payload !== "string") {
+      return durableStoreShapeError.throw({
+        message: "Unexpected Redis claimed timer payload shape",
+      });
+    }
+
+    const timer = serializer.parse(payload) as Timer;
+    if (timer.status !== TimerStatus.Pending) {
+      return durableStoreShapeError.throw({
+        message: `Unexpected claimed timer status '${String(timer.status)}'`,
+      });
+    }
+
+    return timer;
+  });
+}
 
 export async function createTimer(
   runtime: RedisStoreRuntime,
@@ -41,14 +80,105 @@ export async function getReadyTimers(
   const results = await pipeline.exec();
   if (!results) return [];
 
-  return results
-    .map(([_, result]) =>
-      typeof result === "string" ? (serializer.parse(result) as Timer) : null,
-    )
-    .filter(
-      (timer): timer is Timer =>
-        timer !== null && timer.status === TimerStatus.Pending,
-    );
+  return parsePendingTimerPayloads(results.map(([, result]) => result));
+}
+
+export async function claimReadyTimers(
+  runtime: RedisStoreRuntime,
+  now: Date,
+  limit: number,
+  workerId: string,
+  ttlMs: number,
+): Promise<Timer[]> {
+  if (limit <= 0) {
+    return [];
+  }
+
+  const scanBatch = Math.max(limit * 4, 50);
+  const result = await runtime.redis.eval(
+    `
+      local limit = tonumber(ARGV[3]) or 0
+      if limit <= 0 then
+        return {}
+      end
+
+      local nowMs = tonumber(ARGV[1]) or 0
+      local nowIso = ARGV[2]
+      local workerId = ARGV[4]
+      local ttlMs = tonumber(ARGV[5]) or 0
+      local scanBatch = tonumber(ARGV[6]) or limit
+      local claimKeyPrefix = ARGV[7]
+      local pendingStatus = ARGV[8]
+      local claimed = {}
+      local offset = 0
+
+      while #claimed < limit do
+        local timerIds = redis.call(
+          "zrangebyscore",
+          KEYS[1],
+          0,
+          nowMs,
+          "LIMIT",
+          offset,
+          scanBatch
+        )
+
+        if #timerIds == 0 then
+          break
+        end
+
+        offset = offset + #timerIds
+
+        for _, timerId in ipairs(timerIds) do
+          if #claimed >= limit then
+            break
+          end
+
+          local claimKey = claimKeyPrefix .. timerId
+          if redis.call("set", claimKey, workerId, "PX", ttlMs, "NX") then
+            local current = redis.call("hget", KEYS[2], timerId)
+            if current then
+              local okTimer, timer = pcall(cjson.decode, current)
+              if not okTimer then
+                redis.call("del", claimKey)
+                return "__error__:Corrupted durable timer payload"
+              end
+
+              local fireAt = timer.fireAt
+              if type(fireAt) ~= "table" or fireAt.__type ~= "Date" or type(fireAt.value) ~= "string" then
+                redis.call("del", claimKey)
+                return "__error__:Corrupted durable timer payload"
+              end
+
+              if timer.status == pendingStatus and fireAt.value <= nowIso then
+                table.insert(claimed, current)
+              else
+                redis.call("del", claimKey)
+              end
+            else
+              redis.call("del", claimKey)
+            end
+          end
+        end
+      end
+
+      return claimed
+    `,
+    2,
+    runtime.timersScheduleKey(),
+    runtime.timersKey(),
+    `${now.getTime()}`,
+    now.toISOString(),
+    `${limit}`,
+    workerId,
+    `${ttlMs}`,
+    `${scanBatch}`,
+    runtime.k("timer:claim:"),
+    TimerStatus.Pending,
+  );
+  runtime.assertEvalResultNotError(result);
+
+  return parseClaimedTimerPayloads(result);
 }
 
 export async function markTimerFired(

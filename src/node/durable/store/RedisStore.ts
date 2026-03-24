@@ -335,6 +335,21 @@ export class RedisStore implements IDurableStore {
     return await timerOps.getReadyTimers(this.runtime, now);
   }
 
+  async claimReadyTimers(
+    now: Date,
+    limit: number,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<Timer[]> {
+    return await timerOps.claimReadyTimers(
+      this.runtime,
+      now,
+      limit,
+      workerId,
+      ttlMs,
+    );
+  }
+
   async markTimerFired(timerId: string): Promise<void> {
     await timerOps.markTimerFired(this.runtime, timerId);
   }

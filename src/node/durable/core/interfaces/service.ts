@@ -142,9 +142,31 @@ export interface DurableServiceConfig {
     emitter?: DurableAuditEmitter;
   };
   polling?: {
+    /**
+     * Enables the store-backed timer poller for this process.
+     *
+     * When enabled, the durable store must implement `claimReadyTimers(...)`
+     * so workers can split timer backlogs without scanning and fan-outing the
+     * entire ready set on every poll pass.
+     */
     enabled?: boolean;
+    /** Poll interval in milliseconds. Default: 1000. */
     interval?: number;
-    /** Time-to-live for timer claims in milliseconds. Default: 30000. */
+    /**
+     * Maximum number of timers this worker processes concurrently.
+     *
+     * This is a per-worker cap. Total cluster drain capacity scales with the
+     * number of polling workers, so `workers * concurrency` is the effective
+     * upper bound during backlog recovery.
+     *
+     * Default: 10.
+     */
+    concurrency?: number;
+    /**
+     * Time-to-live for timer claims in milliseconds.
+     *
+     * Default: 5000 when a queue is configured, otherwise 30000.
+     */
     claimTtlMs?: number;
   };
   recovery?: {
