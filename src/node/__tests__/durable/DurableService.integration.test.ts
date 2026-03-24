@@ -98,7 +98,7 @@ describe("durable: DurableService integration", () => {
     const service = runtime.getResourceValue(durable);
 
     const parentResult = await service.startAndWait(parentTask, undefined, {
-      completionTimeout: 5_000,
+      waitTimeout: 5_000,
       waitPollIntervalMs: 5,
     });
 

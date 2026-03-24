@@ -342,7 +342,7 @@ export class ExecutionManager {
   ): Promise<DurableStartAndWaitResult<unknown>> {
     const executionId = await this.start(taskRef, input, options);
     const data = await this.waitManager.waitForResult(executionId, {
-      timeout: options?.completionTimeout,
+      timeout: options?.waitTimeout,
       waitPollIntervalMs: options?.waitPollIntervalMs,
     });
     return {

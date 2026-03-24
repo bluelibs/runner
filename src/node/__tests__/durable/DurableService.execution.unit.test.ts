@@ -784,13 +784,13 @@ describe("durable: DurableService — execution (unit)", () => {
 
     await expect(
       service.startAndWait(task, undefined, {
-        completionTimeout: 20,
+        waitTimeout: 20,
         waitPollIntervalMs: 5,
       }),
     ).rejects.toBeInstanceOf(DurableExecutionError);
   });
 
-  it("passes completionTimeout separately from execution timeout", async () => {
+  it("passes waitTimeout separately from execution timeout", async () => {
     const store = new MemoryStore();
     const task = okTask("t-wait-timeout-separation");
     const service = new DurableService({
@@ -816,7 +816,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await expect(
       service.startAndWait(task, undefined, {
         timeout: 111,
-        completionTimeout: 222,
+        waitTimeout: 222,
         waitPollIntervalMs: 7,
       }),
     ).resolves.toEqual({
@@ -826,7 +826,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
     expect(start).toHaveBeenCalledWith(task, undefined, {
       timeout: 111,
-      completionTimeout: 222,
+      waitTimeout: 222,
       waitPollIntervalMs: 7,
     });
     expect(waitForResult).toHaveBeenCalledWith("e1", {

@@ -1068,7 +1068,7 @@ During drain, Runner keeps the durable service alive long enough for already-run
 - `startAndWait(task, input)`:
   convenience wrapper for `start(...)` + `wait(executionId)`; returns
   `{ durable: { executionId }, data }`.
-  `timeout` still bounds workflow runtime; use `completionTimeout` to bound how long
+  `timeout` still bounds workflow runtime; use `waitTimeout` to bound how long
   the caller waits for completion. `startAndWait(..., { timeout })` no longer
   changes the caller wait duration by itself.
 
@@ -1127,7 +1127,7 @@ Whatever your workflow function returns becomes the **execution result**, persis
   const result = await durableRuntime.startAndWait(processOrder, {
     orderId: "order-123",
   }, {
-    completionTimeout: 30_000,
+    waitTimeout: 30_000,
   });
   // result = {
   //   durable: { executionId: "..." },
@@ -1912,7 +1912,7 @@ export interface IDurableService {
     input?: TInput,
     options?: ExecuteOptions & {
       // Caller-side wait bound. Use `timeout` for workflow runtime.
-      completionTimeout?: number;
+      waitTimeout?: number;
       waitPollIntervalMs?: number;
     },
   ): Promise<{ durable: { executionId: string }; data: TResult }>;
