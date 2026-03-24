@@ -500,6 +500,84 @@ describe("taskHandler", () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it("authorizes JSON envelope bodies using the executed input payload", async () => {
+    const serializer = new Serializer();
+    const authorizeTaskBody = jest.fn(async () => null);
+    const runTask = jest.fn(async () => ({ ok: true }));
+    jest
+      .spyOn(requestBodyModule, "readJsonBody")
+      .mockResolvedValue({ ok: true, value: { input: { value: 1 } } });
+
+    const handler = createTaskHandler({
+      store: createStore(TaskId.T) as any,
+      taskRunner: { run: runTask } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      authorizeTaskBody,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+
+    await handler(createReq(ContentType.Json), createRes(), TaskId.T);
+
+    expect(authorizeTaskBody).toHaveBeenCalledWith(
+      expect.anything(),
+      TaskId.T,
+      serializer.stringify({ input: { value: 1 } }),
+    );
+    expect(runTask).toHaveBeenCalledWith(
+      expect.anything(),
+      { value: 1 },
+      expect.anything(),
+    );
+  });
+
+  it("authorizes bare JSON bodies using the executed payload shape", async () => {
+    const serializer = new Serializer();
+    const authorizeTaskBody = jest.fn(async () => null);
+    const runTask = jest.fn(async () => ({ ok: true }));
+    jest
+      .spyOn(requestBodyModule, "readJsonBody")
+      .mockResolvedValue({ ok: true, value: { foo: 1 } });
+
+    const handler = createTaskHandler({
+      store: createStore(TaskId.T) as any,
+      taskRunner: { run: runTask } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      authorizeTaskBody,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+
+    await handler(createReq(ContentType.Json), createRes(), TaskId.T);
+
+    expect(authorizeTaskBody).toHaveBeenCalledWith(
+      expect.anything(),
+      TaskId.T,
+      serializer.stringify({ input: { foo: 1 } }),
+    );
+    expect(runTask).toHaveBeenCalledWith(
+      expect.anything(),
+      { foo: 1 },
+      expect.anything(),
+    );
+  });
+
   it("handles task failures even when the error registry is absent", async () => {
     const serializer = new Serializer();
     const handleRequestErrorSpy = jest.spyOn(

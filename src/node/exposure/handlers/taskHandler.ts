@@ -95,6 +95,23 @@ function resolveAppErrorId(
   return undefined;
 }
 
+function resolveJsonTaskPayload(body: unknown): unknown {
+  if (!body || typeof body !== "object") {
+    return body;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body as Record<string, unknown>,
+      "input",
+    )
+  ) {
+    return (body as Record<string, unknown>).input;
+  }
+
+  return body;
+}
+
 export const createTaskHandler = (deps: TaskHandlerDeps) => {
   const {
     store,
@@ -269,30 +286,17 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         respondJson(res, body.response, serializer);
         return;
       }
+      const payload = resolveJsonTaskPayload(body.value);
       const bodyAuthError = await authorizeTaskBody(
         req,
         policyTaskId,
-        serializer.stringify({ input: body.value?.input }),
+        serializer.stringify({ input: payload }),
       );
       if (bodyAuthError) {
         applyCorsActual(req, res, cors);
         respondJson(res, bodyAuthError, serializer);
         return;
       }
-      const payload = (() => {
-        if (!body.value || typeof body.value !== "object") {
-          return body.value as unknown;
-        }
-        if (
-          Object.prototype.hasOwnProperty.call(
-            body.value as Record<string, unknown>,
-            "input",
-          )
-        ) {
-          return (body.value as Record<string, unknown>).input;
-        }
-        return body.value as unknown;
-      })();
       const result = await runWithContext(() =>
         taskRunner.run(storeTask.task, payload, {
           source: exposureSource,

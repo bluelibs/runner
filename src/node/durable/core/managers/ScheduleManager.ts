@@ -198,7 +198,7 @@ export class ScheduleManager {
       updates,
       "timezone",
     );
-    this.assertValidScheduleUpdate(existing, updates, hasTimezoneUpdate);
+    this.assertValidScheduleUpdate(updates, hasTimezoneUpdate);
 
     const { type, pattern, timezone } = this.resolveUpdatedCadence(
       existing,
@@ -339,7 +339,6 @@ export class ScheduleManager {
   }
 
   private assertValidScheduleUpdate(
-    existing: Schedule,
     updates: UpdateScheduleOptions,
     hasTimezoneUpdate: boolean,
   ): void {
@@ -352,13 +351,6 @@ export class ScheduleManager {
     if (!hasTimezoneUpdate) return;
 
     if (updates.cron === undefined) {
-      durableScheduleConfigError.throw({
-        message:
-          "updateSchedule() cannot set timezone without cron. Timezone is only supported for cron schedules.",
-      });
-    }
-
-    if (existing.type === ScheduleType.Interval && updates.cron === undefined) {
       durableScheduleConfigError.throw({
         message:
           "updateSchedule() cannot set timezone without cron. Timezone is only supported for cron schedules.",
