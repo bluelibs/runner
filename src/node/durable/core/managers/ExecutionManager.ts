@@ -265,8 +265,10 @@ export class ExecutionManager {
   /**
    * Start a workflow with deduplication: if the same (workflowKey, idempotencyKey)
    * was already started, returns the existing executionId instead of creating
-   * a duplicate. Relies on an atomic store primitive so create + dedupe claim
-   * happen in one transaction.
+   * a duplicate. Existing executions are only re-admitted when they are still
+   * pending kickoff or already in retry backoff; actively running or intentionally
+   * parked workflows are left alone. Relies on an atomic store primitive so
+   * create + dedupe claim happen in one transaction.
    */
   private async startWithIdempotencyKey(
     task: ITask<any, Promise<any>, any, any, any, any>,
@@ -285,7 +287,10 @@ export class ExecutionManager {
       const existing = await this.config.store.getExecution(
         created.executionId,
       );
-      if (existing && !this.isExecutionTerminal(existing.status)) {
+      if (
+        existing &&
+        this.shouldKickoffExistingIdempotentExecution(existing.status)
+      ) {
         await this.kickoffWithFailsafe(created.executionId);
       }
       return created.executionId;
@@ -1540,6 +1545,14 @@ export class ExecutionManager {
       });
     }
     return resolved!;
+  }
+
+  private shouldKickoffExistingIdempotentExecution(
+    status: ExecutionStatus,
+  ): boolean {
+    return (
+      status === ExecutionStatus.Pending || status === ExecutionStatus.Retrying
+    );
   }
 
   private isExecutionTerminal(status: ExecutionStatus): boolean {

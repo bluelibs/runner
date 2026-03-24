@@ -80,7 +80,6 @@ describe("durable: idempotency & cancellation (integration)", () => {
 
     await runtime.dispose();
   });
-
   it("cancels an execution and prevents later completion", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();

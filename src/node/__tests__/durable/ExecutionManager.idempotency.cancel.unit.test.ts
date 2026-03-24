@@ -310,7 +310,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
   });
 
-  it("re-kicks existing executions returned by idempotent start", async () => {
+  it("re-kicks retrying executions returned by idempotent start", async () => {
     const store = createStore({
       saveExecution: async () => {
         throw genericError.new({ message: "should not save execution" });
@@ -319,7 +319,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
         id: "existing",
         workflowKey: TaskId.T,
         input: undefined,
-        status: ExecutionStatus.Pending,
+        status: ExecutionStatus.Retrying,
         attempt: 1,
         maxAttempts: 1,
         createdAt: new Date(),
@@ -350,6 +350,48 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     expect(processExecution).toHaveBeenCalledWith("existing");
     expect(processExecution).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ExecutionStatus.Running,
+    ExecutionStatus.Cancelling,
+    ExecutionStatus.Sleeping,
+  ])(
+    "does not re-kick %s executions returned by idempotent start",
+    async (status) => {
+      const store = createStore({
+        saveExecution: async () => {
+          throw genericError.new({ message: "should not save execution" });
+        },
+        getExecution: async () =>
+          createExecution({
+            id: "existing",
+            status,
+          }),
+        updateExecution: async () => undefined,
+        listIncompleteExecutions: async () => [],
+        createExecutionWithIdempotencyKey: async () => ({
+          created: false as const,
+          executionId: "existing",
+        }),
+      });
+
+      const manager = createManager({
+        store,
+        taskExecutor: createFixedTaskExecutor({ ok: true }),
+      });
+      const processExecution = jest
+        .spyOn(manager, "processExecution")
+        .mockResolvedValue(undefined);
+
+      await expect(
+        manager.start(task, undefined, {
+          idempotencyKey: IdempotencyKey.K,
+        }),
+      ).resolves.toBe("existing");
+
+      expect(processExecution).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not re-kick terminal executions returned by idempotent start", async () => {
     const store = createStore({

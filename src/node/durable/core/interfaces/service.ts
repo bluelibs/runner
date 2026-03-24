@@ -181,7 +181,12 @@ export interface ExecuteOptions {
   parentExecutionId?: string;
   /**
    * Optional workflow-level idempotency key.
-   * When supported by the store, multiple concurrent callers using the same key will receive the same executionId.
+   * When supported by the store, repeated callers using the same key receive the
+   * same executionId and keep the originally stored input.
+   *
+   * Existing executions are only re-admitted automatically when they are still
+   * pending kickoff or already retrying. Running or sleeping workflows are not
+   * implicitly resumed by repeating the same idempotent start.
    */
   idempotencyKey?: string;
 }
