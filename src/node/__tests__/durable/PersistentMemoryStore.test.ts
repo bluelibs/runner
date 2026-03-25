@@ -5,6 +5,22 @@ import { PersistentMemoryStore } from "../../durable/store/PersistentMemoryStore
 import type { Execution, Timer } from "../../durable/core/types";
 import { Serializer } from "../../../serializer";
 
+function createExecution(
+  id: string,
+  overrides: Partial<Execution> = {},
+): Execution {
+  return {
+    id,
+    workflowKey: "workflow.test",
+    input: undefined,
+    status: "pending",
+    attempt: 1,
+    maxAttempts: 1,
+    createdAt: new Date("2026-03-25T10:00:00.000Z"),
+    updatedAt: new Date("2026-03-25T10:00:00.000Z"),
+    ...overrides,
+  };
+}
 describe("durable: PersistentMemoryStore", () => {
   let tempDirectory: string;
   let filePath: string;
@@ -180,20 +196,121 @@ describe("durable: PersistentMemoryStore", () => {
     await store.flushWithoutInit();
     await store.init();
 
-    const execution: Execution = {
-      id: "write-failure",
+    const execution = createExecution("write-failure", {
       workflowKey: "workflow.write-failure",
-      input: undefined,
-      status: "pending",
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: new Date("2026-03-25T10:00:00.000Z"),
-      updatedAt: new Date("2026-03-25T10:00:00.000Z"),
-    };
+    });
 
     await expect(store.saveExecution(execution)).rejects.toThrow(/disk-full/);
     expect(readFileSpy).toHaveBeenCalled();
     expect(writeFileSpy).toHaveBeenCalled();
     expect(unlinkSpy).toHaveBeenCalled();
+  });
+
+  it("coalesces pending snapshots into a single follow-up write", async () => {
+    const store = new PersistentMemoryStore({ filePath });
+    await store.init();
+
+    const originalWriteFile = fs.writeFile.bind(fs);
+    let notifyFirstWriteStarted!: () => void;
+    let releaseFirstWrite!: () => void;
+    const firstWriteStarted = new Promise<void>((resolve) => {
+      notifyFirstWriteStarted = resolve;
+    });
+    const firstWriteReleased = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    const writeFileSpy = jest.spyOn(fs, "writeFile");
+    let writeCount = 0;
+
+    writeFileSpy.mockImplementation(async (...args) => {
+      writeCount += 1;
+      if (writeCount === 1) {
+        notifyFirstWriteStarted();
+        await firstWriteReleased;
+      }
+
+      return await originalWriteFile(...args);
+    });
+
+    const firstSave = store.saveExecution(
+      createExecution("coalesce-first", { input: { order: 1 } }),
+    );
+    await firstWriteStarted;
+
+    const secondExecution = createExecution("coalesce-second", {
+      input: { order: 2 },
+    });
+    const thirdExecution = createExecution("coalesce-third", {
+      input: { order: 3 },
+    });
+
+    const secondSave = store.saveExecution(secondExecution);
+    const thirdSave = store.saveExecution(thirdExecution);
+    releaseFirstWrite();
+
+    await Promise.all([firstSave, secondSave, thirdSave]);
+    await store.dispose();
+
+    expect(writeFileSpy).toHaveBeenCalledTimes(2);
+
+    const rehydratedStore = new PersistentMemoryStore({ filePath });
+    await rehydratedStore.init();
+
+    expect(await rehydratedStore.getExecution("coalesce-first")).toEqual(
+      createExecution("coalesce-first", { input: { order: 1 } }),
+    );
+    expect(await rehydratedStore.getExecution(secondExecution.id)).toEqual(
+      secondExecution,
+    );
+    expect(await rehydratedStore.getExecution(thirdExecution.id)).toEqual(
+      thirdExecution,
+    );
+
+    await rehydratedStore.dispose();
+  });
+
+  it("starts a fresh write loop after a transient snapshot write failure", async () => {
+    const store = new PersistentMemoryStore({ filePath });
+    await store.init();
+
+    const originalWriteFile = fs.writeFile.bind(fs);
+    let shouldFailNextWrite = true;
+    jest.spyOn(fs, "writeFile").mockImplementation(async (...args) => {
+      if (shouldFailNextWrite) {
+        shouldFailNextWrite = false;
+        throw new Error("temporary-disk-glitch");
+      }
+
+      return await originalWriteFile(...args);
+    });
+
+    await expect(
+      store.saveExecution(
+        createExecution("queue-recovery-first", {
+          workflowKey: "workflow.queue-recovery",
+          input: { attempt: 1 },
+        }),
+      ),
+    ).rejects.toThrow(/temporary-disk-glitch/);
+
+    const recoveredExecution = createExecution("queue-recovery-second", {
+      workflowKey: "workflow.queue-recovery",
+      input: { attempt: 2 },
+      updatedAt: new Date("2026-03-25T10:00:01.000Z"),
+    });
+
+    await expect(
+      store.saveExecution(recoveredExecution),
+    ).resolves.toBeUndefined();
+    await store.dispose();
+
+    const rehydratedStore = new PersistentMemoryStore({ filePath });
+    await rehydratedStore.init();
+
+    expect(await rehydratedStore.getExecution(recoveredExecution.id)).toEqual(
+      recoveredExecution,
+    );
+
+    await rehydratedStore.dispose();
   });
 });

@@ -67,7 +67,8 @@ function describeError(error: unknown): string {
 export class PersistentMemoryStore extends MemoryStore {
   private readonly filePath: string;
   private readonly serializer: Serializer;
-  private writeChain: Promise<void> = Promise.resolve();
+  private activeWrite: Promise<void> | null = null;
+  private pendingPayload: string | null = null;
   private initialized = false;
 
   constructor(config: PersistentMemoryStoreConfig) {
@@ -105,7 +106,7 @@ export class PersistentMemoryStore extends MemoryStore {
       return;
     }
 
-    await this.writeChain;
+    await this.activeWrite;
   }
 
   protected override async afterDurableMutation(
@@ -115,11 +116,22 @@ export class PersistentMemoryStore extends MemoryStore {
       return;
     }
 
-    const payload = this.serializer.serialize(snapshot);
-    this.writeChain = this.writeChain.then(
-      async () => await this.writeSnapshot(payload),
-    );
-    await this.writeChain;
+    this.pendingPayload = this.serializer.serialize(snapshot);
+    if (!this.activeWrite) {
+      this.activeWrite = this.writePendingSnapshots().finally(() => {
+        this.activeWrite = null;
+      });
+    }
+
+    await this.activeWrite;
+  }
+
+  private async writePendingSnapshots(): Promise<void> {
+    while (this.pendingPayload) {
+      const payload = this.pendingPayload;
+      this.pendingPayload = null;
+      await this.writeSnapshot(payload);
+    }
   }
 
   private parseSnapshot(payload: string): MemoryStoreSnapshot {
