@@ -86,8 +86,7 @@ import { r, run } from "@bluelibs/runner";
 import { resources, tags } from "@bluelibs/runner/node";
 
 const durable = resources.memoryWorkflow.fork("app-durable"); // forking is just making a copy
-const durableSerializer =
-  resources.serializer.fork("app-durable-serializer");
+const durableSerializer = resources.serializer.fork("app-durable-serializer");
 
 const durableRegistration = durable.with({
   persist: { filePath: "./.runner/durable-memory.json" }, // Optional: persist memory store state to disk for local restart drills
@@ -234,10 +233,10 @@ const reservation = await d
   .down(async (res) => inventory.release(res.reservationId));
 ```
 
-| Option    | Description                                                          |
-| --------- | -------------------------------------------------------------------- |
-| `retries` | Retry attempts on non-cancellation failures (default: 0)             |
-| `timeout` | Step-level timeout in ms                                             |
+| Option    | Description                                              |
+| --------- | -------------------------------------------------------- |
+| `retries` | Retry attempts on non-cancellation failures (default: 0) |
+| `timeout` | Step-level timeout in ms                                 |
 
 **Builder methods**:
 
@@ -709,13 +708,13 @@ Durable scheduling persists schedule definitions and timers in the store. The po
 
 **Key properties**:
 
-| Property        | Description                                                                           |
-| --------------- | ------------------------------------------------------------------------------------- |
-| Idempotent      | Safe to call on every boot. Updates existing schedule if `id` matches.                |
-| Crash-safe      | Schedule + timer in store. Process restart → polling continues.                       |
+| Property        | Description                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| Idempotent      | Safe to call on every boot. Updates existing schedule if `id` matches.                              |
+| Crash-safe      | Schedule + timer in store. Process restart → polling continues.                                     |
 | Backpressured   | Workers claim only up to local polling concurrency instead of draining the whole ready set at once. |
-| Deduped         | Uses `idempotencyKey: timer:sched:ID:fireAt` to prevent duplicate runs for same tick. |
-| Rebinding guard | Cannot change `workflowKey` on existing schedule (throws).                            |
+| Deduped         | Uses `idempotencyKey: timer:sched:ID:fireAt` to prevent duplicate runs for same tick.               |
+| Rebinding guard | Cannot change `workflowKey` on existing schedule (throws).                                          |
 
 ### Polling Backpressure
 
@@ -1026,6 +1025,54 @@ r.hook("audit-mirror")
     await writeToColdStorage(event.data.entry);
   });
 ```
+
+### Durable Runner Events
+
+Import the durable event definitions from the Node entrypoint:
+
+```ts
+import { durableEvents } from "@bluelibs/runner/node";
+```
+
+To receive these events, enable both durable audit and Runner event emission:
+
+```ts
+durable.with({
+  audit: { enabled: true, emitRunnerEvents: true },
+});
+```
+
+Then subscribe with a normal Runner hook:
+
+```ts
+import { r } from "@bluelibs/runner";
+import { durableEvents } from "@bluelibs/runner/node";
+
+const auditMirror = r
+  .hook("audit-mirror")
+  .on(durableEvents.audit.appended)
+  .run(async (event) => {
+    console.log(event.data.entry.kind);
+  })
+  .build();
+```
+
+Available events:
+
+| Event                                   | Meaning                                                                                                                            | Payload                                                     |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `durableEvents.audit.appended`          | Fires for every emitted durable audit entry. Use this when you want one stream for mirroring, indexing, or external observability. | `{ entry: DurableAuditEntry }`                              |
+| `durableEvents.execution.statusChanged` | A workflow execution changed status, such as moving to `running`, `sleeping`, `completed`, or `failed`.                            | `DurableAuditEntry` with `kind: "execution_status_changed"` |
+| `durableEvents.step.completed`          | A durable step completed, including internal framework-managed steps.                                                              | `DurableAuditEntry` with `kind: "step_completed"`           |
+| `durableEvents.sleep.scheduled`         | A durable `sleep()` created a persisted timer.                                                                                     | `DurableAuditEntry` with `kind: "sleep_scheduled"`          |
+| `durableEvents.sleep.completed`         | A persisted sleep timer fired and the workflow resumed past that sleep checkpoint.                                                 | `DurableAuditEntry` with `kind: "sleep_completed"`          |
+| `durableEvents.signal.waiting`          | A workflow started waiting in `waitForSignal(...)`.                                                                                | `DurableAuditEntry` with `kind: "signal_waiting"`           |
+| `durableEvents.signal.delivered`        | A signal payload was delivered to a waiting workflow.                                                                              | `DurableAuditEntry` with `kind: "signal_delivered"`         |
+| `durableEvents.signal.timedOut`         | A `waitForSignal(...)` timeout fired before a matching signal arrived.                                                             | `DurableAuditEntry` with `kind: "signal_timed_out"`         |
+| `durableEvents.emit.published`          | `durableContext.emit(...)` published to the durable event bus in a replay-safe way.                                                | `DurableAuditEntry` with `kind: "emit_published"`           |
+| `durableEvents.note.created`            | `durableContext.note(...)` recorded a user audit note.                                                                             | `DurableAuditEntry` with `kind: "note"`                     |
+
+> **Note:** `durableEvents.audit.appended` is the broad umbrella event. The others are typed convenience events derived from the same audit stream, which is a fancy way of saying "same pizza, different slices."
 
 ---
 
