@@ -433,6 +433,69 @@ describe("durable: DurableWorker", () => {
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
+  it("waits for every in-flight message before surfacing a drain failure", async () => {
+    const queue = new TestQueue();
+    const processingError = genericError.new({ message: "boom" });
+    const nackError = genericError.new({ message: "nack failed" });
+    let releaseBlockedExecution!: () => void;
+    const blockedExecution = new Promise<void>((resolve) => {
+      releaseBlockedExecution = resolve;
+    });
+    const { service } = createService({
+      processExecution: async (executionId) => {
+        if (executionId === "blocked") {
+          await blockedExecution;
+          return;
+        }
+
+        throw processingError;
+      },
+    });
+
+    jest.spyOn(queue, "nack").mockImplementation(async (messageId, requeue) => {
+      queue.nackCalls.push({ id: messageId, requeue });
+      if (messageId === "m-fail") {
+        throw nackError;
+      }
+    });
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    const blockedHandlerPromise = queue.handler?.({
+      ...message({ executionId: "blocked" }, "execute"),
+      id: "m-blocked",
+    });
+    const failingHandlerPromise = queue.handler?.({
+      ...message({ executionId: "fail" }, "execute"),
+      id: "m-fail",
+    });
+
+    expect(blockedHandlerPromise).toBeDefined();
+    expect(failingHandlerPromise).toBeDefined();
+    void failingHandlerPromise?.catch(() => undefined);
+
+    let stopSettled = false;
+    const stopPromise = worker.stop().finally(() => {
+      stopSettled = true;
+    });
+    void stopPromise.catch(() => undefined);
+
+    await expect(failingHandlerPromise).rejects.toThrow("nack failed");
+    await Promise.resolve();
+
+    expect(stopSettled).toBe(false);
+    expect(queue.cancelConsumerCalls).toBe(1);
+
+    releaseBlockedExecution();
+
+    await expect(stopPromise).rejects.toThrow("nack failed");
+    await blockedHandlerPromise;
+
+    expect(queue.ackCalls).toEqual(["m-blocked"]);
+    expect(queue.nackCalls).toEqual([{ id: "m-fail", requeue: true }]);
+  });
+
   it("preserves cooldown failures when draining in-flight messages also fails", async () => {
     const queue = new CancelFailQueue();
     const { service } = createService();

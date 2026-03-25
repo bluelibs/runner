@@ -125,16 +125,28 @@ export class DurableWorker {
 
   private trackInFlightMessage(handling: Promise<void>): void {
     this.inFlightMessages.add(handling);
-    void handling.finally(() => {
+    const untrackMessage = () => {
       this.inFlightMessages.delete(handling);
-    });
+    };
+    void handling.then(untrackMessage, untrackMessage);
   }
 
   private async waitForInFlightMessages(): Promise<void> {
+    let firstError: unknown = null;
+
     while (this.inFlightMessages.size > 0) {
       // Snapshot the current set so shutdown drains everything accepted so far,
       // including overlapping deliveries that finish their ack/nack work later.
-      await Promise.all([...this.inFlightMessages]);
+      const results = await Promise.allSettled([...this.inFlightMessages]);
+      for (const result of results) {
+        if (result.status === "rejected") {
+          firstError ??= result.reason;
+        }
+      }
+    }
+
+    if (firstError) {
+      throw firstError;
     }
   }
 
