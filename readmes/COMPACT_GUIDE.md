@@ -83,14 +83,7 @@ await runtime.dispose();
 - `r.task<Input>(id)` and `r.resource<Config>(id)` can seed typing before explicit schemas.
 - User ids are local ids. They cannot contain `.`.
   Use `send-email`, not `app.tasks.sendEmail`.
-- Reserved local ids fail fast:
-  - `tasks`
-  - `resources`
-  - `events`
-  - `hooks`
-  - `tags`
-  - `errors`
-  - `asyncContexts`
+- Reserved local ids fail fast: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `asyncContexts`.
 - Ids cannot start or end with `.`, and cannot contain `..`.
 - Builder order is enforced. After terminal methods such as `.run()` or `.init()`, mutation surfaces intentionally narrow.
 - List builders append by default. Pass `{ override: true }` to replace.
@@ -106,16 +99,9 @@ await runtime.dispose();
   - event -> payload schema
   - error -> data schema
 - Explicit aliases still exist when they read better:
-  - `.inputSchema(...)`
-  - `.configSchema(...)`
-  - `.payloadSchema(...)`
-  - `.dataSchema(...)`
+  - `.inputSchema(...)`, `.configSchema(...)`, `.payloadSchema(...)`, `.dataSchema(...)`
 - Tasks use `.resultSchema()` for output validation.
-- Schema slots accept:
-  - raw Match patterns
-  - compiled Match schemas
-  - decorator-backed classes
-  - any schema object exposing `parse(...)`
+- Schema slots accept: raw Match patterns, compiled Match schemas, decorator-backed classes, or any schema object exposing `parse(...)`.
 - Schema resolution prefers `parse(input)` when present. Otherwise Runner compiles raw Match patterns once and reuses the compiled schema.
 - Prefer `Match.compile(...)` when you want to reuse a schema value yourself or access `.pattern`, `.parse()`, `.test()`, and `.toJSONSchema()` directly.
 
@@ -147,44 +133,30 @@ userInput.toJSONSchema();
 
 `run(app, options?)` wires dependencies, initializes resources, emits lifecycle events, and returns the runtime API.
 
-Main runtime helpers:
+Main runtime helpers: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getHealth`, `dispose(options?)`.
 
-- `runTask`
-- `emitEvent`
-- `getResourceValue`
-- `getLazyResourceValue`
-- `getResourceConfig`
-- `getHealth`
-- `dispose(options?)`
-
-The returned runtime also exposes:
-
-- `runOptions`: the normalized effective `run(...)` options
-- `mode`: `"dev" | "prod" | "test"`
-- `state`: `"running" | "paused"`
+The returned runtime also exposes: `runOptions`, `mode` (`"dev" | "prod" | "test"`), and `state` (`"running" | "paused"`).
 
 Important run options:
 
 - `dryRun: true`: validate the graph without running `init()` / `ready()` or starting ingress
-- `lazy: true`: keep startup-unused resources asleep until `getLazyResourceValue(...)` wakes them, then run their `ready()` when they initialize
+- `lazy: true`: keep startup-unused resources asleep until `getLazyResourceValue(...)` wakes them, then runs their `ready()` on demand
 - `lifecycleMode: "parallel"`: preserve dependency ordering, but run same-wave lifecycle hooks in parallel
 - `shutdownHooks: true`: install graceful `SIGINT` / `SIGTERM` hooks; signals during bootstrap cancel startup and roll back initialized resources
-- `signal: AbortSignal`: let an outer owner cancel bootstrap before readiness or start graceful runtime disposal after readiness without feeding ambient execution cancellation
-- `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control bounded shutdown timing
+- `signal: AbortSignal`: let an outer owner cancel bootstrap before readiness or start graceful runtime disposal after readiness (does not feed ambient execution cancellation)
+- `dispose: { totalBudgetMs, drainingBudgetMs, abortWindowMs, cooldownWindowMs }`: control bounded shutdown timing
 - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`
 - `executionContext: true | { ... }`: enable correlation ids and inherited execution signals, with optional frame tracking and cycle detection
 - `identity: myIdentityContext`: override which registered async context Runner reads for identity-aware framework behavior
 - `mode: "dev" | "prod" | "test"`: override environment-based mode detection
 
-Observability options do not change lifecycle semantics:
-
-- `debug`
-- `logs`
+Observability options (`debug`, `logs`) do not change lifecycle semantics.
 
 Useful examples:
 
 - `run(app, { debug: "verbose" })` for structured debug output
 - `run(app, { logs: { printThreshold: null } })` to silence console printing
+- Node durable workflows expose task-scoped repositories via `durable.getRepository(workflowTask)` for typed execution inspection. Use `find(filters, { sort, limit, skip })` for lists, `findOne(filters)` / `findOneOrFail(filters)` for single reads, and `findTree(filters, { sort, limit, skip })` for recursive subflow trees.
 
 Lifecycle order:
 
@@ -195,41 +167,26 @@ Lifecycle order:
   - run `ready()` in dependency order
   - emit `events.ready`
 - Shutdown:
-  - enter `coolingDown`
-  - run `cooldown()` in reverse dependency order
+  - enter `coolingDown` -> run `cooldown()` in reverse dependency order
   - optionally keep broader admissions open for `dispose.cooldownWindowMs`
-  - enter `disposing`
-  - emit `events.disposing`
-  - drain in-flight work within the remaining shutdown budget
+  - enter `disposing` -> emit `events.disposing`
+  - drain in-flight work within remaining shutdown budget
+  - optionally abort Runner-owned active task signals and wait `dispose.abortWindowMs`
   - emit `events.drained`
   - run `dispose()` in reverse dependency order
 
+See Resources for detailed `cooldown()` semantics.
+
 Disposal modes:
 
-- `runtime.dispose()` is the normal graceful path above.
-- `runtime.dispose({ force: true })` is a manual fast path:
-  - skip any remaining graceful phases that have not started yet
-  - this can skip `cooldown()`
-  - this can skip `dispose.cooldownWindowMs`
-  - this can skip `events.disposing`
-  - this can skip drain wait
-  - this can skip `events.drained`
-  - jump directly to resource `dispose()` in reverse dependency order
-  - it does not preempt lifecycle work that is already in flight
+- `runtime.dispose()`: normal graceful path above.
+- `runtime.dispose({ force: true })`: skip any graceful phases that have not started yet (cooldown, cooldownWindow, disposing event, drain, abortWindow, drained event) and jump directly to resource `dispose()` in reverse dependency order. Does not preempt lifecycle work already in flight.
 
 Pause and recovery:
 
 - `runtime.pause()` is synchronous and idempotent. It stops new runtime-origin task and event admissions immediately.
 - `runtime.resume()` reopens admissions immediately.
 - `runtime.recoverWhen({ everyMs, check })` registers paused-state recovery conditions. Runner auto-resumes only after all active conditions for the current pause episode pass.
-
-Mode access:
-
-```ts
-const runtime = await run(app);
-
-runtime.mode; // "dev" | "prod" | "test"
-```
 
 Inside resources, prefer the narrow DI value:
 
@@ -255,7 +212,6 @@ const app = r
 - Require request-local business state with `r.asyncContext(...).require()` so missing context fails fast.
 - Use an explicit `disposeRunner()` helper only in tests, local scripts, or environments where you truly control teardown.
 - If an external host owns shutdown, prefer `run(app, { signal, shutdownHooks: false })` over forwarding that signal into business execution.
-- See `examples/aws-lambda-quickstart` for examples.
 
 ## Resources
 
@@ -264,41 +220,32 @@ Resources model shared services and state. They are Runner's primary composition
 - Start most apps with `const runtime = await run(appResource)`.
 - `init(config, deps, context)` creates the value.
 - `ready(value, config, deps, context)` starts ingress after startup lock.
-- `cooldown(value, config, deps, context)` stops accepting new external work quickly at shutdown start.
-  Runner fully awaits it before narrowing admissions, and its time still counts against the remaining `dispose.totalBudgetMs` budget.
-  During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, Runner keeps that broader admission policy open for the extra bounded window after `cooldown()` completes.
-  Once `disposing` begins, fresh admissions narrow to the cooling resource itself, any additional resource definitions returned from `cooldown()`, and in-flight continuations.
-  `runtime.dispose({ force: true })` skips `cooldown()` entirely.
-- `dispose(value, config, deps, context)` performs final teardown after drain.
-  With `runtime.dispose({ force: true })`, this becomes the first resource lifecycle phase reached during shutdown.
-- `health(value, config, deps, context)` is an optional probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
-  Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
+- `cooldown(value, config, deps, context)` stops accepting new external work at shutdown start.
+  Fully awaited before narrowing admissions; time counts against `dispose.totalBudgetMs`. During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, broader admissions stay open for an extra window after `cooldown()` completes. Once `disposing`, fresh admissions narrow to the cooling resource, definitions from `cooldown()`, and in-flight continuations. `runtime.dispose({ force: true })` skips `cooldown()`.
+- `dispose(value, config, deps, context)` performs final teardown after drain. With `runtime.dispose({ force: true })`, this becomes the first resource lifecycle phase reached during shutdown.
+- `health(value, config, deps, context)` is an optional probe returning `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()`. Their resolved value is `undefined`.
 - Resource definitions expose `.extract(entry)` to read config from a matching `resource.with(...)` entry.
 - `.context(() => initialContext)` can hold mutable resource-local state shared across lifecycle phases.
-- If you register something, you are a non-leaf resource.
-- Non-leaf resources cannot be forked.
+- If you register something, you are a non-leaf resource. Non-leaf resources cannot be forked.
 
 Use the lifecycle intentionally:
 
 - `ready()` for HTTP listeners, consumers, schedulers, and other ingress
-- `cooldown()` for stopping new work immediately
+- `cooldown()` for stopping new work
 - `dispose()` for final cleanup
 
 Do not use `cooldown()` as a generic teardown phase for support resources such as databases.
-Use it to stop new work; use `dispose()` for final cleanup.
 
 Ownership and ids:
 
 - User resources contribute their own ownership segment to canonical ids.
 - The app resource passed to `run(...)` is a normal resource, so direct registrations compile under `app.*`.
 - Child resources continue that chain, for example `app.billing.tasks.createInvoice`.
-- Only the internal synthetic framework root is invisible to user-facing ids.
 - `runtime-framework-root` is reserved and cannot be used as a user resource id.
-- Runner also creates two real framework namespace resources:
-  - `system`: owns locked internals such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, and lifecycle events
-  - `runner`: owns built-in utility globals such as `resources.mode`, `resources.health`, `resources.timers`, `resources.logger`, `resources.serializer`, `resources.queue`, core tags, middleware, and framework errors
-- `system` and `runner` carry proper `.meta.title` and `.meta.description` for docs and tooling, and they enforce the same metadata contract across the framework-owned resources, events, hooks, tags, and middleware they register.
+- Runner creates two framework namespace resources:
+  - `system`: locked internals (`resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, lifecycle events)
+  - `runner`: utility globals (`resources.mode`, `resources.health`, `resources.timers`, `resources.logger`, `resources.serializer`, `resources.queue`, core tags, middleware, framework errors)
 
 Lazy resources:
 
@@ -307,17 +254,12 @@ Lazy resources:
 
 Health reporting:
 
-- Only resources that define `health()` participate.
-- `resources.health` is the built-in health reporter resource.
+- Only resources that define `health()` participate. `resources.health` is the built-in reporter.
 - Prefer `resources.health.getHealth()` inside resources; keep `runtime.getHealth()` for operator callers.
 - Health APIs are valid only after `run(...)` resolves and before disposal starts.
-- Calling `getHealth()` during disposal or after `dispose()` starts is invalid.
-- Sleeping lazy resources are skipped.
-- Requested resources without `health()` are ignored.
-- Health results expose `{ totals, report, find(...) }`.
-- Report entries look like `{ id, initialized, status, message?, details? }`.
-- `report.find(resourceOrId)` returns that resource entry or throws if it is not present.
-- If `health()` throws, Runner records that resource as `unhealthy` and places the normalized error on `details`.
+- Sleeping lazy resources and resources without `health()` are skipped.
+- Health results expose `{ totals, report, find(...) }`. Report entries: `{ id, initialized, status, message?, details? }`.
+- If `health()` throws, Runner records that resource as `unhealthy` with the normalized error on `details`.
 - When health shows temporary pressure or outage, prefer `runtime.pause()` and `runtime.recoverWhen(...)` over shutdown.
 
 Dynamic registration callbacks receive the resolved mode:
@@ -358,8 +300,7 @@ For lifecycle-owned timers, prefer `resources.timers` inside a task or resource:
 `ExecutionJournal` is typed state scoped to one task execution designed for middleware comms.
 
 - Use it when middleware and tasks need to share execution-local state.
-- `journal.set(key, value)` fails if the key already exists.
-- Pass `{ override: true }` when replacement is intentional.
+- `journal.set(key, value)` fails if the key already exists. Pass `{ override: true }` when replacement is intentional.
 - Create custom keys with `journal.createKey<T>(id)`.
 
 ## Events and Hooks
@@ -441,8 +382,6 @@ Core rules:
   - task middleware attaches only to tasks or `subtree.tasks.middleware`
   - resource middleware attaches only to resources or `subtree.resources.middleware`
 - Owner-scoped auto-application is available through `resource.subtree({ tasks/resources: { middleware: [...] } })`.
-- `resource.subtree({ middleware: { identityScope: { tenant: true, user: true } } })` can enforce one shared identity scope across task middleware tagged with `tags.identityScoped`. (cache, rateLimit, etc)
-- `resource.subtree({ tasks: { identity: { user: true, roles: ["ADMIN"] } } })` adds an execution gate to every task in that subtree. Mentioning `identity` implies `tenant: true`, nested resources add more gates, and all gates must pass.
 - Contract middleware can constrain task input and output types.
 - Middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment.
 - When a runtime predicate must match one exact definition, prefer `isSameDefinition(candidate, definitionRef)` over comparing public ids directly, including configured wrappers such as `resource.with(...)` and middleware `.with(...)`.
@@ -469,7 +408,7 @@ Built-in resilience middleware:
 - resource: `retry`, `timeout`
 - non-resilience helper: `middleware.task.requireContext.with({ context })`
 
-Important config surfaces:
+Config surfaces:
 
 - `cache.with({ ttl, max, ttlAutopurge, keyBuilder, identityScope })`
 - `concurrency.with({ limit, key?, semaphore? })`
@@ -489,18 +428,11 @@ Operational notes:
 - Call `resources.cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
-- `cache`, `debounce`, and `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast when the input cannot be serialized. `rateLimit` defaults to `canonicalTaskId` so one task keeps one shared quota unless you explicitly provide a broader or narrower `keyBuilder(canonicalTaskId, input)`. The `canonicalTaskId` passed to key builders is the full runtime task id, so sibling resources with the same local task id do not share middleware state by accident.
-- Omit `identityScope` to use automatic tenant partitioning. Runner prefixes internal middleware keys with `<tenantId>:` whenever identity context exists.
-- Set `identityScope: { tenant: false }` when middleware state should stay global across all identities.
-- When `identityScope` object is present with `tenant: true`, `required` defaults to `true`. Use `{ tenant: true }` for `<tenantId>:` partitioning, add `user: true` for `<tenantId>:<userId>:` partitioning, and set `required: false` only when identity should refine the key when present instead of being mandatory.
-- Missing required identity fields fail fast with `identityContextRequiredError`.
-- `middleware.identityChecker` is a task gate, not key partitioning. Mentioning it implies tenant identity by default, `user: true` adds `userId`, and `roles` require at least one matching role.
-- `subtree.tasks.identity` uses the same gate contract as `identityChecker`. Gates are additive across nested resources: roles are OR within one gate and AND across layers.
-- Explicit identity-sensitive config fails fast at boot on platforms without `AsyncLocalStorage`. That includes `subtree.tasks.identity`, `middleware.task.identityChecker`, middleware `identityScope` values that enable tenant partitioning, and `subtree.middleware.identityScope` values that enable tenant partitioning.
-- Cache refs stay raw. For tenant-aware or user-aware invalidation, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same ref format.
-- Middleware tags can enforce middleware config contracts. That contract flows into middleware dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
-- `tags.identityScoped` means: this task middleware supports optional `identityScope`, so subtree `middleware.identityScope` policy may fill a missing scope and require the same effective scope when one is already declared.
-- Resource `retry` and `timeout` use the same semantics on `middleware.resource.*`.
+- `cache`, `debounce`, `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast on non-serializable input. `rateLimit` defaults to `canonicalTaskId` (shared quota per task). The `canonicalTaskId` is the full runtime id, so sibling resources with the same local id don't share state by accident.
+- See [Security](#security) for `identityScope` and identity-aware partitioning.
+- Cache refs stay raw. For tenant-aware invalidation, build refs through an app helper (e.g., `CacheRefs.getTenantId()`) so `keyBuilder` and `invalidateRefs(...)` share the same format.
+- Middleware tags can enforce config contracts flowing into dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
+- `tags.identityScoped`: middleware supports optional `identityScope`; subtree policy may fill or require it. See [Security](#security).
 
 Built-in journal keys exist for middleware introspection, for example cache hits, retry attempts, circuit-breaker state, and timeout abort controllers.
 
@@ -522,67 +454,38 @@ Core primitives:
 
 Important rules:
 
-- Hydration happens on `parse(...)`, not on `check(...)`.
-- Class-schema hydration uses prototype assignment and does not call constructors during parse.
-- Plain objects are strict by default.
-- Prefer a plain object for the normal strict case, `Match.ObjectStrict(...)` when you want that strictness to be explicit, and `Match.ObjectIncluding(...)` when extra keys are allowed.
+- Hydration happens on `parse(...)`, not on `check(...)`. Class-schema hydration uses prototype assignment (no constructor call).
+- Plain objects are strict by default. Use `Match.ObjectStrict(...)` for explicit strictness, `Match.ObjectIncluding(...)` when extra keys are allowed.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
-- Compiled schemas do not expose `.extend()`. Compose `compiled.pattern` into a new pattern and compile again.
+- Compiled schemas do not expose `.extend()`. Compose `compiled.pattern` into a new pattern and recompile.
 
-Custom schema and pattern notes:
+Custom schema notes:
 
 - The supported way to create reusable custom patterns is to compose Match-native helpers into named constants.
-- `CheckSchemaLike<T>` is the minimal top-level custom schema contract: implement `parse(input): T`, and optionally `toJSONSchema()`.
-- `CheckSchemaLike` works for schema slots and `check(...)`. It is not a public nested Match-pattern extension point.
-- In a custom `CheckSchemaLike`, a normal thrown error or `errors.genericError` is the normal fit for validation failures.
-  Use `errors.matchError.new({ path: "$", failures: [...] })` only when you intentionally want Match-style failure metadata at the top level.
+- `CheckSchemaLike<T>`: implement `parse(input): T`, optionally `toJSONSchema()`. Works for schema slots and `check(...)` but is not a nested Match-pattern extension point.
+- In custom schemas, a normal thrown error is the right fit. Use `errors.matchError.new({ path: "$", failures: [...] })` only when you need Match-style failure metadata.
 
-Common helpers include:
-
-- `NonEmptyString`
-- `Email`
-- `Integer`
-- `UUID`
-- `URL`
-- `Range({ min?, max?, inclusive?, integer? })`
-- `Optional(...)`
-- `OneOf(...)`
-- `ObjectIncluding(...)`
-- `MapOf(...)`
-- `ArrayOf(...)`
-- `Lazy(...)`
-- `Where(...)`
-- `WithMessage(...)`
+Common helpers: `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Range({ min?, max?, inclusive?, integer? })`, `Optional(...)`, `OneOf(...)`, `ObjectIncluding(...)`, `MapOf(...)`, `ArrayOf(...)`, `Lazy(...)`, `Where(...)`, `WithMessage(...)`.
 
 Decorator-backed schemas:
 
-- `@Match.Schema({ base: BaseClass })` allows subclassing without TypeScript `extends`.
-- `@Match.Schema({ exact, schemaId, errorPolicy })` controls strictness, schema identity, and default aggregation policy.
-- Default decorator exports target standard ES decorators.
-- For legacy `experimentalDecorators`, import `Match` and `Serializer` from `@bluelibs/runner/decorators/legacy`.
-- Runner decorators do not require `emitDecoratorMetadata` or `reflect-metadata`.
-- The default package initializes `Symbol.metadata` when missing, without replacing a native implementation.
+- `@Match.Schema({ base: BaseClass })`: subclassing without TypeScript `extends`.
+- `@Match.Schema({ exact, schemaId, errorPolicy })`: controls strictness, schema identity, and aggregation policy.
+- For legacy `experimentalDecorators`, import from `@bluelibs/runner/decorators/legacy`. No `emitDecoratorMetadata` or `reflect-metadata` needed.
 
 Recursion and custom predicates:
 
-- Use `Match.fromSchema(() => User)` for self-referencing or forward class-schema links.
-- Use `Match.Lazy(() => pattern)` for recursive plain Match patterns.
-- Use `Match.Where(...)` for runtime-only predicates or type guards.
-- Prefer built-ins, `RegExp`, or object patterns when JSON Schema export needs to stay precise.
-- `Match.Range({ min?, max?, inclusive?, integer? })` defaults to inclusive bounds; `inclusive: false` makes both bounds exclusive, and `integer: true` restricts the range to integers.
-- Example: `Match.Range({ min: 5, max: 10, integer: true })`.
-- `Match.Where(...)` receives the immediate parent when matching compound values.
-- `Match.Where(..., messageOrFormatter)` is shorthand for `Match.WithMessage(Match.Where(...), messageOrFormatter)`.
+- `Match.fromSchema(() => User)` for self-referencing or forward class-schema links.
+- `Match.Lazy(() => pattern)` for recursive plain Match patterns.
+- `Match.Where(...)` for runtime-only predicates or type guards (receives immediate parent in compound values). `Match.Where(..., messageOrFormatter)` is shorthand for `Match.WithMessage(...)`.
+- Prefer built-ins, `RegExp`, or object patterns for precise JSON Schema export.
 
 Validation errors:
 
-- Validation failures throw `errors.matchError`.
-- The thrown error exposes `.path` and flat `.failures`.
-- `Match.WithMessage(...)` customizes the error headline.
-- `messageOrFormatter` can be a string, `{ message, code?, params? }`, or a callback.
-- In callback form, `ctx` is `{ value, error, path, pattern, parent? }`.
-- When `{ code, params }` is provided, Runner copies that metadata onto owned `failures[]` entries while keeping each leaf failure's raw `message` intact.
-- Use `check(value, pattern, { errorPolicy: "all" })`, `Match.WithErrorPolicy(pattern, "all")`, or `@Match.Schema({ errorPolicy: "all" })` when you want aggregate failures.
+- Validation failures throw `errors.matchError` with `.path` and flat `.failures`.
+- `Match.WithMessage(...)` customizes the error headline: accepts a string, `{ message, code?, params? }`, or callback `({ value, error, path, pattern, parent? })`.
+- `{ code, params }` copies metadata onto owned `failures[]` entries while preserving each leaf's raw `message`.
+- For aggregate failures: `check(value, pattern, { errorPolicy: "all" })`, `Match.WithErrorPolicy(pattern, "all")`, or `@Match.Schema({ errorPolicy: "all" })`.
 
 ### Errors
 
@@ -614,21 +517,18 @@ Important rules:
 
 ### Serialization
 
-- The built-in serializer round-trips common non-JSON shapes such as `Date` and `RegExp`.
-- Register custom types through `resources.serializer`.
-- For boundary-specific serializer behavior, either register a custom resource that returns `new Serializer({...})` or fork `resources.serializer` and register a configured fork.
-- `allowedTypes: [...]` restricts deserialization to specific built-in or custom type ids.
-- `new Serializer({ types: [...] })` pre-registers explicit `addType({ ... })` definitions.
-- `serializer.addSchema(DtoClass)` and `new Serializer({ schemas: [DtoClass] })` register `@Match.Schema()` DTOs as serializer-aware types, so parse/deserialize can restore them without an explicit `{ schema }`.
-- Use `serializer.parse(payload, { schema })` when you want deserialization and validation in one step.
-- `@Serializer.Field({ from, deserialize, serialize })` composes with `@Match.Field(...)` on `@Match.Schema()` classes for explicit DTOs.
-- For legacy decorators, import `Serializer` from `@bluelibs/runner/decorators/legacy`.
+- The built-in serializer round-trips common non-JSON shapes (`Date`, `RegExp`). Register custom types through `resources.serializer`.
+- For boundary-specific behavior, register a custom resource returning `new Serializer({...})` or fork `resources.serializer`.
+- `allowedTypes: [...]` restricts deserialization. `new Serializer({ types: [...] })` pre-registers explicit `addType({ ... })` definitions.
+- `serializer.addSchema(DtoClass)` / `new Serializer({ schemas: [...] })` registers `@Match.Schema()` DTOs so parse/deserialize restores them without an explicit `{ schema }`.
+- `serializer.parse(payload, { schema })` for deserialization + validation in one step.
+- `@Serializer.Field({ from, deserialize, serialize })` composes with `@Match.Field(...)` on `@Match.Schema()` classes.
+- For legacy decorators, import from `@bluelibs/runner/decorators/legacy`.
 
 ## Testing
 
 - In unit tests, build the smallest root resource that expresses the contract you care about.
-- Run it with `await run(app)`.
-- Assert through `runTask`, `emitEvent`, `getResourceValue`, or `getResourceConfig`.
+- Run it with `await run(app)`. Assert through `runTask`, `emitEvent`, `getResourceValue`, or `getResourceConfig`.
 - `r.override(base, fn)` is the standard way to swap behavior in tests while preserving ids.
 - Duplicate override targets are allowed only in resolved `test` mode.
   The outermost declaring resource wins, and same-resource duplicates use the last declaration.
@@ -639,42 +539,17 @@ Important rules:
 
 Runner treats composition boundaries as first-class.
 
-Think of `.isolate(...)` as two controls on one boundary:
-
-- `exports`: what the subtree exposes outward
-- `deny` / `only` / `whitelist`: what consumers in the subtree may wire to across boundaries
+Think of `.isolate(...)` as: `exports` (what the subtree exposes outward) and `deny`/`only`/`whitelist` (what consumers may wire to across boundaries).
 
 Important rules:
 
-- `exports: []` or `exports: "none"` makes the subtree private.
-- Export entries must be explicit Runner definition or resource references.
+- `exports: []` or `exports: "none"` makes the subtree private. Export entries must be explicit Runner definition or resource references.
 - Runtime operator APIs such as `runTask`, `emitEvent`, and `getResourceValue` are gated only by the root resource's `isolate.exports` surface.
 - `.isolate((config) => ({ ... }))` resolves once per configured resource instance.
 
-Selector model:
+Selectors: direct ref (one definition/resource/tag), `subtreeOf(resource, { types? })`, `scope(target, channels?)` where channels = `dependencies`/`listening`/`tagging`/`middleware`. String selectors only inside `scope(...)`: `scope("*")`, `scope("system.*")`. `subtreeOf` is ownership-based, not string-prefix-based.
 
-- direct ref: one concrete definition, resource, or tag
-- `subtreeOf(resource, { types? })`: everything owned by that resource subtree
-- `scope(target, channels?)`: limit matching to selected channels such as `dependencies`, `listening`, `tagging`, or `middleware`
-- string selectors are valid only inside `scope(...)`
-  - `scope("*")`
-  - `scope("system.*")`
-  - `scope("app.resources.*")`
-- `subtreeOf(resource)` is ownership-based, not string-prefix-based
-
-Rule model:
-
-- `deny`: block matching cross-boundary targets
-- `only`: allow only matching cross-boundary targets
-- `whitelist`: carve out exceptions for this boundary only
-
-More isolation rules:
-
-- `whitelist` does not override ancestor restrictions or make private exports public.
-- `whitelist.for` and `whitelist.targets` accept the same selector forms as `deny` and `only`.
-- Unknown selectors or targets that resolve to nothing fail fast at bootstrap.
-- Violations fail during bootstrap wiring, not first runtime use.
-- Legacy resource-level `exports` and fluent `.exports(...)` were removed in 6.x. Use `isolate: { exports: [...] }` or `.isolate({ exports: [...] })`.
+Rules: `deny` (block), `only` (allow only), `whitelist` (exceptions only; doesn't override ancestors or make private exports public). Unknown selectors and violations fail fast at bootstrap.
 
 Example:
 
@@ -691,48 +566,30 @@ Example:
 })
 ```
 
-Other common patterns:
-
-- Channel-specific boundaries, for example `scope([internalEvent], { listening: false })`
-- Task-only allowlists, for example `only: [subtreeOf(agentResource, { types: ["task"] })]`
-
 ### Subtrees
 
-- `.subtree(policy)`, `.subtree([policyA, policyB])`, and `.subtree((config) => policy | policy[])` can auto-attach middleware to nested tasks or resources.
-- If subtree middleware and local middleware resolve to the same middleware id on one target, Runner fails fast.
-- Subtrees can validate contained definitions.
-- `subtree.validate` is generic for compiled subtree definitions and can be one function or an array.
-- Typed validation is also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`.
-- Generic and typed validators both run when they match the same compiled definition.
-- Use the function form when subtree policy depends on resource config.
-- In subtree validators, prefer `isSameDefinition(...)` over direct id comparison when checking for one exact task/resource/middleware definition, including entries inside `task.middleware`.
-- Validators receive the compiled definition and should return `SubtreeViolation[]` for expected policy failures rather than throwing.
+- `.subtree(policy)` / `.subtree([policyA, policyB])` / `.subtree((config) => policy | policy[])` auto-attaches middleware to nested tasks or resources.
+- Same middleware id from subtree and local on one target fails fast.
+- `subtree.validate` is generic (one function or array). Typed validation also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, `resourceMiddleware`.
+- In validators, prefer `isSameDefinition(...)` over id comparison. Return `SubtreeViolation[]` for expected policy failures.
 
 ### Forks and Overrides
 
-- `resource.fork(newId)` clones a leaf resource definition under a new id.
-- Forks clone identity, not structure.
-- Non-leaf resources cannot be forked.
-- `.fork()` returns a built resource. Do not call `.build()` again.
-- Compose a distinct parent resource when you need a structural variant of a non-leaf resource.
+- `resource.fork(newId)` clones a leaf resource's identity (not structure) under a new id. Returns a built resource; do not call `.build()` again.
+- Non-leaf resources cannot be forked. Compose a distinct parent for structural variants.
 
 Overrides:
 
 - Use `r.override(base, fn)` when you need to replace behavior while preserving the original id.
-- For resources only, `r.override(resource, { context, init, ready, cooldown, dispose })` is also supported.
-- Resource object-form overrides inherit unspecified lifecycle hooks from the base resource and may add stages the base resource did not define.
-- Overriding resource `context` changes the private lifecycle-state contract shared across resource hooks.
+- For resources only, `r.override(resource, { context, init, ready, cooldown, dispose })` also supported. Object-form inherits unspecified hooks from base and may add new stages.
 - `.overrides([...])` applies override definitions during bootstrap.
-- Override direction is downstream-only: declare overrides from the resource that owns the target subtree or from one of its ancestors.
-- Child resources cannot replace parent-owned or sibling-owned definitions.
-- Outside `test` mode, duplicate override targets fail fast.
-  In `test`, the outermost declaring resource wins and same-resource duplicates use the last declaration.
+- Override direction is downstream-only: declare overrides from the resource that owns the target subtree or from one of its ancestors. Child resources cannot replace parent-owned or sibling-owned definitions.
 - Override targets must already exist in the graph.
+- Outside `test` mode, duplicate override targets fail fast. In `test`, the outermost declaring resource wins and same-resource duplicates use the last declaration.
 
 ## Tags and Scheduling
 
-Tags are Runner's typed discovery system.
-They attach metadata to definitions, can affect framework behavior, and can be injected as typed accessors over matching definitions.
+Tags are Runner's typed discovery system. They attach metadata to definitions, can affect framework behavior, and can be injected as typed accessors over matching definitions.
 
 ```ts
 import { Match, r } from "@bluelibs/runner";
@@ -755,23 +612,16 @@ const getHealth = r
 
 Key rules:
 
-- Depending on a tag injects a typed accessor over matching definitions.
+- Depending on a tag injects a typed accessor grouped by kind (`tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, `errors`). Tasks expose `definition`, `config`, `run(...)`; resources expose `definition`, `config`, `value`.
 - `.for([...])` restricts which definition kinds can receive the tag.
 - Tag config schemas accept the same schema types as other config surfaces.
 - Contract tags can shape task or resource typing without changing runtime behavior.
-- Built-in tag`tags.excludeFromGlobalHooks` affect framework behavior.
-- `tags.debug` supports preset levels or fine-grained per-component config.
-- `tags.failWhenUnhealthy.with([db, cache])` blocks task execution only when one of those resources reports `unhealthy`.
-  `degraded` still runs, bootstrap-time task calls are not gated, and sleeping lazy resources stay skipped.
+- Built-in tags affect framework behavior: `tags.excludeFromGlobalHooks`, `tags.debug`, `tags.failWhenUnhealthy.with([db, cache])` (blocks task execution on `unhealthy` only; `degraded` still runs, bootstrap-time calls are not gated, sleeping lazy resources are skipped).
 - Tags are often the cleanest way to implement route discovery, cron scheduling, cache warmers, or internal policies without manual registries.
 
-Depending on a tag injects a typed accessor over all matching definitions. The accessor is grouped by kind (`tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, `errors`); task matches expose `definition`, `config`, and runtime `run(...)`, while resource matches expose `definition`, `config`, and runtime `value`.
-
-Use a normal tag dependency when the accessor can resolve as part of the normal dependency graph. Use `tag.startup()` when the accessor must exist earlier, while Runner is building the startup dependency tree during bootstrap.
+Use a normal tag dependency for normal dependency graph resolution. Use `tag.startup()` when the accessor must exist earlier, during bootstrap tree building.
 
 ```ts
-import { r } from "@bluelibs/runner";
-
 const warmup = r.tag("warmup").for(["tasks"]).build();
 
 const boot = r
@@ -788,11 +638,8 @@ const boot = r
 
 Cron:
 
-- `tags.cron` schedules tasks with cron expressions.
-- Attach it with `tags.cron.with({ expression: "* * * * *" })`.
-- Cron runs only when `resources.cron` is registered.
-- One cron tag per task is supported.
-- Without `resources.cron`, cron tags remain metadata only.
+- `tags.cron` schedules tasks with cron expressions via `tags.cron.with({ expression: "* * * * *" })`.
+- Cron runs only when `resources.cron` is registered. One cron tag per task. Without `resources.cron`, cron tags remain metadata only.
 
 ## Context
 
@@ -805,70 +652,39 @@ Do not treat them as the same feature just because they use the same async-local
 
 ### Execution Context
 
-Use execution context when you want correlation ids, inherited execution signals, frame tracing, or runtime cycle detection.
+Use execution context for correlation ids, inherited execution signals, frame tracing, or cycle detection.
 
 ```ts
 const runtime = await run(app, { executionContext: true });
-
-const fastRuntime = await run(app, {
-  executionContext: { frames: "off", cycleDetection: false },
-});
+// Lightweight: run(app, { executionContext: { frames: "off", cycleDetection: false } })
 
 const myTask = r
   .task("myTask")
   .run(async () => {
     const execution = asyncContexts.execution.use();
     const { correlationId, signal } = execution;
-
-    if (execution.framesMode === "full") {
-      execution.currentFrame.kind;
-      execution.frames;
-    }
+    if (execution.framesMode === "full") { execution.frames; }
   })
   .build();
 ```
 
-Important rules:
+Key rules:
 
-- `executionContext: true` enables full tracing.
-- `executionContext: { frames: "off", cycleDetection: false }` keeps cheap signal inheritance and correlation ids without full frame bookkeeping.
-- Top-level runtime task runs and event emissions automatically create execution context when enabled.
-- You do not need `provide()` just to enable propagation.
-- `asyncContexts.execution.provide(...)` seeds external metadata such as correlation ids or signals at an ingress boundary.
-- `asyncContexts.execution.record(...)` captures the execution tree for assertions, tracing, or debugging.
-- `record()` temporarily promotes lightweight execution context to full frame tracking for the recorded callback.
-- `provide()` and `record()` do not create cancellation on their own. They only propagate a signal you already provide.
-- `asyncContexts.execution` is for Runner metadata, not arbitrary business state.
+- `executionContext: true` enables full tracing. `{ frames: "off", cycleDetection: false }` keeps cheap signal inheritance + correlation ids only.
+- Top-level `runTask` / `emitEvent` auto-create execution context when enabled; no `provide()` needed.
+- `asyncContexts.execution.provide(...)` seeds external metadata at ingress. `record(...)` captures the tree for assertions/tracing (temporarily promotes to full frame tracking). Neither creates cancellation; they only propagate a signal you already provide.
+- This is for Runner metadata, not business state.
 
-Execution signal model:
+Signal model:
 
-- Pass a signal explicitly at the boundary with `runTask(..., { signal })` or `emit(..., { signal })`.
-- Once execution context is enabled, nested calls can inherit that ambient execution signal automatically.
-- The first signal attached to the execution tree becomes the ambient execution signal.
-- Explicit nested signals stay local to that child call and do not rewrite the ambient signal for deeper propagation.
+- Pass a signal at the boundary via `runTask(..., { signal })` or `emit(..., { signal })`. Nested calls inherit the ambient signal automatically.
+- The first signal becomes the ambient signal. Explicit nested signals stay local to that child.
 
-Cancellation surfaces:
+Cancellation surfaces: tasks read `context.signal`, hooks read `event.signal`, injected emitters accept `emit(payload, { signal })`, timeout middleware uses the same path. No source = `undefined` (no shared fake signal).
 
-- Tasks read `context.signal`.
-- Hooks read `event.signal`.
-- Injected event emitters accept `emit(payload, { signal })`.
-- Low-level event-manager APIs accept merged call options such as `{ source, signal, report }`.
-- RPC lane calls forward the active task or event signal automatically.
-- Timeout middleware uses the same cooperative cancellation path.
-- `middleware.task.timeout.journalKeys.abortController` remains available for middleware coordination and compatibility.
-- If no cancellation source exists, `context.signal` and `event.signal` stay `undefined` rather than using a shared fake signal.
+Cycle protection layers: declared `.dependencies(...)` cycles fail at bootstrap; hook-driven event bounces fail at bootstrap; dynamic runtime loops need full frame tracking + cycle detection enabled.
 
-Cycle protection comes in layers:
-
-- declared `.dependencies(...)` cycles fail at bootstrap, including middleware-aware graph validation
-- declared hook-driven event bounce graphs fail at bootstrap event-emission validation
-- dynamic runtime loops such as `task -> event -> hook -> task` need full execution-context frame tracking with cycle detection enabled
-
-Platform note:
-
-- Execution context requires `AsyncLocalStorage`.
-- On runtimes without it, `run(..., { executionContext: ... })` fails fast with a typed context error.
-- Direct calls to `asyncContexts.execution.provide()` or `.record()` throw a typed context error if async-local storage is unavailable.
+Requires `AsyncLocalStorage`. Fails fast with a typed context error on unsupported runtimes.
 
 ### Async Context
 
@@ -893,49 +709,23 @@ const myTask = r
 
 Key rules:
 
-- Async context defines serializable business state scoped to one async execution tree.
-- That scope includes nested `run()` calls created inside the same async execution tree, which is rare but useful for identity-aware composition.
-- Builder surface: `.schema()` / `.configSchema()`, `.serialize()`, `.parse()`, `.meta()`, `.build()`.
-- Runtime surface after `.build()`: `provide()`, `use()`, `tryUse()`, `has()`, `require()`, `optional()`.
-- `.schema()` validates values when `provide(...)` is called.
-- Declare `.schema()` before custom `.serialize()` or `.parse()`.
-- Contexts can be injected as dependencies.
-- Register the context in the app before injecting it as a required dependency.
-- Use `ctx.optional()` when registration is conditional.
-- `middleware.task.requireContext.with({ context })` enforces that required context exists.
-- `ctx.require()` is the shorthand form for that middleware.
-- Custom `serialize` / `parse` support propagation over RPC lanes.
-- `createHttpClient({ contexts: [...] })` serializes only the listed contexts.
-- Remote lanes hydrate only registered contexts that are allowlisted via `eventLane.asyncContexts([...])` or `rpcLane.asyncContexts([...])`.
-- Async context also requires `AsyncLocalStorage` for propagation.
+- Defines serializable business state scoped to one async execution tree, including nested `run()` calls.
+- Builder: `.schema()` / `.configSchema()`, `.serialize()`, `.parse()`, `.meta()`, `.build()`. Runtime: `provide()`, `use()`, `tryUse()`, `has()`, `require()`, `optional()`.
+- `.schema()` validates values on `provide(...)`. Declare `.schema()` before custom `.serialize()` or `.parse()`.
+- Injectable as dependencies; register before injecting as required. Use `ctx.optional()` for conditional registration.
+- `middleware.task.requireContext.with({ context })` / `ctx.require()` enforces required context.
+- Custom `serialize`/`parse` supports RPC lane propagation. Remote lanes hydrate only allowlisted contexts via `eventLane.asyncContexts([...])` or `rpcLane.asyncContexts([...])`.
+
+Requires `AsyncLocalStorage` for propagation.
 
 ### Security
 
-Runner gives you the right hooks to propagate identity, partition framework-managed state, and enforce task-level access rules consistently.
-Authentication itself is still decided by your app, not by Runner.
-Runner's official same-runtime security pattern uses a shared identity async context.
-If you do nothing, Runner uses the built-in `asyncContexts.identity` as the active runtime identity context.
-When your app needs extra runtime-validated fields such as `userId`, define your own async context, register it, and pass it to `run(..., { identity })` so Runner switches its internal identity-aware middleware to that context for this runtime.
-
-- `identity.use()` returns `{ tenantId: string }` and throws when missing.
-- `identity.tryUse()` returns the identity value or `undefined`.
-- `identity.has()` is the safe boolean check.
-- `identity.require()` enforces identity presence, but it does not validate optional fields such as `userId` or `roles` on the built-in identity context.
-- Prefer `middleware.task.identityChecker` or `subtree({ tasks: { identity: ... } })` when access rules depend on the active user or roles. If you want those fields enforced at identity binding time instead, require them in a custom identity context and pass it to `run(..., { identity })`.
-- Provide identity at ingress with `identity.provide({ tenantId }, fn)`.
-- In Runner, `identity` is the async-context payload used to partition framework-managed state and enforce identity gates. It is not an identity-provider abstraction.
-- `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
-- `roles`, when present, must be a string array with no empty entries.
+Runner provides hooks to propagate identity, partition state, and enforce access rules. Authentication is your app's responsibility. The default pattern uses a shared identity async context (`asyncContexts.identity`). For extra fields like `userId`, define your own context, register it, and pass to `run(..., { identity })`. If not already in the graph, `run(...)` auto-registers it.
 
 ```ts
-import { r, run } from "@bluelibs/runner";
-
 const identity = r
   .asyncContext<{ tenantId: string; userId: string }>("appTenant")
-  .configSchema({
-    tenantId: String,
-    userId: String,
-  })
+  .configSchema({ tenantId: String, userId: String })
   .build();
 
 const app = r.resource("app").register([identity, listProjects]).build();
@@ -946,45 +736,37 @@ await identity.provide({ tenantId: "acme", userId: "u1" }, () =>
 );
 ```
 
-- If your custom identity context is already registered in the app graph, your app can also depend on it directly. If it is not, `run(..., { identity })` auto-registers it under the runner namespace for runtime dependency usage.
-- Because identity lives in async context, nested `run()` calls inside the same async execution tree inherit it too.
-- Remote lanes and HTTP transport still require the context to be explicitly forwarded and allowlisted.
-- If your SaaS only has users and no real tenant model, provide a constant tenant such as `tenantId: "app"` at ingress when you want to use identity-aware middleware scopes.
+Identity API: `use()` (throws when missing), `tryUse()` (returns `undefined`), `has()` (boolean), `require()` (presence only, no optional field validation). Provide at ingress via `identity.provide({ tenantId }, fn)`.
 
-Identity-aware middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` automatically use the tenant keyspace when identity context exists, even when you omit `identityScope`.
+Constraints: `tenantId` must be non-empty, no `:`, not `__global__`. `roles` must be string array, no empty entries. Identity is the async-context payload for partitioning and gates, not an identity-provider abstraction.
 
-`identityScope` is an object:
+Identity-aware middleware (`cache`, `rateLimit`, `debounce`, `throttle`, `concurrency`) automatically use the tenant keyspace when identity context exists, even when you omit `identityScope`.
 
-- `identityScope: { tenant: false }`: disable identity-based partitioning and keep one shared middleware keyspace
-- `identityScope: { tenant: true }`: `required` defaults to `true`, so missing `tenantId` throws `identityContextRequiredError`; otherwise partition as `<tenantId>:...`
-- `identityScope: { tenant: true, user: true }`: same default `required: true`, but require both `tenantId` and `userId` and partition as `<tenantId>:<userId>:...`
-- `identityScope: { required: false, tenant: true }`: use `<tenantId>:...` only when identity exists
-- `identityScope: { required: false, tenant: true, user: true }`: append `userId` only when it exists
+`identityScope` controls middleware key partitioning:
 
-Fast rule of thumb:
+| Scope | Behavior |
+|-------|----------|
+| *(omit)* | Default tenant scope. Cross-tenant sharing only when no identity context exists. |
+| `{ tenant: false }` | Disable identity-based partitioning; shared keyspace. |
+| `{ tenant: true }` | Require `tenantId`; partition as `<tenantId>:...` |
+| `{ tenant: true, user: true }` | Require `tenantId` + `userId`; partition as `<tenantId>:<userId>:...` |
+| `{ required: false, tenant: true }` | Optional `<tenantId>:...` partitioning. |
+| `{ required: false, tenant: true, user: true }` | Optional `<tenantId>:<userId>:...` partitioning. |
 
-- omit `identityScope` to use the default tenant scope; cross-tenant sharing only happens when no identity context exists
-- use `{ tenant: false }` when middleware-managed state must stay shared even when identity exists
-- use `{ tenant: true }` for strict tenant-only partitioning
-- use `{ tenant: true, user: true }` for strict tenant+user partitioning
-- add `required: false` when identity should be an optional refinement instead of a requirement
-- if the app is effectively single-tenant, use a constant tenant such as `"app"` and then `{ tenant: true, user: true }` for per-user buckets
+When `identityScope` object is present with `tenant: true`, `required` defaults to `true`. Missing required identity fields fail fast with `identityContextRequiredError`.
 
-Task identity gates are separate from middleware partitioning:
+If your SaaS only has users and no real tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and use `{ tenant: true, user: true }` for per-user buckets.
 
-- `subtree({ tasks: { identity: {} } })` means every task in that subtree requires tenant identity.
-- `subtree({ tasks: { identity: { user: true } } })` means tenant + user.
-- `subtree({ tasks: { identity: { roles: ["ADMIN", "SUPPORT"] } } })` still implies tenant identity and requires at least one listed role.
-- `subtree({ tasks: { identity: ... } })` is declarative sugar for runner-owned `identityChecker` middleware added to matching tasks.
-- Runner treats `roles` literally. If your app has inherited roles like `ADMIN -> MANAGER -> USER`, expand the effective roles before `identity.provide(...)` or `run(..., { identity })`, then gate on the lowest role the task needs.
-- Nested `tasks.identity` policies are additive across owner resources, so every layer must pass.
-- `middleware.task.identityChecker.with(...)` uses the same contract for one explicit task or subtree-added middleware layer.
+Cache refs stay raw. For tenant-aware or user-aware invalidation, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same ref format.
 
-Platform note:
+Task identity gates (separate from middleware partitioning):
 
-- Identity propagation also depends on `AsyncLocalStorage`.
-- `asyncContexts.identity` degrades gently on unsupported runtimes: `tryUse()` returns `undefined`, `has()` returns `false`, and `provide()` still executes the callback.
-- `run(..., { identity: customIdentityContext })` fails fast on runtimes without `AsyncLocalStorage`.
+- `subtree({ tasks: { identity: {} } })`: requires tenant. `{ user: true }`: tenant + user. `{ roles: ["ADMIN"] }`: tenant + at least one role.
+- Declarative sugar for `identityChecker` middleware. Roles are OR within one gate, AND across nested layers.
+- `middleware.task.identityChecker.with(...)` is a task gate (not key partitioning). Implies tenant by default; `user: true` adds `userId`; `roles` require at least one match.
+- Runner treats `roles` literally; expand inherited hierarchies before `identity.provide(...)` and gate on the lowest role needed.
+
+Explicit identity-sensitive config fails fast at boot without `AsyncLocalStorage`. `asyncContexts.identity` degrades gently: `tryUse()` returns `undefined`, `has()` returns `false`, `provide()` still executes. `run(..., { identity: custom })` fails fast without `AsyncLocalStorage`.
 
 ## Queue
 
@@ -992,26 +774,23 @@ Platform note:
 
 - `queue.run(id, task)` schedules work sequentially for that queue id.
 - Each queued task receives `(signal: AbortSignal) => Promise<void>`.
-- `queue.dispose()` drains queued work without aborting the active task.
-- `queue.dispose({ cancel: true })` is teardown mode: abort the active task cooperatively and reject queued-but-not-started work.
-- `resources.queue` uses `queue.dispose({ cancel: true })` during runtime teardown and awaits every queue before the resource is considered disposed.
+- `queue.dispose()` drains queued work and lets the active task finish. `queue.dispose({ cancel: true })` aborts the active task cooperatively and rejects queued-but-not-started work.
+- `resources.queue` uses cancel mode during teardown and awaits every queue before disposal completes.
 
 Always respect the signal in tasks that may be cancelled.
 
 ## Observability
 
-- `resources.logger` is the built-in structured logger.
-- Loggers support `trace`, `debug`, `info`, `warn`, `error`, and `critical`.
-- `logger.with({ source, additionalContext })` creates child loggers that share root listeners and buffering.
-- `logger.onLog(async (log) => { ... })` lets you forward, redact, or collect logs without routing through the event system.
-- To log an error with its stack trace, pass the actual `Error` object in the `error` field:
+- `resources.logger`: built-in structured logger (`trace`, `debug`, `info`, `warn`, `error`, `critical`).
+- `logger.with({ source, additionalContext })` creates child loggers sharing root listeners and buffering.
+- `logger.onLog(async (log) => { ... })` for forwarding, redaction, or collection (does not route through the event system).
+- To log an error with stack trace, pass the `Error` object:
 
 ```ts
 try {
   await processPayment(order);
 } catch (error) {
   await logger.error("Payment processing failed", {
-    // to preserve stacktrace:
     error: error instanceof Error ? error : new Error(String(error)),
     data: { orderId: order.id, amount: order.total },
   });
@@ -1035,14 +814,7 @@ Prefer feature-driven folders and naming by Runner item type:
 - `*.tag.ts`
 - `*.error.ts`
 
-## Durable Workflows
+## See Also
 
-Durable Workflows are normal Runner tasks with replay-safe checkpoints for long flows (approvals, payouts, onboarding). Use `DurableContext` primitives like `step(id, fn)`, `sleep(ms)`, and `waitForSignal(...)` so progress is persisted and can resume after restarts.
-
-The store is the durable source of truth; queue/pubsub handles wake-ups and worker handoff. This gives at-least-once delivery plus effectively-once step execution.
-
-## Remote Lanes
-
-Remote Lanes scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response. Runtime resource configuration defines profiles and topology, while task/event definitions stay unchanged.
-
-Only lane-assigned work is rerouted, so non-lane flows keep local semantics. This keeps transport out of business logic and lets serializer, auth, and exposure policy stay in lane infrastructure configuration.
+- **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` to model durable progress while the store remains the source of truth and queue/pubsub or polling wakes work back up. See `readmes/DURABLE_WORKFLOWS.md`.
+- **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response. Only lane-assigned work is rerouted. See `readmes/REMOTE_LANES.md`.

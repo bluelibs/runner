@@ -152,6 +152,13 @@ export type ExtractTaskInput<T> =
   T extends ITask<infer I, any, infer _D> ? I : never;
 export type ExtractTaskOutput<T> =
   T extends ITask<any, infer O, infer _D> ? O : never;
+/**
+ * Resolve the awaited value returned by a task definition.
+ *
+ * Useful for APIs that accept a task only as a type witness but still want to
+ * expose the concrete result shape in their own return type.
+ */
+export type ResolveTaskOutput<T> = Awaited<ExtractTaskOutput<T>>;
 export type ExtractResourceConfig<T> =
   T extends IResource<infer C, any, any> ? C : never;
 export type ExtractResourceValue<T> =

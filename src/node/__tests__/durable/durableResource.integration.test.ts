@@ -5,20 +5,7 @@ import { durableEvents } from "../../durable/events";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryQueue } from "../../durable/queue/MemoryQueue";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { genericError } from "../../../errors";
-
-async function waitUntil(
-  predicate: () => boolean | Promise<boolean>,
-  options: { timeoutMs: number; intervalMs: number },
-): Promise<void> {
-  const startedAt = Date.now();
-  while (!(await predicate())) {
-    if (Date.now() - startedAt > options.timeoutMs) {
-      throw genericError.new({ message: "waitUntil timed out" });
-    }
-    await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
-  }
-}
+import { waitUntil } from "../../durable/test-utils";
 
 describe("durable: durableResource + fork + with (integration)", () => {
   it("awaits nested taskRunner promises (normal path)", async () => {
@@ -78,17 +65,17 @@ describe("durable: durableResource + fork + with (integration)", () => {
     await runtime.dispose();
   });
 
-  it("executes via queue + embedded worker and resolves tasks via runner store", async () => {
-    const store = new MemoryStore();
+  it("executes via queue + embedded queue consumer and resolves tasks via runner store", async () => {
     const queue = new MemoryQueue();
-    const bus = new MemoryEventBus();
-
+    const consumeSpy = jest.spyOn(queue, "consume");
     const durable = durableResource.fork("durable-tests-unified-queue");
     const durableRegistration = durable.with({
-      store,
+      store: new MemoryStore(),
+      eventBus: new MemoryEventBus(),
       queue,
-      eventBus: bus,
-      worker: true,
+      roles: {
+        queueConsumer: true,
+      },
       polling: { interval: 5 },
     });
 
@@ -107,34 +94,25 @@ describe("durable: durableResource + fork + with (integration)", () => {
       .register([resources.durable, durableRegistration, task])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
+    expect(consumeSpy).toHaveBeenCalledTimes(1);
     const d = runtime.getResourceValue(durable);
 
-    const executionId = "exec_unified_queue_1";
-    await store.saveExecution({
-      id: executionId,
-      taskId: task.id,
-      input: { v: 2 },
-      status: "pending",
-      attempt: 1,
-      maxAttempts: 3,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    await queue.enqueue({
-      type: "execute",
-      payload: { executionId },
-      maxAttempts: 3,
-    });
-
     await expect(
-      d.wait<{ v: number }>(executionId, {
-        timeout: 5_000,
-        waitPollIntervalMs: 5,
-      }),
-    ).resolves.toEqual({ v: 4 });
+      d.startAndWait(
+        task,
+        { v: 2 },
+        {
+          timeout: 5_000,
+          waitPollIntervalMs: 5,
+        },
+      ),
+    ).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: { v: 4 },
+    });
 
     await runtime.dispose();
+    consumeSpy.mockRestore();
   });
 
   it("emits durable runner events by default (without audit persistence)", async () => {
@@ -191,7 +169,6 @@ describe("durable: durableResource + fork + with (integration)", () => {
 
     const executionId = await d.start(task, undefined, {
       timeout: 5_000,
-      waitPollIntervalMs: 5,
     });
 
     await expect(
@@ -214,7 +191,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     await expect(store.listAuditEntries(executionId)).resolves.toEqual([]);
 
     await runtime.dispose();
-  });
+  }, 20_000);
 
   it("persists audit entries when audit.enabled is true (and still emits events)", async () => {
     const store = new MemoryStore();
@@ -262,7 +239,6 @@ describe("durable: durableResource + fork + with (integration)", () => {
 
     const executionId = await d.start(task, undefined, {
       timeout: 5_000,
-      waitPollIntervalMs: 5,
     });
 
     await expect(

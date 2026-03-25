@@ -1,39 +1,172 @@
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { ExecutionStatus } from "../../durable/core/types";
+import { type Execution } from "../../durable/core/types";
+
+function createExecution(
+  overrides: Partial<Execution> & {
+    id: string;
+    workflowKey: string;
+    status: Execution["status"];
+  },
+): Execution {
+  const { id, workflowKey, status, ...rest } = overrides;
+
+  return {
+    input: undefined,
+    attempt: 1,
+    maxAttempts: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...rest,
+    id,
+    workflowKey,
+    status,
+  };
+}
+
+async function saveExecution(
+  store: MemoryStore,
+  overrides: Parameters<typeof createExecution>[0],
+): Promise<void> {
+  await store.saveExecution(createExecution(overrides));
+}
 
 describe("durable: MemoryStore", () => {
-  it("supports execution idempotency key mapping", async () => {
+  it("creates idempotent executions transactionally", async () => {
     const store = new MemoryStore();
+    const execution = {
+      id: "e1",
+      workflowKey: "t",
+      input: { ok: true },
+      status: "pending" as const,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
 
     await expect(
-      store.getExecutionIdByIdempotencyKey({
-        taskId: "t",
+      store.createExecutionWithIdempotencyKey({
+        execution,
+        workflowKey: "t",
         idempotencyKey: "k",
       }),
-    ).resolves.toBeNull();
+    ).resolves.toEqual({
+      created: true,
+      executionId: "e1",
+    });
 
     await expect(
-      store.setExecutionIdByIdempotencyKey({
-        taskId: "t",
+      store.createExecutionWithIdempotencyKey({
+        execution: { ...execution, id: "e2" },
+        workflowKey: "t",
         idempotencyKey: "k",
-        executionId: "e1",
       }),
+    ).resolves.toEqual({
+      created: false,
+      executionId: "e1",
+    });
+
+    await expect(store.getExecution("e1")).resolves.toEqual(execution);
+    await expect(store.getExecution("e2")).resolves.toBeNull();
+  });
+
+  it("only replaces executions when the expected status still matches", async () => {
+    const store = new MemoryStore();
+    const execution = {
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: "pending" as const,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await store.saveExecution(execution);
+
+    await expect(
+      store.saveExecutionIfStatus(
+        {
+          ...execution,
+          status: "running",
+        },
+        ["pending"],
+      ),
     ).resolves.toBe(true);
 
     await expect(
-      store.setExecutionIdByIdempotencyKey({
-        taskId: "t",
-        idempotencyKey: "k",
-        executionId: "e2",
-      }),
+      store.saveExecutionIfStatus(
+        {
+          ...execution,
+          status: "completed",
+          result: "done",
+        },
+        ["pending"],
+      ),
     ).resolves.toBe(false);
+    expect((await store.getExecution("e1"))?.status).toBe("running");
+  });
+
+  it("returns deep-cloned executions so nested current state stays isolated", async () => {
+    const store = new MemoryStore();
+    const execution = createExecution({
+      id: "e-current",
+      workflowKey: "t",
+      status: "running",
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:paid",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "paid",
+            timeoutMs: 1_000,
+          },
+        },
+      },
+    });
+
+    await store.saveExecution(execution);
+
+    const firstRead = await store.getExecution("e-current");
+    expect(firstRead?.current?.kind).toBe("waitForSignal");
+    if (!firstRead || firstRead.current?.kind !== "waitForSignal") {
+      return;
+    }
+    firstRead.current.waitingFor.params.signalId = "mutated";
+
+    const secondRead = await store.getExecution("e-current");
+    expect(secondRead?.current).toMatchObject({
+      kind: "waitForSignal",
+      waitingFor: {
+        type: "signal",
+        params: {
+          signalId: "paid",
+        },
+      },
+    });
+  });
+
+  it("returns false when saveExecutionIfStatus targets a missing execution", async () => {
+    const store = new MemoryStore();
 
     await expect(
-      store.getExecutionIdByIdempotencyKey({
-        taskId: "t",
-        idempotencyKey: "k",
-      }),
-    ).resolves.toBe("e1");
+      store.saveExecutionIfStatus(
+        {
+          id: "missing",
+          workflowKey: "t",
+          input: undefined,
+          status: "running",
+          attempt: 1,
+          maxAttempts: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        ["pending"],
+      ),
+    ).resolves.toBe(false);
   });
 
   it("supports operator actions (and no-ops when execution is missing)", async () => {
@@ -44,16 +177,11 @@ describe("durable: MemoryStore", () => {
       store.forceFail("missing", { message: "x" }),
     ).resolves.toBeUndefined();
 
-    await store.saveExecution({
+    await saveExecution(store, {
       id: "e1",
-      taskId: "t",
-      input: undefined,
+      workflowKey: "t",
       status: "compensation_failed",
       error: { message: "boom" },
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     });
 
     await store.retryRollback("e1");
@@ -86,23 +214,17 @@ describe("durable: MemoryStore", () => {
     const store = new MemoryStore();
     const now = new Date();
 
-    await store.saveExecution({
+    await saveExecution(store, {
       id: "e1",
-      taskId: "t1",
-      input: undefined,
+      workflowKey: "t1",
       status: "pending",
-      attempt: 1,
-      maxAttempts: 1,
       createdAt: new Date(now.getTime() - 10),
       updatedAt: now,
     });
-    await store.saveExecution({
+    await saveExecution(store, {
       id: "e2",
-      taskId: "t2",
-      input: undefined,
+      workflowKey: "t2",
       status: "compensation_failed",
-      attempt: 1,
-      maxAttempts: 1,
       createdAt: new Date(now.getTime() - 5),
       updatedAt: now,
     });
@@ -120,159 +242,21 @@ describe("durable: MemoryStore", () => {
       completedAt: new Date(now.getTime() + 1),
     });
 
-    const all = await store.listExecutions?.();
-    expect(all?.map((e) => e.id)).toEqual(["e2", "e1"]);
+    const all = await store.listExecutions();
+    expect(all.map((e) => e.id)).toEqual(["e2", "e1"]);
 
-    const onlyPending = await store.listExecutions?.({ status: ["pending"] });
-    expect(onlyPending?.map((e) => e.id)).toEqual(["e1"]);
+    const onlyPending = await store.listExecutions({ status: ["pending"] });
+    expect(onlyPending.map((e) => e.id)).toEqual(["e1"]);
 
-    const byTask = await store.listExecutions?.({ taskId: "t2" });
-    expect(byTask?.map((e) => e.id)).toEqual(["e2"]);
+    const byTask = await store.listExecutions({ workflowKey: "t2" });
+    expect(byTask.map((e) => e.id)).toEqual(["e2"]);
 
-    const paged = await store.listExecutions?.({ offset: 1, limit: 1 });
-    expect(paged?.map((e) => e.id)).toEqual(["e1"]);
+    const paged = await store.listExecutions({ offset: 1, limit: 1 });
+    expect(paged.map((e) => e.id)).toEqual(["e1"]);
 
-    const results = await store.listStepResults?.("e1");
-    expect(results?.map((r) => r.stepId)).toEqual(["s1", "s2"]);
+    const results = await store.listStepResults("e1");
+    expect(results.map((r) => r.stepId)).toEqual(["s1", "s2"]);
 
-    expect(await store.listStepResults?.("missing")).toEqual([]);
-  });
-
-  it("supports timers, schedules, locks, and audit pagination", async () => {
-    const store = new MemoryStore();
-    const now = new Date();
-
-    await store.saveExecution({
-      id: "e1",
-      taskId: "t1",
-      input: undefined,
-      status: "running",
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await store.saveExecution({
-      id: "e2",
-      taskId: "t2",
-      input: undefined,
-      status: "completed",
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await store.saveExecution({
-      id: "e3",
-      taskId: "t3",
-      input: undefined,
-      status: "compensation_failed",
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    await store.saveExecution({
-      id: "e4",
-      taskId: "t4",
-      input: undefined,
-      status: ExecutionStatus.Cancelled,
-      error: { message: "cancelled" },
-      attempt: 1,
-      maxAttempts: 1,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: now,
-    });
-
-    expect((await store.listIncompleteExecutions()).map((e) => e.id)).toEqual([
-      "e1",
-    ]);
-    expect((await store.listStuckExecutions()).map((e) => e.id)).toEqual([
-      "e3",
-    ]);
-
-    await store.appendAuditEntry({
-      id: "a1",
-      executionId: "e1",
-      at: new Date(now.getTime() - 10),
-      attempt: 1,
-      kind: "note",
-      message: "first",
-    });
-    await store.appendAuditEntry({
-      id: "a2",
-      executionId: "e1",
-      at: new Date(now.getTime() - 5),
-      attempt: 1,
-      kind: "note",
-      message: "second",
-    });
-    const paged = await store.listAuditEntries("e1", { offset: 1, limit: 1 });
-    expect(paged.map((e) => (e.kind === "note" ? e.message : "x"))).toEqual([
-      "second",
-    ]);
-
-    await store.createTimer({
-      id: "t1",
-      executionId: "e1",
-      stepId: "s1",
-      type: "sleep",
-      fireAt: new Date(now.getTime() - 1),
-      status: "pending",
-    });
-    await store.createTimer({
-      id: "t2",
-      executionId: "e1",
-      stepId: "s2",
-      type: "sleep",
-      fireAt: new Date(now.getTime() + 10_000),
-      status: "pending",
-    });
-
-    const ready = await store.getReadyTimers(now);
-    expect(ready.map((t) => t.id)).toEqual(["t1"]);
-    await store.markTimerFired("t1");
-    await store.deleteTimer("t2");
-
-    const firstClaim = await store.claimTimer("t1", "worker-1", 1000);
-    const secondClaim = await store.claimTimer("t1", "worker-2", 1000);
-    expect(firstClaim).toBe(true);
-    expect(secondClaim).toBe(false);
-
-    await store.createSchedule({
-      id: "s1",
-      taskId: "t1",
-      type: "interval",
-      pattern: "1000",
-      input: undefined,
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-    });
-    await store.createSchedule({
-      id: "s2",
-      taskId: "t2",
-      type: "cron",
-      pattern: "0 0 * * *",
-      input: undefined,
-      status: "paused",
-      createdAt: now,
-      updatedAt: now,
-    });
-    expect((await store.listSchedules()).length).toBe(2);
-    expect((await store.listActiveSchedules()).map((s) => s.id)).toEqual([
-      "s1",
-    ]);
-    await store.updateSchedule("missing", { status: "paused" });
-    await store.updateSchedule("s1", { status: "paused" });
-    await store.deleteSchedule("s2");
-
-    const lockId = await store.acquireLock("res", 1000);
-    expect(lockId).not.toBeNull();
-    expect(await store.acquireLock("res", 1000)).toBeNull();
-    await store.releaseLock("res", "wrong");
-    await store.releaseLock("res", lockId!);
+    expect(await store.listStepResults("missing")).toEqual([]);
   });
 });

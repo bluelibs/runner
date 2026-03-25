@@ -26,6 +26,7 @@ import {
 import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
 import { ExecutionContextStore } from "./ExecutionContextStore";
+import { runWithRuntimeCallSource } from "./RuntimeCallSourceStore";
 import { type ExecutionFrame } from "../types/executionContext";
 import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 import {
@@ -250,8 +251,10 @@ export class EventManager {
     return this.lifecycleAdmissionController.trackHookExecution(
       hookSource,
       () =>
-        this.executionContextStore.runWithFrame(hookFrame, () =>
-          execute(hook, event),
+        runWithRuntimeCallSource(hookSource, () =>
+          this.executionContextStore.runWithFrame(hookFrame, () =>
+            execute(hook, event),
+          ),
         ),
     );
   }

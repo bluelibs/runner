@@ -57,6 +57,16 @@ export interface RequestProcessingDeps {
     req: IncomingMessage,
     eventId: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeTaskBody?: (
+    req: IncomingMessage,
+    taskId: string,
+    bodyText?: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeEventBody?: (
+    req: IncomingMessage,
+    eventId: string,
+    bodyText?: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
 }
 
 export interface NodeExposureRequestHandlers {
@@ -130,6 +140,7 @@ export function createRequestHandlers(
     resolveAsyncContextAllowList: (taskId) =>
       policy.taskAsyncContextAllowList[taskId],
     authorizeTask: deps.authorizeTask,
+    authorizeTaskBody: deps.authorizeTaskBody,
     sourceResourceId: deps.sourceResourceId,
   });
 
@@ -147,6 +158,7 @@ export function createRequestHandlers(
     resolveAsyncContextAllowList: (eventId) =>
       policy.eventAsyncContextAllowList[eventId],
     authorizeEvent: deps.authorizeEvent,
+    authorizeEventBody: deps.authorizeEventBody,
     sourceResourceId: deps.sourceResourceId,
   });
 

@@ -5,7 +5,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-missing",
     );
-    const durableRegistration = durable.with({ worker: false });
+    const durableRegistration = durable.with({});
 
     const task = r
       .task("durable-tests-routing-missing-task")
@@ -32,7 +32,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-direct",
     );
-    const durableRegistration = durable.with({ worker: false });
+    const durableRegistration = durable.with({});
 
     const task = r
       .task("durable-tests-routing-direct-task")
@@ -62,7 +62,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-execute",
     );
-    const durableRegistration = durable.with({ worker: false });
+    const durableRegistration = durable.with({});
 
     const task = r
       .task("durable-tests-routing-execute-task")
@@ -89,13 +89,14 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
       }),
     );
 
+    const persistedTaskId = runtime.store.findIdByDefinition(task);
     const executions = await durableRuntime.operator.listExecutions({
-      taskId: task.id,
+      workflowKey: persistedTaskId,
     });
     expect(executions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          taskId: task.id,
+          workflowKey: persistedTaskId,
           status: "completed",
           result: { value: 4 },
         }),
@@ -109,7 +110,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-start",
     );
-    const durableRegistration = durable.with({ worker: false });
+    const durableRegistration = durable.with({});
 
     const task = r
       .task("durable-tests-routing-start-task")

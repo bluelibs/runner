@@ -203,7 +203,7 @@ describe("durable: crash recovery + resume (integration)", () => {
 
     await store.saveExecution({
       id: executionId,
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,
@@ -226,12 +226,21 @@ describe("durable: crash recovery + resume (integration)", () => {
       handler,
     });
 
-    await service.recover();
+    const report = await service.recover();
 
     const completed = await store.getExecution(executionId);
     expect(completed?.status).toBe(ExecutionStatus.Completed);
     expect(completed?.result).toEqual({ before: "before", after: "after" });
     expect(beforeRuns).toBe(0); // cached from store
     expect(afterRuns).toBe(1);
+    expect(report).toEqual({
+      scannedCount: 1,
+      recoveredCount: 1,
+      skippedCount: 0,
+      failedCount: 0,
+      recovered: [{ executionId, status: ExecutionStatus.Running }],
+      skipped: [],
+      failures: [],
+    });
   });
 });

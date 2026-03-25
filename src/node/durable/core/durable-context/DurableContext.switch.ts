@@ -1,6 +1,11 @@
 import type { SwitchBranch } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
+import {
+  clearExecutionCurrent,
+  createSwitchCurrent,
+  setExecutionCurrent,
+} from "../current";
 import { durableExecutionInvariantError } from "../../../../errors";
 
 /**
@@ -25,15 +30,15 @@ interface SwitchStepResult<TResult> {
 export async function switchDurably<TValue, TResult>(params: {
   store: IDurableStore;
   executionId: string;
-  assertNotCancelled: () => Promise<void>;
+  assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
   assertUniqueStepId: (stepId: string) => void;
   stepId: string;
   value: TValue;
   branches: SwitchBranch<TValue, TResult>[];
-  defaultBranch?: Omit<SwitchBranch<TValue, TResult>, "match">;
+  fallbackBranch?: Omit<SwitchBranch<TValue, TResult>, "match">;
 }): Promise<TResult> {
-  await params.assertNotCancelled();
+  await params.assertCanContinue();
 
   params.assertUniqueStepId(params.stepId);
 
@@ -44,10 +49,17 @@ export async function switchDurably<TValue, TResult>(params: {
   );
   if (cached) {
     const persisted = cached.result as SwitchStepResult<TResult>;
+    await clearExecutionCurrent(params.store, params.executionId);
     return persisted.result;
   }
 
   // First execution: evaluate matchers in order
+  await setExecutionCurrent(
+    params.store,
+    params.executionId,
+    createSwitchCurrent({ stepId: params.stepId, startedAt: new Date() }),
+  );
+
   const startedAt = Date.now();
   let matchedBranch: {
     id: string;
@@ -61,11 +73,11 @@ export async function switchDurably<TValue, TResult>(params: {
     }
   }
 
-  // Fall back to defaultBranch if no matcher hit
-  if (!matchedBranch && params.defaultBranch) {
+  // Fall back to fallbackBranch if no matcher hit
+  if (!matchedBranch && params.fallbackBranch) {
     matchedBranch = {
-      id: params.defaultBranch.id,
-      run: params.defaultBranch.run,
+      id: params.fallbackBranch.id,
+      run: params.fallbackBranch.run,
     };
   }
 
@@ -79,6 +91,8 @@ export async function switchDurably<TValue, TResult>(params: {
 
   // Execute the selected branch
   const result = await selectedBranch.run(params.value);
+  // Re-check before committing so a late cancellation or lost lock cannot persist stale work.
+  await params.assertCanContinue();
   const durationMs = Date.now() - startedAt;
 
   // Persist the outcome for replay
@@ -98,6 +112,8 @@ export async function switchDurably<TValue, TResult>(params: {
     branchId: selectedBranch.id,
     durationMs,
   });
+
+  await clearExecutionCurrent(params.store, params.executionId);
 
   return result;
 }

@@ -1007,6 +1007,54 @@ describe("Serializer", () => {
       expect(deserialized.id).toBe("root");
     });
 
+    it("should discard schema placeholders when remapping throws", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Match.Schema({ schemaId: "tests.serializer.PlaceholderUserDto" })(
+        UserDto,
+      );
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+      Serializer.Field({ from: "abc" })(UserDto.prototype, "id");
+
+      serializer.addSchema(UserDto);
+
+      const typeRegistry = (
+        serializer as unknown as {
+          typeRegistry: {
+            getTypeDefinition: (id: string) => {
+              create: () => UserDto & { debugMarker?: string };
+              deserialize: (
+                value: unknown,
+              ) => UserDto & { debugMarker?: string };
+            };
+          };
+        }
+      ).typeRegistry;
+      const typeDef = typeRegistry.getTypeDefinition(
+        "tests.serializer.PlaceholderUserDto",
+      );
+      const leakedPlaceholder = typeDef.create();
+      leakedPlaceholder.debugMarker = "stale";
+
+      expect(() =>
+        typeDef.deserialize({
+          id: "u1",
+          abc: "legacy",
+        }),
+      ).toThrow('both source key "abc" and target key "id" are present');
+
+      const recovered = typeDef.deserialize({
+        abc: "u2",
+      });
+
+      expect(recovered).toBeInstanceOf(UserDto);
+      expect(recovered.id).toBe("u2");
+      expect(recovered).not.toBe(leakedPlaceholder);
+      expect(recovered.debugMarker).toBeUndefined();
+    });
+
     it("should validate nested recursive Product > Categories schemas", () => {
       class CategoryDto {
         public id!: string;

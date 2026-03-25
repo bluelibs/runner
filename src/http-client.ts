@@ -11,6 +11,7 @@ import {
   httpContextSerializationError,
   httpEventWithResultUnavailableError,
 } from "./errors";
+import { RUNNER_ASYNC_CONTEXT_HEADER } from "./remote-lanes/http/constants";
 
 /**
  * Bearer-style authentication configuration for the universal HTTP client.
@@ -189,7 +190,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       cfg.serializer,
       cfg.contexts,
     );
-    if (contextHeader) headers["x-runner-context"] = contextHeader;
+    if (contextHeader) headers[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeader;
     if (cfg.onRequest) await cfg.onRequest({ url, headers });
     const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
     const res = await fetchImpl(url, {

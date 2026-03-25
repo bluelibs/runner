@@ -10,6 +10,7 @@ import type { Execution } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { DurableService } from "../../durable/core/DurableService";
 import { genericError } from "../../../errors";
+import { Logger, type ILog } from "../../../models/Logger";
 
 // ---------------------------------------------------------------------------
 // Task executor
@@ -51,13 +52,95 @@ export class SpyQueue implements IDurableQueue {
 }
 
 // ---------------------------------------------------------------------------
-// Bare store — MemoryStore stripped of optional capabilities
+// Async / timer helpers
+// ---------------------------------------------------------------------------
+
+export async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+export async function advanceTimers(ms: number): Promise<void> {
+  const asyncAdvance = (
+    jest as unknown as {
+      advanceTimersByTimeAsync?: (msToRun: number) => Promise<void>;
+    }
+  ).advanceTimersByTimeAsync;
+
+  if (asyncAdvance) {
+    await asyncAdvance(ms);
+    return;
+  }
+
+  jest.advanceTimersByTime(ms);
+  await flushMicrotasks();
+}
+
+export function requireScheduledCallback(
+  callback: (() => void) | null,
+  message: string,
+): () => void {
+  if (!callback) {
+    throw genericError.new({ message });
+  }
+
+  return callback;
+}
+
+export function captureScheduledTimeout() {
+  let scheduledCallback: (() => void) | null = null;
+  const clearTimeoutSpy = jest
+    .spyOn(global, "clearTimeout")
+    .mockImplementation(() => undefined);
+  const mockSetTimeout = ((callback: TimerHandler) => {
+    if (typeof callback === "function") {
+      scheduledCallback = callback as () => void;
+    }
+    return { unref: jest.fn() } as unknown as ReturnType<typeof setTimeout>;
+  }) as unknown as typeof setTimeout;
+  const setTimeoutSpy = jest
+    .spyOn(global, "setTimeout")
+    .mockImplementation(mockSetTimeout);
+
+  return {
+    clearTimeoutSpy,
+    getScheduledCallback(message: string) {
+      return requireScheduledCallback(scheduledCallback, message);
+    },
+    restore() {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Logger helpers
+// ---------------------------------------------------------------------------
+
+export function createBufferedLogger(): { logger: Logger; logs: ILog[] } {
+  const logs: ILog[] = [];
+  const logger = new Logger({
+    printThreshold: null,
+    printStrategy: "pretty",
+    bufferLogs: false,
+  });
+
+  logger.onLog((log) => {
+    logs.push(log);
+  });
+
+  return { logger, logs };
+}
+
+// ---------------------------------------------------------------------------
+// Bare store — MemoryStore stripped of optional extras
 // ---------------------------------------------------------------------------
 
 /**
  * Creates a minimal IDurableStore by delegating to `base` (MemoryStore),
  * intentionally omitting optional methods like `acquireLock`, `releaseLock`,
- * `listStepResults`, and `appendAuditEntry`.
+ * and `appendAuditEntry` while preserving required store capabilities.
  *
  * Pass `overrides` to add back specific optional methods.
  */
@@ -67,18 +150,44 @@ export function createBareStore(
 ): IDurableStore {
   return {
     saveExecution: base.saveExecution.bind(base),
+    saveExecutionIfStatus: base.saveExecutionIfStatus.bind(base),
     getExecution: base.getExecution.bind(base),
     updateExecution: base.updateExecution.bind(base),
     listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
+    createExecutionWithIdempotencyKey:
+      base.createExecutionWithIdempotencyKey.bind(base),
+    listExecutions: base.listExecutions.bind(base),
+    listStepResults: base.listStepResults.bind(base),
     getStepResult: base.getStepResult.bind(base),
     saveStepResult: base.saveStepResult.bind(base),
+    getSignalState: base.getSignalState.bind(base),
+    appendSignalRecord: base.appendSignalRecord.bind(base),
+    bufferSignalRecord: base.bufferSignalRecord.bind(base),
+    enqueueQueuedSignalRecord: base.enqueueQueuedSignalRecord.bind(base),
+    consumeQueuedSignalRecord: base.consumeQueuedSignalRecord.bind(base),
+    consumeBufferedSignalForStep: base.consumeBufferedSignalForStep.bind(base),
+    upsertSignalWaiter: base.upsertSignalWaiter.bind(base),
+    peekNextSignalWaiter: base.peekNextSignalWaiter.bind(base),
+    takeNextSignalWaiter: base.takeNextSignalWaiter.bind(base),
+    deleteSignalWaiter: base.deleteSignalWaiter.bind(base),
+    upsertExecutionWaiter: base.upsertExecutionWaiter.bind(base),
+    listExecutionWaiters: base.listExecutionWaiters.bind(base),
+    commitExecutionWaiterCompletion:
+      base.commitExecutionWaiterCompletion.bind(base),
+    deleteExecutionWaiter: base.deleteExecutionWaiter.bind(base),
     createTimer: base.createTimer.bind(base),
     getReadyTimers: base.getReadyTimers.bind(base),
+    claimReadyTimers: base.claimReadyTimers.bind(base),
     markTimerFired: base.markTimerFired.bind(base),
+    claimTimer: base.claimTimer.bind(base),
+    renewTimerClaim: base.renewTimerClaim.bind(base),
+    releaseTimerClaim: base.releaseTimerClaim.bind(base),
+    finalizeClaimedTimer: base.finalizeClaimedTimer.bind(base),
     deleteTimer: base.deleteTimer.bind(base),
     createSchedule: base.createSchedule.bind(base),
     getSchedule: base.getSchedule.bind(base),
     updateSchedule: base.updateSchedule.bind(base),
+    saveScheduleWithTimer: base.saveScheduleWithTimer.bind(base),
     deleteSchedule: base.deleteSchedule.bind(base),
     listSchedules: base.listSchedules.bind(base),
     listActiveSchedules: base.listActiveSchedules.bind(base),
@@ -102,8 +211,9 @@ export function okTask(id: string) {
 // ---------------------------------------------------------------------------
 
 export function pendingExecution(
-  overrides: Partial<Execution> & { taskId: string },
+  overrides: Partial<Execution> & { workflowKey?: string },
 ): Execution {
+  const workflowKey = overrides.workflowKey ?? "t";
   return {
     id: "e1",
     input: undefined,
@@ -113,14 +223,17 @@ export function pendingExecution(
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
+    workflowKey,
   };
 }
 
-export function sleepingExecution(overrides?: Partial<Execution>): Execution {
+export function sleepingExecution(
+  overrides?: Partial<Execution> & { workflowKey?: string },
+): Execution {
   return pendingExecution({
-    taskId: "t",
     status: "sleeping",
     ...overrides,
+    workflowKey: overrides?.workflowKey ?? "t",
   });
 }
 

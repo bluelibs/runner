@@ -1,11 +1,17 @@
 import type { DurableAuditEntryInput } from "../audit";
 import { DurableAuditEntryKind, isDurableInternalStepId } from "../audit";
 import { SuspensionSignal } from "../interfaces/context";
-import type { IStepBuilder, StepOptions } from "../interfaces/context";
+import type {
+  DurableStepRunContext,
+  IStepBuilder,
+  StepOptions,
+} from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
+import { clearExecutionCurrent } from "../current";
 import { ExecutionStatus } from "../types";
-import { sleepMs, withTimeout } from "../utils";
+import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
+import { createCancellationErrorFromSignal } from "../../../../tools/abortSignals";
 
 export type DurableCompensation = {
   stepId: string;
@@ -27,15 +33,17 @@ function registerCompensation<T>(
 export async function executeDurableStep<T>(params: {
   store: IDurableStore;
   executionId: string;
-  assertNotCancelled: () => Promise<void>;
+  assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
+  setCurrent: () => Promise<void>;
   stepId: string;
   options: StepOptions;
-  upFn: () => Promise<T>;
+  upFn: (context: DurableStepRunContext) => Promise<T>;
+  signal: AbortSignal;
   downFn?: (result: T) => Promise<void>;
   compensations: DurableCompensation[];
 }): Promise<T> {
-  await params.assertNotCancelled();
+  await params.assertCanContinue();
 
   const cached = await params.store.getStepResult(
     params.executionId,
@@ -43,6 +51,7 @@ export async function executeDurableStep<T>(params: {
   );
   if (cached) {
     const result = cached.result as T;
+    await clearExecutionCurrent(params.store, params.executionId);
     if (params.downFn) {
       registerCompensation(
         params.compensations,
@@ -54,25 +63,41 @@ export async function executeDurableStep<T>(params: {
     return result;
   }
 
+  await params.setCurrent();
+
   let attempts = 0;
   const maxRetries = params.options.retries ?? 0;
   const startedAt = Date.now();
 
   const executeWithRetry = async (): Promise<T> => {
     try {
+      const context: DurableStepRunContext = { signal: params.signal };
       if (params.options.timeout) {
         return await withTimeout(
-          params.upFn(),
+          params.upFn(context),
           params.options.timeout,
           `Step ${params.stepId} timed out`,
         );
       }
-      return await params.upFn();
+      return await params.upFn(context);
     } catch (error) {
+      if (params.signal.aborted) {
+        throw createCancellationErrorFromSignal(
+          params.signal,
+          `Durable step '${params.stepId}' cancelled`,
+        );
+      }
+
+      if (isTimeoutExceededError(error)) {
+        throw error;
+      }
+
       if (attempts < maxRetries) {
         attempts += 1;
+        await params.assertCanContinue();
         const delay = Math.pow(2, attempts) * 100;
         await sleepMs(delay);
+        await params.assertCanContinue();
         return executeWithRetry();
       }
       throw error;
@@ -81,6 +106,8 @@ export async function executeDurableStep<T>(params: {
 
   const result = await executeWithRetry();
   const durationMs = Date.now() - startedAt;
+
+  await params.assertCanContinue();
 
   await params.store.saveStepResult({
     executionId: params.executionId,
@@ -95,6 +122,8 @@ export async function executeDurableStep<T>(params: {
     durationMs,
     isInternal: isDurableInternalStepId(params.stepId),
   });
+
+  await clearExecutionCurrent(params.store, params.executionId);
 
   if (params.downFn) {
     registerCompensation(
@@ -138,6 +167,7 @@ export async function rollbackDurableCompensations(params: {
 
     await params.store.updateExecution(params.executionId, {
       status: ExecutionStatus.CompensationFailed,
+      current: undefined,
       error: errorInfo,
       updatedAt: new Date(),
     });

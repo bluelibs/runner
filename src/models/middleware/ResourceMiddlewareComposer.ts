@@ -11,6 +11,7 @@ import { IResourceMiddlewareExecutionInput } from "../../types/resourceMiddlewar
 import type { ResourceMiddlewareInterceptor } from "./types";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
 import { runtimeSource } from "../../types/runtimeSource";
+import { runWithRuntimeCallSource } from "../RuntimeCallSourceStore";
 import { composeReverseLayers } from "./composeLayers";
 import {
   extractRequestedId,
@@ -149,17 +150,21 @@ export class ResourceMiddlewareComposer {
           return this.lifecycleAdmissionController.trackMiddlewareExecution(
             middlewareSource,
             () =>
-              storeMiddleware.middleware.run(
-                {
-                  resource: {
-                    definition: canonicalResourceDefinition,
-                    config: cfg,
+              runWithRuntimeCallSource(middlewareSource, () =>
+                storeMiddleware.middleware.run(
+                  {
+                    resource: {
+                      definition: canonicalResourceDefinition,
+                      config: cfg,
+                    },
+                    next: (...args: [TConfig?]) =>
+                      nextFunction(
+                        (args.length > 0 ? args[0] : cfg) as TConfig,
+                      ),
                   },
-                  next: (...args: [TConfig?]) =>
-                    nextFunction((args.length > 0 ? args[0] : cfg) as TConfig),
-                },
-                storeMiddleware.computedDependencies,
-                middleware.config,
+                  storeMiddleware.computedDependencies,
+                  middleware.config,
+                ),
               ),
           );
         };

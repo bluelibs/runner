@@ -26,6 +26,16 @@ export interface NodeExposureAuthorizationOptions {
     req: IncomingMessage,
     eventId: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeTaskBody?: (
+    req: IncomingMessage,
+    taskId: string,
+    bodyText?: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeEventBody?: (
+    req: IncomingMessage,
+    eventId: string,
+    bodyText?: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
 }
 
 export interface CreateNodeExposureOptions {
@@ -93,6 +103,8 @@ export async function createNodeExposure(
       disableDiscovery: httpConfig?.disableDiscovery,
       authorizeTask: options?.authorization?.authorizeTask,
       authorizeEvent: options?.authorization?.authorizeEvent,
+      authorizeTaskBody: options?.authorization?.authorizeTaskBody,
+      authorizeEventBody: options?.authorization?.authorizeEventBody,
       policy: options?.policy ?? EMPTY_NODE_EXPOSURE_POLICY,
       sourceResourceId: options?.sourceResourceId,
     });

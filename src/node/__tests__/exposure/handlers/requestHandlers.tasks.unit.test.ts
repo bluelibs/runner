@@ -58,6 +58,41 @@ describe("requestHandlers - task handling", () => {
     expect(json?.error?.code).toBe("UNAUTHORIZED");
   });
 
+  it("returns authorizeTaskBody response before task execution", async () => {
+    const runSpy = jest.fn(async () => "ok");
+    const deps = createRequestHandlersDeps(serializer, {
+      store: {
+        tasks: new Map([["t-authz-body", { task: { id: "t-authz-body" } }]]),
+        errors: new Map(),
+      },
+      taskRunner: {
+        run: runSpy,
+      },
+      eventManager: {},
+      router: {
+        extract: () => ({ kind: "task", id: "t-authz-body" }),
+      },
+      authorizeTaskBody: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+    });
+
+    const { handleTask } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/task/t-authz-body",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ input: { a: 1 } }),
+    });
+    await handleTask(req, res);
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(res._status).toBe(401);
+  });
+
   it("forwards the request abort signal into task execution", async () => {
     const runSpy = jest.fn(async () => "ok");
     const deps = createRequestHandlersDeps(serializer, {

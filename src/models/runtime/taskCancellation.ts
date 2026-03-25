@@ -18,12 +18,30 @@ interface TaskCallerSignalState {
   currentLink: AbortSignalLink;
 }
 
+interface ActiveTaskAbortControllerState {
+  /**
+   * Optional by design.
+   *
+   * Plain task executions still participate in shutdown drain tracking even
+   * when no task-local abort path exists yet. The cooperative abort window only
+   * applies once some middleware or runtime path creates a journal-scoped
+   * controller.
+   */
+  controller: AbortController | null;
+  retainCount: number;
+  register: ((controller: AbortController) => () => void) | null;
+  unregister: (() => void) | null;
+}
+
 export const taskCancellationJournalKeys = {
   callerSignal: journal.createKey<TaskCallerSignalState>(
     "runner.execution.abortSignal",
   ),
   abortController: journal.createKey<AbortController>(
     "runner.middleware.timeout.abortController",
+  ),
+  activeAbortController: journal.createKey<ActiveTaskAbortControllerState>(
+    "runner.execution.activeAbortController",
   ),
 } as const;
 
@@ -111,13 +129,122 @@ export function getOrCreateTaskAbortController(
 
   const controller = new AbortController();
   executionJournal.set(taskCancellationJournalKeys.abortController, controller);
+  attachTrackedTaskAbortController(executionJournal, controller);
   return controller;
+}
+
+function getOrCreateActiveTaskAbortControllerState(
+  executionJournal: ExecutionJournal,
+  register: (controller: AbortController) => () => void,
+): ActiveTaskAbortControllerState {
+  const existing = executionJournal.get(
+    taskCancellationJournalKeys.activeAbortController,
+  );
+  if (existing) {
+    existing.register = register;
+    return existing;
+  }
+
+  const state: ActiveTaskAbortControllerState = {
+    // We intentionally do not create an AbortController here.
+    // Retaining active task state makes the execution visible to drain
+    // accounting, while cooperative shutdown abort remains opt-in for task
+    // trees that actually expose a task-local cancellation controller.
+    controller:
+      executionJournal.get(taskCancellationJournalKeys.abortController) ?? null,
+    retainCount: 0,
+    register,
+    unregister: null,
+  };
+  executionJournal.set(
+    taskCancellationJournalKeys.activeAbortController,
+    state,
+  );
+  return state;
+}
+
+function registerTrackedTaskAbortController(
+  state: ActiveTaskAbortControllerState,
+): void {
+  if (!state.controller || !state.register || state.unregister !== null) {
+    return;
+  }
+
+  state.unregister = state.register(state.controller);
+}
+
+/**
+ * Retains the journal-scoped task abort controller inside an external active
+ * task registry.
+ *
+ * A forwarded journal may be reused by nested task calls, so registration is
+ * reference-counted per journal to avoid duplicate registry entries while still
+ * ensuring the controller remains active until the outermost frame completes.
+ *
+ * This does not force-create a controller for plain tasks. Those executions are
+ * still counted by the runtime's drain phase, but the shutdown abort window can
+ * only act on task trees that already have a journal-scoped abort controller.
+ */
+export function retainActiveTaskAbortController(
+  executionJournal: ExecutionJournal,
+  register: (controller: AbortController) => () => void,
+): () => void {
+  const state = getOrCreateActiveTaskAbortControllerState(
+    executionJournal,
+    register,
+  );
+  if (state.retainCount === 0) {
+    registerTrackedTaskAbortController(state);
+  }
+  state.retainCount += 1;
+
+  return () => releaseActiveTaskAbortController(state);
+}
+
+function releaseActiveTaskAbortController(
+  state: ActiveTaskAbortControllerState,
+): void {
+  if (state.retainCount === 0) {
+    return;
+  }
+
+  state.retainCount -= 1;
+  if (state.retainCount > 0) {
+    return;
+  }
+
+  state.unregister?.();
+  state.unregister = null;
+}
+
+function attachTrackedTaskAbortController(
+  executionJournal: ExecutionJournal,
+  controller: AbortController,
+): void {
+  const state = executionJournal.get(
+    taskCancellationJournalKeys.activeAbortController,
+  );
+  if (!state) {
+    return;
+  }
+
+  state.controller = controller;
+  if (state.retainCount === 0) {
+    return;
+  }
+
+  // Late controller creation is expected when middleware such as timeout
+  // enables task-local cancellation after the task tree is already retained.
+  registerTrackedTaskAbortController(state);
 }
 
 /**
  * Builds the effective task signal seen by task code and cooperating middleware.
  *
  * This composes caller-provided signals with the task-local abort controller.
+ * When neither source exists, tasks intentionally see `undefined` and remain
+ * drain-only during shutdown.
+ *
  * Callers own the returned link and must invoke `cleanup()` because composing
  * multiple sources may install temporary abort listeners.
  */

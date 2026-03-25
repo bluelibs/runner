@@ -3,12 +3,15 @@ import {
   symbolRpcLanePolicy,
   symbolRpcLaneRoutedBy,
 } from "../../types/symbols";
+import { buildEventRequestBody } from "../../remote-lanes/http/protocol";
 import { buildAsyncContextHeader } from "../remote-lanes/asyncContextAllowlist";
+import { hashRemoteLanePayload } from "../remote-lanes/laneAuth";
 import { buildRpcLaneAuthHeaders } from "./rpcLanes.auth";
 import {
   assertTaskOwnership,
   type RpcLanesRuntimeContext,
 } from "./rpcLanes.runtime.utils";
+import { RUNNER_ASYNC_CONTEXT_HEADER } from "../../remote-lanes/http/constants";
 
 export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   const { resolved, dependencies, resourceId } = context;
@@ -49,7 +52,13 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           },
         ) => Promise<unknown>;
         const remoteTaskId = store.findIdByDefinition(taskEntry.task);
-        const headers = buildRpcLaneRequestHeaders(lane.id);
+        const headers = buildRpcLaneRequestHeaders(lane.id, {
+          kind: "rpc-task",
+          targetId: remoteTaskId,
+          payloadHash: hashRemoteLanePayload(
+            dependencies.serializer.stringify({ input }),
+          ),
+        });
         return headers
           ? executeRemoteTask(remoteTaskId, input, {
               headers,
@@ -79,7 +88,15 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     }
 
     if (typeof binding.communicator.eventWithResult === "function") {
-      const headers = buildRpcLaneRequestHeaders(lane.id);
+      const headers = buildRpcLaneRequestHeaders(lane.id, {
+        kind: "rpc-event",
+        targetId: eventId,
+        payloadHash: hashRemoteLanePayload(
+          dependencies.serializer.stringify(
+            buildEventRequestBody(emission.data, { returnPayload: true }),
+          ),
+        ),
+      });
       const result = await binding.communicator.eventWithResult(
         eventId,
         emission.data,
@@ -94,7 +111,15 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     }
 
     if (typeof binding.communicator.event === "function") {
-      const headers = buildRpcLaneRequestHeaders(lane.id);
+      const headers = buildRpcLaneRequestHeaders(lane.id, {
+        kind: "rpc-event",
+        targetId: eventId,
+        payloadHash: hashRemoteLanePayload(
+          dependencies.serializer.stringify(
+            buildEventRequestBody(emission.data),
+          ),
+        ),
+      });
       if (headers) {
         await binding.communicator.event(eventId, emission.data, {
           headers,
@@ -118,10 +143,21 @@ function createRpcLaneRequestHeadersBuilder(context: RpcLanesRuntimeContext) {
   const { resolved, dependencies } = context;
   const store = dependencies.store;
 
-  return (laneId: string): Record<string, string> | undefined => {
+  return (
+    laneId: string,
+    target: {
+      kind: "rpc-task" | "rpc-event";
+      targetId: string;
+      payloadHash?: string;
+    },
+  ): Record<string, string> | undefined => {
     const binding = resolved.bindingsByLaneId.get(laneId)!;
     const headers = {
-      ...(buildRpcLaneAuthHeaders(binding.lane, binding.auth) ?? {}),
+      ...(buildRpcLaneAuthHeaders({
+        lane: binding.lane,
+        bindingAuth: binding.auth,
+        target,
+      }) ?? {}),
     };
     const contextHeader = buildAsyncContextHeader({
       allowList: binding.asyncContextAllowList,
@@ -129,7 +165,7 @@ function createRpcLaneRequestHeadersBuilder(context: RpcLanesRuntimeContext) {
       serializer: dependencies.serializer,
     });
     if (contextHeader) {
-      headers["x-runner-context"] = contextHeader;
+      headers[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeader;
     }
 
     return Object.keys(headers).length > 0 ? headers : undefined;

@@ -1,10 +1,24 @@
-import { issueRemoteLaneToken } from "../../remote-lanes/laneAuth";
+import {
+  hashRemoteLanePayload,
+  issueRemoteLaneToken,
+} from "../../remote-lanes/laneAuth";
+import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
 import {
   authorizeRpcLaneRequest,
   buildRpcLaneAuthHeaders,
   enforceRpcLaneAuthReadiness,
   getBindingAuthForRpcLane,
 } from "../../rpc-lanes/rpcLanes.auth";
+
+function expectRunnerErrorId(fn: () => unknown, errorId: string): void {
+  try {
+    fn();
+    throw new Error(`Expected RunnerError "${errorId}"`);
+  } catch (error) {
+    const candidate = error as { id?: string; name?: string };
+    expect(candidate.id ?? candidate.name).toBe(errorId);
+  }
+}
 
 describe("rpcLanes auth helpers", () => {
   it("resolves binding auth and enforces readiness across modes", () => {
@@ -44,44 +58,178 @@ describe("rpcLanes auth helpers", () => {
   it("builds auth headers and authorizes request variants", () => {
     const lane = { id: "lane-rpc-authz" } as any;
     const bindingAuth = { secret: "authz-secret" };
-    const headers = buildRpcLaneAuthHeaders(lane, bindingAuth);
+    const payloadText = JSON.stringify({ input: { value: 1 } });
+    const target = {
+      kind: "rpc-task" as const,
+      targetId: "task.id",
+      payloadHash: hashRemoteLanePayload(payloadText),
+    };
+    const headers = buildRpcLaneAuthHeaders({ lane, bindingAuth, target });
     expect(headers).toBeTruthy();
     expect(headers?.authorization).toContain("Bearer ");
 
     expect(
-      buildRpcLaneAuthHeaders({ id: "lane-none" } as any, { mode: "none" }),
+      buildRpcLaneAuthHeaders({
+        lane: { id: "lane-none" } as any,
+        bindingAuth: { mode: "none" },
+        target,
+      }),
     ).toBeUndefined();
 
     const validToken = issueRemoteLaneToken({
       laneId: lane.id,
       bindingAuth,
       capability: "produce",
+      target,
     })!;
     const reqWithValidToken = {
       headers: { authorization: `Bearer ${validToken}` },
     } as any;
     expect(
-      authorizeRpcLaneRequest(reqWithValidToken, lane, bindingAuth),
+      authorizeRpcLaneRequest(
+        reqWithValidToken,
+        lane,
+        bindingAuth,
+        {
+          kind: "rpc-task",
+          targetId: "task.id",
+        },
+        { bodyText: payloadText },
+      ),
     ).toBeNull();
+
+    expect(
+      authorizeRpcLaneRequest(
+        reqWithValidToken,
+        lane,
+        bindingAuth,
+        {
+          kind: "rpc-task",
+          targetId: "task.id",
+        },
+        {
+          bodyText: JSON.stringify({ input: { value: 2 } }),
+        },
+      ),
+    ).toMatchObject({ status: 401 });
 
     const reqWithInvalidToken = {
       headers: { authorization: "Bearer wrong" },
     } as any;
     expect(
-      authorizeRpcLaneRequest(reqWithInvalidToken, lane, bindingAuth),
+      authorizeRpcLaneRequest(
+        reqWithInvalidToken,
+        lane,
+        bindingAuth,
+        {
+          kind: "rpc-task",
+          targetId: "task.id",
+        },
+        { bodyText: payloadText },
+      ),
     ).toMatchObject({ status: 401 });
 
     const reqWithoutToken = { headers: {} } as any;
     expect(
-      authorizeRpcLaneRequest(reqWithoutToken, lane, bindingAuth),
+      authorizeRpcLaneRequest(
+        reqWithoutToken,
+        lane,
+        bindingAuth,
+        {
+          kind: "rpc-task",
+          targetId: "task.id",
+        },
+        { bodyText: payloadText },
+      ),
     ).toMatchObject({
       status: 401,
     });
 
+    const eventBodyText = JSON.stringify(buildEventRequestBody({ value: 1 }));
+    const eventBodyWithResultText = JSON.stringify(
+      buildEventRequestBody({ value: 1 }, { returnPayload: true }),
+    );
+    const eventToken = issueRemoteLaneToken({
+      laneId: lane.id,
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "rpc-event",
+        targetId: "event.id",
+        payloadHash: hashRemoteLanePayload(eventBodyText),
+      },
+    })!;
+    const reqWithEventToken = {
+      headers: { authorization: `Bearer ${eventToken}` },
+    } as any;
+
     expect(
-      authorizeRpcLaneRequest(reqWithoutToken, { id: "lane-none" } as any, {
-        mode: "none",
-      }),
+      authorizeRpcLaneRequest(
+        reqWithEventToken,
+        lane,
+        bindingAuth,
+        {
+          kind: "rpc-event",
+          targetId: "event.id",
+        },
+        { bodyText: eventBodyText },
+      ),
     ).toBeNull();
+
+    expect(
+      authorizeRpcLaneRequest(
+        reqWithEventToken,
+        lane,
+        bindingAuth,
+        {
+          kind: "rpc-event",
+          targetId: "event.id",
+        },
+        { bodyText: eventBodyWithResultText },
+      ),
+    ).toMatchObject({ status: 401 });
+
+    expect(
+      authorizeRpcLaneRequest(
+        reqWithoutToken,
+        { id: "lane-none" } as any,
+        { mode: "none" },
+        {
+          kind: "rpc-task",
+          targetId: "task.id",
+        },
+      ),
+    ).toBeNull();
+  });
+
+  it("requires verifier material for local-simulated lanes", () => {
+    const lane = { id: "lane-rpc-auth-simulated" } as any;
+    const config = {
+      profile: "p",
+      topology: {
+        profiles: { p: { serve: [lane] } },
+        bindings: [
+          {
+            lane,
+            communicator: {},
+            auth: { produceSecret: "produce-only" },
+          },
+        ],
+      },
+    } as any;
+    const resolved = {
+      mode: "local-simulated",
+      serveLaneIds: new Set<string>(),
+      taskLaneByTaskId: new Map([["task.id", lane]]),
+      eventLaneByEventId: new Map(),
+      bindingsByLaneId: new Map([
+        [lane.id, { lane, auth: { produceSecret: "produce-only" } }],
+      ]),
+    } as any;
+
+    expectRunnerErrorId(
+      () => enforceRpcLaneAuthReadiness(config, resolved),
+      "remoteLanes-auth-verifierMissing",
+    );
   });
 });

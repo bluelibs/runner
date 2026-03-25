@@ -72,13 +72,15 @@ export function resolveRegistryAsyncContextIds(
       continue;
     }
 
-    const suffixMatches = registeredIds.filter((registeredId) =>
-      registeredId.endsWith(`.${requestedId}`),
-    );
-
-    if (suffixMatches.length === 1) {
-      resolvedIds.add(suffixMatches[0]!);
-      continue;
+    const resolvedContext = registry.get(requestedId);
+    if (resolvedContext) {
+      const resolvedRegistryId = registeredIds.find(
+        (registeredId) => registry.get(registeredId) === resolvedContext,
+      );
+      if (resolvedRegistryId) {
+        resolvedIds.add(resolvedRegistryId);
+        continue;
+      }
     }
 
     resolvedIds.add(requestedId);

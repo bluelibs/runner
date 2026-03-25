@@ -1,8 +1,10 @@
 import { generateKeyPairSync } from "node:crypto";
 import {
+  hashRemoteLanePayload,
   issueRemoteLaneToken,
   verifyRemoteLaneToken,
-} from "../../remote-lanes/laneAuth.tokens";
+} from "../../remote-lanes/laneAuth";
+import { signLaneJwtWithHmac } from "../../remote-lanes/laneAuth.jwt";
 
 function expectRunnerErrorId(fn: () => unknown, errorId: string): void {
   try {
@@ -33,6 +35,250 @@ describe("laneAuth token flow", () => {
         nowMs: 1_500,
       }),
     ).not.toThrow();
+  });
+
+  it("binds tokens to their target and payload hash", () => {
+    const payloadText = JSON.stringify({ input: { value: 1 } });
+    const token = issueRemoteLaneToken({
+      laneId: "lane.bound",
+      bindingAuth: { secret: "bound-secret" },
+      capability: "produce",
+      target: {
+        kind: "rpc-task",
+        targetId: "task.bound",
+        payloadHash: hashRemoteLanePayload(payloadText),
+      },
+    })!;
+
+    expect(() =>
+      verifyRemoteLaneToken({
+        laneId: "lane.bound",
+        bindingAuth: { secret: "bound-secret" },
+        token,
+        requiredCapability: "produce",
+        expectedTarget: {
+          kind: "rpc-task",
+          targetId: "task.bound",
+          payloadHash: hashRemoteLanePayload(payloadText),
+        },
+      }),
+    ).not.toThrow();
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.bound",
+          bindingAuth: { secret: "bound-secret" },
+          token,
+          requiredCapability: "produce",
+          expectedTarget: {
+            kind: "rpc-event",
+            targetId: "task.bound",
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.bound",
+          bindingAuth: { secret: "bound-secret" },
+          token,
+          requiredCapability: "produce",
+          expectedTarget: {
+            kind: "rpc-task",
+            targetId: "task.other",
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.bound",
+          bindingAuth: { secret: "bound-secret" },
+          token,
+          requiredCapability: "produce",
+          expectedTarget: {
+            kind: "rpc-task",
+            targetId: "task.bound",
+            payloadHash: hashRemoteLanePayload(
+              JSON.stringify({ input: { value: 2 } }),
+            ),
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+
+    const unboundToken = issueRemoteLaneToken({
+      laneId: "lane.bound",
+      bindingAuth: { secret: "bound-secret" },
+      capability: "produce",
+    })!;
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.bound",
+          bindingAuth: { secret: "bound-secret" },
+          token: unboundToken,
+          requiredCapability: "produce",
+          expectedTarget: {
+            kind: "rpc-task",
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.bound",
+          bindingAuth: { secret: "bound-secret" },
+          token: unboundToken,
+          requiredCapability: "produce",
+          expectedTarget: {
+            targetId: "task.bound",
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+  });
+
+  it("reports unknown target claims when a lane-only token is verified as bound", () => {
+    const token = issueRemoteLaneToken({
+      laneId: "lane.unbound",
+      bindingAuth: { secret: "unbound-secret" },
+      capability: "produce",
+    })!;
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.unbound",
+          bindingAuth: { secret: "unbound-secret" },
+          token,
+          requiredCapability: "produce",
+          expectedTarget: {
+            kind: "rpc-task",
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.unbound",
+          bindingAuth: { secret: "unbound-secret" },
+          token,
+          requiredCapability: "produce",
+          expectedTarget: {
+            targetId: "task.missing",
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+  });
+
+  it("allows repeated verification of the same token while it remains valid", () => {
+    const token = issueRemoteLaneToken({
+      laneId: "lane.reuse",
+      bindingAuth: { secret: "reuse-secret" },
+      capability: "produce",
+      nowMs: 1_000,
+    })!;
+
+    expect(() =>
+      verifyRemoteLaneToken({
+        laneId: "lane.reuse",
+        bindingAuth: { secret: "reuse-secret" },
+        token,
+        requiredCapability: "produce",
+        nowMs: 1_500,
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      verifyRemoteLaneToken({
+        laneId: "lane.reuse",
+        bindingAuth: { secret: "reuse-secret" },
+        token,
+        requiredCapability: "produce",
+        nowMs: 2_000,
+      }),
+    ).not.toThrow();
+  });
+
+  it("accepts manually signed verified tokens without nonce claims", () => {
+    const token = signLaneJwtWithHmac(
+      { alg: "HS256", typ: "JWT" },
+      {
+        lane: "lane.manual-token",
+        cap: "produce",
+        iat: 1,
+        exp: 60,
+      },
+      "legacy-secret",
+    );
+
+    expect(
+      verifyRemoteLaneToken({
+        laneId: "lane.manual-token",
+        bindingAuth: { secret: "legacy-secret" },
+        token,
+        requiredCapability: "produce",
+        nowMs: 10_000,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("rejects lane-only tokens when target claims are required", () => {
+    const kindOnlyToken = issueRemoteLaneToken({
+      laneId: "lane.legacy-targets",
+      bindingAuth: { secret: "legacy-secret" },
+      capability: "produce",
+    })!;
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.legacy-targets",
+          bindingAuth: { secret: "legacy-secret" },
+          token: kindOnlyToken,
+          requiredCapability: "produce",
+          expectedTarget: {
+            kind: "rpc-task",
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+
+    const missingTargetIdToken = issueRemoteLaneToken({
+      laneId: "lane.legacy-targets",
+      bindingAuth: { secret: "legacy-secret" },
+      capability: "produce",
+      target: {
+        kind: "rpc-task",
+        targetId: undefined as any,
+      },
+    })!;
+
+    expectRunnerErrorId(
+      () =>
+        verifyRemoteLaneToken({
+          laneId: "lane.legacy-targets",
+          bindingAuth: { secret: "legacy-secret" },
+          token: missingTargetIdToken,
+          requiredCapability: "produce",
+          expectedTarget: {
+            targetId: "task.required",
+          },
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
   });
 
   it("returns undefined for mode none and no-ops verification", () => {

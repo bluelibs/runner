@@ -1,5 +1,6 @@
 import {
   assertOkEnvelope,
+  buildEventRequestBody,
   type ProtocolEnvelope,
   RemoteLaneTransportError,
 } from "./remote-lanes/http/protocol";
@@ -9,7 +10,9 @@ import type {
   ExposureFetchClient,
 } from "./remote-lanes/http/types";
 import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
+import { buildAsyncContextHeader } from "./node/remote-lanes/asyncContextAllowlist";
 import { linkAbortSignals } from "./tools/abortSignals";
+import { RUNNER_ASYNC_CONTEXT_HEADER } from "./remote-lanes/http/constants";
 export { normalizeError } from "./tools/normalizeError";
 export type {
   ExposureFetchAuthConfig,
@@ -56,7 +59,9 @@ async function postSerialized<T = any>(options: {
       "content-type": "application/json; charset=utf-8",
       ...headers,
     } as Record<string, string>;
-    if (contextHeaderText) reqHeaders["x-runner-context"] = contextHeaderText;
+    if (contextHeaderText) {
+      reqHeaders[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeaderText;
+    }
     if (onRequest) await onRequest({ url, headers: reqHeaders });
     const res = await fetchFn(url, {
       method: "POST",
@@ -159,19 +164,15 @@ export function createExposureFetch(
   }
 
   const buildContextHeader = () => {
-    if (!cfg.contexts || cfg.contexts.length === 0) return undefined;
-    const map: Record<string, string> = {};
-    for (const asyncContext of cfg.contexts) {
-      try {
-        const value = asyncContext.use();
-        map[asyncContext.id] = asyncContext.serialize(value);
-      } catch {
-        // context absent; ignore
-      }
+    if (!cfg.contexts || cfg.contexts.length === 0) {
+      return undefined;
     }
-    const keys = Object.keys(map);
-    if (keys.length === 0) return undefined;
-    return cfg.serializer.stringify(map);
+
+    return buildAsyncContextHeader({
+      allowList: undefined,
+      registry: new Map(cfg.contexts.map((context) => [context.id, context])),
+      serializer: cfg.serializer,
+    });
   };
 
   return {
@@ -218,7 +219,7 @@ export function createExposureFetch(
       const r: ProtocolEnvelope<void> = await postSerialized({
         fetch: fetchImpl,
         url,
-        body: { payload },
+        body: buildEventRequestBody(payload),
         headers: {
           ...buildHeaders(),
           ...(options?.headers ?? {}),
@@ -251,7 +252,7 @@ export function createExposureFetch(
       const r: ProtocolEnvelope<P> = await postSerialized({
         fetch: fetchImpl,
         url,
-        body: { payload, returnPayload: true },
+        body: buildEventRequestBody(payload, { returnPayload: true }),
         headers: {
           ...buildHeaders(),
           ...(options?.headers ?? {}),

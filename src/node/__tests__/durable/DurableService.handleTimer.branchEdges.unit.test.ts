@@ -28,7 +28,7 @@ describe("durable: DurableService.handleTimer branch edges", () => {
 
     const timer: Timer = {
       id: "oneoff:no-claim",
-      taskId: task.id,
+      workflowKey: task.id,
       type: TimerType.Scheduled,
       fireAt: new Date(0),
       status: TimerStatus.Pending,
@@ -123,7 +123,7 @@ describe("durable: DurableService.handleTimer branch edges", () => {
 
     const schedule: Schedule = {
       id: "s1",
-      taskId: task.id,
+      workflowKey: task.id,
       type: "interval",
       pattern: "1000",
       input: undefined,
@@ -137,7 +137,7 @@ describe("durable: DurableService.handleTimer branch edges", () => {
     const timer: Timer = {
       id: "sched:s1",
       scheduleId: "s1",
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       type: TimerType.Scheduled,
       fireAt: new Date(schedule.nextRun!),
@@ -148,5 +148,101 @@ describe("durable: DurableService.handleTimer branch edges", () => {
     await service.handleTimer(timer);
 
     expect(rescheduleSpy).not.toHaveBeenCalled();
+  });
+
+  it("finalizes timeout timers when the execution wait is already settled", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__execution:child",
+      result: { state: "completed", targetExecutionId: "child", result: 1 },
+      completedAt: new Date(),
+    });
+
+    const timer: Timer = {
+      id: "timeout:e1:child",
+      executionId: "e1",
+      stepId: "__execution:child",
+      type: TimerType.Timeout,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    await service.handleTimer(timer);
+
+    expect(
+      (await store.getReadyTimers(new Date(Date.now() + 60_000))).some(
+        (readyTimer) => readyTimer.id === timer.id,
+      ),
+    ).toBe(false);
+  });
+
+  it("marks execution waits as timed out when a timeout timer fires", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__execution:child",
+      result: { state: "waiting", targetExecutionId: "child" },
+      completedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "e1",
+      targetExecutionId: "child",
+      stepId: "__execution:child",
+    });
+
+    const timer: Timer = {
+      id: "timeout:e1:child-active",
+      executionId: "e1",
+      stepId: "__execution:child",
+      type: TimerType.Timeout,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    await service.handleTimer(timer);
+
+    expect(
+      (await store.getStepResult("e1", "__execution:child"))?.result,
+    ).toEqual({
+      state: "timed_out",
+      targetExecutionId: "child",
+    });
+  });
+
+  it("returns early when another worker already claimed the timer", async () => {
+    const base = new MemoryStore();
+    const store = createBareStore(base);
+    store.claimTimer = jest.fn(async () => false);
+    const service = new DurableService({ store, tasks: [] });
+
+    const timer: Timer = {
+      id: "timeout:claimed-elsewhere",
+      executionId: "e1",
+      stepId: "__execution:child",
+      type: TimerType.Timeout,
+      fireAt: new Date(0),
+      status: TimerStatus.Pending,
+    };
+    await store.createTimer(timer);
+
+    await service.handleTimer(timer);
+
+    expect(store.claimTimer).toHaveBeenCalledWith(
+      "timeout:claimed-elsewhere",
+      expect.any(String),
+      30_000,
+    );
+    expect(
+      (await store.getReadyTimers(new Date(Date.now() + 60_000))).some(
+        (readyTimer) => readyTimer.id === timer.id,
+      ),
+    ).toBe(true);
   });
 });

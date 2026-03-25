@@ -1,5 +1,6 @@
 import type { IDurableStore } from "../interfaces/store";
 import type { IEventBus, BusEvent } from "../interfaces/bus";
+import type { WaitOptions } from "../interfaces/service";
 import { sleepMs, DurableExecutionError } from "../utils";
 import { clearTimeout, setTimeout } from "node:timers";
 import { ExecutionStatus } from "../types";
@@ -18,6 +19,8 @@ export interface WaitConfig {
  *
  * The durable store remains the source of truth; this manager is purely a convenience layer
  * for callers that want `await durable.wait(...)` / `await durable.startAndWait(...)`.
+ * Event-bus notifications are only lightweight nudges; the waiter always re-reads the store
+ * for the terminal result or error payload.
  */
 export class WaitManager {
   constructor(
@@ -28,12 +31,28 @@ export class WaitManager {
 
   async waitForResult<TResult>(
     executionId: string,
-    options?: { timeout?: number; waitPollIntervalMs?: number },
+    options?: WaitOptions,
   ): Promise<TResult> {
     const startedAt = Date.now();
     const timeoutMs = options?.timeout ?? this.config?.defaultTimeout;
     const pollEveryMs =
       options?.waitPollIntervalMs ?? this.config?.defaultPollIntervalMs ?? 500;
+
+    const buildTimeoutError = async (): Promise<DurableExecutionError> => {
+      const exec = await this.store.getExecution(executionId);
+      return new DurableExecutionError(
+        `Timeout waiting for execution ${executionId}`,
+        executionId,
+        exec?.workflowKey || "unknown",
+        exec?.attempt || 0,
+      );
+    };
+
+    const throwIfTimedOut = async (): Promise<void> => {
+      if (timeoutMs !== undefined && Date.now() - startedAt >= timeoutMs) {
+        throw await buildTimeoutError();
+      }
+    };
 
     const check = async (): Promise<
       { done: false } | { done: true; value: TResult }
@@ -56,7 +75,7 @@ export class WaitManager {
         throw new DurableExecutionError(
           exec.error?.message || "Execution failed",
           exec.id,
-          exec.taskId,
+          exec.workflowKey || "unknown",
           exec.attempt,
           exec.error,
         );
@@ -66,7 +85,7 @@ export class WaitManager {
         throw new DurableExecutionError(
           exec.error?.message || "Compensation failed",
           exec.id,
-          exec.taskId,
+          exec.workflowKey || "unknown",
           exec.attempt,
           exec.error,
         );
@@ -76,7 +95,7 @@ export class WaitManager {
         throw new DurableExecutionError(
           exec.error?.message || "Execution cancelled",
           exec.id,
-          exec.taskId,
+          exec.workflowKey || "unknown",
           exec.attempt,
           exec.error,
         );
@@ -85,24 +104,12 @@ export class WaitManager {
       return { done: false };
     };
 
-    const pollingFallback = async (): Promise<TResult> => {
-      while (true) {
-        const result = await check();
-        if (result.done) return result.value;
-
-        if (timeoutMs !== undefined && Date.now() - startedAt > timeoutMs) {
-          const exec = await this.store.getExecution(executionId);
-          throw new DurableExecutionError(
-            `Timeout waiting for execution ${executionId}`,
-            executionId,
-            exec?.taskId || "unknown",
-            exec?.attempt || 0,
-          );
-        }
-
-        await sleepMs(pollEveryMs);
-      }
-    };
+    const pollingFallback = async (): Promise<TResult> =>
+      await this.pollUntilFinished({
+        check,
+        throwIfTimedOut,
+        pollEveryMs,
+      });
 
     // Initial check
     const initialResult = await check();
@@ -172,16 +179,6 @@ export class WaitManager {
           }
         })();
 
-        const buildTimeoutError = async (): Promise<DurableExecutionError> => {
-          const exec = await this.store.getExecution(executionId);
-          return new DurableExecutionError(
-            `Timeout waiting for execution ${executionId}`,
-            executionId,
-            exec?.taskId || "unknown",
-            exec?.attempt || 0,
-          );
-        };
-
         if (timeoutMs !== undefined) {
           const elapsedMs = Date.now() - startedAt;
           const remainingTimeoutMs = timeoutMs - elapsedMs;
@@ -209,20 +206,31 @@ export class WaitManager {
         }
 
         const pollOnce = async (): Promise<void> => {
-          if (done) return;
           try {
             const result = await check();
+            if (done) return;
             if (result.done) {
               await finalize({ ok: true, value: result.value });
               return;
             }
+            await throwIfTimedOut();
+            /* istanbul ignore next -- another completion path may settle the wait during the timeout microtask turn */
+            if (done) return;
           } catch (err) {
             await finalize({ ok: false, error: err });
             return;
           }
 
-          pollTimer = setTimeout(() => void pollOnce(), pollEveryMs);
-          pollTimer.unref();
+          const nextPollTimer = setTimeout(() => {
+            pollTimer = null;
+            if (done) {
+              return;
+            }
+            void pollOnce();
+          }, pollEveryMs);
+          nextPollTimer.unref();
+
+          pollTimer = nextPollTimer;
         };
 
         void (async () => {
@@ -231,24 +239,47 @@ export class WaitManager {
               return;
             }
             await eventBus.subscribe(channel, handler);
+            if (done) {
+              return;
+            }
             await handler({
               type: "subscribed",
               payload: null,
               timestamp: new Date(),
             });
+            if (done) {
+              return;
+            }
             await pollOnce();
           } catch {
             // Fallback to polling if subscription fails
+            if (done) {
+              return;
+            }
             if (timer) {
               clearTimeout(timer);
               timer = null;
             }
-            pollingFallback().then(resolve).catch(reject);
+            void pollingFallback().then(resolve).catch(reject);
           }
         })();
       });
     }
 
     return pollingFallback();
+  }
+
+  private async pollUntilFinished<TResult>(params: {
+    check: () => Promise<{ done: false } | { done: true; value: TResult }>;
+    throwIfTimedOut: () => Promise<void>;
+    pollEveryMs: number;
+  }): Promise<TResult> {
+    while (true) {
+      const result = await params.check();
+      if (result.done) return result.value;
+      await params.throwIfTimedOut();
+
+      await sleepMs(params.pollEveryMs);
+    }
   }
 }

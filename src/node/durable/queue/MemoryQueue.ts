@@ -38,4 +38,8 @@ export class MemoryQueue
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
     return this.nackMessage(messageId, requeue);
   }
+
+  async cancelConsumer(): Promise<void> {
+    this.messageHandler = null;
+  }
 }

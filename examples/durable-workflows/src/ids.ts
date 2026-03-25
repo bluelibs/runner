@@ -13,15 +13,15 @@ import {
 export const store = new MemoryStore();
 export const eventBus = new MemoryEventBus();
 
-// ─── Durable resource (in-memory, worker enabled) ───────────────────────────
+// ─── Durable resource (in-memory, queue-less poller/executor) ───────────────
 
 export const durable = durableResource.fork("durable");
 
 export const durableRegistration = durable.with({
   store,
   eventBus,
-  worker: true,
   polling: { interval: 50 },
+  recovery: { onStartup: true },
 });
 
 // ─── Signals ─────────────────────────────────────────────────────────────────

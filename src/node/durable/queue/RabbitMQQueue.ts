@@ -147,6 +147,13 @@ export class RabbitMQQueue implements IDurableQueue {
     await this.transport.nack(messageId, requeue);
   }
 
+  /**
+   * Cancels the active consumer registration while leaving the queue intact.
+   */
+  async cancelConsumer(): Promise<void> {
+    await this.transport.cancelConsumer();
+  }
+
   async dispose(): Promise<void> {
     this.attemptsByMessageId.clear();
     await this.transport.dispose();

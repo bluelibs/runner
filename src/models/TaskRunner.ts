@@ -26,6 +26,7 @@ import {
 import type { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
 import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import { ExecutionContextStore } from "./ExecutionContextStore";
+import { runWithRuntimeCallSource } from "./RuntimeCallSourceStore";
 import type { ExecutionFrame } from "../types/executionContext";
 import { globalTags } from "../globals/globalTags";
 import { raceWithAbortSignal } from "../tools/abortSignals";
@@ -163,9 +164,11 @@ export class TaskRunner {
     return this.lifecycleAdmissionController.trackTaskExecution(
       executionSource,
       () =>
-        this.executionContextStore.runWithFrame(traceFrame, executeTask, {
-          signal,
-        }),
+        runWithRuntimeCallSource(executionSource, () =>
+          this.executionContextStore.runWithFrame(traceFrame, executeTask, {
+            signal,
+          }),
+        ),
     );
   }
 

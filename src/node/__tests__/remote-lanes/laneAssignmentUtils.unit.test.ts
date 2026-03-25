@@ -2,6 +2,7 @@ import {
   assignLaneTargetOrThrow,
   collectCrossLaneApplyToEventIds,
 } from "../../remote-lanes/laneAssignmentUtils";
+import { rpcLanesResource } from "../../rpc-lanes/rpcLanes.resource";
 
 describe("laneAssignmentUtils", () => {
   it("uses the raw resource id fallback when canonical resolution returns null", () => {
@@ -70,7 +71,7 @@ describe("laneAssignmentUtils", () => {
     expect(eventIds.size).toBe(0);
   });
 
-  it("resolves a uniquely suffix-matched event id from applyTo", () => {
+  it("requires exact event ids when collecting cross-lane event ids", () => {
     const canonicalEventId = "app.events.user.created";
     const eventIds = collectCrossLaneApplyToEventIds(
       {
@@ -91,7 +92,7 @@ describe("laneAssignmentUtils", () => {
           [canonicalEventId, { event: { id: canonicalEventId } }],
         ]),
       } as any,
-      "rpc",
+      "app.resources.rpc",
       (topology) =>
         (
           topology as {
@@ -100,20 +101,26 @@ describe("laneAssignmentUtils", () => {
         ).bindings.map((binding) => binding.lane),
     );
 
-    expect(Array.from(eventIds)).toEqual([canonicalEventId]);
+    expect(eventIds.size).toBe(0);
   });
 
-  it("skips ambiguous suffix-matches when more than one event could match", () => {
+  it("resolves configured resource definitions through the store lookup", () => {
     const eventIds = collectCrossLaneApplyToEventIds(
       {
         resources: new Map([
           [
-            "resource",
+            "app.rpcLanes",
             {
-              resource: { id: "resource" },
+              resource: { id: "app.rpcLanes" },
               config: {
                 topology: {
-                  bindings: [{ lane: { applyTo: ["created"] } }],
+                  bindings: [
+                    {
+                      lane: {
+                        applyTo: ["app.events.user.created"],
+                      },
+                    },
+                  ],
                 },
               },
             },
@@ -124,13 +131,12 @@ describe("laneAssignmentUtils", () => {
             "app.events.user.created",
             { event: { id: "app.events.user.created" } },
           ],
-          [
-            "app.events.audit.created",
-            { event: { id: "app.events.audit.created" } },
-          ],
         ]),
+        hasDefinition: (reference: unknown) => reference === rpcLanesResource,
+        findIdByDefinition: (reference: unknown) =>
+          reference === rpcLanesResource ? "app.rpcLanes" : String(reference),
       } as any,
-      "resource",
+      rpcLanesResource,
       (topology) =>
         (
           topology as {
@@ -139,7 +145,7 @@ describe("laneAssignmentUtils", () => {
         ).bindings.map((binding) => binding.lane),
     );
 
-    expect(eventIds.size).toBe(0);
+    expect(Array.from(eventIds)).toEqual(["app.events.user.created"]);
   });
 
   it("falls back to raw target ids when canonical resolution returns null", () => {
@@ -165,5 +171,18 @@ describe("laneAssignmentUtils", () => {
       currentLaneId: "lane-a",
       attemptedLaneId: "lane-b",
     });
+  });
+
+  it("ignores unresolved non-string resource references", () => {
+    const eventIds = collectCrossLaneApplyToEventIds(
+      {
+        resources: new Map(),
+        events: new Map(),
+      } as any,
+      { resource: "rpcLanes" },
+      () => [],
+    );
+
+    expect(eventIds.size).toBe(0);
   });
 });

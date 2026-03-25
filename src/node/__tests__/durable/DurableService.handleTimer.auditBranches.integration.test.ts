@@ -1,20 +1,6 @@
 import { DurableService } from "../../durable/core/DurableService";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { genericError } from "../../../errors";
-
-async function waitUntil(
-  predicate: () => Promise<boolean>,
-  options: { timeoutMs: number; intervalMs: number },
-): Promise<void> {
-  const deadline = Date.now() + options.timeoutMs;
-  while (Date.now() < deadline) {
-    if (await predicate()) return;
-    await new Promise<void>((resolve) =>
-      setTimeout(resolve, options.intervalMs),
-    );
-  }
-  throw genericError.new({ message: "Timed out waiting for condition" });
-}
+import { waitUntil } from "../../durable/test-utils";
 
 describe("durable: DurableService handleTimer audit branches", () => {
   it("uses configured claimTtlMs and records sleep_completed with attempt from execution", async () => {
@@ -40,13 +26,23 @@ describe("durable: DurableService handleTimer audit branches", () => {
 
     await store.saveExecution({
       id: "exec-1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: "sleeping",
       attempt: 2,
       maxAttempts: 3,
       createdAt: new Date(),
       updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "exec-1",
+      stepId: "sleep:1",
+      result: {
+        state: "sleeping",
+        timerId: "t-claim",
+        fireAtMs: Date.now() + 1_000,
+      },
+      completedAt: new Date(),
     });
 
     await store.createTimer({
@@ -137,6 +133,16 @@ describe("durable: DurableService handleTimer audit branches", () => {
       stepId: "sleep:1",
       fireAt: new Date(0),
       status: "pending",
+    });
+    await store.saveStepResult({
+      executionId: "missing-exec",
+      stepId: "sleep:1",
+      result: {
+        state: "sleeping",
+        timerId: "t1",
+        fireAtMs: Date.now() + 1_000,
+      },
+      completedAt: new Date(),
     });
 
     service.start();

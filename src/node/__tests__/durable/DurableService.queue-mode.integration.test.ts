@@ -1,21 +1,12 @@
 import { r, resources, run } from "../../node";
-import { durableResource } from "../../durable/core/resource";
-import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
-import { MemoryQueue } from "../../durable/queue/MemoryQueue";
-import { MemoryStore } from "../../durable/store/MemoryStore";
 
 describe("durable: queue mode integration", () => {
-  it("executes via queue + worker", async () => {
-    const store = new MemoryStore();
-    const queue = new MemoryQueue();
-    const bus = new MemoryEventBus();
-
-    const durable = durableResource.fork("durable-tests-queue-durable");
+  it("executes via queue + embedded queue consumer", async () => {
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-queue-durable",
+    );
     const durableRegistration = durable.with({
-      store,
-      queue,
-      eventBus: bus,
-      worker: true,
+      queue: { consume: true },
     });
 
     const task = r

@@ -1,4 +1,8 @@
-import type { IStepBuilder, StepOptions } from "./interfaces/context";
+import type {
+  DurableStepRunContext,
+  IStepBuilder,
+  StepOptions,
+} from "./interfaces/context";
 import type { DurableContext } from "./DurableContext";
 import { durableStepDefinitionError } from "../../../errors";
 
@@ -12,16 +16,17 @@ import { durableStepDefinitionError } from "../../../errors";
  * It is `PromiseLike`, so users can `await durableContext.step("x").up(...).down(...)`.
  */
 export class StepBuilder<T> implements IStepBuilder<T> {
-  private upFn?: () => Promise<T>;
+  private upFn?: (context: DurableStepRunContext) => Promise<T>;
   private downFn?: (result: T) => Promise<void>;
 
   constructor(
     private readonly context: DurableContext,
     private readonly stepId: string,
     private readonly options: StepOptions = {},
+    private readonly allowCancellationRequested = false,
   ) {}
 
-  up(fn: () => Promise<T>): this {
+  up(fn: (context: DurableStepRunContext) => Promise<T>): this {
     this.upFn = fn;
     return this;
   }
@@ -41,6 +46,8 @@ export class StepBuilder<T> implements IStepBuilder<T> {
       this.options,
       this.upFn!,
       this.downFn,
+      undefined,
+      this.allowCancellationRequested,
     );
   }
 

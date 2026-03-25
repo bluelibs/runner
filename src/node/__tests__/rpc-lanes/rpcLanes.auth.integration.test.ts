@@ -6,9 +6,20 @@ import { globalResources } from "../../../globals/globalResources";
 import { globalTags } from "../../../globals/globalTags";
 import { rpcLanesResource } from "../../rpc-lanes";
 import { r } from "../../../public";
-import { issueRemoteLaneToken } from "../../remote-lanes/laneAuth";
+import {
+  hashRemoteLanePayload,
+  verifyRemoteLaneToken,
+} from "../../remote-lanes/laneAuth";
+import { buildRpcLaneAuthHeaders } from "../../rpc-lanes/rpcLanes.auth";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { genericError } from "../../../errors";
+import { Serializer } from "../../../serializer";
+import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
+import {
+  createClientRpcLaneTopology,
+  createMockRpcLaneCommunicator,
+  createServerRpcLaneTopology,
+} from "./test.utils";
 
 describe("rpcLanes auth", () => {
   const allocatePort = async (): Promise<number> => {
@@ -40,18 +51,13 @@ describe("rpcLanes auth", () => {
       tags: [globalTags.rpcLane.with({ lane })],
       run: async (input) => input.value + 1,
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-auth-local-simulated-communicator",
-      init: async () => ({
-        task: async () => 1,
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [{ lane, communicator, auth: { secret: "simulated-secret" } }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-auth-local-simulated-communicator",
+      { task: async () => 1 },
+    );
+    const topology = createClientRpcLaneTopology([
+      { lane, communicator, auth: { secret: "simulated-secret" } },
+    ]);
 
     const app = defineResource({
       id: "tests-rpc-lanes-auth-local-simulated-app",
@@ -79,18 +85,12 @@ describe("rpcLanes auth", () => {
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "ok",
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-auth-local-simulated-missing-communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [{ lane, communicator, auth: {} }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-auth-local-simulated-missing-communicator",
+    );
+    const topology = createClientRpcLaneTopology([
+      { lane, communicator, auth: {} },
+    ]);
     const app = defineResource({
       id: "tests-rpc-lanes-auth-local-simulated-missing-app",
       register: [
@@ -105,6 +105,42 @@ describe("rpcLanes auth", () => {
 
     await expect(run(app)).rejects.toMatchObject({
       name: "remoteLanes-auth-signerMissing",
+    });
+  });
+
+  it("fails fast in local-simulated mode when verifier material is missing", async () => {
+    const lane = r
+      .rpcLane("tests-rpc-lanes-auth-local-simulated-verifier-missing-lane")
+      .build();
+    const task = defineTask({
+      id: "tests-rpc-lanes-auth-local-simulated-verifier-missing-task",
+      tags: [globalTags.rpcLane.with({ lane })],
+      run: async () => "ok",
+    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-auth-local-simulated-verifier-missing-communicator",
+    );
+    const topology = createClientRpcLaneTopology([
+      {
+        lane,
+        communicator,
+        auth: { produceSecret: "produce-only-secret" },
+      },
+    ]);
+    const app = defineResource({
+      id: "tests-rpc-lanes-auth-local-simulated-verifier-missing-app",
+      register: [
+        task,
+        rpcLanesResource.with({
+          profile: "client",
+          topology,
+          mode: "local-simulated",
+        }),
+      ],
+    });
+
+    await expect(run(app)).rejects.toMatchObject({
+      name: "remoteLanes-auth-verifierMissing",
     });
   });
 
@@ -127,18 +163,13 @@ describe("rpcLanes auth", () => {
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "secured",
     });
-    const communicator = defineResource({
-      id: "tests-rpc-lanes-auth-network-communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        server: { serve: [lane] },
-      },
-      bindings: [{ lane, communicator, auth: { secret: "network-secret" } }],
-    });
+    const communicator = createMockRpcLaneCommunicator(
+      "tests-rpc-lanes-auth-network-communicator",
+    );
+    const topology = createServerRpcLaneTopology(
+      [lane],
+      [{ lane, communicator, auth: { secret: "network-secret" } }],
+    );
     const exposurePort = await allocatePort();
     const lanes = rpcLanesResource.with({
       profile: "server",
@@ -159,54 +190,107 @@ describe("rpcLanes auth", () => {
 
     const runtime = await run(app);
     try {
-      const url = `http://127.0.0.1:${exposurePort}/__runner/task/${encodeURIComponent(task.id)}`;
+      const serializer = new Serializer();
+      const discoveryUrl = `http://127.0.0.1:${exposurePort}/__runner/discovery`;
+      const discovery = await fetch(discoveryUrl);
+      const discoveryJson = await discovery.json();
+      const servedTaskId = discoveryJson.result.allowList.tasks[0] as string;
+      const servedEventId = discoveryJson.result.allowList.events[0] as string;
+      const taskBody = serializer.stringify({ input: {} });
+      const mismatchedTaskBody = serializer.stringify({ input: { value: 9 } });
+      const eventBody = serializer.stringify({ payload: { value: 1 } });
+
+      const url = `http://127.0.0.1:${exposurePort}/__runner/task/${encodeURIComponent(servedTaskId)}`;
 
       const unauthorized = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ input: {} }),
+        body: taskBody,
       });
       const unauthorizedJson = await unauthorized.json();
       expect(unauthorized.status).toBe(401);
       expect(unauthorizedJson.error.code).toBe("UNAUTHORIZED");
 
-      const token = issueRemoteLaneToken({
-        laneId: lane.id,
+      const taskHeaders = buildRpcLaneAuthHeaders({
+        lane,
         bindingAuth: topology.bindings[0]?.auth,
-        capability: "produce",
-      });
-      const authToken = token as string;
+        target: {
+          kind: "rpc-task",
+          targetId: servedTaskId,
+          payloadHash: hashRemoteLanePayload(taskBody),
+        },
+      })!;
+
+      const mismatchedTaskHeaders = buildRpcLaneAuthHeaders({
+        lane,
+        bindingAuth: topology.bindings[0]?.auth,
+        target: {
+          kind: "rpc-task",
+          targetId: servedTaskId,
+          payloadHash: hashRemoteLanePayload(taskBody),
+        },
+      })!;
 
       const authorized = await fetch(url, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${authToken}`,
+          ...taskHeaders,
         },
-        body: JSON.stringify({ input: {} }),
+        body: taskBody,
       });
       const authorizedJson = await authorized.json();
       expect(authorized.status).toBe(200);
       expect(authorizedJson.result).toBe("secured");
 
-      const eventUrl = `http://127.0.0.1:${exposurePort}/__runner/event/${encodeURIComponent(event.id)}`;
+      const mismatchedTask = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...mismatchedTaskHeaders,
+        },
+        body: mismatchedTaskBody,
+      });
+      expect(mismatchedTask.status).toBe(401);
+
+      const eventUrl = `http://127.0.0.1:${exposurePort}/__runner/event/${encodeURIComponent(servedEventId)}`;
       const unauthorizedEvent = await fetch(eventUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ payload: { value: 1 } }),
+        body: eventBody,
       });
       expect(unauthorizedEvent.status).toBe(401);
+
+      const eventHeaders = buildRpcLaneAuthHeaders({
+        lane,
+        bindingAuth: topology.bindings[0]?.auth,
+        target: {
+          kind: "rpc-event",
+          targetId: servedEventId,
+          payloadHash: hashRemoteLanePayload(eventBody),
+        },
+      })!;
 
       const authorizedEvent = await fetch(eventUrl, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${authToken}`,
+          ...eventHeaders,
         },
-        body: JSON.stringify({ payload: { value: 1 } }),
+        body: eventBody,
       });
       expect(authorizedEvent.status).toBe(200);
       expect(eventRuns).toBe(1);
+
+      const wrongTargetEvent = await fetch(eventUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...taskHeaders,
+        },
+        body: eventBody,
+      });
+      expect(wrongTargetEvent.status).toBe(401);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "EPERM") {
         return;
@@ -275,10 +359,52 @@ describe("rpcLanes auth", () => {
     await expect(runtime.runTask(task as any)).resolves.toBe("remote-ok");
     await runtime.runTask(emitTask as any);
 
+    const remoteTaskId = remoteTask.mock.calls[0]?.[0] as string;
+    const remoteEventId = remoteEvent.mock.calls[0]?.[0] as string;
     const taskOptions = remoteTask.mock.calls[0]?.[2];
     const eventOptions = remoteEvent.mock.calls[0]?.[2];
     expect(taskOptions?.headers?.authorization).toMatch(/^Bearer /);
     expect(eventOptions?.headers?.authorization).toMatch(/^Bearer /);
+    const taskToken = taskOptions?.headers?.authorization?.replace(
+      /^Bearer\s+/,
+      "",
+    );
+    const eventToken = eventOptions?.headers?.authorization?.replace(
+      /^Bearer\s+/,
+      "",
+    );
+    const serializer = new Serializer();
+
+    expect(() =>
+      verifyRemoteLaneToken({
+        laneId: lane.id,
+        bindingAuth: topology.bindings[0]?.auth,
+        token: taskToken!,
+        requiredCapability: "produce",
+        expectedTarget: {
+          kind: "rpc-task",
+          targetId: remoteTaskId,
+          payloadHash: hashRemoteLanePayload(
+            serializer.stringify({ input: undefined }),
+          ),
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      verifyRemoteLaneToken({
+        laneId: lane.id,
+        bindingAuth: topology.bindings[0]?.auth,
+        token: eventToken!,
+        requiredCapability: "produce",
+        expectedTarget: {
+          kind: "rpc-event",
+          targetId: remoteEventId,
+          payloadHash: hashRemoteLanePayload(
+            serializer.stringify(buildEventRequestBody({ value: 1 })),
+          ),
+        },
+      }),
+    ).not.toThrow();
     await runtime.dispose();
   });
 
@@ -337,8 +463,28 @@ describe("rpcLanes auth", () => {
     await expect(runtime.runTask(emitTask as any)).resolves.toEqual({
       value: 11,
     });
+    const remoteEventId = remoteEventWithResult.mock.calls[0]?.[0] as string;
     const options = remoteEventWithResult.mock.calls[0]?.[2];
     expect(options?.headers?.authorization).toMatch(/^Bearer /);
+    const token = options?.headers?.authorization?.replace(/^Bearer\s+/, "");
+    const serializer = new Serializer();
+    expect(() =>
+      verifyRemoteLaneToken({
+        laneId: lane.id,
+        bindingAuth: topology.bindings[0]?.auth,
+        token: token!,
+        requiredCapability: "produce",
+        expectedTarget: {
+          kind: "rpc-event",
+          targetId: remoteEventId,
+          payloadHash: hashRemoteLanePayload(
+            serializer.stringify(
+              buildEventRequestBody({ value: 1 }, { returnPayload: true }),
+            ),
+          ),
+        },
+      }),
+    ).not.toThrow();
     await runtime.dispose();
   });
 

@@ -47,6 +47,15 @@ export interface RpcLaneResolvedState {
   communicatorByLaneId: Map<string, IRpcLaneCommunicator>;
 }
 
+interface RpcLanesExposureSnapshot {
+  taskIds: readonly string[];
+  eventIds: readonly string[];
+  taskAllowAsyncContext: Readonly<Record<string, boolean>>;
+  eventAllowAsyncContext: Readonly<Record<string, boolean>>;
+  taskAsyncContextAllowList: Readonly<Record<string, readonly string[]>>;
+  eventAsyncContextAllowList: Readonly<Record<string, readonly string[]>>;
+}
+
 function toFrozenRecord<TValue>(
   entries: Iterable<readonly [string, TValue]>,
   mapId: (id: string) => string,
@@ -170,11 +179,46 @@ export function toRpcLanesResourceValue(
   exposure?: { close: () => Promise<void> } | null,
   mapId: (id: string) => string = (id) => id,
 ): RpcLanesResourceValue {
+  const snapshot = toRpcLanesExposureSnapshot(resolved, mapId);
+
   return {
     profile: resolved.profile,
     mode: resolved.mode,
-    serveTaskIds: Array.from(resolved.serveTaskIds, mapId),
-    serveEventIds: Array.from(resolved.serveEventIds, mapId),
+    serveTaskIds: snapshot.taskIds,
+    serveEventIds: snapshot.eventIds,
+    taskAllowAsyncContext: snapshot.taskAllowAsyncContext,
+    eventAllowAsyncContext: snapshot.eventAllowAsyncContext,
+    taskAsyncContextAllowList: snapshot.taskAsyncContextAllowList,
+    eventAsyncContextAllowList: snapshot.eventAsyncContextAllowList,
+    communicatorByLaneId: resolved.communicatorByLaneId,
+    exposure: exposure ?? null,
+  };
+}
+
+export function toRpcLanesExposurePolicy(
+  resolved: RpcLaneResolvedState,
+  mapId: (id: string) => string = (id) => id,
+): NodeExposurePolicySnapshot {
+  const snapshot = toRpcLanesExposureSnapshot(resolved, mapId);
+
+  return {
+    enabled: snapshot.taskIds.length > 0 || snapshot.eventIds.length > 0,
+    taskIds: snapshot.taskIds,
+    eventIds: snapshot.eventIds,
+    taskAllowAsyncContext: snapshot.taskAllowAsyncContext,
+    eventAllowAsyncContext: snapshot.eventAllowAsyncContext,
+    taskAsyncContextAllowList: snapshot.taskAsyncContextAllowList,
+    eventAsyncContextAllowList: snapshot.eventAsyncContextAllowList,
+  };
+}
+
+function toRpcLanesExposureSnapshot(
+  resolved: RpcLaneResolvedState,
+  mapId: (id: string) => string,
+): RpcLanesExposureSnapshot {
+  return {
+    taskIds: Object.freeze(Array.from(resolved.serveTaskIds, mapId)),
+    eventIds: Object.freeze(Array.from(resolved.serveEventIds, mapId)),
     taskAllowAsyncContext: toFrozenRecord(
       resolved.taskAllowAsyncContext.entries(),
       mapId,
@@ -191,42 +235,6 @@ export function toRpcLanesResourceValue(
       resolved.eventAsyncContextAllowList.entries(),
       mapId,
     ),
-    communicatorByLaneId: resolved.communicatorByLaneId,
-    exposure: exposure ?? null,
-  };
-}
-
-export function toRpcLanesExposurePolicy(
-  resolved: RpcLaneResolvedState,
-  mapId: (id: string) => string = (id) => id,
-): NodeExposurePolicySnapshot {
-  const taskAllowAsyncContext = toFrozenRecord(
-    resolved.taskAllowAsyncContext.entries(),
-    mapId,
-  );
-  const eventAllowAsyncContext = toFrozenRecord(
-    resolved.eventAllowAsyncContext.entries(),
-    mapId,
-  );
-  const taskAsyncContextAllowList = toFrozenRecord(
-    resolved.taskAsyncContextAllowList.entries(),
-    mapId,
-  );
-  const eventAsyncContextAllowList = toFrozenRecord(
-    resolved.eventAsyncContextAllowList.entries(),
-    mapId,
-  );
-  const taskIds = Object.freeze(Array.from(resolved.serveTaskIds, mapId));
-  const eventIds = Object.freeze(Array.from(resolved.serveEventIds, mapId));
-
-  return {
-    enabled: taskIds.length > 0 || eventIds.length > 0,
-    taskIds,
-    eventIds,
-    taskAllowAsyncContext,
-    eventAllowAsyncContext,
-    taskAsyncContextAllowList,
-    eventAsyncContextAllowList,
   };
 }
 
@@ -239,7 +247,7 @@ function resolveProfile(topology: RpcLanesTopology, profileId: string) {
   if (!profile) {
     rpcLaneProfileNotFoundError.throw({ profile: profileId });
   }
-  return profile!;
+  return profile;
 }
 
 function resolveBindings(

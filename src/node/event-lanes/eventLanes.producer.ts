@@ -1,4 +1,7 @@
-import { issueRemoteLaneToken } from "../remote-lanes/laneAuth";
+import {
+  hashRemoteLanePayload,
+  issueRemoteLaneToken,
+} from "../remote-lanes/laneAuth";
 import { buildSerializedEventLaneAsyncContexts } from "./eventLanes.asyncContext";
 import { getLaneBindingOrThrow, isRelayEmission } from "./EventLanesInternals";
 import { resolveEventLaneBindingAuth } from "./eventLanes.auth";
@@ -48,16 +51,22 @@ export function registerEventLaneProducerInterceptor(options: {
       context,
       config,
     });
+    const payload = dependencies.serializer.stringify(emission.data);
     const authToken = issueRemoteLaneToken({
       laneId: eventRoute.lane.id,
       bindingAuth,
       capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: resolvedEmissionId,
+        payloadHash: hashRemoteLanePayload(payload),
+      },
     });
 
     await binding.queue.enqueue({
       laneId: eventRoute.lane.id,
       eventId: resolvedEmissionId,
-      payload: dependencies.serializer.stringify(emission.data),
+      payload,
       serializedAsyncContexts: buildSerializedEventLaneAsyncContexts({
         lane: eventRoute.lane,
         store: dependencies.store,

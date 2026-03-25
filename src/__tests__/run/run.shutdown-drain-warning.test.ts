@@ -1,6 +1,12 @@
-import { defineHook, defineResource, defineTask } from "../../define";
+import {
+  defineHook,
+  defineResource,
+  defineTask,
+  defineTaskMiddleware,
+} from "../../define";
 import { globalEvents } from "../../globals/globalEvents";
 import { Logger } from "../../models/Logger";
+import { getOrCreateTaskAbortController } from "../../models/runtime/taskCancellation";
 import { getPlatform } from "../../platform";
 import { run } from "../../run";
 
@@ -44,6 +50,7 @@ describe("run shutdown drain warning", () => {
       errorBoundary: false,
       dispose: {
         drainingBudgetMs: 20,
+        abortWindowMs: 0,
       },
     });
 
@@ -98,6 +105,7 @@ describe("run shutdown drain warning", () => {
         errorBoundary: false,
         dispose: {
           drainingBudgetMs: 20,
+          abortWindowMs: 0,
         },
       });
 
@@ -121,6 +129,197 @@ describe("run shutdown drain warning", () => {
     } finally {
       exitSpy.mockRestore();
     }
+  });
+
+  it("aborts in-flight task signals during the abort window after drain expires", async () => {
+    let taskSignal: AbortSignal | undefined;
+    let releaseTaskStarted: (() => void) | undefined;
+    const taskStarted = new Promise<void>((resolve) => {
+      releaseTaskStarted = resolve;
+    });
+    const captureAbortSignalMiddleware = defineTaskMiddleware({
+      id: "tests-shutdown-drain-warning-abort-signal-capture-middleware",
+      async run({ next, journal, task }) {
+        taskSignal = getOrCreateTaskAbortController(journal).signal;
+        return next(task.input);
+      },
+    });
+
+    const neverTask = defineTask({
+      id: "tests-shutdown-drain-warning-abort-in-flight-task",
+      middleware: [captureAbortSignalMiddleware],
+      async run(_input, _deps, context) {
+        releaseTaskStarted?.();
+        return await new Promise<never>((_resolve, reject) => {
+          context?.signal?.addEventListener(
+            "abort",
+            () => reject(context.signal?.reason),
+            { once: true },
+          );
+        });
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-shutdown-drain-warning-abort-in-flight-app",
+      register: [captureAbortSignalMiddleware, neverTask],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      dispose: {
+        drainingBudgetMs: 20,
+        abortWindowMs: 20,
+      },
+    });
+
+    const inFlightTask = runtime.runTask(neverTask);
+    await taskStarted;
+
+    await runtime.dispose();
+
+    expect(taskSignal?.aborted).toBe(true);
+    expect(String(taskSignal?.reason)).toContain(
+      "Runtime shutdown drain budget expired",
+    );
+    await expect(inFlightTask).rejects.toContain(
+      "Runtime shutdown drain budget expired",
+    );
+  });
+
+  it("warns with drain-budget-timeout when abort window lets cooperative work settle", async () => {
+    const warns: unknown[] = [];
+    const captureAbortSignalMiddleware = defineTaskMiddleware({
+      id: "tests-shutdown-drain-warning-abort-window-success-capture-middleware",
+      async run({ next, journal, task }) {
+        getOrCreateTaskAbortController(journal);
+        return next(task.input);
+      },
+    });
+
+    const cooperativeTask = defineTask({
+      id: "tests-shutdown-drain-warning-abort-window-success-task",
+      middleware: [captureAbortSignalMiddleware],
+      async run(_input, _deps, context) {
+        const signal = context?.signal;
+        return await new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => {
+              setTimeout(
+                () => reject(signal?.reason ?? "missing abort reason"),
+                5,
+              );
+            },
+            { once: true },
+          );
+        });
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-shutdown-drain-warning-abort-window-success-app",
+      register: [captureAbortSignalMiddleware, cooperativeTask],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      dispose: {
+        drainingBudgetMs: 20,
+        abortWindowMs: 50,
+      },
+    });
+
+    runtime.logger.onLog((log) => {
+      if (log.level === "warn") {
+        warns.push(log.data);
+      }
+    });
+
+    const taskPromise = runtime.runTask(cooperativeTask);
+    await tick();
+
+    await runtime.dispose();
+
+    await expect(taskPromise).rejects.toContain(
+      "Runtime shutdown drain budget expired",
+    );
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatchObject({
+      reason: "drain-budget-timeout",
+      requestedDrainBudgetMs: 20,
+      effectiveDrainBudgetMs: 20,
+      requestedAbortWindowMs: 50,
+      effectiveAbortWindowMs: 50,
+    });
+  });
+
+  it("warns with abort-window-timeout when cooperative abort does not settle in time", async () => {
+    const warns: unknown[] = [];
+    const captureAbortSignalMiddleware = defineTaskMiddleware({
+      id: "tests-shutdown-drain-warning-abort-window-timeout-capture-middleware",
+      async run({ next, journal, task }) {
+        getOrCreateTaskAbortController(journal);
+        return next(task.input);
+      },
+    });
+
+    const neverTask = defineTask({
+      id: "tests-shutdown-drain-warning-abort-window-timeout-task",
+      middleware: [captureAbortSignalMiddleware],
+      async run(_input, _deps, context) {
+        return await new Promise<never>(() => {
+          context?.signal?.addEventListener("abort", () => undefined, {
+            once: true,
+          });
+        });
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-shutdown-drain-warning-abort-window-timeout-app",
+      register: [captureAbortSignalMiddleware, neverTask],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      dispose: {
+        drainingBudgetMs: 20,
+        abortWindowMs: 20,
+      },
+    });
+
+    runtime.logger.onLog((log) => {
+      if (log.level === "warn") {
+        warns.push(log.data);
+      }
+    });
+
+    void runtime.runTask(neverTask).catch(() => undefined);
+    await tick();
+
+    await runtime.dispose();
+
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatchObject({
+      reason: "abort-window-timeout",
+      requestedDrainBudgetMs: 20,
+      effectiveDrainBudgetMs: 20,
+      requestedAbortWindowMs: 20,
+      effectiveAbortWindowMs: 20,
+    });
   });
 
   it("does not warn when in-flight work drains within budget", async () => {
@@ -147,6 +346,7 @@ describe("run shutdown drain warning", () => {
       errorBoundary: false,
       dispose: {
         drainingBudgetMs: 100,
+        abortWindowMs: 0,
       },
     });
 
@@ -188,6 +388,7 @@ describe("run shutdown drain warning", () => {
       errorBoundary: false,
       dispose: {
         drainingBudgetMs: 0,
+        abortWindowMs: 0,
       },
     });
 
@@ -223,6 +424,7 @@ describe("run shutdown drain warning", () => {
       dispose: {
         totalBudgetMs: 20,
         drainingBudgetMs: 50,
+        abortWindowMs: 0,
       },
     });
 
@@ -239,7 +441,84 @@ describe("run shutdown drain warning", () => {
       reason: "dispose-budget-exhausted-before-drain",
       requestedDrainBudgetMs: 50,
       effectiveDrainBudgetMs: 0,
+      requestedAbortWindowMs: 0,
+      effectiveAbortWindowMs: 0,
     });
+  });
+
+  it("warns when drain expires but no budget remains for the abort window", async () => {
+    const warns: unknown[] = [];
+    const captureAbortSignalMiddleware = defineTaskMiddleware({
+      id: "tests-shutdown-drain-warning-abort-window-budget-exhausted-capture-middleware",
+      async run({ next, journal, task }) {
+        getOrCreateTaskAbortController(journal);
+        return next(task.input);
+      },
+    });
+
+    const neverTask = defineTask({
+      id: "tests-shutdown-drain-warning-abort-window-budget-exhausted-task",
+      middleware: [captureAbortSignalMiddleware],
+      async run(_input, _deps, context) {
+        return await new Promise<never>(() => {
+          context?.signal?.addEventListener("abort", () => undefined, {
+            once: true,
+          });
+        });
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-shutdown-drain-warning-abort-window-budget-exhausted-app",
+      register: [captureAbortSignalMiddleware, neverTask],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      dispose: {
+        totalBudgetMs: 20,
+        drainingBudgetMs: 20,
+        abortWindowMs: 20,
+      },
+    });
+
+    runtime.logger.onLog((log) => {
+      if (log.level === "warn") {
+        warns.push(log.data);
+      }
+    });
+
+    void runtime.runTask(neverTask).catch(() => undefined);
+    await tick();
+    await runtime.dispose();
+
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatchObject({
+      requestedDrainBudgetMs: 20,
+      requestedAbortWindowMs: 20,
+      effectiveDrainBudgetMs: expect.any(Number),
+      effectiveAbortWindowMs: expect.any(Number),
+    });
+    const { effectiveDrainBudgetMs, effectiveAbortWindowMs, reason } =
+      warns[0] as {
+        effectiveDrainBudgetMs: number;
+        effectiveAbortWindowMs: number;
+        reason: string;
+      };
+    expect(effectiveDrainBudgetMs).toBeGreaterThan(0);
+    expect(effectiveDrainBudgetMs).toBeLessThanOrEqual(20);
+    expect(effectiveAbortWindowMs).toBeGreaterThanOrEqual(0);
+    expect(effectiveAbortWindowMs).toBeLessThanOrEqual(1);
+
+    if (effectiveAbortWindowMs === 0) {
+      expect(reason).toBe("dispose-budget-exhausted-before-abort-window");
+    } else {
+      expect(reason).toBe("abort-window-timeout");
+    }
   });
 
   it("continues disposal when warning emission fails", async () => {

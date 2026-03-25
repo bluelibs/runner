@@ -6,6 +6,7 @@ import {
   taskCancellationJournalKeys,
 } from "../../models/runtime/taskCancellation";
 import { middlewareTimeoutError, RunnerErrorId } from "../../errors";
+import { createCancellationErrorFromSignal } from "../../tools/abortSignals";
 import { Match } from "../../tools/check";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 
@@ -77,7 +78,21 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
     return await new Promise((resolve, reject) => {
       let settled = false;
 
-      const abortHandler = () => settle("reject", timeoutError);
+      const abortHandler = () => {
+        const reason = controller.signal.reason;
+        if (reason instanceof TimeoutError) {
+          settle("reject", timeoutError);
+          return;
+        }
+
+        settle(
+          "reject",
+          createCancellationErrorFromSignal(
+            controller.signal,
+            `Operation cancelled before timeout after ${ttl}ms`,
+          ),
+        );
+      };
 
       const settle = (kind: "resolve" | "reject", value?: unknown) => {
         if (settled) return;
@@ -95,7 +110,7 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
       };
 
       const timeoutId = setTimeout(() => {
-        controller.abort();
+        controller.abort(timeoutError);
         settle("reject", timeoutError);
       }, ttl);
 

@@ -244,7 +244,9 @@ describe("Timeout Middleware", () => {
       register: [slowTask, abortingMiddleware],
       dependencies: { slowTask },
       async init(_, { slowTask }) {
-        await expect(slowTask()).rejects.toThrow(/timed out/i);
+        await expect(slowTask()).rejects.toMatchObject({
+          id: "cancellation",
+        });
       },
     });
 

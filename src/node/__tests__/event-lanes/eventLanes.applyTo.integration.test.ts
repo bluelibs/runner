@@ -208,4 +208,49 @@ describe("eventLanes applyTo", () => {
       /already assigned to an (rpcLane|event lane)/,
     );
   });
+
+  it("fails when a nested rpcLane applyTo collides with eventLane applyTo on the same event", async () => {
+    const event = r.event("nested-cross-event").build();
+    const lane = r.eventLane("nested-cross-lane").applyTo([event]).build();
+    const rpc = r.rpcLane("nested-cross-rpc").applyTo([event]).build();
+    const communicator = r
+      .resource("nested-cross-comm")
+      .init(async () => ({
+        event: async () => undefined,
+      }))
+      .build();
+    const nestedRemote = r
+      .resource("remote")
+      .register([
+        communicator,
+        rpcLanesResource.with({
+          profile: "client",
+          topology: {
+            profiles: { client: { serve: [] } },
+            bindings: [{ lane: rpc, communicator }],
+          },
+        }),
+      ])
+      .build();
+
+    const app = r
+      .resource("nested-cross-app")
+      .register([
+        event,
+        nestedRemote,
+        eventLanesResource.with({
+          profile: "worker",
+          mode: "transparent",
+          topology: {
+            profiles: { worker: { consume: [{ lane }] } },
+            bindings: [],
+          },
+        }),
+      ])
+      .build();
+
+    await expect(run(app)).rejects.toThrow(
+      /already assigned to an (rpcLane|event lane)/,
+    );
+  });
 });

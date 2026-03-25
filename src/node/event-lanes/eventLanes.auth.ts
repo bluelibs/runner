@@ -3,6 +3,7 @@ import { remoteLaneAuthUnauthorizedError } from "../../errors";
 import {
   assertRemoteLaneSignerConfigured,
   assertRemoteLaneVerifierConfigured,
+  hashRemoteLanePayload,
   verifyRemoteLaneToken,
 } from "../remote-lanes/laneAuth";
 import { resolveLaneAuthPolicy } from "../remote-lanes/laneAuth.policy";
@@ -39,10 +40,7 @@ export function enforceEventLaneAuthReadiness(options: {
   config: EventLanesResourceConfig;
 }): void {
   const { mode, context, config } = options;
-  const laneById = new Map<string, IEventLaneDefinition>();
-  for (const route of context.eventRouteByEventId.values()) {
-    laneById.set(route.lane.id, route.lane);
-  }
+  const laneById = collectAuthRelevantEventLanes(context);
 
   for (const laneId of laneById.keys()) {
     const bindingAuth = resolveEventLaneBindingAuth({
@@ -55,10 +53,14 @@ export function enforceEventLaneAuthReadiness(options: {
       const isConsumed = Array.from(
         context.activeBindingsByQueue.values(),
       ).some((laneIds) => laneIds.has(laneId));
+      const isProduced = Array.from(context.eventRouteByEventId.values()).some(
+        (route) => route.lane.id === laneId,
+      );
+      if (isProduced) {
+        assertRemoteLaneSignerConfigured(laneId, bindingAuth);
+      }
       if (isConsumed) {
         assertRemoteLaneVerifierConfigured(laneId, bindingAuth);
-      } else {
-        assertRemoteLaneSignerConfigured(laneId, bindingAuth);
       }
       continue;
     }
@@ -68,6 +70,27 @@ export function enforceEventLaneAuthReadiness(options: {
       assertRemoteLaneVerifierConfigured(laneId, bindingAuth);
     }
   }
+}
+
+function collectAuthRelevantEventLanes(
+  context: EventLanesResourceContext,
+): Map<string, IEventLaneDefinition> {
+  const laneById = new Map<string, IEventLaneDefinition>();
+
+  for (const route of context.eventRouteByEventId.values()) {
+    laneById.set(route.lane.id, route.lane);
+  }
+
+  for (const laneIds of context.activeBindingsByQueue.values()) {
+    for (const laneId of laneIds) {
+      const lane = context.bindingsByLaneId.get(laneId)?.lane;
+      if (lane) {
+        laneById.set(laneId, lane);
+      }
+    }
+  }
+
+  return laneById;
 }
 
 export function verifyEventLaneMessageToken(options: {
@@ -92,5 +115,10 @@ export function verifyEventLaneMessageToken(options: {
     bindingAuth,
     token: authToken,
     requiredCapability: "produce",
+    expectedTarget: {
+      kind: "event-lane",
+      targetId: message.eventId,
+      payloadHash: hashRemoteLanePayload(message.payload),
+    },
   });
 }

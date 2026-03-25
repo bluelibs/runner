@@ -38,6 +38,7 @@ export function normalizeRunOptions(
   const dispose = Object.freeze({
     totalBudgetMs: options?.dispose?.totalBudgetMs ?? 30_000,
     drainingBudgetMs: options?.dispose?.drainingBudgetMs ?? 20_000,
+    abortWindowMs: options?.dispose?.abortWindowMs ?? 0,
     cooldownWindowMs: options?.dispose?.cooldownWindowMs ?? 0,
   });
   const dryRun = options?.dryRun ?? false;

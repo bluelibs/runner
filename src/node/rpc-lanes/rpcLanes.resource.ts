@@ -37,7 +37,7 @@ export const rpcLanesResource = defineResource<
     const typedDependencies = dependencies as RpcLanesDependencies;
     const store = typedDependencies.store;
     const resolved = resolveRpcLaneState(config, typedDependencies, store);
-    const resourceId = RPC_LANES_RESOURCE_ID;
+    const resourceId = store.findIdByDefinition(rpcLanesResource);
     enforceRpcLaneAuthReadiness(config, resolved);
 
     applyRpcLanesModeRouting({

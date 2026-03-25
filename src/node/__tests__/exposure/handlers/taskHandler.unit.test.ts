@@ -23,6 +23,7 @@ enum ContentTypeHeader {
 enum ContentType {
   Json = "application/json",
   Multipart = "multipart/form-data; boundary=abc",
+  OctetStream = "application/octet-stream",
 }
 
 enum UrlPath {
@@ -261,6 +262,126 @@ describe("taskHandler", () => {
     expect(res.endCalls).toBe(0);
   });
 
+  it("handles thrown task errors when the store does not expose error helpers", async () => {
+    const serializer = new Serializer();
+    const handleRequestErrorSpy = jest.spyOn(
+      errorHandlers,
+      "handleRequestError",
+    );
+    jest
+      .spyOn(requestBodyModule, "readJsonBody")
+      .mockResolvedValue({ ok: true, value: { input: 1 } });
+
+    const handler = createTaskHandler({
+      store: {
+        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
+        resolveDefinitionId: resolveMockDefinitionId,
+        toPublicId: (reference: unknown) =>
+          typeof reference === "string"
+            ? reference
+            : ((reference as { id?: string })?.id ?? String(reference)),
+        createRuntimeSource: createMockRuntimeSource,
+      } as any,
+      taskRunner: {
+        run: async () => {
+          throw genericError.new({ message: ErrorMessage.Boom });
+        },
+      } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+
+    await handler(createReq(ContentType.Json), createRes(), TaskId.T);
+
+    expect(handleRequestErrorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appErrorId: undefined,
+      }),
+    );
+  });
+
+  it("returns multipart body authorization responses before task execution", async () => {
+    const serializer = new Serializer();
+    const runSpy = jest.fn(async () => undefined);
+    jest.spyOn(multipartModule, "isMultipart").mockReturnValue(true);
+    jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
+      ok: true,
+      value: { input: 1 },
+      finalize: Promise.resolve({ ok: true }),
+    });
+
+    const res = createRes();
+    const handler = createTaskHandler({
+      store: createStore(TaskId.T) as any,
+      taskRunner: { run: runSpy } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+      authorizeTaskBody: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+    });
+
+    await handler(createReq(ContentType.Multipart), res, TaskId.T);
+
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns octet-stream body authorization responses before task execution", async () => {
+    const serializer = new Serializer();
+    const runSpy = jest.fn(async () => undefined);
+    const res = createRes();
+    const handler = createTaskHandler({
+      store: createStore(TaskId.T) as any,
+      taskRunner: { run: runSpy } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+      authorizeTaskBody: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+    });
+
+    await handler(createReq(ContentType.OctetStream), res, TaskId.T);
+
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+  });
+
   it("falls back to raw task ids when request id resolution misses", async () => {
     const serializer = new Serializer();
     const ensureTask = jest.fn(() => null);
@@ -303,5 +424,197 @@ describe("taskHandler", () => {
     expect(ensureTask).toHaveBeenCalledWith(TaskId.T);
     expect(authorizeTask).toHaveBeenCalledWith(expect.anything(), TaskId.T);
     expect(runTask).toHaveBeenCalled();
+  });
+
+  it("returns authorizeTaskBody errors for multipart requests before task execution", async () => {
+    const serializer = new Serializer();
+    const runTask = jest.fn(async () => ({ ok: true }));
+    jest.spyOn(multipartModule, "isMultipart").mockReturnValue(true);
+    jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
+      ok: true,
+      value: { input: 1 },
+      finalize: Promise.resolve({ ok: true }),
+    });
+
+    const handler = createTaskHandler({
+      store: createStore(TaskId.T) as any,
+      taskRunner: { run: runTask } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      authorizeTaskBody: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+    const res = createRes();
+
+    await handler(createReq(ContentType.Multipart), res, TaskId.T);
+
+    expect(runTask).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns authorizeTaskBody errors for octet-stream requests before task execution", async () => {
+    const serializer = new Serializer();
+    const runTask = jest.fn(async () => ({ ok: true }));
+
+    const handler = createTaskHandler({
+      store: createStore(TaskId.T) as any,
+      taskRunner: { run: runTask } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      authorizeTaskBody: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+    const res = createRes();
+
+    await handler(createReq(ContentType.OctetStream), res, TaskId.T);
+
+    expect(runTask).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("authorizes JSON envelope bodies using the executed input payload", async () => {
+    const serializer = new Serializer();
+    const authorizeTaskBody = jest.fn(async () => null);
+    const runTask = jest.fn(async () => ({ ok: true }));
+    jest
+      .spyOn(requestBodyModule, "readJsonBody")
+      .mockResolvedValue({ ok: true, value: { input: { value: 1 } } });
+
+    const handler = createTaskHandler({
+      store: createStore(TaskId.T) as any,
+      taskRunner: { run: runTask } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      authorizeTaskBody,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+
+    await handler(createReq(ContentType.Json), createRes(), TaskId.T);
+
+    expect(authorizeTaskBody).toHaveBeenCalledWith(
+      expect.anything(),
+      TaskId.T,
+      serializer.stringify({ input: { value: 1 } }),
+    );
+    expect(runTask).toHaveBeenCalledWith(
+      expect.anything(),
+      { value: 1 },
+      expect.anything(),
+    );
+  });
+
+  it("authorizes bare JSON bodies using the executed payload shape", async () => {
+    const serializer = new Serializer();
+    const authorizeTaskBody = jest.fn(async () => null);
+    const runTask = jest.fn(async () => ({ ok: true }));
+    jest
+      .spyOn(requestBodyModule, "readJsonBody")
+      .mockResolvedValue({ ok: true, value: { foo: 1 } });
+
+    const handler = createTaskHandler({
+      store: createStore(TaskId.T) as any,
+      taskRunner: { run: runTask } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      authorizeTaskBody,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+
+    await handler(createReq(ContentType.Json), createRes(), TaskId.T);
+
+    expect(authorizeTaskBody).toHaveBeenCalledWith(
+      expect.anything(),
+      TaskId.T,
+      serializer.stringify({ input: { foo: 1 } }),
+    );
+    expect(runTask).toHaveBeenCalledWith(
+      expect.anything(),
+      { foo: 1 },
+      expect.anything(),
+    );
+  });
+
+  it("handles task failures even when the error registry is absent", async () => {
+    const serializer = new Serializer();
+    const handleRequestErrorSpy = jest.spyOn(
+      errorHandlers,
+      "handleRequestError",
+    );
+    jest
+      .spyOn(requestBodyModule, "readJsonBody")
+      .mockResolvedValue({ ok: true, value: { input: 1 } });
+
+    const handler = createTaskHandler({
+      store: {
+        ...createStore(TaskId.T),
+        errors: undefined,
+      } as any,
+      taskRunner: {
+        run: async () => {
+          throw genericError.new({ message: ErrorMessage.Boom });
+        },
+      } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+    const res = createRes();
+
+    await handler(createReq(ContentType.Json), res, TaskId.T);
+
+    expect(handleRequestErrorSpy).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
   });
 });

@@ -5,6 +5,7 @@ import type { SerializerLike } from "../../serializer";
 import type { ProtocolEnvelope } from "../../remote-lanes/http/protocol";
 import {
   assertOkEnvelope,
+  buildEventRequestBody,
   RemoteLaneTransportError,
 } from "../../remote-lanes/http/protocol";
 import type { IAsyncContext } from "../../types/asyncContext";
@@ -15,6 +16,7 @@ import {
   httpBaseUrlRequiredError,
   httpContextSerializationError,
 } from "../../errors";
+import { RUNNER_ASYNC_CONTEXT_HEADER } from "../../remote-lanes/http/constants";
 import { createCancellationErrorFromSignal } from "../../tools/abortSignals";
 
 export interface HttpSmartClientAuthConfig {
@@ -163,7 +165,7 @@ async function postJson<T = any>(
     serializer: cfg.serializer,
     contexts: cfg.contexts,
   });
-  if (contextHeader) headers["x-runner-context"] = contextHeader;
+  if (contextHeader) headers[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeader;
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
   return await new Promise<T>((resolve, reject) => {
     let settled = false;
@@ -337,7 +339,7 @@ async function postMultipart(
     serializer: cfg.serializer,
     contexts: cfg.contexts,
   });
-  if (contextHeader) headers["x-runner-context"] = contextHeader;
+  if (contextHeader) headers[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeader;
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
 
   return await new Promise<{ stream: Readable; res: http.IncomingMessage }>(
@@ -407,7 +409,7 @@ async function postOctetStream(
     serializer: cfg.serializer,
     contexts: cfg.contexts,
   });
-  if (contextHeader) headers["x-runner-context"] = contextHeader;
+  if (contextHeader) headers[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeader;
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
   return await new Promise<{ stream: Readable; res: http.IncomingMessage }>(
     (resolve, reject) => {
@@ -644,7 +646,7 @@ export function createHttpSmartClient(
         const r = await postJson<ProtocolEnvelope<void>>(
           cfg,
           url,
-          { payload },
+          buildEventRequestBody(payload),
           options?.headers,
           options?.signal,
         );
@@ -666,10 +668,7 @@ export function createHttpSmartClient(
         const r = await postJson<ProtocolEnvelope<P>>(
           cfg,
           url,
-          {
-            payload,
-            returnPayload: true,
-          },
+          buildEventRequestBody(payload, { returnPayload: true }),
           options?.headers,
           options?.signal,
         );

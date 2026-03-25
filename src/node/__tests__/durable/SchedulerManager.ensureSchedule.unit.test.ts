@@ -5,33 +5,14 @@ import { DurableResource } from "../../durable/core/DurableResource";
 import { DurableService } from "../../durable/core/DurableService";
 import type { Schedule, Timer } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createBareStore } from "./DurableService.unit.helpers";
 
 function futureTimers(store: IDurableStore): Promise<Timer[]> {
   return store.getReadyTimers(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
 }
 
 function createNoLockStore(base: MemoryStore): IDurableStore {
-  return {
-    saveExecution: base.saveExecution.bind(base),
-    getExecution: base.getExecution.bind(base),
-    updateExecution: base.updateExecution.bind(base),
-    listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
-
-    getStepResult: base.getStepResult.bind(base),
-    saveStepResult: base.saveStepResult.bind(base),
-
-    createTimer: base.createTimer.bind(base),
-    getReadyTimers: base.getReadyTimers.bind(base),
-    markTimerFired: base.markTimerFired.bind(base),
-    deleteTimer: base.deleteTimer.bind(base),
-
-    createSchedule: base.createSchedule.bind(base),
-    getSchedule: base.getSchedule.bind(base),
-    updateSchedule: base.updateSchedule.bind(base),
-    deleteSchedule: base.deleteSchedule.bind(base),
-    listSchedules: base.listSchedules.bind(base),
-    listActiveSchedules: base.listActiveSchedules.bind(base),
-  };
+  return createBareStore(base);
 }
 
 describe("ensureSchedule()", () => {
@@ -49,7 +30,7 @@ describe("ensureSchedule()", () => {
 
     const schedule = await store.getSchedule("s1");
     expect(schedule).not.toBeNull();
-    expect(schedule?.taskId).toBe(task.id);
+    expect(schedule?.workflowKey).toBe(task.id);
     expect(schedule?.type).toBe("cron");
     expect(schedule?.pattern).toBe("*/5 * * * *");
     expect(schedule?.status).toBe("active");
@@ -57,6 +38,23 @@ describe("ensureSchedule()", () => {
 
     const timers = await futureTimers(store);
     expect(timers.some((t) => t.id === "sched:s1")).toBe(true);
+  });
+
+  it("persists timezone for cron schedules created via ensureSchedule()", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const task = r
+      .task("t-ensure-cron-timezone")
+      .run(async () => "ok")
+      .build();
+
+    await service.ensureSchedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "UTC",
+    });
+
+    expect((await store.getSchedule("s1"))?.timezone).toBe("UTC");
   });
 
   it("updates an existing schedule (same id/task) and re-arms its timer", async () => {
@@ -81,7 +79,29 @@ describe("ensureSchedule()", () => {
     expect(timer?.scheduleId).toBe("s1");
   });
 
-  it("rejects rebinding an existing schedule id to a different task id", async () => {
+  it("replaces timezone when ensureSchedule() updates an existing cron schedule", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const task = r
+      .task("t-ensure-timezone-update")
+      .run(async () => "ok")
+      .build();
+
+    await service.ensureSchedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "UTC",
+    });
+    await service.ensureSchedule(task, undefined, {
+      id: "s1",
+      cron: "0 9 * * *",
+      timezone: "America/New_York",
+    });
+
+    expect((await store.getSchedule("s1"))?.timezone).toBe("America/New_York");
+  });
+
+  it("rejects rebinding an existing schedule id to a different workflow", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
     const a = r
@@ -129,6 +149,31 @@ describe("ensureSchedule()", () => {
     ).resolves.toBe("s1");
   });
 
+  it("fails fast when schedule timer arming is attempted without nextRun", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, tasks: [] });
+    const scheduleManager = (
+      service as unknown as {
+        scheduleManager: {
+          saveScheduleWithTimer: (schedule: Schedule) => Promise<void>;
+        };
+      }
+    ).scheduleManager;
+
+    await expect(
+      scheduleManager.saveScheduleWithTimer({
+        id: "s-missing-next-run",
+        workflowKey: "t-missing-next-run",
+        input: undefined,
+        pattern: "1000",
+        type: "interval",
+        status: "active",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as Schedule),
+    ).rejects.toThrow("must have nextRun before arming its timer");
+  });
+
   it("fails fast when the schedule lock cannot be acquired", async () => {
     class LockedStore extends MemoryStore {
       override async acquireLock(): Promise<string | null> {
@@ -161,7 +206,7 @@ describe("ensureSchedule()", () => {
     await expect(
       durable.ensureSchedule(task, undefined, { id: "s1", interval: 1000 }),
     ).resolves.toBe("s1");
-    expect((await store.getSchedule("s1"))?.taskId).toBe(task.id);
+    expect((await store.getSchedule("s1"))?.workflowKey).toBe(task.id);
   });
 
   it("does not re-arm when the updated schedule cannot be reloaded", async () => {

@@ -19,6 +19,7 @@ describe("middleware composers coverage gaps", () => {
       resolveDefinitionId: () => undefined,
       hasDefinition: () => false,
       findIdByDefinition: () => undefined,
+      trackTaskAbortController: () => () => undefined,
     }) as any;
 
   it("TaskMiddlewareComposer resolves task id from String(reference) fallback", async () => {

@@ -1,5 +1,9 @@
 import type { IDurableStore } from "../interfaces/store";
-import type { ScheduleOptions } from "../interfaces/service";
+import type {
+  EnsureScheduleOptions,
+  ScheduleOptions,
+  UpdateScheduleOptions,
+} from "../interfaces/service";
 import {
   ScheduleStatus,
   ScheduleType,
@@ -9,6 +13,7 @@ import {
 } from "../types";
 import { CronParser } from "../CronParser";
 import { createExecutionId, sleepMs } from "../utils";
+import { withStoreLock } from "../locking";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ITask } from "../../../../types/task";
 import {
@@ -32,7 +37,7 @@ export class ScheduleManager {
   async ensureSchedule(
     taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
     input: unknown,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string> {
     if (!options.cron && options.interval === undefined) {
       durableScheduleConfigError.throw({
@@ -45,77 +50,61 @@ export class ScheduleManager {
 
     const scheduleId = options.id;
 
-    const lockTtlMs = 10_000;
-    const lockResource = `schedule:${scheduleId}`;
-    const canLock = !!this.store.acquireLock && !!this.store.releaseLock;
-
-    let lockId: string | null = null;
-    if (canLock) {
-      const maxAttempts = 20;
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        lockId = await this.store.acquireLock!(lockResource, lockTtlMs);
-        if (lockId !== null) break;
-        await sleepMs(5);
-      }
-      if (lockId === null) {
+    return await withStoreLock({
+      store: this.store,
+      resource: `schedule:${scheduleId}`,
+      ttlMs: 10_000,
+      maxAttempts: 20,
+      retryDelayMs: 5,
+      sleep: sleepMs,
+      onLockUnavailable: () =>
         durableScheduleConfigError.throw({
           message: `Failed to acquire schedule lock for '${scheduleId}'`,
-        });
-      }
-    }
+        }),
+      fn: async () => {
+        const existing = await this.store.getSchedule(scheduleId);
+        const workflowKey = this.taskRegistry.getWorkflowKey(task);
 
-    try {
-      const existing = await this.store.getSchedule(scheduleId);
+        const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
+        const pattern = options.cron ?? String(options.interval);
+        const timezone = options.cron ? options.timezone : undefined;
 
-      const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
-      const pattern = options.cron ?? String(options.interval);
+        if (existing) {
+          if (existing.workflowKey !== workflowKey) {
+            durableScheduleConfigError.throw({
+              message: `Schedule '${scheduleId}' already exists for workflow '${existing.workflowKey}', cannot rebind to '${workflowKey}'`,
+            });
+          }
 
-      if (existing) {
-        if (existing.taskId !== task.id) {
-          durableScheduleConfigError.throw({
-            message: `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${task.id}'`,
+          await this.reschedule({
+            ...existing,
+            type,
+            pattern,
+            timezone,
+            input,
+            status: ScheduleStatus.Active,
+            updatedAt: new Date(),
           });
+
+          return scheduleId;
         }
 
-        await this.store.updateSchedule(scheduleId, {
-          type,
-          pattern,
+        const schedule: Schedule = {
+          id: scheduleId,
+          workflowKey,
           input,
+          pattern,
+          timezone,
+          type,
           status: ScheduleStatus.Active,
+          createdAt: new Date(),
           updatedAt: new Date(),
-        });
+        };
 
-        const updated = await this.store.getSchedule(scheduleId);
-        if (updated) {
-          await this.reschedule(updated);
-        }
-
+        await this.reschedule(schedule);
         return scheduleId;
-      }
-
-      const schedule: Schedule = {
-        id: scheduleId,
-        taskId: task.id,
-        input,
-        pattern,
-        type,
-        status: ScheduleStatus.Active,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await this.store.createSchedule(schedule);
-      await this.reschedule(schedule);
-      return scheduleId;
-    } finally {
-      if (canLock && lockId !== null) {
-        try {
-          await this.store.releaseLock!(lockResource, lockId);
-        } catch {
-          // best-effort cleanup; ignore
-        }
-      }
-    }
+      },
+    });
   }
 
   async schedule(
@@ -129,18 +118,19 @@ export class ScheduleManager {
     const id = options.id ?? createExecutionId();
 
     if (options.cron || options.interval !== undefined) {
+      const workflowKey = this.taskRegistry.getWorkflowKey(task);
       const schedule: Schedule = {
         id,
-        taskId: task.id,
+        workflowKey,
         input,
         pattern: options.cron ?? String(options.interval),
+        timezone: options.cron ? options.timezone : undefined,
         type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
         status: ScheduleStatus.Active,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      await this.store.createSchedule(schedule);
       await this.reschedule(schedule);
       return id;
     }
@@ -150,7 +140,7 @@ export class ScheduleManager {
 
     await this.store.createTimer({
       id: `once:${id}`,
-      taskId: task.id,
+      workflowKey: this.taskRegistry.getWorkflowKey(task),
       input,
       type: TimerType.Scheduled,
       fireAt,
@@ -162,13 +152,12 @@ export class ScheduleManager {
 
   async reschedule(
     schedule: Schedule,
-    options?: { lastRunAt?: Date },
+    options?: { lastRunAt?: Date; nextRunAnchorMs?: number },
   ): Promise<void> {
-    const nextRun = this.computeNextRun(schedule);
-    await this.armScheduleTimer(schedule, nextRun);
-
-    await this.store.updateSchedule(schedule.id, {
-      lastRun: options?.lastRunAt,
+    const nextRun = this.computeNextRun(schedule, options?.nextRunAnchorMs);
+    await this.saveScheduleWithTimer({
+      ...schedule,
+      lastRun: options?.lastRunAt ?? schedule.lastRun,
       nextRun,
       updatedAt: new Date(),
     });
@@ -183,14 +172,10 @@ export class ScheduleManager {
     if (!schedule) return;
     if (schedule.status === ScheduleStatus.Active) return;
 
-    await this.store.updateSchedule(id, {
-      status: ScheduleStatus.Active,
-      updatedAt: new Date(),
-    });
-
     await this.reschedule({
       ...schedule,
       status: ScheduleStatus.Active,
+      updatedAt: new Date(),
     });
   }
 
@@ -202,59 +187,90 @@ export class ScheduleManager {
     return this.store.listSchedules();
   }
 
-  async update(
-    id: string,
-    updates: { cron?: string; interval?: number; input?: unknown },
-  ): Promise<void> {
+  async update(id: string, updates: UpdateScheduleOptions): Promise<void> {
     const existing = await this.store.getSchedule(id);
     if (!existing) return;
     const hasInputUpdate = Object.prototype.hasOwnProperty.call(
       updates,
       "input",
     );
+    const hasTimezoneUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      "timezone",
+    );
+    this.assertValidScheduleUpdate(updates, hasTimezoneUpdate);
 
-    const { type, pattern } = this.resolveUpdatedCadence(existing, updates);
+    const { type, pattern, timezone } = this.resolveUpdatedCadence(
+      existing,
+      updates,
+    );
     const input = hasInputUpdate ? updates.input : existing.input;
     const updatedAt = new Date();
     const cadenceChanged =
-      type !== existing.type || pattern !== existing.pattern;
+      type !== existing.type ||
+      pattern !== existing.pattern ||
+      timezone !== existing.timezone;
     const updatedSchedule: Schedule = {
       ...existing,
       type,
       pattern,
+      timezone,
       input,
       updatedAt,
     };
 
     // Fail fast before persisting an invalid cadence update.
+    const updatedIntervalAnchorMs =
+      cadenceChanged && type === ScheduleType.Interval
+        ? (existing.lastRun?.getTime() ?? updatedAt.getTime())
+        : undefined;
+
     if (cadenceChanged) {
-      this.computeNextRun(updatedSchedule);
+      this.computeNextRun(updatedSchedule, updatedIntervalAnchorMs);
+    }
+
+    if (existing.status !== ScheduleStatus.Active) {
+      await this.store.updateSchedule(id, {
+        type,
+        pattern,
+        timezone,
+        input,
+        updatedAt,
+      });
+      return;
+    }
+
+    if (cadenceChanged) {
+      await this.reschedule(updatedSchedule, {
+        nextRunAnchorMs: updatedIntervalAnchorMs,
+      });
+      return;
+    }
+
+    if (existing.nextRun) {
+      await this.saveScheduleWithTimer({
+        ...updatedSchedule,
+        nextRun: existing.nextRun,
+      });
+      return;
     }
 
     await this.store.updateSchedule(id, {
       type,
       pattern,
+      timezone,
       input,
       updatedAt,
     });
-
-    if (existing.status !== ScheduleStatus.Active) {
-      return;
-    }
-
-    if (cadenceChanged) {
-      await this.reschedule(updatedSchedule);
-      return;
-    }
-
-    if (existing.nextRun) {
-      await this.armScheduleTimer(updatedSchedule, existing.nextRun);
-    }
   }
 
-  private computeNextRun(schedule: Schedule): Date {
+  private computeNextRun(schedule: Schedule, anchorMs?: number): Date {
     if (schedule.type === ScheduleType.Cron) {
-      return CronParser.getNextRun(schedule.pattern);
+      return CronParser.getNextRun(
+        schedule.pattern,
+        new Date(),
+        schedule.timezone,
+      );
     }
 
     const intervalMs = Number(schedule.pattern);
@@ -263,20 +279,38 @@ export class ScheduleManager {
         message: `Schedule '${schedule.id}' has invalid interval '${schedule.pattern}'`,
       });
     }
-    return new Date(Date.now() + intervalMs);
+
+    const nowMs = Date.now();
+    const resolvedAnchorMs =
+      anchorMs ??
+      schedule.nextRun?.getTime() ??
+      schedule.lastRun?.getTime() ??
+      schedule.createdAt.getTime();
+    const firstCandidateMs = resolvedAnchorMs + intervalMs;
+    if (firstCandidateMs > nowMs) {
+      return new Date(firstCandidateMs);
+    }
+
+    const intervalsBehind =
+      Math.floor((nowMs - resolvedAnchorMs) / intervalMs) + 1;
+    return new Date(resolvedAnchorMs + intervalsBehind * intervalMs);
   }
 
-  private async armScheduleTimer(
-    schedule: Schedule,
-    fireAt: Date,
-  ): Promise<void> {
-    await this.store.createTimer({
+  private async saveScheduleWithTimer(schedule: Schedule): Promise<void> {
+    const nextRun = schedule.nextRun;
+    if (!nextRun) {
+      return durableExecutionInvariantError.throw({
+        message: `Schedule '${schedule.id}' must have nextRun before arming its timer.`,
+      });
+    }
+
+    await this.store.saveScheduleWithTimer(schedule, {
       id: `sched:${schedule.id}`,
       scheduleId: schedule.id,
-      taskId: schedule.taskId,
+      workflowKey: schedule.workflowKey,
       input: schedule.input,
       type: TimerType.Scheduled,
-      fireAt,
+      fireAt: nextRun,
       status: TimerStatus.Pending,
     });
   }
@@ -287,12 +321,13 @@ export class ScheduleManager {
 
   private resolveUpdatedCadence(
     existing: Schedule,
-    updates: { cron?: string; interval?: number },
-  ): Pick<Schedule, "type" | "pattern"> {
+    updates: UpdateScheduleOptions,
+  ): Pick<Schedule, "type" | "pattern" | "timezone"> {
     if (updates.cron !== undefined) {
       return {
         type: ScheduleType.Cron,
         pattern: updates.cron,
+        timezone: updates.timezone,
       };
     }
 
@@ -300,13 +335,36 @@ export class ScheduleManager {
       return {
         type: ScheduleType.Interval,
         pattern: String(updates.interval),
+        timezone: undefined,
       };
     }
 
     return {
       type: existing.type,
       pattern: existing.pattern,
+      timezone:
+        existing.type === ScheduleType.Cron ? existing.timezone : undefined,
     };
+  }
+
+  private assertValidScheduleUpdate(
+    updates: UpdateScheduleOptions,
+    hasTimezoneUpdate: boolean,
+  ): void {
+    if (updates.cron !== undefined && updates.interval !== undefined) {
+      durableScheduleConfigError.throw({
+        message: "updateSchedule() accepts cron or interval, not both",
+      });
+    }
+
+    if (!hasTimezoneUpdate) return;
+
+    if (updates.cron === undefined) {
+      durableScheduleConfigError.throw({
+        message:
+          "updateSchedule() cannot set timezone without cron. Timezone is only supported for cron schedules.",
+      });
+    }
   }
 
   private resolveTaskReference(

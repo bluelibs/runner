@@ -723,6 +723,7 @@ describe("RunResult", () => {
       dispose: {
         totalBudgetMs: 1234,
         drainingBudgetMs: 567,
+        abortWindowMs: 45,
         cooldownWindowMs: 89,
       },
       onUnhandledError,
@@ -747,6 +748,7 @@ describe("RunResult", () => {
       dispose: {
         totalBudgetMs: 1234,
         drainingBudgetMs: 567,
+        abortWindowMs: 45,
         cooldownWindowMs: 89,
       },
       onUnhandledError,
@@ -769,4 +771,18 @@ describe("RunResult", () => {
 
     await runtime.dispose();
   });
+});
+
+it("defaults abortWindowMs to zero in normalized runOptions", async () => {
+  const app = defineResource({
+    id: "rr-run-options-default-abort-window-app",
+    init: async () => "ready",
+  });
+
+  const runtime = await run(app, {
+    shutdownHooks: false,
+    dryRun: true,
+  });
+
+  expect(runtime.runOptions.dispose.abortWindowMs).toBe(0);
 });

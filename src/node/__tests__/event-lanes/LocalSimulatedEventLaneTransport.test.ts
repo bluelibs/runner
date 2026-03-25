@@ -9,7 +9,10 @@ import { EventLanesDiagnostics } from "../../event-lanes/EventLanesDiagnostics";
 import { LocalSimulatedEventLaneTransport } from "../../event-lanes/LocalSimulatedEventLaneTransport";
 import type { EventLanesResourceContext } from "../../event-lanes/EventLanesInternals";
 import type { EventLaneMessage } from "../../event-lanes/types";
-import { issueRemoteLaneToken } from "../../remote-lanes/laneAuth";
+import {
+  hashRemoteLanePayload,
+  issueRemoteLaneToken,
+} from "../../remote-lanes/laneAuth";
 
 function createContext(
   overrides: Partial<
@@ -242,6 +245,11 @@ describe("LocalSimulatedEventLaneTransport", () => {
       laneId,
       bindingAuth,
       capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: event.id,
+        payloadHash: hashRemoteLanePayload(JSON.stringify({ value: 1 })),
+      },
     });
     const transport = new LocalSimulatedEventLaneTransport(
       {
@@ -265,6 +273,60 @@ describe("LocalSimulatedEventLaneTransport", () => {
       { value: 1 },
       expect.objectContaining({ kind: "runtime" }),
     );
+  });
+
+  it("accepts repeated local-simulated messages while the token remains valid", async () => {
+    const logger = createLogger();
+    const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
+    const eventManager = new EventManager();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
+    const diagnostics = new EventLanesDiagnostics(logger, true);
+    const context = createContext();
+    const event = defineEvent<{ value: number }>({
+      id: "tests-local-simulated-repeat-event",
+    });
+    context.eventRouteByEventId.set(event.id, {
+      lane: { id: "tests.local-simulated.lane" },
+    } as any);
+    const store = createStore({
+      events: new Map([[event.id, { event }]]),
+    });
+    const bindingAuth = { secret: "repeat-secret" };
+    const payload = JSON.stringify({ value: 1 });
+    const token = issueRemoteLaneToken({
+      laneId: "tests.local-simulated.lane",
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: event.id,
+        payloadHash: hashRemoteLanePayload(payload),
+      },
+    });
+    const transport = new LocalSimulatedEventLaneTransport(
+      {
+        eventManager,
+        serializer: new Serializer(),
+        store,
+        logger,
+      },
+      context,
+      diagnostics,
+      new Map([["tests.local-simulated.lane", bindingAuth]]),
+    );
+    const message = {
+      ...createMessage(event.id),
+      payload,
+      authToken: token,
+    };
+
+    await relay(transport, message);
+    await relay(transport, message);
+
+    expect(emitSpy).toHaveBeenCalledTimes(2);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it("logs enqueue diagnostics with source ids when source paths are absent", async () => {

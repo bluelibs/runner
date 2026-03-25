@@ -15,7 +15,7 @@ function nextIndex(counter: Map<string, number>, key: string): number {
 
 export async function emitDurably<TPayload>(params: {
   bus: IEventBus;
-  assertNotCancelled: () => Promise<void>;
+  assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
   assertUniqueStepId: (stepId: string) => void;
   assertOrWarnImplicitInternalStepId: (
@@ -27,7 +27,7 @@ export async function emitDurably<TPayload>(params: {
   payload: TPayload;
   options?: EmitOptions;
 }): Promise<void> {
-  await params.assertNotCancelled();
+  await params.assertCanContinue();
 
   const eventId = params.event.id;
 

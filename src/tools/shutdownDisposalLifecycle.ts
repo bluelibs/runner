@@ -16,6 +16,7 @@ type LifecycleStore = {
   cooldown(options?: { shouldStop?: () => boolean }): Promise<void>;
   beginDrained(): void;
   waitForDrain(timeoutMs: number): Promise<boolean>;
+  abortInFlightTaskSignals(reason: string): void;
   resolveRegisteredDefinition<TDefinition extends RegisterableItem>(
     definition: TDefinition,
   ): TDefinition;
@@ -37,6 +38,7 @@ export type ShutdownDisposalLifecycleInput = {
   dispose: {
     totalBudgetMs: number;
     drainingBudgetMs: number;
+    abortWindowMs: number;
     cooldownWindowMs: number;
   };
   forceDisposal: ForceDisposalController;
@@ -112,10 +114,39 @@ export async function runShutdownDisposalLifecycle(
     return;
   }
 
+  let effectiveAbortWindowMs = 0;
+  let abortWaitResult: ShutdownDrainWaitResult = { completed: false };
+
+  if (
+    drainWaitResult.completed &&
+    drainWaitResult.drained === false &&
+    input.dispose.abortWindowMs > 0
+  ) {
+    effectiveAbortWindowMs = disposalBudget.capByRemainingBudget(
+      input.dispose.abortWindowMs,
+    );
+    if (effectiveAbortWindowMs > 0) {
+      input.store.abortInFlightTaskSignals(
+        "Runtime shutdown drain budget expired",
+      );
+      abortWaitResult = await waitForDrainWithinBudget(
+        input.store,
+        effectiveAbortWindowMs,
+      );
+      if (input.forceDisposal.isRequested) {
+        await disposeImmediately(input);
+        return;
+      }
+    }
+  }
+
   const drainWarning = resolveShutdownDrainWarningDecision({
     requestedDrainBudgetMs: input.dispose.drainingBudgetMs,
     effectiveDrainBudgetMs,
     drainWaitResult,
+    requestedAbortWindowMs: input.dispose.abortWindowMs,
+    effectiveAbortWindowMs,
+    abortWaitResult,
   });
 
   if (drainWarning.shouldWarn) {
@@ -128,6 +159,8 @@ export async function runShutdownDisposalLifecycle(
             reason: drainWarning.reason,
             requestedDrainBudgetMs: input.dispose.drainingBudgetMs,
             effectiveDrainBudgetMs,
+            requestedAbortWindowMs: input.dispose.abortWindowMs,
+            effectiveAbortWindowMs,
             remainingDisposeBudgetMs: disposalBudget.remainingMs(),
           },
         },
@@ -217,7 +250,10 @@ async function waitForDrainWithinBudget(
   effectiveDrainBudgetMs: number,
 ): Promise<ShutdownDrainWaitResult> {
   if (effectiveDrainBudgetMs <= 0) {
-    return { completed: false };
+    return {
+      completed: true,
+      drained: await waitForDisposeDrainBudget(store, 0),
+    };
   }
 
   return {

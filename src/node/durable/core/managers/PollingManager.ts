@@ -1,23 +1,29 @@
 import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
 import { DurableAuditEntryKind } from "../audit";
-import {
-  ExecutionStatus,
-  ScheduleStatus,
-  TimerType,
-  type Execution,
-  type Timer,
-} from "../types";
+import { TimerType, type Timer } from "../types";
 import type { AuditLogger } from "./AuditLogger";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ScheduleManager } from "./ScheduleManager";
-import { parseSignalState, createExecutionId } from "../utils";
-import { clearTimeout, setTimeout } from "node:timers";
+import {
+  handleExecutionWaitTimeoutTimer,
+  handleExecutionTimer,
+  handleScheduledTaskTimer,
+  handleSignalTimeoutTimer,
+  handleSleepTimer,
+  persistTaskTimerExecution,
+} from "./PollingManager.timerHandlers";
+import {
+  startTimerClaimHeartbeat,
+  type TimerClaimState,
+} from "./PollingManager.timerHeartbeat";
 import { Logger } from "../../../../models/Logger";
+import { durableExecutionInvariantError } from "../../../../errors";
 
 export interface PollingConfig {
   enabled?: boolean;
   interval?: number;
+  concurrency?: number;
   claimTtlMs?: number;
 }
 
@@ -30,16 +36,20 @@ export interface PollingManagerCallbacks {
  * Timer/tick driver for durable workflows.
  *
  * The durable store is the source of truth, but time needs an active driver:
- * `PollingManager` periodically scans ready timers and performs the appropriate action:
+ * `PollingManager` periodically claims ready timers and performs the
+ * appropriate action:
  *
  * - complete `sleep()` steps by marking their step result as completed
  * - resume executions after signal timeouts / scheduled kickoffs / retries
- * - coordinate multi-worker polling via optional `store.claimTimer(...)`
+ * - coordinate multi-worker polling via bounded `store.claimReadyTimers(...)`
+ *   plus per-timer claim renewal/finalization
  *
  * In production topologies you typically enable polling on worker nodes only.
  */
 export class PollingManager {
+  private readonly inFlightTimers = new Set<Promise<void>>();
   private isRunning = false;
+  private pollRequested = false;
   private pollingTimer: ReturnType<typeof setTimeout> | null = null;
   private pollingWake: (() => void) | null = null;
   private readonly logger: Logger;
@@ -69,32 +79,31 @@ export class PollingManager {
 
   start(): void {
     if (this.isRunning) return;
+    this.assertClaimBasedPollingSupport();
+    this.getPollingIntervalMs();
+    this.getConcurrency();
+    this.getClaimTtlMs();
     this.isRunning = true;
+    this.pollRequested = false;
     void this.poll();
   }
 
-  async stop(): Promise<void> {
+  async cooldown(): Promise<void> {
     this.isRunning = false;
-    if (this.pollingTimer) {
-      clearTimeout(this.pollingTimer);
-      this.pollingTimer = null;
-    }
-    if (this.pollingWake) {
-      const wake = this.pollingWake;
-      this.pollingWake = null;
-      wake();
-    }
+    this.wakePollingLoop();
+  }
+
+  async stop(): Promise<void> {
+    await this.cooldown();
+    await this.waitForInFlightTimers();
   }
 
   private async poll(): Promise<void> {
-    const intervalMs = this.config.interval ?? 1000;
+    const intervalMs = this.getPollingIntervalMs();
 
     while (this.isRunning) {
       try {
-        const ready = await this.store.getReadyTimers();
-        for (const timer of ready) {
-          await this.handleTimer(timer);
-        }
+        await this.fillAvailableTimerSlots();
       } catch (error) {
         try {
           await this.logger.error("Durable polling loop failed.", { error });
@@ -105,164 +114,223 @@ export class PollingManager {
 
       if (!this.isRunning) return;
 
-      await new Promise<void>((resolve) => {
-        this.pollingWake = resolve;
-        const pollingTimer = setTimeout(() => {
-          this.pollingTimer = null;
-          this.pollingWake = null;
-          resolve();
-        }, intervalMs);
-        this.pollingTimer = pollingTimer;
-        pollingTimer.unref();
-      });
+      await this.waitForPollingWake(intervalMs);
     }
   }
 
   /** @internal - public for testing */
   async handleTimer(timer: Timer): Promise<void> {
+    return await this.handleTimerInternal(timer, false);
+  }
+
+  private async handleClaimedTimer(timer: Timer): Promise<void> {
+    return await this.handleTimerInternal(timer, true);
+  }
+
+  private async handleTimerInternal(
+    timer: Timer,
+    alreadyClaimed: boolean,
+  ): Promise<void> {
+    let stopClaimHeartbeat = () => {};
+    let timerClaimState: TimerClaimState | null = null;
+    let safeToFinalizeCurrentTimer = false;
+
+    const assertTimerClaimIsStillOwned = (): void => {
+      if (timerClaimState?.lossError) {
+        throw timerClaimState.lossError;
+      }
+    };
+
+    const finalizeTimer = async (): Promise<void> => {
+      if (this.store.finalizeClaimedTimer && timerClaimState) {
+        const finalized = await this.store.finalizeClaimedTimer(
+          timer.id,
+          this.workerId,
+        );
+        if (!finalized) {
+          assertTimerClaimIsStillOwned();
+          throw durableExecutionInvariantError.new({
+            message: `Timer claim lost for '${timer.id}' before finalization could be committed.`,
+          });
+        }
+        return;
+      }
+
+      await this.store.markTimerFired(timer.id);
+      await this.store.deleteTimer(timer.id);
+    };
+
+    const releaseTimerClaim = async (): Promise<void> => {
+      if (!timerClaimState) {
+        return;
+      }
+
+      if (!this.store.releaseTimerClaim) {
+        throw durableExecutionInvariantError.new({
+          message: `Store must implement releaseTimerClaim() when recurring timers are claimed for '${timer.id}'.`,
+        });
+      }
+
+      const currentClaimState = timerClaimState;
+      stopClaimHeartbeat();
+      stopClaimHeartbeat = () => {};
+      timerClaimState = null;
+
+      const released = await this.store.releaseTimerClaim(
+        timer.id,
+        this.workerId,
+      );
+      if (!released) {
+        throw (
+          currentClaimState.lossError ??
+          durableExecutionInvariantError.new({
+            message: `Timer claim lost for '${timer.id}' before claim release could be committed.`,
+          })
+        );
+      }
+    };
+
     // Distributed timer coordination. Failures must not drop timers (at-least-once).
-    if (this.store.claimTimer) {
-      const defaultClaimTtlMs = this.queue ? 5_000 : 30_000;
-      const claimTtlMs = this.config.claimTtlMs ?? defaultClaimTtlMs;
+    if (alreadyClaimed) {
+      const claimTtlMs = this.getClaimTtlMs();
+      timerClaimState = { lossError: null };
+      stopClaimHeartbeat = this.startTimerClaimHeartbeat(
+        timer.id,
+        claimTtlMs,
+        timerClaimState,
+      );
+    } else if (this.store.claimTimer) {
+      const claimTtlMs = this.getClaimTtlMs();
       const claimed = await this.store.claimTimer(
         timer.id,
         this.workerId,
         claimTtlMs,
       );
       if (!claimed) return; // Another worker is handling this timer
+
+      timerClaimState = { lossError: null };
+      stopClaimHeartbeat = this.startTimerClaimHeartbeat(
+        timer.id,
+        claimTtlMs,
+        timerClaimState,
+      );
     }
 
     try {
+      assertTimerClaimIsStillOwned();
+
       if (timer.type === TimerType.Sleep && timer.executionId && timer.stepId) {
-        await this.store.saveStepResult({
-          executionId: timer.executionId,
-          stepId: timer.stepId,
-          result: { state: "completed" },
-          completedAt: new Date(),
+        const completedSleep = await handleSleepTimer({
+          store: this.store,
+          auditLogger: this.auditLogger,
+          timer,
         });
-        const execution = await this.store.getExecution(timer.executionId);
-        const attempt = execution ? execution.attempt : 0;
-        await this.auditLogger.log({
-          kind: DurableAuditEntryKind.SleepCompleted,
-          executionId: timer.executionId,
-          taskId: execution?.taskId,
-          attempt,
-          stepId: timer.stepId,
-          timerId: timer.id,
-        });
+        safeToFinalizeCurrentTimer = true;
+        if (!completedSleep) {
+          await finalizeTimer();
+          return;
+        }
       }
+
+      assertTimerClaimIsStillOwned();
+
+      if (
+        timer.type === TimerType.Timeout &&
+        timer.executionId &&
+        timer.stepId
+      ) {
+        if (
+          await handleExecutionWaitTimeoutTimer({
+            store: this.store,
+            timer,
+          })
+        ) {
+          safeToFinalizeCurrentTimer = true;
+        }
+      }
+
+      assertTimerClaimIsStillOwned();
 
       if (
         timer.type === TimerType.SignalTimeout &&
         timer.executionId &&
         timer.stepId
       ) {
-        const existing = await this.store.getStepResult(
-          timer.executionId,
-          timer.stepId,
-        );
-        const state = parseSignalState(existing?.result);
-        if (state?.state === "waiting") {
-          await this.store.saveStepResult({
-            executionId: timer.executionId,
-            stepId: timer.stepId,
-            result: { state: "timed_out" },
-            completedAt: new Date(),
-          });
+        const persistedSignalId = await handleSignalTimeoutTimer({
+          store: this.store,
+          logger: this.logger,
+          timer,
+        });
+
+        if (persistedSignalId) {
+          safeToFinalizeCurrentTimer = true;
           const execution = await this.store.getExecution(timer.executionId);
           const attempt = execution ? execution.attempt : 0;
-          const stepSuffix = timer.stepId.startsWith("__signal:")
-            ? timer.stepId.slice("__signal:".length)
-            : timer.stepId;
-          const signalId = stepSuffix.split(":")[0];
           await this.auditLogger.log({
             kind: DurableAuditEntryKind.SignalTimedOut,
             executionId: timer.executionId,
-            taskId: execution?.taskId,
+            workflowKey: execution?.workflowKey,
             attempt,
             stepId: timer.stepId,
-            signalId,
+            signalId: persistedSignalId,
             timerId: timer.id,
           });
         }
       }
 
-      if (timer.executionId) {
-        if (this.queue) {
-          await this.queue.enqueue({
-            type: "resume",
-            payload: { executionId: timer.executionId },
-            maxAttempts: this.maxAttempts,
-          });
-        } else {
-          await this.callbacks.processExecution(timer.executionId);
-        }
+      assertTimerClaimIsStillOwned();
 
-        await this.store.markTimerFired(timer.id);
-        await this.store.deleteTimer(timer.id);
+      if (
+        await handleExecutionTimer({
+          timer,
+          queue: this.queue,
+          maxAttempts: this.maxAttempts,
+          processExecution: this.callbacks.processExecution,
+          onSafeToFinalizeCurrentTimer: () => {
+            safeToFinalizeCurrentTimer = true;
+          },
+        })
+      ) {
+        assertTimerClaimIsStillOwned();
+        await finalizeTimer();
         return;
       }
 
-      if (!timer.taskId) {
-        await this.store.markTimerFired(timer.id);
-        await this.store.deleteTimer(timer.id);
+      const scheduledTimerResult = await handleScheduledTaskTimer({
+        store: this.store,
+        timer,
+        taskRegistry: this.taskRegistry,
+        scheduleManager: this.scheduleManager,
+        kickoffExecution: this.callbacks.kickoffExecution,
+        persistTaskTimerExecution: (params) =>
+          this.persistTaskTimerExecution(params),
+        assertTimerClaimIsStillOwned,
+        onSafeToFinalizeCurrentTimer: () => {
+          safeToFinalizeCurrentTimer = true;
+        },
+      });
+      if (!scheduledTimerResult.handled) {
+        await finalizeTimer();
         return;
       }
 
-      if (timer.scheduleId) {
-        const schedule = await this.store.getSchedule(timer.scheduleId);
-        // If the schedule no longer exists, or is paused, don't execute.
-        if (!schedule || schedule.status !== ScheduleStatus.Active) {
-          await this.store.markTimerFired(timer.id);
-          await this.store.deleteTimer(timer.id);
-          return;
-        }
-        // If schedule.nextRun exists, treat mismatched timers as stale (race/updates).
-        if (
-          schedule.nextRun &&
-          timer.fireAt.getTime() !== schedule.nextRun.getTime()
-        ) {
-          await this.store.markTimerFired(timer.id);
-          await this.store.deleteTimer(timer.id);
-          return;
-        }
-      }
-
-      const task = this.taskRegistry.find(timer.taskId);
-      if (!task) {
-        await this.store.markTimerFired(timer.id);
-        await this.store.deleteTimer(timer.id);
+      if (scheduledTimerResult.finalizeCurrentTimer) {
+        await finalizeTimer();
         return;
       }
 
-      const executionId = createExecutionId();
-      const execution: Execution<unknown, unknown> = {
-        id: executionId,
-        taskId: task.id,
-        input: timer.input,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: this.maxAttempts,
-        timeout: this.defaultTimeout,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await this.store.saveExecution(execution);
-      await this.callbacks.kickoffExecution(executionId);
-
-      if (timer.scheduleId) {
-        const schedule = await this.store.getSchedule(timer.scheduleId);
-        if (schedule && schedule.status === ScheduleStatus.Active) {
-          await this.scheduleManager.reschedule(schedule, {
-            lastRunAt: new Date(),
-          });
-        }
-      }
-
-      await this.store.markTimerFired(timer.id);
-      await this.store.deleteTimer(timer.id);
+      await releaseTimerClaim();
+      return;
     } catch (error) {
+      let cleanupError: unknown = null;
+      if (safeToFinalizeCurrentTimer) {
+        try {
+          await finalizeTimer();
+        } catch (finalizeError) {
+          cleanupError = finalizeError;
+        }
+      }
+
       // Keep the timer pending so it can be retried by the poller.
       try {
         await this.logger.error("Durable timer handling failed.", {
@@ -271,13 +339,177 @@ export class PollingManager {
             timerId: timer.id,
             timerType: timer.type,
             executionId: timer.executionId,
-            taskId: timer.taskId,
+            workflowKey: timer.workflowKey,
             scheduleId: timer.scheduleId,
+            safeToFinalizeCurrentTimer,
+            cleanupError,
           },
         });
       } catch {
         // Logging must not crash durable timer retry loops.
       }
+    } finally {
+      stopClaimHeartbeat();
+    }
+  }
+
+  private async persistTaskTimerExecution(params: {
+    timer: Timer;
+    workflowKey: string;
+  }): Promise<string> {
+    return await persistTaskTimerExecution({
+      store: this.store,
+      timer: params.timer,
+      workflowKey: params.workflowKey,
+      maxAttempts: this.maxAttempts,
+      defaultTimeout: this.defaultTimeout,
+    });
+  }
+
+  private startTimerClaimHeartbeat(
+    timerId: string,
+    claimTtlMs: number,
+    claimState: TimerClaimState,
+  ): () => void {
+    return startTimerClaimHeartbeat({
+      store: this.store,
+      logger: this.logger,
+      workerId: this.workerId,
+      timerId,
+      claimTtlMs,
+      claimState,
+    });
+  }
+
+  private getConcurrency(): number {
+    return this.getPositiveIntegerConfig("polling.concurrency", {
+      configuredValue: this.config.concurrency,
+      defaultValue: 10,
+    });
+  }
+
+  private getClaimTtlMs(): number {
+    const defaultClaimTtlMs = this.queue ? 5_000 : 30_000;
+    return this.getPositiveIntegerConfig("polling.claimTtlMs", {
+      configuredValue: this.config.claimTtlMs,
+      defaultValue: defaultClaimTtlMs,
+    });
+  }
+
+  private getPollingIntervalMs(): number {
+    return this.getPositiveIntegerConfig("polling.interval", {
+      configuredValue: this.config.interval,
+      defaultValue: 1_000,
+    });
+  }
+
+  private getPositiveIntegerConfig(
+    configName:
+      | "polling.interval"
+      | "polling.concurrency"
+      | "polling.claimTtlMs",
+    params: {
+      configuredValue: number | undefined;
+      defaultValue: number;
+    },
+  ): number {
+    const value = params.configuredValue ?? params.defaultValue;
+    if (!Number.isInteger(value) || value <= 0) {
+      durableExecutionInvariantError.throw({
+        message: `${configName} must be a positive integer. Received ${String(value)}.`,
+      });
+    }
+
+    return value;
+  }
+
+  private assertClaimBasedPollingSupport(): void {
+    if (typeof this.store.claimReadyTimers !== "function") {
+      durableExecutionInvariantError.throw({
+        message:
+          "Durable polling requires store.claimReadyTimers() so ready timers can be claimed with bounded concurrency.",
+      });
+    }
+  }
+
+  private async fillAvailableTimerSlots(): Promise<void> {
+    const availableSlots = Math.max(
+      0,
+      this.getConcurrency() - this.inFlightTimers.size,
+    );
+
+    if (availableSlots === 0) {
+      return;
+    }
+
+    const claimedTimers = await this.store.claimReadyTimers(
+      new Date(),
+      availableSlots,
+      this.workerId,
+      this.getClaimTtlMs(),
+    );
+
+    claimedTimers.forEach((timer) => {
+      this.trackInFlightTimer(this.handleClaimedTimer(timer));
+    });
+  }
+
+  private wakePollingLoop(): void {
+    this.pollRequested = true;
+
+    if (this.pollingTimer) {
+      clearTimeout(this.pollingTimer);
+      this.pollingTimer = null;
+    }
+
+    if (this.pollingWake) {
+      const wake = this.pollingWake;
+      this.pollingWake = null;
+      wake();
+    }
+  }
+
+  private async waitForPollingWake(intervalMs: number): Promise<void> {
+    if (this.pollRequested) {
+      this.pollRequested = false;
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        this.pollRequested = false;
+        this.pollingTimer = null;
+        this.pollingWake = null;
+        resolve();
+      };
+
+      this.pollingWake = finish;
+      const pollingTimer = setTimeout(finish, intervalMs);
+      this.pollingTimer = pollingTimer;
+      pollingTimer.unref();
+    });
+  }
+
+  private trackInFlightTimer(handling: Promise<void>): Promise<void> {
+    this.inFlightTimers.add(handling);
+    void handling.finally(() => {
+      this.inFlightTimers.delete(handling);
+      if (this.isRunning) {
+        this.wakePollingLoop();
+      }
+    });
+    return handling;
+  }
+
+  private async waitForInFlightTimers(): Promise<void> {
+    while (this.inFlightTimers.size > 0) {
+      await Promise.allSettled([...this.inFlightTimers]);
     }
   }
 }

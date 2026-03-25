@@ -2,16 +2,15 @@ import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
 import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
 import { genericError } from "../../../errors";
+import { flushMicrotasks } from "./DurableService.unit.helpers";
 
 describe("durable: RedisEventBus", () => {
   let redisMock: any;
   let bus: RedisEventBus;
   let onMessage: ((chan: string, msg: string) => void) | undefined;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    onMessage = undefined;
-    redisMock = {
+  function createRedisMockClient(): any {
+    return {
       publish: jest.fn().mockResolvedValue(1),
       subscribe: jest.fn().mockResolvedValue(1),
       unsubscribe: jest.fn().mockResolvedValue(1),
@@ -19,8 +18,14 @@ describe("durable: RedisEventBus", () => {
         if (evt === "message") onMessage = fn;
       }),
       quit: jest.fn().mockResolvedValue("OK"),
-      duplicate: jest.fn().mockReturnThis(),
     };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    onMessage = undefined;
+    redisMock = createRedisMockClient();
+    redisMock.duplicate = jest.fn().mockReturnThis();
     jest
       .spyOn(ioredisOptional, "createIORedisClient")
       .mockReturnValue(redisMock as any);
@@ -57,7 +62,7 @@ describe("durable: RedisEventBus", () => {
     const event = { type: "t", payload: {}, timestamp: new Date() };
     onMessage?.("durable:bus:chan", serializer.stringify(event));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(received).toEqual({ ok: true, timestampIsDate: true });
   });
 
@@ -73,7 +78,7 @@ describe("durable: RedisEventBus", () => {
     const event = { type: "t", payload: {}, timestamp: new Date() };
     onMessage?.("durable:bus:chan", serializer.stringify(event));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
   });
 
@@ -91,7 +96,7 @@ describe("durable: RedisEventBus", () => {
       onMessage?.("durable:bus:chan", serializer.stringify(event)),
     ).not.toThrow();
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
   });
 
@@ -111,7 +116,7 @@ describe("durable: RedisEventBus", () => {
     });
     onMessage?.("durable:bus:chan", message);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(received).toBeInstanceOf(Date);
     expect(received?.toISOString()).toBe("2020-01-01T00:00:00.000Z");
   });
@@ -135,7 +140,7 @@ describe("durable: RedisEventBus", () => {
       JSON.stringify({ type: "t", payload: {}, timestamp: 0 }),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(timestamps).toHaveLength(2);
     expect(timestamps[0].toISOString()).toBe("2020-01-01T00:00:00.000Z");
     expect(timestamps[1].toISOString()).toBe("1970-01-01T00:00:00.000Z");
@@ -156,7 +161,7 @@ describe("durable: RedisEventBus", () => {
       }),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -205,7 +210,7 @@ describe("durable: RedisEventBus", () => {
       JSON.stringify({ type: "t", payload: {}, timestamp: {} }),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushMicrotasks();
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -215,7 +220,24 @@ describe("durable: RedisEventBus", () => {
     expect(redisMock.unsubscribe).toHaveBeenCalledWith("durable:bus:chan");
 
     await bus.dispose?.();
-    expect(redisMock.quit).toHaveBeenCalled();
+    expect(redisMock.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not quit an injected publisher client unless explicitly configured", async () => {
+    await bus.dispose?.();
+    expect(redisMock.quit).toHaveBeenCalledTimes(1);
+
+    const ownedPublisher = createRedisMockClient();
+    const ownedSubscriber = createRedisMockClient();
+    ownedPublisher.duplicate = jest.fn().mockReturnValue(ownedSubscriber);
+    const ownedBus = new RedisEventBus({
+      redis: ownedPublisher,
+      disposeProvidedClient: true,
+    });
+    await ownedBus.dispose?.();
+
+    expect(ownedPublisher.quit).toHaveBeenCalledTimes(1);
+    expect(ownedSubscriber.quit).toHaveBeenCalledTimes(1);
   });
 
   it("unsubscribe(channel, handler) only removes that handler until last one", async () => {
@@ -233,6 +255,32 @@ describe("durable: RedisEventBus", () => {
 
   it("unsubscribe is a no-op for unknown channels", async () => {
     await expect(bus.unsubscribe("missing")).resolves.toBeUndefined();
+  });
+
+  it("still unsubscribes when the pending subscription promise rejects", async () => {
+    let rejectSubscription!: (error: Error) => void;
+    (
+      bus as unknown as {
+        channels: Map<
+          string,
+          {
+            handlers: Set<unknown>;
+            subscriptionPromise: Promise<void> | null;
+          }
+        >;
+      }
+    ).channels.set("durable:bus:chan", {
+      handlers: new Set(),
+      subscriptionPromise: new Promise<void>((_, reject) => {
+        rejectSubscription = reject;
+      }),
+    });
+
+    const unsubscribe = bus.unsubscribe("chan");
+    rejectSubscription(new Error("subscribe failed"));
+
+    await expect(unsubscribe).resolves.toBeUndefined();
+    expect(redisMock.unsubscribe).toHaveBeenCalledWith("durable:bus:chan");
   });
 
   it("supports string redis url and default redis in constructor", async () => {

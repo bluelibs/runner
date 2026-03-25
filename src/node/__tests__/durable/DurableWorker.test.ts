@@ -12,6 +12,7 @@ class TestQueue implements IDurableQueue {
   public handler: MessageHandler<unknown> | null = null;
   public ackCalls: string[] = [];
   public nackCalls: Array<{ id: string; requeue?: boolean }> = [];
+  public cancelConsumerCalls = 0;
 
   async enqueue<T>(
     _message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
@@ -29,6 +30,34 @@ class TestQueue implements IDurableQueue {
 
   async nack(messageId: string, requeue?: boolean): Promise<void> {
     this.nackCalls.push({ id: messageId, requeue });
+  }
+
+  async cancelConsumer(): Promise<void> {
+    this.cancelConsumerCalls += 1;
+    this.handler = null;
+  }
+}
+
+class FailingConsumeQueue extends TestQueue {
+  constructor(private remainingFailures: number) {
+    super();
+  }
+
+  override async consume<T>(handler: MessageHandler<T>): Promise<void> {
+    if (this.remainingFailures > 0) {
+      this.remainingFailures -= 1;
+      throw genericError.new({ message: "consume failed" });
+    }
+
+    await super.consume(handler);
+  }
+}
+
+class CancelFailQueue extends TestQueue {
+  override async cancelConsumer(): Promise<void> {
+    this.cancelConsumerCalls += 1;
+    this.handler = null;
+    throw genericError.new({ message: "cancel failed" });
   }
 }
 
@@ -108,6 +137,31 @@ describe("durable: DurableWorker", () => {
 
     expect(processExecution).toHaveBeenCalledWith("e1");
     expect(queue.ackCalls).toEqual(["m1"]);
+  });
+
+  it("allows start() to be retried after queue.consume() fails during startup", async () => {
+    const queue = new FailingConsumeQueue(1);
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+
+    await expect(worker.start()).rejects.toThrow("consume failed");
+    await expect(worker.start()).resolves.toBeUndefined();
+
+    expect(queue.handler).not.toBeNull();
+  });
+
+  it("treats repeated successful start() calls as idempotent", async () => {
+    const queue = new TestQueue();
+    const consumeSpy = jest.spyOn(queue, "consume");
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+
+    await worker.start();
+    await worker.start();
+
+    expect(consumeSpy).toHaveBeenCalledTimes(1);
   });
 
   it("nacks on handler errors", async () => {
@@ -244,7 +298,7 @@ describe("durable: DurableWorker", () => {
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
-  it("ignores unknown payload shapes", async () => {
+  it("nacks malformed payload shapes instead of acknowledging them", async () => {
     const queue = new TestQueue();
     const { service, processExecution } = createService();
 
@@ -254,7 +308,11 @@ describe("durable: DurableWorker", () => {
     await queue.handler?.(message("bad", "execute"));
     await queue.handler?.(message({ executionId: 123 }, "execute"));
     expect(processExecution).not.toHaveBeenCalled();
-    expect(queue.ackCalls).toEqual(["m1", "m1"]);
+    expect(queue.ackCalls).toEqual([]);
+    expect(queue.nackCalls).toEqual([
+      { id: "m1", requeue: true },
+      { id: "m1", requeue: true },
+    ]);
   });
 
   it("ignores non-execution message types", async () => {
@@ -269,7 +327,7 @@ describe("durable: DurableWorker", () => {
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
-  it("acks unsupported message types without processing executions", async () => {
+  it("nacks unsupported message types instead of dropping them", async () => {
     const queue = new TestQueue();
     const { service, processExecution } = createService();
 
@@ -280,6 +338,193 @@ describe("durable: DurableWorker", () => {
     await queue.handler?.(unknown as QueueMessage);
 
     expect(processExecution).not.toHaveBeenCalled();
+    expect(queue.ackCalls).toEqual([]);
+    expect(queue.nackCalls).toEqual([{ id: "m1", requeue: true }]);
+  });
+
+  it("stops the active queue consumer when the worker stops", async () => {
+    const queue = new TestQueue();
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+    await worker.stop();
+
+    expect(queue.cancelConsumerCalls).toBe(1);
+    expect(queue.handler).toBeNull();
+  });
+
+  it("waits for the in-flight message to settle before stop() returns", async () => {
+    const queue = new TestQueue();
+    let releaseExecution!: () => void;
+    const executionBlocked = new Promise<void>((resolve) => {
+      releaseExecution = resolve;
+    });
+    const { service } = createService({
+      processExecution: async () => {
+        await executionBlocked;
+      },
+    });
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    const handlerPromise = queue.handler?.(
+      message({ executionId: "e1" }, "execute"),
+    );
+    expect(handlerPromise).toBeDefined();
+
+    await Promise.resolve();
+
+    let stopped = false;
+    const stopPromise = worker.stop().then(() => {
+      stopped = true;
+    });
+
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+    expect(queue.cancelConsumerCalls).toBe(1);
+
+    releaseExecution();
+
+    await stopPromise;
+    await handlerPromise;
+
+    expect(stopped).toBe(true);
     expect(queue.ackCalls).toEqual(["m1"]);
+  });
+
+  it("waits for in-flight messages even when cancelConsumer() fails", async () => {
+    const queue = new CancelFailQueue();
+    let releaseExecution!: () => void;
+    const executionBlocked = new Promise<void>((resolve) => {
+      releaseExecution = resolve;
+    });
+    const { service } = createService({
+      processExecution: async () => {
+        await executionBlocked;
+      },
+    });
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    const handlerPromise = queue.handler?.(
+      message({ executionId: "e1" }, "execute"),
+    );
+    expect(handlerPromise).toBeDefined();
+
+    await Promise.resolve();
+
+    let settled = false;
+    const stopPromise = worker.stop().finally(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(queue.cancelConsumerCalls).toBe(1);
+
+    releaseExecution();
+
+    await expect(stopPromise).rejects.toThrow("cancel failed");
+    await handlerPromise;
+
+    expect(queue.ackCalls).toEqual(["m1"]);
+  });
+
+  it("waits for every in-flight message before surfacing a drain failure", async () => {
+    const queue = new TestQueue();
+    const processingError = genericError.new({ message: "boom" });
+    const nackError = genericError.new({ message: "nack failed" });
+    let releaseBlockedExecution!: () => void;
+    const blockedExecution = new Promise<void>((resolve) => {
+      releaseBlockedExecution = resolve;
+    });
+    const { service } = createService({
+      processExecution: async (executionId) => {
+        if (executionId === "blocked") {
+          await blockedExecution;
+          return;
+        }
+
+        throw processingError;
+      },
+    });
+
+    jest.spyOn(queue, "nack").mockImplementation(async (messageId, requeue) => {
+      queue.nackCalls.push({ id: messageId, requeue });
+      if (messageId === "m-fail") {
+        throw nackError;
+      }
+    });
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    const blockedHandlerPromise = queue.handler?.({
+      ...message({ executionId: "blocked" }, "execute"),
+      id: "m-blocked",
+    });
+    const failingHandlerPromise = queue.handler?.({
+      ...message({ executionId: "fail" }, "execute"),
+      id: "m-fail",
+    });
+
+    expect(blockedHandlerPromise).toBeDefined();
+    expect(failingHandlerPromise).toBeDefined();
+    void failingHandlerPromise?.catch(() => undefined);
+
+    let stopSettled = false;
+    const stopPromise = worker.stop().finally(() => {
+      stopSettled = true;
+    });
+    void stopPromise.catch(() => undefined);
+
+    await expect(failingHandlerPromise).rejects.toThrow("nack failed");
+    await Promise.resolve();
+
+    expect(stopSettled).toBe(false);
+    expect(queue.cancelConsumerCalls).toBe(1);
+
+    releaseBlockedExecution();
+
+    await expect(stopPromise).rejects.toThrow("nack failed");
+    await blockedHandlerPromise;
+
+    expect(queue.ackCalls).toEqual(["m-blocked"]);
+    expect(queue.nackCalls).toEqual([{ id: "m-fail", requeue: true }]);
+  });
+
+  it("preserves cooldown failures when draining in-flight messages also fails", async () => {
+    const queue = new CancelFailQueue();
+    const { service } = createService();
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    const waitError = genericError.new({ message: "wait failed" });
+
+    jest
+      .spyOn(
+        worker as unknown as { waitForInFlightMessages: () => Promise<void> },
+        "waitForInFlightMessages",
+      )
+      .mockRejectedValue(waitError);
+
+    await expect(worker.stop()).rejects.toThrow("cancel failed");
+  });
+
+  it("rethrows drain failures when cooldown succeeds", async () => {
+    const queue = new TestQueue();
+    const { service } = createService();
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    const waitError = genericError.new({ message: "wait failed" });
+
+    jest
+      .spyOn(
+        worker as unknown as { waitForInFlightMessages: () => Promise<void> },
+        "waitForInFlightMessages",
+      )
+      .mockRejectedValue(waitError);
+
+    await expect(worker.stop()).rejects.toThrow("wait failed");
   });
 });

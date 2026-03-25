@@ -369,6 +369,16 @@ export class Store {
     return this.lifecycleAdmissionController.waitForDrain(drainingBudgetMs);
   }
 
+  public trackTaskAbortController(controller: AbortController): () => void {
+    return this.lifecycleAdmissionController.trackTaskAbortController(
+      controller,
+    );
+  }
+
+  public abortInFlightTaskSignals(reason: string): void {
+    this.lifecycleAdmissionController.abortInFlightTaskSignals(reason);
+  }
+
   public cancelDrainWaiters(): void {
     this.lifecycleAdmissionController.cancelDrainWaiters();
   }

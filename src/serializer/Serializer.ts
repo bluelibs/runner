@@ -180,11 +180,11 @@ function toSchemaTypeDefinition<TInstance>(
     is: (value: unknown): value is TInstance => value instanceof schemaClass,
     serialize: (value: TInstance) => cloneSchemaPayload(value as object),
     deserialize: (value: unknown) => {
+      const placeholder = placeholderStack.pop();
       const remapped = remapValueForSchemaDeserialize(
         value,
         schemaClass as SerializerClassConstructor,
       );
-      const placeholder = placeholderStack.pop();
 
       if (placeholder !== undefined && placeholder !== null) {
         seedSchemaPlaceholder(placeholder as object, remapped);

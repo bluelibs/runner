@@ -11,6 +11,17 @@ import { Logger } from "../../../models/Logger";
 export interface RedisEventBusConfig {
   prefix?: string;
   redis?: RedisEventBusClient | string;
+  /**
+   * Serializer used for durable event bus payloads.
+   *
+   * Defaults to Runner's standard serializer when omitted.
+   */
+  serializer?: Serializer;
+  /**
+   * When `true`, `dispose()` also closes a caller-provided Redis client.
+   * By default externally provided clients remain owned by the caller.
+   */
+  disposeProvidedClient?: boolean;
   logger?: Logger;
   onHandlerError?: (error: unknown) => void | Promise<void>;
 }
@@ -34,11 +45,16 @@ export class RedisEventBus implements IEventBus {
   private sub: RedisEventBusClient;
   private prefix: string;
   private readonly channels = new Map<string, ChannelState>();
-  private readonly serializer = new Serializer();
+  private readonly serializer: Serializer;
   private readonly logger: Logger;
   private readonly onHandlerError?: (error: unknown) => void | Promise<void>;
+  private readonly ownsPublisherClient: boolean;
 
   constructor(config: RedisEventBusConfig = {}) {
+    this.ownsPublisherClient =
+      typeof config.redis === "string" ||
+      config.redis === undefined ||
+      config.disposeProvidedClient === true;
     this.pub =
       typeof config.redis === "string" || config.redis === undefined
         ? (createIORedisClient(config.redis) as RedisEventBusClient)
@@ -50,6 +66,7 @@ export class RedisEventBus implements IEventBus {
         printStrategy: "pretty",
         bufferLogs: false,
       });
+    this.serializer = config.serializer ?? new Serializer();
     this.logger = baseLogger.with({ source: "durable.bus.redis" });
     this.onHandlerError = config.onHandlerError;
 
@@ -226,7 +243,9 @@ export class RedisEventBus implements IEventBus {
   }
 
   async dispose(): Promise<void> {
-    await this.pub.quit();
+    if (this.ownsPublisherClient) {
+      await this.pub.quit();
+    }
     await this.sub.quit();
   }
 }

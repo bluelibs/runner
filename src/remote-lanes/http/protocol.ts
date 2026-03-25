@@ -33,6 +33,28 @@ export interface EventRequest {
   traceId?: string;
 }
 
+/**
+ * Builds the canonical JSON body used by HTTP event transports and auth hashing.
+ *
+ * We intentionally omit `returnPayload` unless result semantics are requested so
+ * fire-and-forget and result-returning calls remain distinct auth targets.
+ */
+export function buildEventRequestBody<TPayload>(
+  payload?: TPayload,
+  options?: { returnPayload?: boolean },
+): Pick<EventRequest, "payload" | "returnPayload"> {
+  if (options?.returnPayload) {
+    return {
+      payload,
+      returnPayload: true,
+    };
+  }
+
+  return {
+    payload,
+  };
+}
+
 export class RemoteLaneTransportError extends Error {
   public readonly code: string;
   public readonly details?: unknown;

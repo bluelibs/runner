@@ -63,9 +63,9 @@ export type RuntimeDisposeOptions = {
   /**
    * Skips any remaining graceful shutdown orchestration that has not started
    * yet and jumps toward direct resource disposal. This can bypass
-   * `dispose.cooldownWindowMs`, `events.disposing`, drain wait, and
-   * `events.drained`, but it does not preempt work already in flight such as an
-   * active `cooldown()` call.
+   * `dispose.cooldownWindowMs`, `events.disposing`, graceful drain wait,
+   * `dispose.abortWindowMs`, and `events.drained`, but it does not preempt
+   * work already in flight such as an active `cooldown()` call.
    */
   force?: boolean;
 };
@@ -152,9 +152,20 @@ export type DisposeOptions = {
    * Drain budget (milliseconds) used while waiting for in-flight business work
    * (tasks + event listeners) after entering `disposing`.
    * Effective wait is capped by remaining `dispose.totalBudgetMs`.
-   * Set to `0` to skip drain waiting.
+   * Set to `0` to skip drain waiting. Runner still performs an immediate drain
+   * check, so when work remains in flight and `abortWindowMs > 0`, shutdown can
+   * enter the cooperative-abort phase right away.
    */
   drainingBudgetMs?: number;
+  /**
+   * Optional bounded cooperative-abort window after graceful drain expires.
+   * Runner aborts its tracked task-local signals, then waits up to this window
+   * for in-flight business work to settle. Effective wait is capped by
+   * remaining `dispose.totalBudgetMs`. When `drainingBudgetMs` is `0`, this can
+   * still run immediately after the initial drain check. Set to `0` to skip
+   * this phase.
+   */
+  abortWindowMs?: number;
   /**
    * Short bounded post-cooldown window before `disposing` begins.
    * Runner keeps the broader `coolingDown` admission policy open during this
@@ -282,6 +293,8 @@ export type ResolvedRunOptions = {
     totalBudgetMs: number;
     /** Drain waiting budget in milliseconds. */
     drainingBudgetMs: number;
+    /** Post-abort cooperative settle window in milliseconds. */
+    abortWindowMs: number;
     /** Post-cooldown admission window in milliseconds. */
     cooldownWindowMs: number;
   };

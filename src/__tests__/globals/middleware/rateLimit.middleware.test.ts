@@ -1,5 +1,6 @@
 import { defineResource, defineTask } from "../../../define";
 import {
+  matchError,
   middlewareKeyCapacityExceededError,
   middlewareRateLimitExceededError,
 } from "../../../errors";
@@ -151,7 +152,7 @@ describe("Rate Limit Middleware", () => {
         rateLimitTaskMiddleware.with({
           windowMs: 1000,
           max: 1,
-          keyBuilder: (_taskId, input) => input as string,
+          keyBuilder: (_taskId: string, input: unknown) => input as string,
         }),
       ],
       run: async (input: string) => input,
@@ -241,7 +242,7 @@ describe("Rate Limit Middleware", () => {
       windowMs: 1000,
       max: 1,
       maxKeys: 3,
-      keyBuilder: (taskId) => taskId,
+      keyBuilder: (taskId: string) => taskId,
     });
 
     expect(configured.config).toEqual({
@@ -254,23 +255,39 @@ describe("Rate Limit Middleware", () => {
 
   it("should throw when config is null", () => {
     expectValidationError(() => {
-      // @ts-expect-error - runtime guard should reject invalid config.
-      rateLimitTaskMiddleware.with(null);
+      rateLimitTaskMiddleware.with(null as never);
     });
   });
 
   it("should throw when config is a non-object", () => {
     expectValidationError(() => {
-      // @ts-expect-error - runtime guard should reject invalid config.
-      rateLimitTaskMiddleware.with(5);
+      rateLimitTaskMiddleware.with(5 as never);
     });
   });
 
   it("should throw when required config keys are missing", () => {
     expectValidationError(() => {
-      // @ts-expect-error - runtime guard should reject missing keys.
-      rateLimitTaskMiddleware.with({});
+      rateLimitTaskMiddleware.with({} as never);
     });
+  });
+
+  it("fails fast when middleware is used without with()", async () => {
+    const task = defineTask({
+      id: "rateLimit-missing-config",
+      middleware: [rateLimitTaskMiddleware as any],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-rateLimit-missing-config",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await task(undefined as never);
+      },
+    });
+
+    await expect(run(app)).rejects.toMatchObject({ id: matchError.id });
   });
 
   it("should throw when windowMs is not finite", () => {
@@ -441,7 +458,7 @@ describe("Rate Limit Middleware", () => {
           windowMs: 60_000,
           max: 10,
           maxKeys: 1,
-          keyBuilder: (_taskId, input) => String(input),
+          keyBuilder: (_taskId: string, input: unknown) => String(input),
         }),
       ],
       run: async (input: string) => input,
@@ -478,7 +495,7 @@ describe("Rate Limit Middleware", () => {
     const middleware = rateLimitTaskMiddleware.with({
       windowMs: 50,
       max: 1,
-      keyBuilder: (_taskId, input) => String(input),
+      keyBuilder: (_taskId: string, input: unknown) => String(input),
     });
     const task = defineTask({
       id: "rateLimit-background-cleanup",
@@ -505,6 +522,48 @@ describe("Rate Limit Middleware", () => {
 
       expect(keyedStates?.size).toBe(0);
       expect(state.states.get(middleware.config)).toBeUndefined();
+      await runtime.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("re-registers the keyed state map after a full expiration sweep", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+    const middleware = rateLimitTaskMiddleware.with({
+      windowMs: 100,
+      max: 1,
+      keyBuilder: (_taskId: string, input: unknown) => String(input),
+    });
+    const task = defineTask({
+      id: "rateLimit-reregister-after-sweep",
+      middleware: [middleware],
+      run: async (input: string) => input,
+    });
+    const app = defineResource({
+      id: "app-rateLimit-reregister-after-sweep",
+      register: [task],
+      dependencies: { task, rateLimit: rateLimitResource },
+      init: async () => "ok",
+    });
+
+    try {
+      const runtime = await run(app);
+      const state = runtime.getResourceValue(rateLimitResource);
+
+      await expect(runtime.runTask(task, "expired")).resolves.toBe("expired");
+
+      jest.setSystemTime(new Date("2026-01-01T00:00:00.200Z"));
+
+      await expect(runtime.runTask(task, "fresh")).resolves.toBe("fresh");
+      expect(state.states.get(middleware.config)?.has("fresh")).toBe(true);
+
+      await expect(runtime.runTask(task, "fresh")).rejects.toThrow(
+        /Rate limit exceeded/i,
+      );
+
       await runtime.dispose();
     } finally {
       jest.useRealTimers();

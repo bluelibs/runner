@@ -1,21 +1,33 @@
 import { EventManager } from "../../../models/EventManager";
+import {
+  hashRemoteLanePayload,
+  issueRemoteLaneToken,
+} from "../../remote-lanes/laneAuth";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { consumeEventLaneQueueMessage } from "../../event-lanes/eventLanes.consumer";
 
-describe("eventLanes.consumer", () => {
-  it("uses the default retry delay when a requeueable failure occurs", async () => {
-    const emitError = new Error("emit failed");
-    const queue = {
-      ack: jest.fn(async () => undefined),
-      nack: jest.fn(async () => undefined),
-      consume: jest.fn(async () => undefined),
-    };
+const laneId = "tests-event-lanes-consumer-lane";
+const otherLaneId = "tests-event-lanes-consumer-other-lane";
+const eventId = "tests-event-lanes-consumer-event";
 
-    const logger = {
-      error: jest.fn(async () => undefined),
-    };
+function createBaseOptions(overrides: Record<string, unknown> = {}) {
+  const queue = {
+    ack: jest.fn(async () => undefined),
+    nack: jest.fn(async () => undefined),
+    consume: jest.fn(async () => undefined),
+  };
+  const logger = {
+    error: jest.fn(async () => undefined),
+  };
+  const eventManager = {
+    emit: jest.fn(async () => undefined),
+  } as unknown as EventManager;
 
-    await consumeEventLaneQueueMessage({
+  return {
+    queue,
+    logger,
+    eventManager,
+    options: {
       config: {
         profile: "worker",
         mode: "network",
@@ -27,22 +39,9 @@ describe("eventLanes.consumer", () => {
         },
       } as any,
       dependencies: {
-        eventManager: {
-          emit: jest.fn(async () => {
-            throw emitError;
-          }),
-        } as unknown as EventManager,
+        eventManager,
         store: {
-          events: new Map([
-            [
-              "tests-event-lanes-consumer-event",
-              {
-                event: {
-                  id: "tests-event-lanes-consumer-event",
-                },
-              },
-            ],
-          ]),
+          events: new Map([[eventId, { event: { id: eventId } }]]),
           asyncContexts: new Map(),
         } as any,
         serializer: {
@@ -56,14 +55,15 @@ describe("eventLanes.consumer", () => {
         disposed: false,
         bindingsByLaneId: new Map([
           [
-            "tests-event-lanes-consumer-lane",
+            laneId,
             {
-              lane: { id: "tests-event-lanes-consumer-lane" },
+              lane: { id: laneId },
               retryDelayMs: 1,
               maxAttempts: 2,
             },
           ],
         ]),
+        eventRouteByEventId: new Map([[eventId, { lane: { id: laneId } }]]),
         relaySourcePrefix: "relay:",
       } as any,
       diagnostics: {
@@ -71,17 +71,28 @@ describe("eventLanes.consumer", () => {
         logSkipInactiveLane: jest.fn(async () => undefined),
       } as any,
       queue,
-      activeLaneIds: new Set(["tests-event-lanes-consumer-lane"]),
+      activeLaneIds: new Set([laneId]),
       message: {
         id: "tests-event-lanes-consumer-message",
-        laneId: "tests-event-lanes-consumer-lane",
-        eventId: "tests-event-lanes-consumer-event",
+        laneId,
+        eventId,
         payload: JSON.stringify({ ok: true }),
         source: runtimeSource.runtime("tests.event-lanes.consumer"),
         createdAt: new Date(),
         attempts: 1,
       },
-    });
+      ...overrides,
+    },
+  };
+}
+
+describe("eventLanes.consumer", () => {
+  it("requeues retryable event handler failures", async () => {
+    const emitError = new Error("emit failed");
+    const { queue, logger, eventManager, options } = createBaseOptions();
+    jest.spyOn(eventManager, "emit").mockRejectedValue(emitError);
+
+    await consumeEventLaneQueueMessage(options as any);
 
     expect(queue.nack).toHaveBeenCalledWith(
       "tests-event-lanes-consumer-message",
@@ -91,6 +102,297 @@ describe("eventLanes.consumer", () => {
       "Event lane consumer failed; message requeued for retry.",
       expect.objectContaining({
         error: emitError,
+      }),
+    );
+  });
+
+  it("rejects messages whose event is assigned to a different lane", async () => {
+    const { queue, logger, eventManager, options } = createBaseOptions({
+      context: {
+        profile: "worker",
+        coolingDown: false,
+        disposed: false,
+        bindingsByLaneId: new Map([
+          [
+            laneId,
+            {
+              lane: { id: laneId },
+              maxAttempts: 3,
+            },
+          ],
+        ]),
+        eventRouteByEventId: new Map([
+          [eventId, { lane: { id: otherLaneId } }],
+        ]),
+        relaySourcePrefix: "relay:",
+      } as any,
+    });
+
+    await consumeEventLaneQueueMessage(options as any);
+
+    expect(eventManager.emit).not.toHaveBeenCalled();
+    expect(queue.nack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+      false,
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Event lane consumer rejected a permanent message.",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          name: "eventLanes-assignmentMismatch",
+        }),
+      }),
+    );
+  });
+
+  it("rejects messages whose event has no assigned lane route", async () => {
+    const { queue, logger, eventManager, options } = createBaseOptions({
+      context: {
+        profile: "worker",
+        coolingDown: false,
+        disposed: false,
+        bindingsByLaneId: new Map([
+          [
+            laneId,
+            {
+              lane: { id: laneId },
+              maxAttempts: 3,
+            },
+          ],
+        ]),
+        eventRouteByEventId: new Map(),
+        relaySourcePrefix: "relay:",
+      } as any,
+    });
+
+    await consumeEventLaneQueueMessage(options as any);
+
+    expect(eventManager.emit).not.toHaveBeenCalled();
+    expect(queue.nack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+      false,
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Event lane consumer rejected a permanent message.",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          name: "eventLanes-assignmentMismatch",
+        }),
+      }),
+    );
+  });
+
+  it("rejects messages with invalid auth tokens without retry", async () => {
+    const { queue, logger, eventManager, options } = createBaseOptions({
+      context: {
+        profile: "worker",
+        coolingDown: false,
+        disposed: false,
+        bindingsByLaneId: new Map([
+          [
+            laneId,
+            {
+              lane: { id: laneId },
+              auth: { secret: "consumer-secret" },
+              maxAttempts: 3,
+            },
+          ],
+        ]),
+        eventRouteByEventId: new Map([[eventId, { lane: { id: laneId } }]]),
+        relaySourcePrefix: "relay:",
+      } as any,
+      config: {
+        profile: "worker",
+        mode: "network",
+        topology: {
+          profiles: {
+            worker: { consume: [] },
+          },
+          bindings: [
+            {
+              lane: { id: laneId },
+              queue: {},
+              auth: { secret: "consumer-secret" },
+            },
+          ],
+        },
+      } as any,
+      message: {
+        id: "tests-event-lanes-consumer-message",
+        laneId,
+        eventId,
+        payload: JSON.stringify({ ok: true }),
+        authToken: "not-a-jwt",
+        source: runtimeSource.runtime("tests.event-lanes.consumer"),
+        createdAt: new Date(),
+        attempts: 1,
+      },
+    });
+
+    await consumeEventLaneQueueMessage(options as any);
+
+    expect(eventManager.emit).not.toHaveBeenCalled();
+    expect(queue.nack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+      false,
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Event lane consumer rejected a permanent message.",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          name: "remoteLanes-auth-unauthorized",
+        }),
+      }),
+    );
+  });
+
+  it("allows a retried delivery to reuse the same auth token after emit failure", async () => {
+    const bindingAuth = { secret: "consumer-secret" };
+    const payload = JSON.stringify({ ok: true });
+    const authToken = issueRemoteLaneToken({
+      laneId,
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: eventId,
+        payloadHash: hashRemoteLanePayload(payload),
+      },
+    })!;
+    const emitError = new Error("emit failed once");
+    const { queue, logger, eventManager, options } = createBaseOptions({
+      context: {
+        profile: "worker",
+        coolingDown: false,
+        disposed: false,
+        bindingsByLaneId: new Map([
+          [
+            laneId,
+            {
+              lane: { id: laneId },
+              auth: bindingAuth,
+              retryDelayMs: 1,
+              maxAttempts: 3,
+            },
+          ],
+        ]),
+        eventRouteByEventId: new Map([[eventId, { lane: { id: laneId } }]]),
+        relaySourcePrefix: "relay:",
+      } as any,
+      config: {
+        profile: "worker",
+        mode: "network",
+        topology: {
+          profiles: {
+            worker: { consume: [] },
+          },
+          bindings: [
+            {
+              lane: { id: laneId },
+              queue: {},
+              auth: bindingAuth,
+            },
+          ],
+        },
+      } as any,
+      message: {
+        id: "tests-event-lanes-consumer-message",
+        laneId,
+        eventId,
+        payload,
+        authToken,
+        source: runtimeSource.runtime("tests.event-lanes.consumer"),
+        createdAt: new Date(),
+        attempts: 1,
+      },
+    });
+
+    jest
+      .spyOn(eventManager, "emit")
+      .mockRejectedValueOnce(emitError)
+      .mockResolvedValueOnce(undefined);
+
+    await consumeEventLaneQueueMessage(options as any);
+    await consumeEventLaneQueueMessage({
+      ...(options as any),
+      message: {
+        ...(options as any).message,
+        attempts: 2,
+      },
+    });
+
+    expect(eventManager.emit).toHaveBeenCalledTimes(2);
+    expect(queue.nack).toHaveBeenCalledTimes(1);
+    expect(queue.nack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+      true,
+    );
+    expect(queue.ack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+    );
+    expect(logger.error).not.toHaveBeenCalledWith(
+      "Event lane consumer rejected a permanent message.",
+      expect.anything(),
+    );
+  });
+
+  it("rejects malformed payloads without retry", async () => {
+    const setup = createBaseOptions();
+    setup.options.dependencies = {
+      eventManager: setup.eventManager,
+      store: {
+        events: new Map([[eventId, { event: { id: eventId } }]]),
+        asyncContexts: new Map(),
+      } as any,
+      serializer: {
+        parse: jest.fn(() => {
+          throw new Error("parse failed");
+        }),
+      } as any,
+      logger: setup.logger as any,
+    };
+
+    await consumeEventLaneQueueMessage(setup.options as any);
+
+    expect(setup.eventManager.emit).not.toHaveBeenCalled();
+    expect(setup.queue.nack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+      false,
+    );
+    expect(setup.logger.error).toHaveBeenCalledWith(
+      "Event lane consumer rejected a permanent message.",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          name: "eventLanes-payloadMalformed",
+        }),
+      }),
+    );
+  });
+
+  it("normalizes primitive payload parse failures into permanent malformed-payload errors", async () => {
+    const setup = createBaseOptions();
+    setup.options.dependencies = {
+      ...setup.options.dependencies,
+      serializer: {
+        parse: jest.fn(() => {
+          throw "bad-payload";
+        }),
+      } as any,
+    };
+
+    await consumeEventLaneQueueMessage(setup.options as any);
+
+    expect(setup.eventManager.emit).not.toHaveBeenCalled();
+    expect(setup.queue.nack).toHaveBeenCalledWith(
+      "tests-event-lanes-consumer-message",
+      false,
+    );
+    expect(setup.logger.error).toHaveBeenCalledWith(
+      "Event lane consumer rejected a permanent message.",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          name: "eventLanes-payloadMalformed",
+        }),
       }),
     );
   });

@@ -18,6 +18,7 @@ import {
   verifyLaneJwtHmacSignature,
 } from "./laneAuth.jwt";
 import { resolveLaneAuthPolicy } from "./laneAuth.policy";
+import type { RemoteLaneTokenTarget } from "./laneAuth.subject";
 
 type LaneCapability = "produce" | "consume";
 
@@ -25,6 +26,7 @@ export interface RemoteLaneTokenIssueInput {
   laneId: string;
   bindingAuth?: RemoteLaneBindingAuth;
   capability: LaneCapability;
+  target?: RemoteLaneTokenTarget;
   nowMs?: number;
 }
 
@@ -33,6 +35,7 @@ export interface RemoteLaneTokenVerifyInput {
   bindingAuth?: RemoteLaneBindingAuth;
   token: string;
   requiredCapability: LaneCapability;
+  expectedTarget?: Partial<RemoteLaneTokenTarget>;
   nowMs?: number;
 }
 
@@ -40,6 +43,7 @@ export function issueRemoteLaneToken({
   laneId,
   bindingAuth,
   capability,
+  target,
   nowMs = Date.now(),
 }: RemoteLaneTokenIssueInput): string | undefined {
   const resolvedPolicy = resolveLaneAuthPolicy(bindingAuth);
@@ -49,7 +53,15 @@ export function issueRemoteLaneToken({
 
   const iat = Math.floor(nowMs / 1000);
   const exp = Math.floor((nowMs + resolvedPolicy.tokenTtlMs) / 1000);
-  const payload = { lane: laneId, cap: capability, iat, exp } as const;
+  const payload = {
+    lane: laneId,
+    cap: capability,
+    kind: target?.kind,
+    target: target?.targetId,
+    hash: target?.payloadHash,
+    iat,
+    exp,
+  } as const;
 
   if (resolvedPolicy.mode === "jwt_hmac") {
     const secret = resolveHmacSecret(bindingAuth, "produce");
@@ -87,6 +99,7 @@ export function verifyRemoteLaneToken({
   bindingAuth,
   token,
   requiredCapability,
+  expectedTarget,
   nowMs = Date.now(),
 }: RemoteLaneTokenVerifyInput): void {
   const resolvedPolicy = resolveLaneAuthPolicy(bindingAuth);
@@ -125,6 +138,28 @@ export function verifyRemoteLaneToken({
     });
   }
 
+  if (expectedTarget?.kind && payload.kind !== expectedTarget.kind) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: `token target kind "${payload.kind ?? "unknown"}" does not allow "${expectedTarget.kind}"`,
+    });
+  }
+  if (expectedTarget?.targetId && payload.target !== expectedTarget.targetId) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: `token target "${payload.target ?? "unknown"}" does not allow "${expectedTarget.targetId}"`,
+    });
+  }
+  if (
+    expectedTarget?.payloadHash &&
+    payload.hash !== expectedTarget.payloadHash
+  ) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: "token payload hash mismatch",
+    });
+  }
+
   if (resolvedPolicy.mode === "jwt_hmac") {
     if (header.alg !== "HS256") {
       remoteLaneAuthUnauthorizedError.throw({
@@ -150,36 +185,35 @@ export function verifyRemoteLaneToken({
         reason: "invalid signature",
       });
     }
-    return;
-  }
+  } else {
+    if (header.alg !== resolvedPolicy.algorithm) {
+      remoteLaneAuthUnauthorizedError.throw({
+        laneId,
+        reason: `unexpected JWT alg "${header.alg}"`,
+      });
+    }
+    const publicKey = resolveAsymmetricPublicKey({
+      bindingAuth,
+      kid: header.kid,
+    });
+    if (!publicKey) {
+      remoteLaneAuthVerifierMissingError.throw({
+        laneId,
+        mode: resolvedPolicy.mode,
+      });
+    }
 
-  if (header.alg !== resolvedPolicy.algorithm) {
-    remoteLaneAuthUnauthorizedError.throw({
-      laneId,
-      reason: `unexpected JWT alg "${header.alg}"`,
+    const verified = verifyLaneJwtAsymmetricSignature({
+      encoded,
+      signature,
+      publicKey: publicKey!,
+      algorithm: resolvedPolicy.algorithm,
     });
-  }
-  const publicKey = resolveAsymmetricPublicKey({
-    bindingAuth,
-    kid: header.kid,
-  });
-  if (!publicKey) {
-    remoteLaneAuthVerifierMissingError.throw({
-      laneId,
-      mode: resolvedPolicy.mode,
-    });
-  }
-
-  const verified = verifyLaneJwtAsymmetricSignature({
-    encoded,
-    signature,
-    publicKey: publicKey!,
-    algorithm: resolvedPolicy.algorithm,
-  });
-  if (!verified) {
-    remoteLaneAuthUnauthorizedError.throw({
-      laneId,
-      reason: "invalid signature",
-    });
+    if (!verified) {
+      remoteLaneAuthUnauthorizedError.throw({
+        laneId,
+        reason: "invalid signature",
+      });
+    }
   }
 }

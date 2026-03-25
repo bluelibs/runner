@@ -10,10 +10,12 @@ import type { ExecutionJournal } from "../../types/executionJournal";
 import type { TaskMiddlewareInterceptor } from "./types";
 import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
+import { runWithRuntimeCallSource } from "../RuntimeCallSourceStore";
 import type { TaskCallOptions } from "../../types/utilities";
 import { composeReverseLayers } from "./composeLayers";
 import {
   getTaskAbortSignalLink,
+  retainActiveTaskAbortController,
   setTaskCallerSignal,
 } from "../runtime/taskCancellation";
 import { throwCancellationErrorFromSignal } from "../../tools/abortSignals";
@@ -88,12 +90,17 @@ export class TaskMiddlewareComposer {
     const journaledRunner = runner;
     return ((input: TInput, options?: TaskCallOptions) => {
       const journal = options?.journal ?? new ExecutionJournalImpl();
+      const cleanupTrackedTaskAbortController = retainActiveTaskAbortController(
+        journal,
+        (controller) => this.store.trackTaskAbortController(controller),
+      );
       const cleanupCallerSignal = setTaskCallerSignal(journal, options?.signal);
       const executionSource =
         options?.source ?? runtimeSource.runtime("runtime-internal-taskRunner");
-      return journaledRunner(input, journal, executionSource).finally(
-        cleanupCallerSignal,
-      );
+      return journaledRunner(input, journal, executionSource).finally(() => {
+        cleanupCallerSignal();
+        cleanupTrackedTaskAbortController();
+      });
     }) as (
       input: TInput,
       options?: TaskCallOptions,
@@ -341,22 +348,24 @@ export class TaskMiddlewareComposer {
           return this.lifecycleAdmissionController.trackMiddlewareExecution(
             middlewareSource,
             () =>
-              storeMiddleware.middleware.run(
-                {
-                  task: {
-                    definition: canonicalTaskDefinition,
-                    input,
+              runWithRuntimeCallSource(middlewareSource, () =>
+                storeMiddleware.middleware.run(
+                  {
+                    task: {
+                      definition: canonicalTaskDefinition,
+                      input,
+                    },
+                    next: (...args: [TInput?]) =>
+                      nextFunction(
+                        args.length > 0 ? (args[0] as TInput) : input,
+                        journal,
+                        source,
+                      ),
+                    journal,
                   },
-                  next: (...args: [TInput?]) =>
-                    nextFunction(
-                      args.length > 0 ? (args[0] as TInput) : input,
-                      journal,
-                      source,
-                    ),
-                  journal,
-                },
-                storeMiddleware.computedDependencies,
-                middleware.config,
+                  storeMiddleware.computedDependencies,
+                  middleware.config,
+                ),
               ),
           );
         };

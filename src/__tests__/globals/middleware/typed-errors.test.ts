@@ -69,7 +69,7 @@ describe("Typed Infrastructure Errors", () => {
     expect(err).toBeInstanceOf(RunnerError);
     expect(err.name).toBe(RunnerErrorId.DurableExecutionError);
     expect(err.data.executionId).toBe("exec-1");
-    expect(err.data.taskId).toBe("task-1");
+    expect(err.data.workflowKey).toBe("task-1");
     expect(err.data.attempt).toBe(3);
     expect(err.data.causeInfo?.message).toBe("boom");
     expect(durableExecutionError.is(err)).toBe(true);

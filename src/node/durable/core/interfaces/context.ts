@@ -1,9 +1,21 @@
 import type { IEventDefinition } from "../../../../types/event";
+import type { AnyTask } from "../../../../types/task";
+import type {
+  ExtractTaskInput,
+  ResolveTaskOutput,
+} from "../../../../types/utilities";
 import type { DurableStepId } from "../ids";
 
 export interface StepOptions {
   retries?: number;
   timeout?: number;
+}
+
+/**
+ * Live execution controls available to a running durable step body.
+ */
+export interface DurableStepRunContext {
+  signal: AbortSignal;
 }
 
 /**
@@ -19,9 +31,26 @@ export interface SleepOptions {
  * Options for waitForSignal operations.
  */
 export interface SignalOptions {
-  /** Timeout in milliseconds. If provided, returns a discriminated union with kind. */
+  /** Timeout in milliseconds. If provided, the wait may resolve as `{ kind: "timeout" }`. */
   timeoutMs?: number;
   /** Explicit step ID for replay stability. If not provided, an auto-indexed ID is used. */
+  stepId?: string;
+}
+
+export type WaitForSignalResult<TPayload> =
+  | { kind: "signal"; payload: TPayload }
+  | { kind: "timeout" };
+
+/**
+ * Options for waiting on another workflow execution to complete.
+ */
+export interface WaitForExecutionOptions {
+  /** Timeout in milliseconds. If provided, returns a discriminated union with kind. */
+  timeoutMs?: number;
+  /**
+   * Explicit step ID for replay stability. When omitted, a deterministic step id
+   * is derived from the waited execution id.
+   */
   stepId?: string;
 }
 
@@ -31,6 +60,22 @@ export interface SignalOptions {
 export interface EmitOptions {
   /** Explicit step ID for replay stability. If not provided, an auto-indexed ID is used. */
   stepId?: string;
+}
+
+/**
+ * Options for starting a child workflow from within a durable workflow.
+ */
+export interface WorkflowOptions {
+  /** Optional workflow runtime timeout forwarded to the child execution. */
+  timeout?: number;
+  /** Optional execution priority forwarded to the child start path. */
+  priority?: number;
+  /**
+   * Optional explicit idempotency key override.
+   * When omitted, `workflow()` derives a deterministic key from
+   * `parentExecutionId + stepId`.
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -49,7 +94,7 @@ export interface SwitchBranch<TValue, TResult> {
 }
 
 export interface IStepBuilder<T> extends PromiseLike<T> {
-  up(fn: () => Promise<T>): this;
+  up(fn: (context: DurableStepRunContext) => Promise<T>): this;
   down(fn: (result: T) => Promise<void>): this;
 }
 
@@ -59,37 +104,91 @@ export interface IDurableContext {
 
   step<T>(stepId: string): IStepBuilder<T>;
   step<T>(stepId: DurableStepId<T>): IStepBuilder<T>;
-  step<T>(stepId: string, fn: () => Promise<T>): Promise<T>;
-  step<T>(stepId: DurableStepId<T>, fn: () => Promise<T>): Promise<T>;
+  step<T>(
+    stepId: string,
+    fn: (context: DurableStepRunContext) => Promise<T>,
+  ): Promise<T>;
+  step<T>(
+    stepId: DurableStepId<T>,
+    fn: (context: DurableStepRunContext) => Promise<T>,
+  ): Promise<T>;
   step<T>(
     stepId: string,
     options: StepOptions,
-    fn: () => Promise<T>,
+    fn: (context: DurableStepRunContext) => Promise<T>,
   ): Promise<T>;
   step<T>(
     stepId: DurableStepId<T>,
     options: StepOptions,
-    fn: () => Promise<T>,
+    fn: (context: DurableStepRunContext) => Promise<T>,
   ): Promise<T>;
 
   sleep(durationMs: number, options?: SleepOptions): Promise<void>;
 
   /**
+   * Start a child durable workflow in a replay-safe way.
+   *
+   * `workflow()` behaves like a durable `step(...)` around `durable.start(...)`:
+   * it memoizes the returned child execution id, always forwards
+   * `parentExecutionId: this.executionId`, and auto-derives a deterministic
+   * idempotency key from `stepId` when one is not explicitly provided.
+   */
+  workflow<TTask extends AnyTask>(
+    stepId: string,
+    task: TTask,
+    ...args: ExtractTaskInput<TTask> extends undefined | void
+      ? [input?: ExtractTaskInput<TTask>, options?: WorkflowOptions]
+      : [input: ExtractTaskInput<TTask>, options?: WorkflowOptions]
+  ): Promise<string>;
+
+  /**
    * Suspend until an external signal is delivered via DurableService.signal().
-   * The signal is memoized as a durable step under `__signal:<signalId>[:index]`.
+   * Accepted live-execution signals are retained at the execution level, while
+   * consumed waits are memoized as durable steps under `__signal:<signalId>[:index]`.
+   * Unawaited signals are queued per signal type and consumed in FIFO order.
+   * Duplicate queued payloads are de-duplicated using serialized payload identity.
    * Use options.stepId to provide a stable identifier for replay safety.
    */
   waitForSignal<TPayload>(
     signal: IEventDefinition<TPayload>,
-  ): Promise<TPayload>;
-  waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-    options: SignalOptions & { timeoutMs: number },
-  ): Promise<{ kind: "signal"; payload: TPayload } | { kind: "timeout" }>;
-  waitForSignal<TPayload>(
-    signal: IEventDefinition<TPayload>,
-    options: SignalOptions,
-  ): Promise<TPayload>;
+    options?: SignalOptions,
+  ): Promise<WaitForSignalResult<TPayload>>;
+
+  /**
+   * Suspend until another durable execution reaches a terminal state.
+   *
+   * Intended for parent/child workflow orchestration when a child execution id
+   * was produced earlier inside a replay-safe `workflow(...)` or `step(...)`.
+   * The `task` argument drives type inference and is also checked against the
+   * stored durable execution identity; the wait itself is still keyed by the
+   * supplied `executionId`.
+   *
+   * - completed child executions return their result
+   * - failed / cancelled / compensation_failed child executions throw
+   * - waiting on `this.executionId` throws immediately to avoid deadlocks
+   * - `timeoutMs` changes the return type to a timeout union
+   * - if the parent is already suspended, child completion can still resume the
+   *   wait during durable cooldown/drain before final disposal closes adapters
+   *
+   * Use `options.stepId` to keep the wait stable across refactors. When omitted,
+   * the waited execution id is used to derive a deterministic internal step id.
+   */
+  waitForExecution<TTask extends AnyTask>(
+    task: TTask,
+    executionId: string,
+  ): Promise<ResolveTaskOutput<TTask>>;
+  waitForExecution<TTask extends AnyTask>(
+    task: TTask,
+    executionId: string,
+    options: WaitForExecutionOptions & { timeoutMs: number },
+  ): Promise<
+    { kind: "completed"; data: ResolveTaskOutput<TTask> } | { kind: "timeout" }
+  >;
+  waitForExecution<TTask extends AnyTask>(
+    task: TTask,
+    executionId: string,
+    options: WaitForExecutionOptions,
+  ): Promise<ResolveTaskOutput<TTask>>;
 
   emit<TPayload>(
     event: IEventDefinition<TPayload>,
@@ -110,13 +209,13 @@ export interface IDurableContext {
    * The matched branch's `id` and result are persisted; on replay the matchers
    * are skipped and the cached result is returned directly.
    *
-   * Throws if no branch matches and no `defaultBranch` is provided.
+   * Throws if no branch matches and no `fallbackBranch` is provided.
    */
   switch<TValue, TResult>(
     stepId: string,
     value: TValue,
     branches: SwitchBranch<TValue, TResult>[],
-    defaultBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
+    fallbackBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
   ): Promise<TResult>;
 
   rollback(): Promise<void>;

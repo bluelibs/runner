@@ -154,7 +154,7 @@ Task requests wrap payloads as `{ input: <value> }`. Event requests use `{ paylo
 - **Auth**: Required.
 - **Allow-List**: Checked against server exposure policies (`rpcLanesResource` serve topology).
 - **Body Modes**: See [Request Modes](#request-modes).
-- **Context**: Task receives `useRpcLaneRequestContext()` (Node-only: `{ req, res, url, headers, method, signal }`).
+- **Context**: Task receives `useRpcLaneRequestContext()` (Node-only: `{ req, res, url, basePath, headers, method, signal }`).
 - **Response**:
   - Success: 200 + JSON envelope or stream (see [Response Modes](#response-modes)).
   - Errors: 4xx/5xx + JSON envelope.

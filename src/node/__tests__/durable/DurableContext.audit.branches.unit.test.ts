@@ -5,30 +5,14 @@ import { SuspensionSignal } from "../../durable/core/interfaces/context";
 import { defineEvent } from "../../..";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { genericError } from "../../../errors";
+import { createBareStore } from "./DurableService.unit.helpers";
 
 describe("durable: DurableContext audit branches", () => {
   it("note is a no-op when the store does not support audit", async () => {
     const base = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const storeNoAudit: IDurableStore = {
-      saveExecution: base.saveExecution.bind(base),
-      getExecution: base.getExecution.bind(base),
-      updateExecution: base.updateExecution.bind(base),
-      listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
-      getStepResult: base.getStepResult.bind(base),
-      saveStepResult: base.saveStepResult.bind(base),
-      createTimer: base.createTimer.bind(base),
-      getReadyTimers: base.getReadyTimers.bind(base),
-      markTimerFired: base.markTimerFired.bind(base),
-      deleteTimer: base.deleteTimer.bind(base),
-      createSchedule: base.createSchedule.bind(base),
-      getSchedule: base.getSchedule.bind(base),
-      updateSchedule: base.updateSchedule.bind(base),
-      deleteSchedule: base.deleteSchedule.bind(base),
-      listSchedules: base.listSchedules.bind(base),
-      listActiveSchedules: base.listActiveSchedules.bind(base),
-    };
+    const storeNoAudit: IDurableStore = createBareStore(base);
 
     const ctx = new DurableContext(storeNoAudit, bus, "e1", 1, {
       auditEnabled: true,

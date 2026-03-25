@@ -6,11 +6,13 @@ import type { RpcLanesResourceConfig } from "./types";
 import {
   assertRemoteLaneSignerConfigured,
   assertRemoteLaneVerifierConfigured,
+  hashRemoteLanePayload,
   issueRemoteLaneToken,
   readRemoteLaneTokenFromHeaders,
   verifyRemoteLaneToken,
   writeRemoteLaneTokenToHeaders,
 } from "../remote-lanes/laneAuth";
+import type { RemoteLaneTokenTarget } from "../remote-lanes/laneAuth";
 
 interface RpcLaneAuthResolvedState {
   mode: string;
@@ -40,6 +42,9 @@ export function enforceRpcLaneAuthReadiness(
   config: RpcLanesResourceConfig,
   resolved: RpcLaneAuthResolvedState,
 ): void {
+  const bindingAuthByLaneId = new Map(
+    config.topology.bindings.map((binding) => [binding.lane.id, binding.auth]),
+  );
   const laneById = new Map<string, IRpcLaneDefinition>();
   for (const lane of resolved.taskLaneByTaskId.values()) {
     laneById.set(lane.id, lane);
@@ -52,7 +57,7 @@ export function enforceRpcLaneAuthReadiness(
     laneId: string,
   ): RemoteLaneBindingAuth | undefined =>
     resolved.bindingsByLaneId.get(laneId)?.auth ??
-    getBindingAuthForRpcLane(config, laneId);
+    bindingAuthByLaneId.get(laneId);
 
   if (resolved.mode === "network") {
     for (const lane of laneById.values()) {
@@ -76,14 +81,17 @@ export function enforceRpcLaneAuthReadiness(
   }
 }
 
-export function buildRpcLaneAuthHeaders(
-  lane: IRpcLaneDefinition,
-  bindingAuth: RemoteLaneBindingAuth | undefined,
-): Record<string, string> | undefined {
+export function buildRpcLaneAuthHeaders(options: {
+  lane: IRpcLaneDefinition;
+  bindingAuth: RemoteLaneBindingAuth | undefined;
+  target: RemoteLaneTokenTarget;
+}): Record<string, string> | undefined {
+  const { lane, bindingAuth, target } = options;
   const token = issueRemoteLaneToken({
     laneId: lane.id,
     bindingAuth,
     capability: "produce",
+    target,
   });
   if (!token) {
     return undefined;
@@ -98,6 +106,10 @@ export function authorizeRpcLaneRequest(
   req: IncomingMessage,
   lane: IRpcLaneDefinition,
   bindingAuth: RemoteLaneBindingAuth | undefined,
+  target: Pick<RemoteLaneTokenTarget, "kind" | "targetId">,
+  options?: {
+    bodyText?: string;
+  },
 ): JsonResponse | null {
   if (!bindingAuth || bindingAuth.mode === "none") {
     return null;
@@ -114,6 +126,12 @@ export function authorizeRpcLaneRequest(
       bindingAuth,
       token,
       requiredCapability: "produce",
+      expectedTarget: {
+        ...target,
+        payloadHash: options?.bodyText
+          ? hashRemoteLanePayload(options.bodyText)
+          : undefined,
+      },
     });
     return null;
   } catch {

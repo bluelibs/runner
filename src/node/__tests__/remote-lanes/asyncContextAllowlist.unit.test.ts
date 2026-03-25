@@ -120,7 +120,7 @@ describe("asyncContext allowlist helpers", () => {
     });
   });
 
-  it("resolves allowlist ids against registry suffixes only when the match is unique", () => {
+  it("does not resolve allowlist ids by suffix matching", () => {
     const registry = new Map([
       ["app.asyncContexts.trace", { id: "app.asyncContexts.trace" }],
       ["app.asyncContexts.auth", { id: "app.asyncContexts.auth" }],
@@ -128,7 +128,7 @@ describe("asyncContext allowlist helpers", () => {
     ]);
 
     expect(resolveRegistryAsyncContextIds(registry as any, ["auth"])).toEqual([
-      "app.asyncContexts.auth",
+      "auth",
     ]);
     expect(resolveRegistryAsyncContextIds(registry as any, ["trace"])).toEqual([
       "trace",
@@ -146,6 +146,27 @@ describe("asyncContext allowlist helpers", () => {
 
     expect(resolveRegistryAsyncContextIds(registry as any, ["trace"])).toEqual([
       "app.asyncContexts.trace",
+    ]);
+  });
+
+  it("falls back to requested ids when alias lookup cannot be mapped back to a stored key", () => {
+    const resolvedContext = {
+      id: "trace",
+    };
+    const registry = {
+      keys: function* () {
+        yield "app.asyncContexts.other";
+      },
+      get: (id: string) =>
+        id === "trace"
+          ? resolvedContext
+          : id === "app.asyncContexts.other"
+            ? { id: "other" }
+            : undefined,
+    };
+
+    expect(resolveRegistryAsyncContextIds(registry as any, ["trace"])).toEqual([
+      "trace",
     ]);
   });
 
@@ -250,7 +271,9 @@ describe("asyncContext allowlist helpers", () => {
           undefined,
           runtimeSource.runtime("test"),
         ),
-      allowedAsyncContextIds: [context.id],
+      allowedAsyncContextIds: [
+        "app.asyncContexts.tests-allowlist-event-manager-context",
+      ],
     });
 
     expect(seen).toBe("A");

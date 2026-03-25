@@ -114,7 +114,14 @@ describe("EventLanesController unit coverage", () => {
             },
           ],
         ]),
-        eventRouteByEventId: new Map(),
+        eventRouteByEventId: new Map([
+          [
+            "unit-event",
+            {
+              lane: { id: "lane-unit" },
+            },
+          ],
+        ]),
         queues: new Set(),
         managedQueues: new Set(),
         relaySourcePrefix: "relay:",
@@ -205,7 +212,14 @@ describe("EventLanesController unit coverage", () => {
             },
           ],
         ]),
-        eventRouteByEventId: new Map(),
+        eventRouteByEventId: new Map([
+          [
+            "unit-event-retry",
+            {
+              lane: { id: "lane-unit-retry" },
+            },
+          ],
+        ]),
         queues: new Set(),
         managedQueues: new Set(),
         relaySourcePrefix: "relay:",

@@ -146,7 +146,10 @@ describe("durable: DurableService — execution (unit)", () => {
     expect(scheduleId).toBeDefined();
     expect(timers).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ taskId: task.id, id: `once:${scheduleId}` }),
+        expect.objectContaining({
+          workflowKey: task.id,
+          id: `once:${scheduleId}`,
+        }),
       ]),
     );
   });
@@ -222,10 +225,219 @@ describe("durable: DurableService — execution (unit)", () => {
       taskExecutor: createTaskExecutor({}),
     });
 
-    await store.saveExecution(pendingExecution({ taskId: "missing" }));
+    await store.saveExecution(pendingExecution({ workflowKey: "missing" }));
 
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("failed");
+  });
+
+  it("clears stale current state before a new attempt runs and after completion", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-current-reset");
+    let currentDuringTask: Execution["current"] | undefined;
+
+    const service = new DurableService({
+      store,
+      contextProvider: async (context, fn) => {
+        currentDuringTask = (await store.getExecution(context.executionId))
+          ?.current;
+        return await fn();
+      },
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+
+    await store.saveExecution(
+      pendingExecution({
+        id: "e-current-reset",
+        workflowKey: task.id,
+        current: {
+          kind: "waitForSignal",
+          stepId: "__signal:old",
+          startedAt: new Date(),
+          waitingFor: {
+            type: "signal",
+            params: {
+              signalId: "old-signal",
+            },
+          },
+        },
+      }),
+    );
+
+    await service.processExecution("e-current-reset");
+
+    expect(currentDuringTask).toBeUndefined();
+    expect(await store.getExecution("e-current-reset")).toMatchObject({
+      status: "completed",
+      current: undefined,
+    });
+  });
+
+  it("clears stale current state when recovering an already-running execution", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-running-current-reset");
+    let currentDuringTask: Execution["current"] | undefined;
+
+    const service = new DurableService({
+      store,
+      contextProvider: async (context, fn) => {
+        currentDuringTask = (await store.getExecution(context.executionId))
+          ?.current;
+        return await fn();
+      },
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+
+    await store.saveExecution({
+      id: "e-running-current-reset",
+      workflowKey: task.id,
+      input: undefined,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:old",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "old-signal",
+          },
+        },
+      },
+    });
+
+    await service.processExecution("e-running-current-reset");
+
+    expect(currentDuringTask).toBeUndefined();
+    expect(await store.getExecution("e-running-current-reset")).toMatchObject({
+      status: "completed",
+      current: undefined,
+    });
+  });
+
+  it("clears waiting current when a child execution completion resumes its parent", async () => {
+    const store = new MemoryStore();
+    const childTask = okTask("t-child-current-clear");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({ [childTask.id]: async () => "ok" }),
+      tasks: [childTask],
+      execution: { maxAttempts: 1 },
+    });
+
+    await store.saveExecution(
+      pendingExecution({
+        id: "parent",
+        workflowKey: "t-parent",
+        status: "sleeping",
+        current: {
+          kind: "waitForExecution",
+          stepId: "__execution:child",
+          startedAt: new Date(),
+          waitingFor: {
+            type: "execution",
+            params: {
+              targetExecutionId: "child",
+              targetWorkflowKey: childTask.id,
+            },
+          },
+        },
+      }),
+    );
+    await store.saveStepResult({
+      executionId: "parent",
+      stepId: "__execution:child",
+      result: { state: "waiting", targetExecutionId: "child" },
+      completedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "parent",
+      targetExecutionId: "child",
+      stepId: "__execution:child",
+    });
+    await store.saveExecution(
+      pendingExecution({
+        id: "child",
+        workflowKey: childTask.id,
+      }),
+    );
+
+    await service.processExecution("child");
+
+    expect((await store.getExecution("parent"))?.current).toBeUndefined();
+    expect(
+      (await store.getStepResult("parent", "__execution:child"))?.result,
+    ).toEqual({
+      state: "completed",
+      targetExecutionId: "child",
+      workflowKey: childTask.id,
+      result: "ok",
+    });
+  });
+
+  it("skips execution when a running execution can no longer be resumed atomically", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-running-race");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({
+        [task.id]: async () => "ok",
+      }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+
+    await store.saveExecution({
+      id: "e-running-race",
+      workflowKey: task.id,
+      input: undefined,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      current: {
+        kind: "waitForSignal",
+        stepId: "__signal:old",
+        startedAt: new Date(),
+        waitingFor: {
+          type: "signal",
+          params: {
+            signalId: "old-signal",
+          },
+        },
+      },
+    });
+
+    const saveExecutionIfStatus = jest.spyOn(store, "saveExecutionIfStatus");
+    saveExecutionIfStatus.mockImplementation(async (execution, expected) => {
+      if (execution.id === "e-running-race" && expected[0] === "running") {
+        return false;
+      }
+
+      return await MemoryStore.prototype.saveExecutionIfStatus.call(
+        store,
+        execution,
+        expected,
+      );
+    });
+
+    await service.processExecution("e-running-race");
+
+    expect(await store.getExecution("e-running-race")).toMatchObject({
+      status: "running",
+      current: {
+        kind: "waitForSignal",
+      },
+    });
   });
 
   it("processes executions even when the store does not implement locks", async () => {
@@ -239,7 +451,7 @@ describe("durable: DurableService — execution (unit)", () => {
       execution: { maxAttempts: 1 },
     });
 
-    await base.saveExecution(pendingExecution({ taskId: task.id }));
+    await base.saveExecution(pendingExecution({ workflowKey: task.id }));
 
     await service.processExecution("e1");
     expect((await base.getExecution("e1"))?.status).toBe("completed");
@@ -266,7 +478,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await store.saveExecution(
-      pendingExecution({ taskId: task.id, maxAttempts: 2 }),
+      pendingExecution({ workflowKey: task.id, maxAttempts: 2 }),
     );
 
     await service.processExecution("e1");
@@ -347,7 +559,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [task],
     });
 
-    await store.saveExecution(pendingExecution({ taskId: task.id }));
+    await store.saveExecution(pendingExecution({ workflowKey: task.id }));
 
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("sleeping");
@@ -365,7 +577,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await expect(service.processExecution("missing")).resolves.toBeUndefined();
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: task.id }),
+      ...pendingExecution({ workflowKey: task.id }),
       id: "done",
       status: "completed",
       result: "ok",
@@ -385,7 +597,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [task],
     });
 
-    await store.saveExecution(pendingExecution({ taskId: task.id }));
+    await store.saveExecution(pendingExecution({ workflowKey: task.id }));
 
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("pending");
@@ -411,7 +623,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await base.saveExecution(
       pendingExecution({
         id: "e-no-renew",
-        taskId: task.id,
+        workflowKey: task.id,
       }),
     );
 
@@ -443,7 +655,7 @@ describe("durable: DurableService — execution (unit)", () => {
         tasks: [task],
       });
 
-      await store.saveExecution(pendingExecution({ taskId: task.id }));
+      await store.saveExecution(pendingExecution({ workflowKey: task.id }));
       const processing = service.processExecution("e1");
 
       await advanceTimers(35_000);
@@ -460,7 +672,7 @@ describe("durable: DurableService — execution (unit)", () => {
     }
   });
 
-  it("continues processing when lock renewal rejects during heartbeat", async () => {
+  it("still completes when a heartbeat renewal fails transiently", async () => {
     jest.useFakeTimers();
 
     try {
@@ -482,13 +694,16 @@ describe("durable: DurableService — execution (unit)", () => {
       });
 
       await store.saveExecution(
-        pendingExecution({ id: "e-renew-reject", taskId: task.id }),
+        pendingExecution({ id: "e-renew-reject", workflowKey: task.id }),
       );
 
       const processing = service.processExecution("e-renew-reject");
       await advanceTimers(35_000);
       await expect(processing).resolves.toBeUndefined();
       expect(renewLockSpy).toHaveBeenCalled();
+      expect((await store.getExecution("e-renew-reject"))?.status).toBe(
+        "completed",
+      );
     } finally {
       jest.useRealTimers();
     }
@@ -508,13 +723,13 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [task],
     });
 
-    await base.saveExecution(pendingExecution({ taskId: task.id }));
+    await base.saveExecution(pendingExecution({ workflowKey: task.id }));
     await service.processExecution("e1");
 
     expect((await base.getExecution("e1"))?.status).toBe("completed");
   });
 
-  it("ignores lock-renewal heartbeat failures", async () => {
+  it("does not mark execution completed after lock-renewal heartbeat failures", async () => {
     jest.useFakeTimers();
 
     try {
@@ -533,12 +748,12 @@ describe("durable: DurableService — execution (unit)", () => {
         tasks: [task],
       });
 
-      await store.saveExecution(pendingExecution({ taskId: task.id }));
+      await store.saveExecution(pendingExecution({ workflowKey: task.id }));
       const processing = service.processExecution("e1");
       await advanceTimers(12_000);
       await processing;
 
-      expect((await store.getExecution("e1"))?.status).toBe("completed");
+      expect((await store.getExecution("e1"))?.status).toBe("running");
     } finally {
       jest.useRealTimers();
     }
@@ -549,7 +764,7 @@ describe("durable: DurableService — execution (unit)", () => {
     const task = okTask("t-ok");
     const service = new DurableService({ store, tasks: [task] });
 
-    await store.saveExecution(pendingExecution({ taskId: task.id }));
+    await store.saveExecution(pendingExecution({ workflowKey: task.id }));
 
     await expect(service.processExecution("e1")).rejects.toThrow(
       "taskExecutor",
@@ -569,10 +784,55 @@ describe("durable: DurableService — execution (unit)", () => {
 
     await expect(
       service.startAndWait(task, undefined, {
-        timeout: 20,
+        waitTimeout: 20,
         waitPollIntervalMs: 5,
       }),
     ).rejects.toBeInstanceOf(DurableExecutionError);
+  });
+
+  it("passes waitTimeout separately from execution timeout", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-wait-timeout-separation");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+      tasks: [task],
+    });
+
+    const executionManager = service._executionManager as unknown as {
+      start: typeof service._executionManager.start;
+      waitManager: {
+        waitForResult: (
+          executionId: string,
+          options?: { timeout?: number; waitPollIntervalMs?: number },
+        ) => Promise<string>;
+      };
+    };
+    const start = jest.spyOn(executionManager, "start").mockResolvedValue("e1");
+    const waitForResult = jest
+      .spyOn(executionManager.waitManager, "waitForResult")
+      .mockResolvedValue("ok");
+
+    await expect(
+      service.startAndWait(task, undefined, {
+        timeout: 111,
+        waitTimeout: 222,
+        waitPollIntervalMs: 7,
+      }),
+    ).resolves.toEqual({
+      durable: { executionId: "e1" },
+      data: "ok",
+    });
+
+    expect(start).toHaveBeenCalledWith(task, undefined, {
+      timeout: 111,
+      waitTimeout: 222,
+      waitPollIntervalMs: 7,
+    });
+    expect(waitForResult).toHaveBeenCalledWith("e1", {
+      timeout: 222,
+      waitPollIntervalMs: 7,
+    });
   });
 
   it("covers timeout and non-Error failure shapes", async () => {
@@ -609,7 +869,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: slow.id }),
+      ...pendingExecution({ workflowKey: slow.id }),
       id: "timeout",
       timeout: 1,
     });
@@ -617,7 +877,7 @@ describe("durable: DurableService — execution (unit)", () => {
     expect((await store.getExecution("timeout"))?.status).toBe("failed");
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: nonError.id }),
+      ...pendingExecution({ workflowKey: nonError.id }),
       id: "nonerror",
       maxAttempts: 2,
     });
@@ -639,7 +899,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: task.id }),
+      ...pendingExecution({ workflowKey: task.id }),
       id: "elapsed",
       timeout: 1,
       createdAt: new Date(Date.now() - 10_000),
@@ -668,7 +928,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await store.saveExecution({
-      ...pendingExecution({ taskId: task.id, maxAttempts: 3 }),
+      ...pendingExecution({ workflowKey: task.id, maxAttempts: 3 }),
       id: "timeout-no-retry",
       timeout: 1,
       createdAt: new Date(Date.now() - 10_000),
@@ -703,7 +963,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [task],
     });
 
-    await store.saveExecution(pendingExecution({ taskId: task.id }));
+    await store.saveExecution(pendingExecution({ workflowKey: task.id }));
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("completed");
 
@@ -712,7 +972,7 @@ describe("durable: DurableService — execution (unit)", () => {
     ).rejects.toBeInstanceOf(DurableExecutionError);
   });
 
-  it("recovers incomplete executions", async () => {
+  it("reports recovered queue-mode executions when no suspension timers are pending", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
     const task = okTask("t-ok");
@@ -725,7 +985,7 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     const base: Omit<Execution, "id" | "status"> = {
-      taskId: task.id,
+      workflowKey: task.id,
       input: undefined,
       attempt: 1,
       maxAttempts: 1,
@@ -743,11 +1003,26 @@ describe("durable: DurableService — execution (unit)", () => {
       result: "ok",
     });
 
-    await service.recover();
+    const report = await service.recover();
     expect(queue.enqueued).toEqual([
       { type: "execute", payload: { executionId: "p" } },
       { type: "execute", payload: { executionId: "r" } },
       { type: "execute", payload: { executionId: "s" } },
+      { type: "execute", payload: { executionId: "x" } },
     ]);
+    expect(report).toEqual({
+      scannedCount: 4,
+      recoveredCount: 4,
+      skippedCount: 0,
+      failedCount: 0,
+      recovered: [
+        { executionId: "p", status: "pending" },
+        { executionId: "r", status: "running" },
+        { executionId: "s", status: "sleeping" },
+        { executionId: "x", status: "retrying" },
+      ],
+      skipped: [],
+      failures: [],
+    });
   });
 });

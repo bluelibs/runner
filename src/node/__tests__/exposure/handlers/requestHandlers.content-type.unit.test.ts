@@ -78,7 +78,10 @@ describe("requestHandlers - content-type handling", () => {
 
   it("handles missing content-type by treating as empty string", async () => {
     const deps = getDeps();
-    const { handleTask } = createRequestHandlers(deps as any);
+    const { handleTask } = createRequestHandlers({
+      ...deps,
+      serializer: new Serializer(),
+    } as any);
     const { req, res } = createReqRes({
       method: HttpMethod.Post,
       url: "/api/task/t",

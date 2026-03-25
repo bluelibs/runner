@@ -16,6 +16,7 @@ const testRunOptions: ResolvedRunOptions = {
   dispose: {
     totalBudgetMs: 30_000,
     drainingBudgetMs: 20_000,
+    abortWindowMs: 0,
     cooldownWindowMs: 0,
   },
   onUnhandledError: jest.fn(),

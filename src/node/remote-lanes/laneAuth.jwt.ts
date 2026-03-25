@@ -11,6 +11,9 @@ export interface LaneJwtHeader {
 export interface LaneJwtPayload {
   lane: string;
   cap: "produce" | "consume";
+  kind?: "rpc-task" | "rpc-event" | "event-lane";
+  target?: string;
+  hash?: string;
   iat: number;
   exp: number;
 }

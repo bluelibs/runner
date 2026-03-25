@@ -7,6 +7,9 @@ import { MemoryStore } from "../../durable/store/MemoryStore";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
 
 describe("durable: DurableContext.switch", () => {
+  type ExecutionCurrent = NonNullable<
+    Awaited<ReturnType<MemoryStore["getExecution"]>>
+  >["current"];
   const createContext = (
     executionId = "e1",
     attempt = 1,
@@ -14,6 +17,7 @@ describe("durable: DurableContext.switch", () => {
     options: {
       auditEnabled?: boolean;
       auditEmitter?: DurableAuditEmitter;
+      assertLockOwnership?: () => void;
     } = {},
   ) => {
     const bus = new MemoryEventBus();
@@ -42,6 +46,16 @@ describe("durable: DurableContext.switch", () => {
 
   it("persists the branch result in the store", async () => {
     const { store, ctx } = createContext();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "switch-task",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     await ctx.switch("route", "a", [
       { id: "alpha", match: (v) => v === "a", run: async () => 42 },
@@ -50,6 +64,59 @@ describe("durable: DurableContext.switch", () => {
     const step = await store.getStepResult("e1", "route");
     expect(step).not.toBeNull();
     expect(step!.result).toEqual({ branchId: "alpha", result: 42 });
+  });
+
+  it("tracks switch current state while the branch is executing", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "switch-task",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const { ctx } = createContext("e1", 1, store);
+    let currentDuringSwitch: ExecutionCurrent | undefined;
+
+    await ctx.switch("route", "a", [
+      {
+        id: "alpha",
+        match: (v) => v === "a",
+        run: async () => {
+          currentDuringSwitch = (await store.getExecution("e1"))?.current;
+          return 42;
+        },
+      },
+    ]);
+
+    expect(currentDuringSwitch).toMatchObject({
+      kind: "switch",
+      stepId: "route",
+    });
+  });
+
+  it("clears current after a switch branch completes", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "switch-task",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const { ctx } = createContext("e1", 1, store);
+
+    await ctx.switch("route", "a", [
+      { id: "alpha", match: (v) => v === "a", run: async () => 42 },
+    ]);
+
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
   });
 
   it("returns cached result on replay without re-running matchers", async () => {
@@ -78,6 +145,39 @@ describe("durable: DurableContext.switch", () => {
     // Should return the cached "first" result, not "second"
     expect(result).toBe("first");
     expect(matcherCalled).toBe(false);
+  });
+
+  it("clears stale current when replay returns a cached switch result", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      current: {
+        kind: "switch",
+        stepId: "route",
+        startedAt: new Date(),
+      },
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "route",
+      result: { branchId: "alpha", result: "cached" },
+      completedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+    await expect(
+      ctx.switch("route", "ignored", [
+        { id: "beta", match: () => true, run: async () => "fresh" },
+      ]),
+    ).resolves.toBe("cached");
+    expect((await store.getExecution("e1"))?.current).toBeUndefined();
   });
 
   it("falls back to the default branch when no matcher hits", async () => {
@@ -158,7 +258,7 @@ describe("durable: DurableContext.switch", () => {
     const store = new MemoryStore();
     await store.saveExecution({
       id: "e1",
-      taskId: "t",
+      workflowKey: "t",
       input: undefined,
       status: ExecutionStatus.Cancelled,
       attempt: 1,
@@ -174,6 +274,59 @@ describe("durable: DurableContext.switch", () => {
         { id: "a", match: () => true, run: async () => 1 },
       ]),
     ).rejects.toThrow("Execution cancelled");
+  });
+
+  it("re-checks cancellation before persisting the selected branch result", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      workflowKey: "t",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(
+      ctx.switch("route", "x", [
+        {
+          id: "a",
+          match: () => true,
+          run: async () => {
+            await store.updateExecution("e1", {
+              status: ExecutionStatus.Cancelled,
+              error: { message: "cancelled while switching" },
+              updatedAt: new Date(),
+            });
+            return "ok";
+          },
+        },
+      ]),
+    ).rejects.toThrow("cancelled while switching");
+
+    expect(await store.getStepResult("e1", "route")).toBeNull();
+  });
+
+  it("re-checks lock ownership before persisting the selected branch result", async () => {
+    const store = new MemoryStore();
+    const assertLockOwnership = jest.fn(() => {
+      if (assertLockOwnership.mock.calls.length === 2) {
+        throw new Error("lock-lost");
+      }
+    });
+    const { ctx } = createContext("e1", 1, store, { assertLockOwnership });
+
+    await expect(
+      ctx.switch("route", "x", [
+        { id: "a", match: () => true, run: async () => "ok" },
+      ]),
+    ).rejects.toThrow("lock-lost");
+
+    expect(await store.getStepResult("e1", "route")).toBeNull();
   });
 
   it("emits a SwitchEvaluated audit entry when audit is enabled", async () => {

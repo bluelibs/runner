@@ -4,7 +4,7 @@ import type { IDurableStore } from "./store";
 import type { IDurableQueue } from "./queue";
 import type { IEventBus } from "./bus";
 import type { IDurableContext } from "./context";
-import type { Schedule } from "../types";
+import type { ExecutionStatus, Schedule } from "../types";
 import type { DurableAuditEmitter } from "../audit";
 import type { Logger } from "../../../../models/Logger";
 
@@ -15,13 +15,80 @@ export interface ITaskExecutor {
   ): Promise<TResult>;
 }
 
-export interface ScheduleConfig<TInput = unknown> {
-  id: string;
-  task: ITask<TInput, Promise<any>, any, any, any, any> | string;
-  cron?: string;
-  interval?: number;
-  input: TInput;
+export interface CronScheduleOptions {
+  id?: string;
+  cron: string;
+  timezone?: string;
+  at?: never;
+  delay?: never;
+  interval?: never;
 }
+
+export interface IntervalScheduleOptions {
+  id?: string;
+  interval: number;
+  at?: never;
+  delay?: never;
+  cron?: never;
+  timezone?: never;
+}
+
+export interface OneTimeScheduleOptions {
+  id?: string;
+  at?: Date;
+  delay?: number;
+  cron?: never;
+  interval?: never;
+  timezone?: never;
+}
+
+export type RecurringScheduleConfig<TInput = unknown> =
+  | {
+      id: string;
+      task: ITask<TInput, Promise<any>, any, any, any, any> | string;
+      cron: string;
+      timezone?: string;
+      interval?: never;
+      input: TInput;
+    }
+  | {
+      id: string;
+      task: ITask<TInput, Promise<any>, any, any, any, any> | string;
+      interval: number;
+      cron?: never;
+      input: TInput;
+    };
+
+export type ScheduleConfig<TInput = unknown> = RecurringScheduleConfig<TInput>;
+
+export type ScheduleOptions =
+  | OneTimeScheduleOptions
+  | CronScheduleOptions
+  | IntervalScheduleOptions;
+
+export type EnsureScheduleOptions =
+  | CronScheduleOptions
+  | IntervalScheduleOptions;
+
+export type UpdateScheduleOptions =
+  | {
+      input?: unknown;
+      cron?: never;
+      interval?: never;
+      timezone?: never;
+    }
+  | {
+      cron: string;
+      timezone?: string;
+      interval?: never;
+      input?: unknown;
+    }
+  | {
+      interval: number;
+      cron?: never;
+      timezone?: never;
+      input?: unknown;
+    };
 
 export interface DurableServiceConfig {
   store: IDurableStore;
@@ -60,16 +127,54 @@ export interface DurableServiceConfig {
    * Useful in Runner environments where tasks are registered in the Store registry.
    */
   taskResolver?: (
-    taskId: string,
+    workflowKey: string,
   ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
+  /**
+   * Resolves the durable persisted workflow key for a task definition.
+   * In Runner environments this prefers tags.durableWorkflow.with({ key })
+   * and falls back to the canonical runtime task id.
+   */
+  workflowKeyResolver?: (
+    task: ITask<any, Promise<any>, any, any, any, any>,
+  ) => string | undefined;
   audit?: {
     enabled?: boolean;
     emitter?: DurableAuditEmitter;
   };
   polling?: {
+    /**
+     * Enables the store-backed timer poller for this process.
+     *
+     * When enabled, the durable store must implement `claimReadyTimers(...)`
+     * so workers can split timer backlogs without scanning and fan-outing the
+     * entire ready set on every poll pass.
+     */
     enabled?: boolean;
+    /** Poll interval in milliseconds. Default: 1000. */
     interval?: number;
-    /** Time-to-live for timer claims in milliseconds. Default: 30000. */
+    /**
+     * Maximum number of timers this worker processes concurrently.
+     *
+     * This is a per-worker cap. Total cluster drain capacity scales with the
+     * number of polling workers, so `workers * concurrency` is the effective
+     * upper bound during backlog recovery.
+     *
+     * Default: 10.
+     */
+    concurrency?: number;
+    /**
+     * Time-to-live for timer claims in milliseconds.
+     *
+     * Default: 5000 when a queue is configured, otherwise 30000.
+     */
+    claimTtlMs?: number;
+  };
+  recovery?: {
+    /** Automatically starts background orphan recovery when the runtime boots. */
+    onStartup?: boolean;
+    /** Maximum number of concurrent recovery attempts per drain. Default: 10. */
+    concurrency?: number;
+    /** Time-to-live for per-execution recovery claims in milliseconds. Default: 30000. */
     claimTtlMs?: number;
   };
   execution?: {
@@ -91,20 +196,36 @@ export interface DurableServiceConfig {
 export interface ExecuteOptions {
   timeout?: number;
   priority?: number;
-  waitPollIntervalMs?: number;
+  /**
+   * Optional parent execution linkage for nested durable workflow starts.
+   * Useful for operator tooling and execution tree visualizations.
+   */
+  parentExecutionId?: string;
   /**
    * Optional workflow-level idempotency key.
-   * When supported by the store, multiple concurrent callers using the same key will receive the same executionId.
+   * When supported by the store, repeated callers using the same key receive the
+   * same executionId and keep the originally stored input.
+   *
+   * Existing executions are only re-admitted automatically when they are still
+   * pending kickoff or already retrying. Running or sleeping workflows are not
+   * implicitly resumed by repeating the same idempotent start.
    */
   idempotencyKey?: string;
 }
 
-export interface ScheduleOptions {
-  id?: string;
-  at?: Date;
-  delay?: number;
-  cron?: string;
-  interval?: number;
+export interface WaitOptions {
+  timeout?: number;
+  waitPollIntervalMs?: number;
+}
+
+export interface StartAndWaitOptions extends ExecuteOptions {
+  /**
+   * Optional caller wait timeout for `startAndWait()`.
+   * Separate from `ExecuteOptions.timeout`, which bounds workflow runtime.
+   * Use this when the caller should stop waiting even if the workflow keeps running.
+   */
+  waitTimeout?: number;
+  waitPollIntervalMs?: number;
 }
 
 export interface DurableStartAndWaitResult<TResult = unknown> {
@@ -114,7 +235,55 @@ export interface DurableStartAndWaitResult<TResult = unknown> {
   data: TResult;
 }
 
+export interface RecoverRecoveredReportType {
+  executionId: string;
+  status: ExecutionStatus;
+}
+
+export type RecoverSkippedReasonType =
+  | "pending_timer"
+  | "claimed_elsewhere"
+  | "not_recoverable";
+
+export interface RecoverSkippedReportType {
+  executionId: string;
+  status: ExecutionStatus;
+  reason: RecoverSkippedReasonType;
+}
+
+export interface RecoverFailureReportType {
+  executionId: string;
+  status: ExecutionStatus;
+  errorMessage: string;
+}
+
+/**
+ * Summary returned by `recover()` so callers can decide whether startup should
+ * continue, warn, or fail based on partial recovery outcomes.
+ */
+export interface RecoverReportType {
+  scannedCount: number;
+  recoveredCount: number;
+  skippedCount: number;
+  failedCount: number;
+  recovered: RecoverRecoveredReportType[];
+  skipped: RecoverSkippedReportType[];
+  failures: RecoverFailureReportType[];
+}
+
 export interface IDurableService {
+  /**
+   * Stops worker, polling, recovery, and other background durable ownership for
+   * this runtime instance while still allowing task-level durable interactions
+   * needed by already-admitted Runner work to settle during drain.
+   */
+  cooldown(): Promise<void>;
+
+  /**
+   * Starts a workflow execution.
+   * Task-level admission stays owned by Runner; durable only rejects starts once
+   * this durable runtime has been fully disposed.
+   */
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
@@ -128,29 +297,32 @@ export interface IDurableService {
 
   /**
    * Request cancellation for an execution.
-   * Cancellation is cooperative: it marks the execution as cancelled and unblocks waiters,
-   * but cannot preempt arbitrary in-process async work.
+   * Cancellation is cooperative and cannot preempt arbitrary in-process async work.
+   * Running executions first move into a non-terminal cancellation-requested state
+   * so the active step can observe its AbortSignal; live propagation uses the
+   * durable event bus when configured, with polling fallback for runtimes that
+   * do not provide one. Waiters unblock once the attempt exits and the execution
+   * becomes terminal `cancelled`.
    */
   cancelExecution(executionId: string, reason?: string): Promise<void>;
 
-  wait<TResult>(
-    executionId: string,
-    options?: { timeout?: number; waitPollIntervalMs?: number },
-  ): Promise<TResult>;
+  wait<TResult>(executionId: string, options?: WaitOptions): Promise<TResult>;
 
   /**
    * Starts a workflow and waits for completion.
+   * Task-level admission stays owned by Runner; durable only rejects starts once
+   * this durable runtime has been fully disposed.
    * Returns the started execution id together with the workflow result payload.
    */
   startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
   startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
-    options?: ExecuteOptions,
+    options?: StartAndWaitOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
 
   schedule<TInput, TResult>(
@@ -171,15 +343,19 @@ export interface IDurableService {
   ensureSchedule<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
   ensureSchedule(
     task: string,
     input: unknown,
-    options: ScheduleOptions & { id: string },
+    options: EnsureScheduleOptions & { id: string },
   ): Promise<string>;
 
-  recover(): Promise<void>;
+  /**
+   * Recover incomplete executions and report which ones were resumed, skipped,
+   * or failed during recovery.
+   */
+  recover(): Promise<RecoverReportType>;
 
   /**
    * Starts the durable polling loop (timers/schedules processing).
@@ -194,14 +370,18 @@ export interface IDurableService {
   listSchedules(): Promise<Schedule[]>;
   updateSchedule(
     scheduleId: string,
-    updates: { cron?: string; interval?: number; input?: unknown },
+    updates: UpdateScheduleOptions,
   ): Promise<void>;
   removeSchedule(scheduleId: string): Promise<void>;
 
   /**
-   * Deliver a signal payload to a waiting workflow execution and resume it.
-   * If the first wait has not been recorded yet, the base signal slot may be
-   * prebuffered so the upcoming `waitForSignal()` can consume it on replay.
+   * Deliver a signal payload to a workflow execution.
+   * Remains available during shutdown drain so draining workflows blocked in
+   * `waitForSignal()` can still be resumed before the durable service is disposed.
+   * Missing or terminal executions ignore new signals.
+   * Live executions retain signal history at the execution level and queue
+   * unawaited signals per `signalId` for `waitForSignal()` to consume in FIFO
+   * order before suspending again.
    */
   signal<TPayload>(
     executionId: string,

@@ -2,20 +2,7 @@ import { defineEvent, r, resources, run } from "../../node";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { genericError } from "../../../errors";
-
-async function waitUntil(
-  predicate: () => boolean | Promise<boolean>,
-  options: { timeoutMs: number; intervalMs: number },
-): Promise<void> {
-  const startedAt = Date.now();
-  while (!(await predicate())) {
-    if (Date.now() - startedAt > options.timeoutMs) {
-      throw genericError.new({ message: "waitUntil timed out" });
-    }
-    await new Promise((r) => setTimeout(r, options.intervalMs));
-  }
-}
+import { waitUntil } from "../../durable/test-utils";
 
 describe("durable: audit trail (integration)", () => {
   const Paid = defineEvent<{ paidAt: number }>({
@@ -64,7 +51,6 @@ describe("durable: audit trail (integration)", () => {
 
     const executionId = await service.start(task, undefined, {
       timeout: 5_000,
-      waitPollIntervalMs: 5,
     });
     await expect(
       service.wait(executionId, { timeout: 5_000, waitPollIntervalMs: 5 }),
@@ -115,7 +101,10 @@ describe("durable: audit trail (integration)", () => {
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
         const payment = await ctx.waitForSignal(Paid);
-        await ctx.note("payment-received", { paidAt: payment.paidAt });
+        if (payment.kind === "timeout") {
+          return { ok: false };
+        }
+        await ctx.note("payment-received", { paidAt: payment.payload.paidAt });
         return { ok: true };
       })
       .build();
@@ -130,7 +119,6 @@ describe("durable: audit trail (integration)", () => {
 
     const executionId = await service.start(task, undefined, {
       timeout: 5_000,
-      waitPollIntervalMs: 5,
     });
 
     await waitUntil(
@@ -188,7 +176,6 @@ describe("durable: audit trail (integration)", () => {
 
     const executionId = await service.start(task, undefined, {
       timeout: 5_000,
-      waitPollIntervalMs: 5,
     });
 
     await expect(

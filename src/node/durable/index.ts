@@ -5,6 +5,7 @@ export * from "./core/interfaces/service";
 export * from "./core/interfaces/store";
 export * from "./core/interfaces/context";
 export * from "./core/interfaces/bus";
+export * from "./core/interfaces/queue";
 export * from "./core/DurableResource";
 
 export { durableEvents, durableEventsArray } from "./events";
@@ -26,18 +27,11 @@ export { DurableContext } from "./core/DurableContext";
 export { StepBuilder } from "./core/StepBuilder";
 export { DurableOperator } from "./core/DurableOperator";
 export { DurableWorker, initDurableWorker } from "./core/DurableWorker";
-export type {
-  DurableFlowShape,
-  FlowNode,
-  FlowStepNode,
-  FlowSleepNode,
-  FlowSignalNode,
-  FlowEmitNode,
-  FlowSwitchNode,
-  FlowNoteNode,
-} from "./core/flowShape";
 
 export { MemoryStore } from "./store/MemoryStore";
+export type { MemoryStoreSnapshot } from "./store/MemoryStore";
+export { PersistentMemoryStore } from "./store/PersistentMemoryStore";
+export type { PersistentMemoryStoreConfig } from "./store/PersistentMemoryStore";
 export { RedisStore } from "./store/RedisStore";
 
 export { MemoryQueue } from "./queue/MemoryQueue";
@@ -52,6 +46,7 @@ export type { DurableTestSetup, DurableTestSetupOptions } from "./test-utils";
 export {
   durableWorkflowTag,
   type DurableWorkflowTagConfig,
+  type DurableWorkflowSignalDefinition,
 } from "./tags/durableWorkflow.tag";
 export { durableSupportResource } from "./resources/durable.resource";
 

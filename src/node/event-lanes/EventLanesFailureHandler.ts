@@ -26,7 +26,25 @@ export async function handleEventLaneConsumerFailure({
   delay,
 }: HandleEventLaneConsumerFailureInput): Promise<void> {
   const consumerError = toError(error);
+  const isPermanentFailure = isPermanentEventLaneFailure(error);
   const configuredMaxAttempts = binding.maxAttempts ?? 1;
+
+  if (isPermanentFailure) {
+    try {
+      await queue.nack(message.id, false);
+    } finally {
+      await logger.error("Event lane consumer rejected a permanent message.", {
+        laneId: message.laneId,
+        eventId: message.eventId,
+        error: consumerError,
+        data: {
+          attempts: message.attempts,
+          maxAttempts: configuredMaxAttempts,
+        },
+      });
+    }
+    return;
+  }
 
   const retried = await tryRetry({
     queue,
@@ -106,4 +124,20 @@ async function tryRetry({
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
+}
+
+function isPermanentEventLaneFailure(error: unknown): boolean {
+  const id =
+    error && typeof error === "object" && "id" in error
+      ? String((error as { id?: unknown }).id)
+      : undefined;
+  if (
+    id === "remoteLanes-auth-unauthorized" ||
+    id === "eventLanes-eventNotRegistered" ||
+    id === "eventLanes-assignmentMismatch" ||
+    id === "eventLanes-payloadMalformed"
+  ) {
+    return true;
+  }
+  return false;
 }

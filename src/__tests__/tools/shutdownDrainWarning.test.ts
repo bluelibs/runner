@@ -7,6 +7,9 @@ describe("shutdownDrainWarning", () => {
         requestedDrainBudgetMs: 100,
         effectiveDrainBudgetMs: 100,
         drainWaitResult: { completed: true, drained: true },
+        requestedAbortWindowMs: 0,
+        effectiveAbortWindowMs: 0,
+        abortWaitResult: { completed: false },
       }),
     ).toEqual({ shouldWarn: false });
   });
@@ -17,6 +20,9 @@ describe("shutdownDrainWarning", () => {
         requestedDrainBudgetMs: 0,
         effectiveDrainBudgetMs: 0,
         drainWaitResult: { completed: false },
+        requestedAbortWindowMs: 0,
+        effectiveAbortWindowMs: 0,
+        abortWaitResult: { completed: false },
       }),
     ).toEqual({ shouldWarn: false });
   });
@@ -27,6 +33,9 @@ describe("shutdownDrainWarning", () => {
         requestedDrainBudgetMs: 100,
         effectiveDrainBudgetMs: 100,
         drainWaitResult: { completed: true, drained: false },
+        requestedAbortWindowMs: 0,
+        effectiveAbortWindowMs: 0,
+        abortWaitResult: { completed: false },
       }),
     ).toEqual({
       shouldWarn: true,
@@ -40,10 +49,61 @@ describe("shutdownDrainWarning", () => {
         requestedDrainBudgetMs: 200,
         effectiveDrainBudgetMs: 0,
         drainWaitResult: { completed: false },
+        requestedAbortWindowMs: 0,
+        effectiveAbortWindowMs: 0,
+        abortWaitResult: { completed: false },
       }),
     ).toEqual({
       shouldWarn: true,
       reason: "dispose-budget-exhausted-before-drain",
+    });
+  });
+
+  it("warns when abort window also times out", () => {
+    expect(
+      resolveShutdownDrainWarningDecision({
+        requestedDrainBudgetMs: 100,
+        effectiveDrainBudgetMs: 100,
+        drainWaitResult: { completed: true, drained: false },
+        requestedAbortWindowMs: 25,
+        effectiveAbortWindowMs: 25,
+        abortWaitResult: { completed: true, drained: false },
+      }),
+    ).toEqual({
+      shouldWarn: true,
+      reason: "abort-window-timeout",
+    });
+  });
+
+  it("warns when no budget remains for the abort window", () => {
+    expect(
+      resolveShutdownDrainWarningDecision({
+        requestedDrainBudgetMs: 100,
+        effectiveDrainBudgetMs: 100,
+        drainWaitResult: { completed: true, drained: false },
+        requestedAbortWindowMs: 25,
+        effectiveAbortWindowMs: 0,
+        abortWaitResult: { completed: false },
+      }),
+    ).toEqual({
+      shouldWarn: true,
+      reason: "dispose-budget-exhausted-before-abort-window",
+    });
+  });
+
+  it("keeps the warning at drain-budget-timeout when abort window settles work", () => {
+    expect(
+      resolveShutdownDrainWarningDecision({
+        requestedDrainBudgetMs: 100,
+        effectiveDrainBudgetMs: 100,
+        drainWaitResult: { completed: true, drained: false },
+        requestedAbortWindowMs: 25,
+        effectiveAbortWindowMs: 25,
+        abortWaitResult: { completed: true, drained: true },
+      }),
+    ).toEqual({
+      shouldWarn: true,
+      reason: "drain-budget-timeout",
     });
   });
 });

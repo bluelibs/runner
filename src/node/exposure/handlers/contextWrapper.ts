@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { ExposureRequestContext } from "../requestContext";
 import type { NodeExposureDeps } from "../resourceTypes";
 import type { SerializerLike } from "../../../serializer";
+import { RUNNER_ASYNC_CONTEXT_HEADER } from "../../../remote-lanes/http/constants";
 import { requestUrl } from "../router";
 import { withSerializedAsyncContexts } from "../../remote-lanes/asyncContextAllowlist";
 
@@ -17,7 +18,7 @@ interface AsyncContextHydrationOptions {
 }
 
 function readContextHeader(req: IncomingMessage): string | undefined {
-  const rawHeader = req.headers["x-runner-context"];
+  const rawHeader = req.headers[RUNNER_ASYNC_CONTEXT_HEADER];
   if (Array.isArray(rawHeader)) return rawHeader[0];
   if (typeof rawHeader === "string") return rawHeader;
 }

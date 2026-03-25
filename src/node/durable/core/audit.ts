@@ -23,7 +23,7 @@ export interface DurableAuditEntryBase {
   at: Date;
   kind: DurableAuditEntryKind;
   attempt: number;
-  taskId?: string;
+  workflowKey?: string;
 }
 
 export type DurableAuditEntry =
@@ -101,14 +101,14 @@ export type DurableAuditEntryInput =
       from: ExecutionStatus | null;
       to: ExecutionStatus;
       reason?: string;
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.StepCompleted;
       stepId: string;
       durationMs: number;
       isInternal: boolean;
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.SleepScheduled;
@@ -116,7 +116,7 @@ export type DurableAuditEntryInput =
       timerId: string;
       durationMs: number;
       fireAt: Date;
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.SleepCompleted;
@@ -124,7 +124,7 @@ export type DurableAuditEntryInput =
       attempt: number;
       stepId: string;
       timerId: string;
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.SignalWaiting;
@@ -134,7 +134,7 @@ export type DurableAuditEntryInput =
       timeoutAtMs?: number;
       timerId?: string;
       reason?: "initial" | "timeout_armed";
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.SignalDelivered;
@@ -142,7 +142,7 @@ export type DurableAuditEntryInput =
       attempt: number;
       stepId: string;
       signalId: string;
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.SignalTimedOut;
@@ -151,26 +151,26 @@ export type DurableAuditEntryInput =
       stepId: string;
       signalId: string;
       timerId: string;
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.EmitPublished;
       stepId: string;
       eventId: string;
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.SwitchEvaluated;
       stepId: string;
       branchId: string;
       durationMs: number;
-      taskId?: string;
+      workflowKey?: string;
     }
   | {
       kind: typeof DurableAuditEntryKind.Note;
       message: string;
       meta?: Record<string, unknown>;
-      taskId?: string;
+      workflowKey?: string;
     };
 
 export interface DurableAuditEmitter {
