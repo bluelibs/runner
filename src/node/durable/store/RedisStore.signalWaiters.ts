@@ -3,7 +3,7 @@ import type {
   DurableSignalWaiter,
   StepResult,
 } from "../core/types";
-import { serializer, type RedisStoreRuntime } from "./RedisStore.runtime";
+import type { RedisStoreRuntime } from "./RedisStore.runtime";
 import { createRedisSignalState } from "./RedisStore.signalState";
 
 export async function upsertSignalWaiter(
@@ -31,7 +31,7 @@ export async function upsertSignalWaiter(
     runtime.signalWaiterStepKey(waiter.executionId, waiter.signalId),
     waiter.stepId,
     member,
-    serializer.stringify(waiter),
+    runtime.serializer.stringify(waiter),
   );
 }
 
@@ -55,7 +55,9 @@ export async function peekNextSignalWaiter(
   );
   runtime.assertEvalResultNotError(outcome);
   const payload = runtime.parseRedisString(outcome);
-  return payload ? (serializer.parse(payload) as DurableSignalWaiter) : null;
+  return payload
+    ? (runtime.serializer.parse(payload) as DurableSignalWaiter)
+    : null;
 }
 
 export async function commitSignalDelivery(
@@ -130,11 +132,11 @@ export async function commitSignalDelivery(
     runtime.timersScheduleKey(),
     params.stepId,
     params.signalId,
-    serializer.stringify(params.stepResult),
-    serializer.stringify(
+    runtime.serializer.stringify(params.stepResult),
+    runtime.serializer.stringify(
       createRedisSignalState(params.executionId, params.signalId),
     ),
-    serializer.stringify(params.signalRecord),
+    runtime.serializer.stringify(params.signalRecord),
     params.timerId ?? "",
   );
   runtime.assertEvalResultNotError(result);
@@ -176,7 +178,9 @@ export async function takeNextSignalWaiter(
   );
   runtime.assertEvalResultNotError(outcome);
   const payload = runtime.parseRedisString(outcome);
-  return payload ? (serializer.parse(payload) as DurableSignalWaiter) : null;
+  return payload
+    ? (runtime.serializer.parse(payload) as DurableSignalWaiter)
+    : null;
 }
 
 export async function deleteSignalWaiter(

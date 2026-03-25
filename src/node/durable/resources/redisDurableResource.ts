@@ -8,6 +8,18 @@ import { disposeDurableService } from "../core/DurableService";
 import type { DurableResource } from "../core/DurableResource";
 import { deriveDurableIsolation } from "./isolation";
 import { Logger } from "../../../models/Logger";
+import type { IResource } from "../../../defs";
+import type { Serializer } from "../../../serializer";
+
+type DurableSerializerResource = IResource<
+  any,
+  Promise<Serializer>,
+  any,
+  any,
+  any,
+  any,
+  any
+>;
 
 export type RedisDurableResourceConfig = Omit<
   RunnerDurableRuntimeConfig,
@@ -21,6 +33,13 @@ export type RedisDurableResourceConfig = Omit<
   redis: { url: string };
   store?: { prefix?: string };
   eventBus?: { prefix?: string };
+  /**
+   * Optional serializer resource used for durable Redis persistence and bus
+   * payloads. Pass the bare resource definition here.
+   *
+   * Defaults to `resources.serializer`.
+   */
+  serializer?: DurableSerializerResource;
   queue?: {
     enabled?: boolean;
     url: string;
@@ -39,19 +58,21 @@ export interface RedisDurableResourceContext {
 
 export const redisDurableResource = r
   .resource<RedisDurableResourceConfig>("base-durable-redis")
-  .dependencies({
+  .dependencies((config) => ({
     taskRunner: resources.taskRunner,
     eventManager: resources.eventManager,
     runnerStore: resources.store,
     logger: resources.logger,
-  })
+    serializer: config.serializer ?? resources.serializer,
+  }))
   .context<RedisDurableResourceContext>(() => ({ runtimeConfig: null }))
   .init(async function (
     this: { id: string },
     config,
-    { taskRunner, eventManager, runnerStore, logger },
+    { taskRunner, eventManager, runnerStore, logger, serializer },
     resourceContext,
   ): Promise<DurableResource> {
+    const { serializer: _serializerResource, ...runtimeConfigInput } = config;
     const namespace = config.namespace ?? this.id;
     const baseLogger =
       config.logger ??
@@ -86,16 +107,18 @@ export const redisDurableResource = r
         : undefined;
 
     const runtimeConfig: RunnerDurableRuntimeConfig = {
-      ...config,
+      ...runtimeConfigInput,
       logger: durableLogger,
       store: new RedisStore({
         redis: config.redis.url,
         prefix: isolation.storePrefix,
+        serializer,
       }),
       eventBus: new RedisEventBus({
         redis: config.redis.url,
         prefix: isolation.busPrefix,
         logger: durableLogger.with({ source: "durable.bus.redis" }),
+        serializer,
       }),
       queue,
       roles: {

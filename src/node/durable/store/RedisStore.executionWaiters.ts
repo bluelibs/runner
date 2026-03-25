@@ -1,5 +1,5 @@
 import type { DurableExecutionWaiter, StepResult } from "../core/types";
-import { serializer, type RedisStoreRuntime } from "./RedisStore.runtime";
+import type { RedisStoreRuntime } from "./RedisStore.runtime";
 
 function waiterField(executionId: string, stepId: string): string {
   return `${executionId}:${stepId}`;
@@ -12,7 +12,7 @@ export async function upsertExecutionWaiter(
   await runtime.redis.hset(
     runtime.executionWaiterKey(waiter.targetExecutionId),
     waiterField(waiter.executionId, waiter.stepId),
-    serializer.stringify(waiter),
+    runtime.serializer.stringify(waiter),
   );
 }
 
@@ -83,7 +83,7 @@ export async function commitExecutionWaiterCompletion(
     waiterField(params.executionId, params.stepId),
     params.stepId,
     params.targetExecutionId,
-    serializer.stringify(params.stepResult),
+    runtime.serializer.stringify(params.stepResult),
     params.timerId ?? "",
   );
   runtime.assertEvalResultNotError(result);

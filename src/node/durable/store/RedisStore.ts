@@ -49,6 +49,7 @@ export class RedisStore implements IDurableStore {
       redis,
       config.prefix || "durable:",
       ownsRedisClient,
+      config.serializer,
     );
   }
 

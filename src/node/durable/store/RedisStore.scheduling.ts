@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import { ScheduleStatus, type Schedule, type Timer } from "../core/types";
-import { serializer, type RedisStoreRuntime } from "./RedisStore.runtime";
+import type { RedisStoreRuntime } from "./RedisStore.runtime";
 
 export async function createSchedule(
   runtime: RedisStoreRuntime,
@@ -9,7 +9,7 @@ export async function createSchedule(
   await runtime.redis.hset(
     runtime.schedulesKey(),
     schedule.id,
-    serializer.stringify(schedule),
+    runtime.serializer.stringify(schedule),
   );
 }
 
@@ -20,7 +20,7 @@ export async function getSchedule(
   const data = runtime.parseRedisString(
     await runtime.redis.hget(runtime.schedulesKey(), id),
   );
-  return data ? (serializer.parse(data) as Schedule) : null;
+  return data ? (runtime.serializer.parse(data) as Schedule) : null;
 }
 
 export async function updateSchedule(
@@ -50,9 +50,9 @@ export async function saveScheduleWithTimer(
     runtime.timersKey(),
     runtime.timersScheduleKey(),
     schedule.id,
-    serializer.stringify(schedule),
+    runtime.serializer.stringify(schedule),
     timer.id,
-    serializer.stringify(timer),
+    runtime.serializer.stringify(timer),
     timer.fireAt.getTime(),
   );
 }

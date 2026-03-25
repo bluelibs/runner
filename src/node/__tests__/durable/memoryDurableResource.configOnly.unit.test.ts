@@ -1,3 +1,5 @@
+import { resources, Serializer } from "../../../index";
+import { RunnerMode } from "../../../types/runner";
 import type { DurableResource } from "../../durable/core/DurableResource";
 
 type CreateRunnerDurableRuntime =
@@ -199,6 +201,85 @@ describe("durable: memoryDurableResource (config-only)", () => {
     const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
     expect(runtimeConfig?.store).toBeInstanceOf(PersistentMemoryStore);
     expect(runtimeConfig?.queue).toBeUndefined();
+  });
+
+  it("defaults serializer dependency selection to resources.serializer", () => {
+    let memoryDurableResource!: typeof import("../../durable/resources/memoryDurableResource").memoryDurableResource;
+    jest.isolateModules(() => {
+      ({
+        memoryDurableResource,
+      } = require("../../durable/resources/memoryDurableResource"));
+    });
+
+    const dependencies =
+      typeof memoryDurableResource.dependencies === "function"
+        ? memoryDurableResource.dependencies({}, RunnerMode.TEST)
+        : memoryDurableResource.dependencies;
+
+    expect((dependencies as any).serializer.id).toBe(resources.serializer.id);
+  });
+
+  it("uses a custom serializer resource for persistent snapshots when configured", async () => {
+    class PersistentMemoryStoreMock {
+      constructor(public readonly cfg: unknown) {}
+    }
+
+    const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
+    const customSerializerResource = resources.serializer.fork(
+      "tests-durable-memory-serializer",
+    );
+    const customSerializer = new Serializer({ pretty: true });
+
+    jest.doMock("../../durable/store/PersistentMemoryStore", () => ({
+      PersistentMemoryStore: PersistentMemoryStoreMock,
+    }));
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime,
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let memoryDurableResource!: typeof import("../../durable/resources/memoryDurableResource").memoryDurableResource;
+    jest.isolateModules(() => {
+      ({
+        memoryDurableResource,
+      } = require("../../durable/resources/memoryDurableResource"));
+    });
+
+    const dependencies =
+      typeof memoryDurableResource.dependencies === "function"
+        ? memoryDurableResource.dependencies(
+            {
+              serializer: customSerializerResource,
+            },
+            RunnerMode.TEST,
+          )
+        : memoryDurableResource.dependencies;
+
+    expect((dependencies as any).serializer).toBe(customSerializerResource);
+
+    await memoryDurableResource.init!.call(
+      { id: "tenantA-durable" },
+      {
+        persist: { filePath: "./tmp/durable.json" },
+        serializer: customSerializerResource,
+      },
+      {
+        ...deps,
+        serializer: customSerializer,
+      } as any,
+      { runtimeConfig: null } as any,
+    );
+
+    const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
+    expect("serializer" in (runtimeConfig as object)).toBe(false);
+    expect((runtimeConfig?.store as any).cfg).toEqual(
+      expect.objectContaining({
+        filePath: "./tmp/durable.json",
+        serializer: customSerializer,
+      }),
+    );
   });
 
   it("allows queue.enabled=false to disable queue creation explicitly", async () => {

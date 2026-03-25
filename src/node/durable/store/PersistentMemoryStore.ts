@@ -22,6 +22,12 @@ export interface PersistentMemoryStoreConfig {
    * survive process restarts without provisioning Redis/RabbitMQ.
    */
   filePath: string;
+  /**
+   * Serializer used to persist and restore the durable snapshot payload.
+   *
+   * Defaults to Runner's standard serializer when omitted.
+   */
+  serializer?: Serializer;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -60,13 +66,14 @@ function describeError(error: unknown): string {
  */
 export class PersistentMemoryStore extends MemoryStore {
   private readonly filePath: string;
-  private readonly serializer = new Serializer();
+  private readonly serializer: Serializer;
   private writeChain: Promise<void> = Promise.resolve();
   private initialized = false;
 
   constructor(config: PersistentMemoryStoreConfig) {
     super();
     this.filePath = resolve(config.filePath);
+    this.serializer = config.serializer ?? new Serializer();
   }
 
   async init(): Promise<void> {

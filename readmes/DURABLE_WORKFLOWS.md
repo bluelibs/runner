@@ -86,9 +86,12 @@ import { r, run } from "@bluelibs/runner";
 import { resources, tags } from "@bluelibs/runner/node";
 
 const durable = resources.memoryWorkflow.fork("app-durable"); // forking is just making a copy
+const durableSerializer =
+  resources.serializer.fork("app-durable-serializer");
 
 const durableRegistration = durable.with({
   persist: { filePath: "./.runner/durable-memory.json" }, // Optional: persist memory store state to disk for local restart drills
+  serializer: durableSerializer, // Optional: custom serializer resource for persisted durable payloads
   queue: { consume: true }, // Optional: test queue-mode semantics
   polling: { enabled: true }, // Drive timers/sleeps/timeouts with bounded fan-out
   recovery: { onStartup: true }, // Recover orphaned executions on boot
@@ -107,6 +110,15 @@ Use `queue: { consume: true }` when testing production-like topology (signals, c
 `persist: { filePath }` makes `resources.memoryWorkflow` reload its durable store state from a local file on boot.
 This is designed for single-process local/dev workflows and crash-recovery testing.
 It does not turn the memory backend into a shared multi-node store, and it does not persist in-process `MemoryQueue` / `MemoryEventBus` subscribers.
+
+`serializer` accepts a serializer resource definition, not a serializer instance.
+If omitted, durable workflows use Runner's built-in `resources.serializer`.
+When you need a different durable payload contract, register a fork such as
+`resources.serializer.fork("app-durable-serializer").with({ ... })`, then pass
+the bare forked resource definition here.
+For `resources.memoryWorkflow`, that serializer is used for file-backed
+`persist.filePath` snapshots. For `resources.redisWorkflow`, it is used for the
+Redis durable store and Redis durable event bus payloads.
 
 ### 2. Define a durable workflow task
 

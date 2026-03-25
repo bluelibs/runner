@@ -6,7 +6,7 @@ import {
 } from "../core/types";
 import { getSignalIdFromStepId } from "../core/signalWaiters";
 import { durableExecutionInvariantError } from "../../../errors";
-import { serializer, type RedisStoreRuntime } from "./RedisStore.runtime";
+import type { RedisStoreRuntime } from "./RedisStore.runtime";
 
 export const createRedisSignalState = (
   executionId: string,
@@ -47,7 +47,7 @@ export async function getSignalState(
   const data = runtime.parseRedisString(
     await runtime.redis.get(runtime.signalKey(executionId, signalId)),
   );
-  return data ? (serializer.parse(data) as DurableSignalState) : null;
+  return data ? (runtime.serializer.parse(data) as DurableSignalState) : null;
 }
 
 async function mutateSignalState(params: {
@@ -79,10 +79,10 @@ async function mutateSignalState(params: {
     script,
     1,
     params.runtime.signalKey(params.executionId, params.signalId),
-    serializer.stringify(
+    params.runtime.serializer.stringify(
       createRedisSignalState(params.executionId, params.signalId),
     ),
-    serializer.stringify(params.record),
+    params.runtime.serializer.stringify(params.record),
   );
   params.runtime.assertEvalResultNotError(outcome);
 }
@@ -170,7 +170,9 @@ export async function consumeQueuedSignalRecord(
   );
   runtime.assertEvalResultNotError(outcome);
   const payload = runtime.parseRedisString(outcome);
-  return payload ? (serializer.parse(payload) as DurableSignalRecord) : null;
+  return payload
+    ? (runtime.serializer.parse(payload) as DurableSignalRecord)
+    : null;
 }
 
 export async function consumeBufferedSignalForStep(
@@ -213,9 +215,11 @@ export async function consumeBufferedSignalForStep(
     runtime.signalKey(stepResult.executionId, signalId),
     runtime.stepBucketKey(stepResult.executionId),
     stepResult.stepId,
-    serializer.stringify(stepResult),
+    runtime.serializer.stringify(stepResult),
   );
   runtime.assertEvalResultNotError(outcome);
   const payload = runtime.parseRedisString(outcome);
-  return payload ? (serializer.parse(payload) as DurableSignalRecord) : null;
+  return payload
+    ? (runtime.serializer.parse(payload) as DurableSignalRecord)
+    : null;
 }

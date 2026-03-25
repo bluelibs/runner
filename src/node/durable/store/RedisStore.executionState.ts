@@ -1,7 +1,7 @@
 import { ExecutionStatus, type Execution } from "../core/types";
 import type { ExpectedExecutionStatuses } from "../core/interfaces/store";
 import { durableStoreShapeError } from "../../../errors";
-import { serializer, type RedisStoreRuntime } from "./RedisStore.runtime";
+import type { RedisStoreRuntime } from "./RedisStore.runtime";
 import { saveStepResult } from "./RedisStore.executionViews";
 
 function isActiveExecutionStatus(status: ExecutionStatus): boolean {
@@ -71,7 +71,7 @@ async function loadExecutionsFromSet(
       continue;
     }
 
-    executions.push(serializer.parse(raw) as Execution);
+    executions.push(runtime.serializer.parse(raw) as Execution);
   }
 
   if (staleIds.length > 0) {
@@ -115,7 +115,7 @@ export async function createExecutionWithIdempotencyKey(
     runtime.allExecutionsKey(),
     runtime.activeExecutionsKey(),
     runtime.stuckExecutionsKey(),
-    serializer.stringify(params.execution),
+    runtime.serializer.stringify(params.execution),
     params.execution.id,
     isActive,
     isStuck,
@@ -147,7 +147,7 @@ export async function saveExecution(
     runtime.allExecutionsKey(),
     runtime.activeExecutionsKey(),
     runtime.stuckExecutionsKey(),
-    serializer.stringify(execution),
+    runtime.serializer.stringify(execution),
     execution.id,
     isActive,
     isStuck,
@@ -198,11 +198,11 @@ export async function saveExecutionIfStatus(
     runtime.allExecutionsKey(),
     runtime.activeExecutionsKey(),
     runtime.stuckExecutionsKey(),
-    serializer.stringify(execution),
+    runtime.serializer.stringify(execution),
     execution.id,
     isActive,
     isStuck,
-    serializer.stringify(expectedStatuses),
+    runtime.serializer.stringify(expectedStatuses),
   );
   runtime.assertEvalResultNotError(outcome);
   return outcome === 1;
@@ -215,7 +215,7 @@ export async function getExecution(
   const data = runtime.parseRedisString(
     await runtime.redis.get(runtime.executionKey(id)),
   );
-  return data ? (serializer.parse(data) as Execution) : null;
+  return data ? (runtime.serializer.parse(data) as Execution) : null;
 }
 
 export async function updateExecution(

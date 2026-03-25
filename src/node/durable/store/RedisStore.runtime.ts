@@ -30,15 +30,20 @@ export interface RedisStoreConfig {
   prefix?: string;
   redis?: RedisClient | string;
   disposeProvidedClient?: boolean;
+  /**
+   * Serializer used for durable Redis payloads.
+   *
+   * Defaults to Runner's standard serializer when omitted.
+   */
+  serializer?: Serializer;
 }
-
-export const serializer = new Serializer();
 
 export class RedisStoreRuntime {
   constructor(
     readonly redis: RedisClient,
     readonly prefix: string,
     readonly ownsRedisClient: boolean,
+    readonly serializer: Serializer = new Serializer(),
   ) {}
 
   k(key: string): string {
@@ -66,7 +71,7 @@ export class RedisStoreRuntime {
 
     return Object.values(data as Record<string, unknown>)
       .filter((value): value is string => typeof value === "string")
-      .map((value) => serializer.parse(value) as T);
+      .map((value) => this.serializer.parse(value) as T);
   }
 
   private parseScanResponse(value: unknown): [string, string[]] | null {

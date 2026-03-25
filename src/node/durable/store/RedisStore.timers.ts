@@ -1,11 +1,16 @@
 import { durableStoreShapeError } from "../../../errors";
 import { TimerStatus, type Timer } from "../core/types";
-import { serializer, type RedisStoreRuntime } from "./RedisStore.runtime";
+import type { RedisStoreRuntime } from "./RedisStore.runtime";
 
-function parsePendingTimerPayloads(payloads: unknown[]): Timer[] {
+function parsePendingTimerPayloads(
+  runtime: RedisStoreRuntime,
+  payloads: unknown[],
+): Timer[] {
   return payloads
     .map((payload) =>
-      typeof payload === "string" ? (serializer.parse(payload) as Timer) : null,
+      typeof payload === "string"
+        ? (runtime.serializer.parse(payload) as Timer)
+        : null,
     )
     .filter(
       (timer): timer is Timer =>
@@ -13,7 +18,10 @@ function parsePendingTimerPayloads(payloads: unknown[]): Timer[] {
     );
 }
 
-function parseClaimedTimerPayloads(payloads: unknown): Timer[] {
+function parseClaimedTimerPayloads(
+  runtime: RedisStoreRuntime,
+  payloads: unknown,
+): Timer[] {
   if (!Array.isArray(payloads)) {
     durableStoreShapeError.throw({
       message: "Unexpected Redis claimed timer response shape",
@@ -29,7 +37,7 @@ function parseClaimedTimerPayloads(payloads: unknown): Timer[] {
       });
     }
 
-    const timer = serializer.parse(payload) as Timer;
+    const timer = runtime.serializer.parse(payload) as Timer;
     if (timer.status !== TimerStatus.Pending) {
       return durableStoreShapeError.throw({
         message: `Unexpected claimed timer status '${String(timer.status)}'`,
@@ -54,7 +62,7 @@ export async function createTimer(
     runtime.timersKey(),
     runtime.timersScheduleKey(),
     timer.id,
-    serializer.stringify(timer),
+    runtime.serializer.stringify(timer),
     timer.fireAt.getTime(),
   );
 }
@@ -80,7 +88,10 @@ export async function getReadyTimers(
   const results = await pipeline.exec();
   if (!results) return [];
 
-  return parsePendingTimerPayloads(results.map(([, result]) => result));
+  return parsePendingTimerPayloads(
+    runtime,
+    results.map(([, result]) => result),
+  );
 }
 
 export async function claimReadyTimers(
@@ -178,7 +189,7 @@ export async function claimReadyTimers(
   );
   runtime.assertEvalResultNotError(result);
 
-  return parseClaimedTimerPayloads(result);
+  return parseClaimedTimerPayloads(runtime, result);
 }
 
 export async function markTimerFired(

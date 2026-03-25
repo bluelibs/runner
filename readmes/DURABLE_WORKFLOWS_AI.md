@@ -25,7 +25,10 @@ import { r, run } from "@bluelibs/runner";
 import { resources, tags } from "@bluelibs/runner/node";
 
 const durable = resources.memoryWorkflow.fork("app-durable");
+const durableSerializer =
+  resources.serializer.fork("app-durable-serializer");
 const durableRegistration = durable.with({
+  serializer: durableSerializer, // optional resource, not instance
   polling: { enabled: true },
   recovery: { onStartup: true },
 });
@@ -56,6 +59,13 @@ const durableRuntime = runtime.getResourceValue(durable);
 
 - No `queue` → executions run directly/synchronously
 - `queue: { consume: true }` → work dispatched through `MemoryQueue` + `DurableWorker`
+
+**Serializer override** (optional):
+
+- `serializer` expects a serializer resource definition
+- default is `resources.serializer`
+- for `memoryWorkflow`, it affects persisted `filePath` snapshots
+- for `redisWorkflow`, it affects Redis store + bus payloads
 
 ## DurableContext API
 

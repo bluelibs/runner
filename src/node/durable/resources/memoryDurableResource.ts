@@ -8,6 +8,18 @@ import { createRunnerDurableRuntime } from "../core/createRunnerDurableRuntime";
 import { disposeDurableService } from "../core/DurableService";
 import type { DurableResource } from "../core/DurableResource";
 import { Logger } from "../../../models/Logger";
+import type { IResource } from "../../../defs";
+import type { Serializer } from "../../../serializer";
+
+type DurableSerializerResource = IResource<
+  any,
+  Promise<Serializer>,
+  any,
+  any,
+  any,
+  any,
+  any
+>;
 
 export type MemoryDurableResourceConfig = Omit<
   RunnerDurableRuntimeConfig,
@@ -31,6 +43,12 @@ export type MemoryDurableResourceConfig = Omit<
      */
     filePath: string;
   };
+  /**
+   * Optional serializer resource used for persistent durable snapshots.
+   *
+   * Pass the bare resource definition here. Defaults to `resources.serializer`.
+   */
+  serializer?: DurableSerializerResource;
 };
 
 export interface MemoryDurableResourceContext {
@@ -39,20 +57,25 @@ export interface MemoryDurableResourceContext {
 
 export const memoryDurableResource = r
   .resource<MemoryDurableResourceConfig>("base-durable-memory")
-  .dependencies({
+  .dependencies((config) => ({
     taskRunner: resources.taskRunner,
     eventManager: resources.eventManager,
     runnerStore: resources.store,
     logger: resources.logger,
-  })
+    serializer: config.serializer ?? resources.serializer,
+  }))
   .context<MemoryDurableResourceContext>(() => ({ runtimeConfig: null }))
   .init(async function (
     this: { id: string },
     config,
-    { taskRunner, eventManager, runnerStore, logger },
+    { taskRunner, eventManager, runnerStore, logger, serializer },
     resourceContext,
   ): Promise<DurableResource> {
-    const { persist, ...memoryConfig } = config;
+    const {
+      persist,
+      serializer: _serializerResource,
+      ...memoryConfig
+    } = config;
     const baseLogger =
       memoryConfig.logger ??
       logger ??
@@ -69,7 +92,10 @@ export const memoryDurableResource = r
         : false;
     const queue = shouldCreateQueue ? new MemoryQueue() : undefined;
     const store = persist?.filePath
-      ? new PersistentMemoryStore({ filePath: persist.filePath })
+      ? new PersistentMemoryStore({
+          filePath: persist.filePath,
+          serializer,
+        })
       : new MemoryStore();
 
     const runtimeConfig: RunnerDurableRuntimeConfig = {

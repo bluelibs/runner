@@ -1,3 +1,5 @@
+import { resources, Serializer } from "../../../index";
+import { RunnerMode } from "../../../types/runner";
 import type { DurableResource } from "../../durable/core/DurableResource";
 
 type CreateRunnerDurableRuntime =
@@ -210,6 +212,99 @@ describe("durable: redisDurableResource (config-only)", () => {
 
     const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
     expect(runtimeConfig?.queue).toBeUndefined();
+  });
+
+  it("defaults serializer dependency selection to resources.serializer", () => {
+    let redisDurableResource!: typeof import("../../durable/resources/redisDurableResource").redisDurableResource;
+    jest.isolateModules(() => {
+      ({
+        redisDurableResource,
+      } = require("../../durable/resources/redisDurableResource"));
+    });
+
+    const dependencies =
+      typeof redisDurableResource.dependencies === "function"
+        ? redisDurableResource.dependencies(
+            { redis: { url: "redis://x" } },
+            RunnerMode.TEST,
+          )
+        : redisDurableResource.dependencies;
+
+    expect((dependencies as any).serializer.id).toBe(resources.serializer.id);
+  });
+
+  it("uses a custom serializer resource for redis store and bus when configured", async () => {
+    class RedisStoreMock {
+      constructor(public readonly cfg: unknown) {}
+    }
+    class RedisEventBusMock {
+      constructor(public readonly cfg: unknown) {}
+    }
+
+    const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
+    const customSerializerResource = resources.serializer.fork(
+      "tests-durable-redis-serializer",
+    );
+    const customSerializer = new Serializer({ pretty: true });
+
+    jest.doMock("../../durable/store/RedisStore", () => ({
+      RedisStore: RedisStoreMock,
+    }));
+    jest.doMock("../../durable/bus/RedisEventBus", () => ({
+      RedisEventBus: RedisEventBusMock,
+    }));
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime,
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let redisDurableResource!: typeof import("../../durable/resources/redisDurableResource").redisDurableResource;
+    jest.isolateModules(() => {
+      ({
+        redisDurableResource,
+      } = require("../../durable/resources/redisDurableResource"));
+    });
+
+    const dependencies =
+      typeof redisDurableResource.dependencies === "function"
+        ? redisDurableResource.dependencies(
+            {
+              redis: { url: "redis://x" },
+              serializer: customSerializerResource,
+            },
+            RunnerMode.TEST,
+          )
+        : redisDurableResource.dependencies;
+
+    expect((dependencies as any).serializer).toBe(customSerializerResource);
+
+    await redisDurableResource.init!.call(
+      { id: "tenantA-durable" },
+      {
+        redis: { url: "redis://x" },
+        serializer: customSerializerResource,
+      },
+      {
+        ...deps,
+        serializer: customSerializer,
+      } as any,
+      { runtimeConfig: null } as any,
+    );
+
+    const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
+    expect("serializer" in (runtimeConfig as object)).toBe(false);
+    expect((runtimeConfig?.store as any).cfg).toEqual(
+      expect.objectContaining({
+        serializer: customSerializer,
+      }),
+    );
+    expect((runtimeConfig?.eventBus as any).cfg).toEqual(
+      expect.objectContaining({
+        serializer: customSerializer,
+      }),
+    );
   });
 
   it("allows queue.enabled=false to disable queue creation explicitly", async () => {

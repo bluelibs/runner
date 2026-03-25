@@ -4,7 +4,7 @@ import {
   createDurableAuditEntryId,
   type DurableAuditEntry,
 } from "../core/audit";
-import { serializer, type RedisStoreRuntime } from "./RedisStore.runtime";
+import type { RedisStoreRuntime } from "./RedisStore.runtime";
 
 async function loadExecutionsFromSet(
   runtime: RedisStoreRuntime,
@@ -21,7 +21,7 @@ async function loadExecutionsFromSet(
   return results
     .map((entry) => entry?.[1])
     .filter((payload): payload is string => typeof payload === "string")
-    .map((payload) => serializer.parse(payload) as Execution);
+    .map((payload) => runtime.serializer.parse(payload) as Execution);
 }
 
 export async function listExecutions(
@@ -72,7 +72,7 @@ export async function appendAuditEntry(
   await runtime.redis.hset(
     runtime.auditBucketKey(entry.executionId),
     id,
-    serializer.stringify({ ...entry, id }),
+    runtime.serializer.stringify({ ...entry, id }),
   );
 }
 
@@ -98,7 +98,7 @@ export async function getStepResult(
   const data = runtime.parseRedisString(
     await runtime.redis.hget(runtime.stepBucketKey(executionId), stepId),
   );
-  return data ? (serializer.parse(data) as StepResult) : null;
+  return data ? (runtime.serializer.parse(data) as StepResult) : null;
 }
 
 export async function saveStepResult(
@@ -108,6 +108,6 @@ export async function saveStepResult(
   await runtime.redis.hset(
     runtime.stepBucketKey(result.executionId),
     result.stepId,
-    serializer.stringify(result),
+    runtime.serializer.stringify(result),
   );
 }

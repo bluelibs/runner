@@ -12,6 +12,12 @@ export interface RedisEventBusConfig {
   prefix?: string;
   redis?: RedisEventBusClient | string;
   /**
+   * Serializer used for durable event bus payloads.
+   *
+   * Defaults to Runner's standard serializer when omitted.
+   */
+  serializer?: Serializer;
+  /**
    * When `true`, `dispose()` also closes a caller-provided Redis client.
    * By default externally provided clients remain owned by the caller.
    */
@@ -39,7 +45,7 @@ export class RedisEventBus implements IEventBus {
   private sub: RedisEventBusClient;
   private prefix: string;
   private readonly channels = new Map<string, ChannelState>();
-  private readonly serializer = new Serializer();
+  private readonly serializer: Serializer;
   private readonly logger: Logger;
   private readonly onHandlerError?: (error: unknown) => void | Promise<void>;
   private readonly ownsPublisherClient: boolean;
@@ -60,6 +66,7 @@ export class RedisEventBus implements IEventBus {
         printStrategy: "pretty",
         bufferLogs: false,
       });
+    this.serializer = config.serializer ?? new Serializer();
     this.logger = baseLogger.with({ source: "durable.bus.redis" });
     this.onHandlerError = config.onHandlerError;
 
