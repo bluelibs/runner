@@ -2,6 +2,7 @@ import { r, resources } from "../../../index";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryQueue } from "../queue/MemoryQueue";
 import { MemoryStore } from "../store/MemoryStore";
+import { PersistentMemoryStore } from "../store/PersistentMemoryStore";
 import type { RunnerDurableRuntimeConfig } from "../core/createRunnerDurableRuntime";
 import { createRunnerDurableRuntime } from "../core/createRunnerDurableRuntime";
 import { disposeDurableService } from "../core/DurableService";
@@ -20,6 +21,15 @@ export type MemoryDurableResourceConfig = Omit<
   queue?: {
     enabled?: boolean;
     consume?: boolean;
+  };
+  persist?: {
+    /**
+     * Local file used to persist the in-memory durable state between restarts.
+     *
+     * Intended for single-process local/dev scenarios, not shared multi-node
+     * deployments.
+     */
+    filePath: string;
   };
 };
 
@@ -42,8 +52,9 @@ export const memoryDurableResource = r
     { taskRunner, eventManager, runnerStore, logger },
     resourceContext,
   ): Promise<DurableResource> {
+    const { persist, ...memoryConfig } = config;
     const baseLogger =
-      config.logger ??
+      memoryConfig.logger ??
       logger ??
       new Logger({
         printThreshold: "error",
@@ -53,20 +64,26 @@ export const memoryDurableResource = r
     const durableLogger = baseLogger.with({ source: "durable.memory" });
 
     const shouldCreateQueue =
-      config.queue !== undefined ? config.queue.enabled !== false : false;
+      memoryConfig.queue !== undefined
+        ? memoryConfig.queue.enabled !== false
+        : false;
     const queue = shouldCreateQueue ? new MemoryQueue() : undefined;
+    const store = persist?.filePath
+      ? new PersistentMemoryStore({ filePath: persist.filePath })
+      : new MemoryStore();
 
     const runtimeConfig: RunnerDurableRuntimeConfig = {
-      ...config,
+      ...memoryConfig,
       logger: durableLogger,
-      store: new MemoryStore(),
+      store,
       eventBus: new MemoryEventBus({
         logger: durableLogger.with({ source: "durable.bus.memory" }),
       }),
       queue,
       roles: {
-        ...config.roles,
-        queueConsumer: queue !== undefined && config.queue?.consume === true,
+        ...memoryConfig.roles,
+        queueConsumer:
+          queue !== undefined && memoryConfig.queue?.consume === true,
       },
     };
 

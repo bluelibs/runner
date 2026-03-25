@@ -29,6 +29,9 @@ export { DurableOperator } from "./core/DurableOperator";
 export { DurableWorker, initDurableWorker } from "./core/DurableWorker";
 
 export { MemoryStore } from "./store/MemoryStore";
+export type { MemoryStoreSnapshot } from "./store/MemoryStore";
+export { PersistentMemoryStore } from "./store/PersistentMemoryStore";
+export type { PersistentMemoryStoreConfig } from "./store/PersistentMemoryStore";
 export { RedisStore } from "./store/RedisStore";
 
 export { MemoryQueue } from "./queue/MemoryQueue";

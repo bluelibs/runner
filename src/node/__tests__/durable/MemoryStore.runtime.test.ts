@@ -100,6 +100,52 @@ describe("durable: MemoryStore runtime surfaces", () => {
     ]);
   });
 
+  it("preserves execution dates across reads and snapshots", async () => {
+    const store = new MemoryStore();
+    const nestedWhen = new Date("2026-03-25T10:00:00.000Z");
+    const input = {
+      nestedWhen,
+      pattern: /memory/gi,
+      bytes: new Uint8Array([1, 2, 3]),
+      tags: new Set(["sticky", "durable"]),
+      timeline: [nestedWhen],
+      checkpoints: new Map([["wakeAt", new Date("2026-03-25T10:00:04.000Z")]]),
+    };
+    Object.defineProperty(input, "summary", {
+      enumerable: true,
+      get: () => "sticky",
+    });
+
+    const execution: Execution = {
+      id: "dated",
+      workflowKey: "workflow.dated",
+      input,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      current: {
+        kind: "step",
+        stepId: "remember",
+        startedAt: new Date("2026-03-25T10:00:01.000Z"),
+      },
+      createdAt: new Date("2026-03-25T10:00:02.000Z"),
+      updatedAt: new Date("2026-03-25T10:00:03.000Z"),
+    };
+
+    await store.saveExecution(execution);
+
+    const storedExecution = await store.getExecution(execution.id);
+    expect(storedExecution).toEqual(execution);
+    expect(storedExecution?.input).toMatchObject({ summary: "sticky" });
+    expect(
+      Object.getOwnPropertyDescriptor(
+        storedExecution!.input as object,
+        "summary",
+      )?.get,
+    ).toBeInstanceOf(Function);
+    expect(store.exportSnapshot().executions).toEqual([execution]);
+  });
+
   it("handles timer lifecycle and exclusive claims", async () => {
     const store = new MemoryStore();
     const now = new Date();
@@ -293,6 +339,7 @@ describe("durable: MemoryStore runtime surfaces", () => {
     expect((await store.listActiveSchedules()).map((s) => s.id)).toEqual([
       "s1",
     ]);
+    await store.deleteSchedule("missing");
     await store.updateSchedule("missing", { status: "paused" });
     await store.updateSchedule("s1", { status: "paused" });
     await store.deleteSchedule("s2");

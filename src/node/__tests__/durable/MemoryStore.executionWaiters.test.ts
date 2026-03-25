@@ -184,6 +184,13 @@ describe("durable: MemoryStore execution waiters", () => {
         "__execution:child-step-a",
       ),
     ).resolves.toBeUndefined();
+    await expect(
+      store.deleteExecutionWaiter(
+        "child",
+        "parent-missing",
+        "__execution:child-step-missing",
+      ),
+    ).resolves.toBeUndefined();
     await expect(store.listExecutionWaiters("child")).resolves.toEqual([
       expect.objectContaining({
         executionId: "parent-b",

@@ -39,6 +39,14 @@ describe("durable: signalWaiters helpers", () => {
         store,
         executionId: "e1",
         signalId: "paid",
+        stepId: "__signal:paid:missing",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      deleteSignalWaiter({
+        store,
+        executionId: "e1",
+        signalId: "paid",
         stepId: "__signal:paid",
       }),
     ).resolves.toBeUndefined();

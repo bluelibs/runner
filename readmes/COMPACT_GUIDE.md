@@ -816,5 +816,5 @@ Prefer feature-driven folders and naming by Runner item type:
 
 ## See Also
 
-- **Durable Workflows**: Replay-safe checkpoints for long-running flows. `step(id, fn)` callbacks receive `{ signal: AbortSignal }` for cooperative mid-step cancellation; replay hits still return cached results without re-running the callback. Use `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` for other executions only; self-waits are rejected to avoid deadlocks. Store is the durable source of truth; queue/pubsub handles wake-ups and queue-consumer handoff, while polling claims ready timers with bounded per-worker concurrency via `claimReadyTimers(...)`. See `readmes/DURABLE_WORKFLOWS.md`.
+- **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` to model durable progress while the store remains the source of truth and queue/pubsub or polling wakes work back up. See `readmes/DURABLE_WORKFLOWS.md`.
 - **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response. Only lane-assigned work is rerouted. See `readmes/REMOTE_LANES.md`.

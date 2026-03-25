@@ -34,8 +34,105 @@ const createEmptySignalState = (
   history: [],
 });
 
+function isDateLike(value: unknown): value is Date {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.prototype.toString.call(value) === "[object Date]" &&
+    typeof Reflect.get(value, "getTime") === "function"
+  );
+}
+
+function isMapLike(value: unknown): value is Map<unknown, unknown> {
+  return Object.prototype.toString.call(value) === "[object Map]";
+}
+
+function isSetLike(value: unknown): value is Set<unknown> {
+  return Object.prototype.toString.call(value) === "[object Set]";
+}
+
+function isRegExpLike(value: unknown): value is RegExp {
+  return Object.prototype.toString.call(value) === "[object RegExp]";
+}
+
+function cloneDurableValue<T>(
+  value: T,
+  seen = new WeakMap<object, unknown>(),
+): T {
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+
+  const existing = seen.get(value);
+  if (existing !== undefined) {
+    return existing as T;
+  }
+
+  if (isDateLike(value)) {
+    // Jest's vm-backed test runtime can flatten Date fields inside
+    // structuredClone(...) results to plain objects, so we rebuild them here
+    // in the current realm before persistence or equality checks depend on
+    // instanceof Date.
+    return new Date(value.getTime()) as T;
+  }
+
+  if (isRegExpLike(value)) {
+    return new RegExp(value.source, value.flags) as T;
+  }
+
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+    return structuredClone(value);
+  }
+
+  if (Array.isArray(value)) {
+    const clone: unknown[] = [];
+    seen.set(value, clone);
+    for (const item of value) {
+      clone.push(cloneDurableValue(item, seen));
+    }
+    return clone as T;
+  }
+
+  if (isMapLike(value)) {
+    const clone = new Map();
+    seen.set(value, clone);
+    for (const [key, mapValue] of value.entries()) {
+      clone.set(
+        cloneDurableValue(key, seen),
+        cloneDurableValue(mapValue, seen),
+      );
+    }
+    return clone as T;
+  }
+
+  if (isSetLike(value)) {
+    const clone = new Set();
+    seen.set(value, clone);
+    for (const entry of value.values()) {
+      clone.add(cloneDurableValue(entry, seen));
+    }
+    return clone as T;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  const clone = Object.create(prototype) as Record<PropertyKey, unknown>;
+  seen.set(value, clone);
+
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+
+    if ("value" in descriptor) {
+      descriptor.value = cloneDurableValue(descriptor.value, seen);
+    }
+
+    Object.defineProperty(clone, key, descriptor);
+  }
+
+  return clone as T;
+}
+
 const cloneSignalPayload = <TPayload>(payload: TPayload): TPayload =>
-  structuredClone(payload);
+  cloneDurableValue(payload);
 
 const cloneSignalRecord = <TPayload>(
   record: DurableSignalRecord<TPayload>,
@@ -62,14 +159,50 @@ const cloneSignalState = (
 });
 
 const cloneSignalWaiter = (waiter: DurableSignalWaiter): DurableSignalWaiter =>
-  structuredClone(waiter);
+  cloneDurableValue(waiter);
 
 const cloneExecutionWaiter = (
   waiter: DurableExecutionWaiter,
-): DurableExecutionWaiter => structuredClone(waiter);
+): DurableExecutionWaiter => cloneDurableValue(waiter);
 
 const cloneExecution = (execution: Execution): Execution =>
-  structuredClone(execution);
+  cloneDurableValue(execution);
+
+const cloneStepResult = <T>(result: StepResult<T>): StepResult<T> => ({
+  ...result,
+});
+
+const cloneAuditEntry = (entry: DurableAuditEntry): DurableAuditEntry => ({
+  ...entry,
+});
+
+const cloneTimer = (timer: Timer): Timer => ({ ...timer });
+
+const cloneSchedule = (schedule: Schedule): Schedule => ({ ...schedule });
+
+/**
+ * Serializable snapshot of the in-memory durable state.
+ *
+ * This intentionally excludes ephemeral lock ownership because lock recovery is
+ * rebuilt on boot and must not resurrect stale claims from a prior process.
+ */
+export interface MemoryStoreSnapshot {
+  version: 1;
+  executions: Execution[];
+  executionIdByIdempotencyKey: Array<readonly [string, string]>;
+  stepResults: StepResult[];
+  signalStates: DurableSignalState[];
+  signalWaiters: DurableSignalWaiter[];
+  executionWaiters: DurableExecutionWaiter[];
+  auditEntries: DurableAuditEntry[];
+  timers: Timer[];
+  schedules: Schedule[];
+}
+
+type DurableMutationResult<T> = {
+  result: T;
+  changed: boolean;
+};
 
 const compareTimersByReadyOrder = (left: Timer, right: Timer): number => {
   const fireAtDiff = left.fireAt.getTime() - right.fireAt.getTime();
@@ -123,12 +256,72 @@ export class MemoryStore implements IDurableStore {
   private schedules = new Map<string, Schedule>();
   private locks = new Map<string, { id: string; expires: number }>();
 
+  /**
+   * Hook for subclasses that need to persist durable state changes.
+   *
+   * MemoryStore itself is intentionally volatile, so the default implementation
+   * is a no-op.
+   */
+  protected async afterDurableMutation(
+    _snapshot: MemoryStoreSnapshot,
+  ): Promise<void> {}
+
+  protected captureDurableMutationSnapshot(): MemoryStoreSnapshot {
+    return this.exportSnapshot();
+  }
+
   private withSignalStatePermit<T>(fn: () => T | Promise<T>): Promise<T> {
     return this.signalStateSemaphore.withPermit(async () => await fn());
   }
 
   private withExecutionWaiterPermit<T>(fn: () => T | Promise<T>): Promise<T> {
     return this.executionWaiterSemaphore.withPermit(async () => await fn());
+  }
+
+  private async persistDurableMutation(): Promise<void> {
+    await this.afterDurableMutation(this.captureDurableMutationSnapshot());
+  }
+
+  private async withSignalStateMutation<T>(
+    fn: () => DurableMutationResult<T> | Promise<DurableMutationResult<T>>,
+  ): Promise<T> {
+    const { result, snapshot } = await this.withSignalStatePermit(async () => {
+      const mutation = await fn();
+      return {
+        result: mutation.result,
+        snapshot: mutation.changed
+          ? this.captureDurableMutationSnapshot()
+          : null,
+      };
+    });
+
+    if (snapshot) {
+      await this.afterDurableMutation(snapshot);
+    }
+
+    return result;
+  }
+
+  private async withExecutionWaiterMutation<T>(
+    fn: () => DurableMutationResult<T> | Promise<DurableMutationResult<T>>,
+  ): Promise<T> {
+    const { result, snapshot } = await this.withExecutionWaiterPermit(
+      async () => {
+        const mutation = await fn();
+        return {
+          result: mutation.result,
+          snapshot: mutation.changed
+            ? this.captureDurableMutationSnapshot()
+            : null,
+        };
+      },
+    );
+
+    if (snapshot) {
+      await this.afterDurableMutation(snapshot);
+    }
+
+    return result;
   }
 
   private pruneExpiredLocks(now: number): void {
@@ -165,11 +358,13 @@ export class MemoryStore implements IDurableStore {
 
     this.executionIdByIdempotencyKey.set(key, params.execution.id);
     this.executions.set(params.execution.id, cloneExecution(params.execution));
+    await this.persistDurableMutation();
     return { created: true, executionId: params.execution.id };
   }
 
   async saveExecution(execution: Execution): Promise<void> {
     this.executions.set(execution.id, cloneExecution(execution));
+    await this.persistDurableMutation();
   }
 
   async saveExecutionIfStatus(
@@ -181,6 +376,7 @@ export class MemoryStore implements IDurableStore {
     if (!expectedStatuses.includes(current.status)) return false;
 
     this.executions.set(execution.id, cloneExecution(execution));
+    await this.persistDurableMutation();
     return true;
   }
 
@@ -199,6 +395,7 @@ export class MemoryStore implements IDurableStore {
       id,
       cloneExecution({ ...e, ...updates, updatedAt: new Date() }),
     );
+    await this.persistDurableMutation();
   }
 
   async listIncompleteExecutions(): Promise<Execution[]> {
@@ -262,8 +459,9 @@ export class MemoryStore implements IDurableStore {
 
   async appendAuditEntry(entry: DurableAuditEntry): Promise<void> {
     const list = this.auditEntries.get(entry.executionId) ?? [];
-    list.push({ ...entry });
+    list.push(cloneAuditEntry(entry));
     this.auditEntries.set(entry.executionId, list);
+    await this.persistDurableMutation();
   }
 
   async listAuditEntries(
@@ -286,6 +484,7 @@ export class MemoryStore implements IDurableStore {
       error: undefined,
       updatedAt: new Date(),
     });
+    await this.persistDurableMutation();
   }
 
   async skipStep(executionId: string, stepId: string): Promise<void> {
@@ -309,6 +508,7 @@ export class MemoryStore implements IDurableStore {
       error,
       updatedAt: new Date(),
     });
+    await this.persistDurableMutation();
   }
 
   async editStepResult(
@@ -341,11 +541,12 @@ export class MemoryStore implements IDurableStore {
       this.stepResults.set(result.executionId, results);
     }
 
-    results.set(result.stepId, { ...result });
+    results.set(result.stepId, cloneStepResult(result));
   }
 
   async saveStepResult(result: StepResult): Promise<void> {
     this.setStepResult(result);
+    await this.persistDurableMutation();
   }
 
   private getOrCreateSignalState(
@@ -384,9 +585,10 @@ export class MemoryStore implements IDurableStore {
     signalId: string,
     record: DurableSignalRecord,
   ): Promise<void> {
-    await this.withSignalStatePermit(() => {
+    await this.withSignalStateMutation(() => {
       const signalState = this.getOrCreateSignalState(executionId, signalId);
       signalState.history.push(cloneSignalRecord(record));
+      return { result: undefined, changed: true };
     });
   }
 
@@ -395,10 +597,11 @@ export class MemoryStore implements IDurableStore {
     signalId: string,
     record: DurableQueuedSignalRecord,
   ): Promise<void> {
-    await this.withSignalStatePermit(() => {
+    await this.withSignalStateMutation(() => {
       const signalState = this.getOrCreateSignalState(executionId, signalId);
       signalState.history.push(cloneSignalRecord(record));
       signalState.queued.push(cloneQueuedSignalRecord(record));
+      return { result: undefined, changed: true };
     });
   }
 
@@ -407,9 +610,10 @@ export class MemoryStore implements IDurableStore {
     signalId: string,
     record: DurableQueuedSignalRecord,
   ): Promise<void> {
-    await this.withSignalStatePermit(() => {
+    await this.withSignalStateMutation(() => {
       const signalState = this.getOrCreateSignalState(executionId, signalId);
       signalState.queued.push(cloneQueuedSignalRecord(record));
+      return { result: undefined, changed: true };
     });
   }
 
@@ -417,26 +621,31 @@ export class MemoryStore implements IDurableStore {
     executionId: string,
     signalId: string,
   ): Promise<DurableSignalRecord | null> {
-    return this.withSignalStatePermit(() => {
+    return await this.withSignalStateMutation(() => {
       const signalState = this.signalStates.get(executionId)?.get(signalId);
       const record = signalState?.queued.shift();
-      if (!record) return null;
+      if (!record) {
+        return { result: null, changed: false };
+      }
 
-      return cloneSignalRecord(record);
+      return {
+        result: cloneSignalRecord(record),
+        changed: true,
+      };
     });
   }
 
   async consumeBufferedSignalForStep(
     stepResult: StepResult,
   ): Promise<DurableSignalRecord | null> {
-    return this.withSignalStatePermit(() => {
+    return await this.withSignalStateMutation(() => {
       const signalId = getSignalIdFromStepResult(stepResult);
       const signalState = this.signalStates
         .get(stepResult.executionId)
         ?.get(signalId);
       const record = signalState?.queued.shift();
       if (!record) {
-        return null;
+        return { result: null, changed: false };
       }
 
       const nextResult =
@@ -450,7 +659,10 @@ export class MemoryStore implements IDurableStore {
         ...stepResult,
         result: nextResult,
       });
-      return cloneSignalRecord(record);
+      return {
+        result: cloneSignalRecord(record),
+        changed: true,
+      };
     });
   }
 
@@ -492,21 +704,26 @@ export class MemoryStore implements IDurableStore {
     executionId: string,
     signalId: string,
     stepId: string,
-  ): void {
+  ): boolean {
     const signalWaiters = this.signalWaiters.get(executionId)?.get(signalId);
-    if (!signalWaiters) return;
+    if (!signalWaiters) return false;
 
-    signalWaiters.delete(stepId);
+    const changed = signalWaiters.delete(stepId);
+    if (!changed) {
+      return false;
+    }
     this.pruneEmptySignalWaiterBuckets(executionId, signalId);
+    return true;
   }
 
   async upsertSignalWaiter(waiter: DurableSignalWaiter): Promise<void> {
-    await this.withSignalStatePermit(() => {
+    await this.withSignalStateMutation(() => {
       const signalWaiters = this.getOrCreateSignalWaiters(
         waiter.executionId,
         waiter.signalId,
       );
       signalWaiters.set(waiter.stepId, cloneSignalWaiter(waiter));
+      return { result: undefined, changed: true };
     });
   }
 
@@ -547,12 +764,12 @@ export class MemoryStore implements IDurableStore {
     signalRecord: DurableSignalRecord;
     timerId?: string;
   }): Promise<boolean> {
-    return this.withSignalStatePermit(() => {
+    return await this.withSignalStateMutation(() => {
       const currentStep = this.stepResults
         .get(params.executionId)
         ?.get(params.stepId);
       if (!currentStep) {
-        return false;
+        return { result: false, changed: false };
       }
 
       const signalState = parseSignalState(currentStep.result);
@@ -561,14 +778,14 @@ export class MemoryStore implements IDurableStore {
         (signalState.signalId !== undefined &&
           signalState.signalId !== params.signalId)
       ) {
-        return false;
+        return { result: false, changed: false };
       }
 
       const signalWaiters = this.signalWaiters
         .get(params.executionId)
         ?.get(params.signalId);
       if (!signalWaiters?.has(params.stepId)) {
-        return false;
+        return { result: false, changed: false };
       }
 
       this.setStepResult(params.stepResult);
@@ -586,7 +803,7 @@ export class MemoryStore implements IDurableStore {
         this.timers.delete(params.timerId);
       }
 
-      return true;
+      return { result: true, changed: true };
     });
   }
 
@@ -594,15 +811,22 @@ export class MemoryStore implements IDurableStore {
     executionId: string,
     signalId: string,
   ): Promise<DurableSignalWaiter | null> {
-    return this.withSignalStatePermit(() => {
+    return await this.withSignalStateMutation(() => {
       const nextWaiter = this.peekNextSignalWaiterUnsafe(executionId, signalId);
-      if (!nextWaiter) return null;
+      if (!nextWaiter) {
+        return { result: null, changed: false };
+      }
 
       const signalWaiters = this.signalWaiters.get(executionId)?.get(signalId);
-      if (!signalWaiters) return null;
+      if (!signalWaiters) {
+        return { result: null, changed: false };
+      }
       this.deleteSignalWaiterUnsafe(executionId, signalId, nextWaiter.stepId);
 
-      return cloneSignalWaiter(nextWaiter);
+      return {
+        result: cloneSignalWaiter(nextWaiter),
+        changed: true,
+      };
     });
   }
 
@@ -611,13 +835,18 @@ export class MemoryStore implements IDurableStore {
     signalId: string,
     stepId: string,
   ): Promise<void> {
-    await this.withSignalStatePermit(() => {
-      this.deleteSignalWaiterUnsafe(executionId, signalId, stepId);
+    await this.withSignalStateMutation(() => {
+      const changed = this.deleteSignalWaiterUnsafe(
+        executionId,
+        signalId,
+        stepId,
+      );
+      return { result: undefined, changed };
     });
   }
 
   async upsertExecutionWaiter(waiter: DurableExecutionWaiter): Promise<void> {
-    await this.withExecutionWaiterPermit(() => {
+    await this.withExecutionWaiterMutation(() => {
       const executionWaiters =
         this.executionWaiters.get(waiter.targetExecutionId) ?? new Map();
       executionWaiters.set(
@@ -625,6 +854,7 @@ export class MemoryStore implements IDurableStore {
         cloneExecutionWaiter(waiter),
       );
       this.executionWaiters.set(waiter.targetExecutionId, executionWaiters);
+      return { result: undefined, changed: true };
     });
   }
 
@@ -645,18 +875,18 @@ export class MemoryStore implements IDurableStore {
     stepResult: StepResult;
     timerId?: string;
   }): Promise<boolean> {
-    return await this.withExecutionWaiterPermit(() => {
+    return await this.withExecutionWaiterMutation(() => {
       const waiterKey = `${params.executionId}:${params.stepId}`;
       const waiters = this.executionWaiters.get(params.targetExecutionId);
       if (!waiters?.has(waiterKey)) {
-        return false;
+        return { result: false, changed: false };
       }
 
       const currentStep = this.stepResults
         .get(params.executionId)
         ?.get(params.stepId);
       if (!currentStep) {
-        return false;
+        return { result: false, changed: false };
       }
 
       const waitState = parseExecutionWaitState(currentStep.result);
@@ -664,7 +894,7 @@ export class MemoryStore implements IDurableStore {
         waitState?.state !== "waiting" ||
         waitState.targetExecutionId !== params.targetExecutionId
       ) {
-        return false;
+        return { result: false, changed: false };
       }
 
       this.setStepResult(params.stepResult);
@@ -677,8 +907,28 @@ export class MemoryStore implements IDurableStore {
         this.timers.delete(params.timerId);
       }
 
-      return true;
+      return { result: true, changed: true };
     });
+  }
+
+  private deleteExecutionWaiterUnsafe(
+    targetExecutionId: string,
+    executionId: string,
+    stepId: string,
+  ): boolean {
+    const waiters = this.executionWaiters.get(targetExecutionId);
+    if (!waiters) return false;
+
+    const changed = waiters.delete(`${executionId}:${stepId}`);
+    if (!changed) {
+      return false;
+    }
+
+    if (waiters.size === 0) {
+      this.executionWaiters.delete(targetExecutionId);
+    }
+
+    return true;
   }
 
   async deleteExecutionWaiter(
@@ -686,19 +936,19 @@ export class MemoryStore implements IDurableStore {
     executionId: string,
     stepId: string,
   ): Promise<void> {
-    await this.withExecutionWaiterPermit(() => {
-      const waiters = this.executionWaiters.get(targetExecutionId);
-      if (!waiters) return;
-
-      waiters.delete(`${executionId}:${stepId}`);
-      if (waiters.size === 0) {
-        this.executionWaiters.delete(targetExecutionId);
-      }
+    await this.withExecutionWaiterMutation(() => {
+      const changed = this.deleteExecutionWaiterUnsafe(
+        targetExecutionId,
+        executionId,
+        stepId,
+      );
+      return { result: undefined, changed };
     });
   }
 
   async createTimer(timer: Timer): Promise<void> {
-    this.timers.set(timer.id, { ...timer });
+    this.timers.set(timer.id, cloneTimer(timer));
+    await this.persistDurableMutation();
   }
 
   private listReadyPendingTimers(now: Date): Timer[] {
@@ -758,11 +1008,16 @@ export class MemoryStore implements IDurableStore {
         ...t,
         status: TimerStatus.Fired,
       });
+      await this.persistDurableMutation();
     }
   }
 
   async deleteTimer(timerId: string): Promise<void> {
-    this.timers.delete(timerId);
+    if (!this.timers.delete(timerId)) {
+      return;
+    }
+
+    await this.persistDurableMutation();
   }
 
   async claimTimer(
@@ -822,19 +1077,20 @@ export class MemoryStore implements IDurableStore {
     }
 
     const timer = this.timers.get(timerId);
-    if (timer) {
-      this.timers.set(timerId, {
-        ...timer,
-        status: TimerStatus.Fired,
-      });
+    if (!timer) {
+      this.locks.delete(claimKey);
+      return true;
     }
+
     this.timers.delete(timerId);
     this.locks.delete(claimKey);
+    await this.persistDurableMutation();
     return true;
   }
 
   async createSchedule(schedule: Schedule): Promise<void> {
-    this.schedules.set(schedule.id, { ...schedule });
+    this.schedules.set(schedule.id, cloneSchedule(schedule));
+    await this.persistDurableMutation();
   }
 
   async getSchedule(id: string): Promise<Schedule | null> {
@@ -845,16 +1101,22 @@ export class MemoryStore implements IDurableStore {
   async updateSchedule(id: string, updates: Partial<Schedule>): Promise<void> {
     const s = this.schedules.get(id);
     if (!s) return;
-    this.schedules.set(id, { ...s, ...updates });
+    this.schedules.set(id, cloneSchedule({ ...s, ...updates }));
+    await this.persistDurableMutation();
   }
 
   async saveScheduleWithTimer(schedule: Schedule, timer: Timer): Promise<void> {
-    this.schedules.set(schedule.id, { ...schedule });
-    this.timers.set(timer.id, { ...timer });
+    this.schedules.set(schedule.id, cloneSchedule(schedule));
+    this.timers.set(timer.id, cloneTimer(timer));
+    await this.persistDurableMutation();
   }
 
   async deleteSchedule(id: string): Promise<void> {
-    this.schedules.delete(id);
+    if (!this.schedules.delete(id)) {
+      return;
+    }
+
+    await this.persistDurableMutation();
   }
 
   async listSchedules(): Promise<Schedule[]> {
@@ -900,5 +1162,124 @@ export class MemoryStore implements IDurableStore {
     if (lock && lock.id === lockId) {
       this.locks.delete(resource);
     }
+  }
+
+  /**
+   * Exports the current durable truth as a serializable snapshot.
+   *
+   * The snapshot excludes ephemeral lock ownership so rehydrated stores can
+   * recover work without inheriting stale claims from prior processes.
+   */
+  exportSnapshot(): MemoryStoreSnapshot {
+    return {
+      version: 1,
+      executions: Array.from(this.executions.values()).map(cloneExecution),
+      executionIdByIdempotencyKey: Array.from(
+        this.executionIdByIdempotencyKey.entries(),
+      ),
+      stepResults: Array.from(this.stepResults.values()).flatMap((results) =>
+        Array.from(results.values()).map(cloneStepResult),
+      ),
+      signalStates: Array.from(this.signalStates.values()).flatMap((signals) =>
+        Array.from(signals.values()).map(cloneSignalState),
+      ),
+      signalWaiters: Array.from(this.signalWaiters.values()).flatMap(
+        (executionWaiters) =>
+          Array.from(executionWaiters.values()).flatMap((signalWaiters) =>
+            Array.from(signalWaiters.values()).map(cloneSignalWaiter),
+          ),
+      ),
+      executionWaiters: Array.from(this.executionWaiters.values()).flatMap(
+        (waiters) => Array.from(waiters.values()).map(cloneExecutionWaiter),
+      ),
+      auditEntries: Array.from(this.auditEntries.values()).flatMap((entries) =>
+        entries.map(cloneAuditEntry),
+      ),
+      timers: Array.from(this.timers.values()).map(cloneTimer),
+      schedules: Array.from(this.schedules.values()).map(cloneSchedule),
+    };
+  }
+
+  /**
+   * Replaces the current in-memory durable truth from a previously exported snapshot.
+   *
+   * Rehydration intentionally starts with a clean lock table so recovery and
+   * polling can establish fresh ownership in the new process.
+   */
+  restoreSnapshot(snapshot: MemoryStoreSnapshot): void {
+    this.executions = new Map(
+      snapshot.executions.map((execution) => [
+        execution.id,
+        cloneExecution(execution),
+      ]),
+    );
+    this.executionIdByIdempotencyKey = new Map(
+      snapshot.executionIdByIdempotencyKey,
+    );
+
+    const stepResults = new Map<string, Map<string, StepResult>>();
+    for (const result of snapshot.stepResults) {
+      const executionResults = stepResults.get(result.executionId) ?? new Map();
+      executionResults.set(result.stepId, cloneStepResult(result));
+      stepResults.set(result.executionId, executionResults);
+    }
+    this.stepResults = stepResults;
+
+    const signalStates = new Map<string, Map<string, DurableSignalState>>();
+    for (const signalState of snapshot.signalStates) {
+      const executionSignals =
+        signalStates.get(signalState.executionId) ?? new Map();
+      executionSignals.set(signalState.signalId, cloneSignalState(signalState));
+      signalStates.set(signalState.executionId, executionSignals);
+    }
+    this.signalStates = signalStates;
+
+    const signalWaiters = new Map<
+      string,
+      Map<string, Map<string, DurableSignalWaiter>>
+    >();
+    for (const waiter of snapshot.signalWaiters) {
+      const executionWaiters =
+        signalWaiters.get(waiter.executionId) ?? new Map();
+      const signalBucket = executionWaiters.get(waiter.signalId) ?? new Map();
+      signalBucket.set(waiter.stepId, cloneSignalWaiter(waiter));
+      executionWaiters.set(waiter.signalId, signalBucket);
+      signalWaiters.set(waiter.executionId, executionWaiters);
+    }
+    this.signalWaiters = signalWaiters;
+
+    const executionWaiters = new Map<
+      string,
+      Map<string, DurableExecutionWaiter>
+    >();
+    for (const waiter of snapshot.executionWaiters) {
+      const targetWaiters =
+        executionWaiters.get(waiter.targetExecutionId) ?? new Map();
+      targetWaiters.set(
+        `${waiter.executionId}:${waiter.stepId}`,
+        cloneExecutionWaiter(waiter),
+      );
+      executionWaiters.set(waiter.targetExecutionId, targetWaiters);
+    }
+    this.executionWaiters = executionWaiters;
+
+    const auditEntries = new Map<string, DurableAuditEntry[]>();
+    for (const entry of snapshot.auditEntries) {
+      const executionEntries = auditEntries.get(entry.executionId) ?? [];
+      executionEntries.push(cloneAuditEntry(entry));
+      auditEntries.set(entry.executionId, executionEntries);
+    }
+    this.auditEntries = auditEntries;
+
+    this.timers = new Map(
+      snapshot.timers.map((timer) => [timer.id, cloneTimer(timer)]),
+    );
+    this.schedules = new Map(
+      snapshot.schedules.map((schedule) => [
+        schedule.id,
+        cloneSchedule(schedule),
+      ]),
+    );
+    this.locks = new Map();
   }
 }

@@ -169,6 +169,38 @@ describe("durable: memoryDurableResource (config-only)", () => {
     });
   });
 
+  it("creates a persistent store when persist.filePath is configured", async () => {
+    const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
+    jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({
+      createRunnerDurableRuntime,
+    }));
+    jest.doMock("../../durable/core/DurableService", () => ({
+      disposeDurableService: jest.fn(async () => {}),
+    }));
+
+    let memoryDurableResource!: typeof import("../../durable/resources/memoryDurableResource").memoryDurableResource;
+    let PersistentMemoryStore!: typeof import("../../durable/store/PersistentMemoryStore").PersistentMemoryStore;
+    jest.isolateModules(() => {
+      ({
+        memoryDurableResource,
+      } = require("../../durable/resources/memoryDurableResource"));
+      ({
+        PersistentMemoryStore,
+      } = require("../../durable/store/PersistentMemoryStore"));
+    });
+
+    await memoryDurableResource.init!.call(
+      { id: "tenantA-durable" },
+      { persist: { filePath: "./tmp/durable.json" } },
+      deps as any,
+      { runtimeConfig: null } as any,
+    );
+
+    const runtimeConfig = createRunnerDurableRuntime.mock.calls[0]?.[0];
+    expect(runtimeConfig?.store).toBeInstanceOf(PersistentMemoryStore);
+    expect(runtimeConfig?.queue).toBeUndefined();
+  });
+
   it("allows queue.enabled=false to disable queue creation explicitly", async () => {
     const { createRunnerDurableRuntime } = mockCreateRunnerDurableRuntime();
     jest.doMock("../../durable/core/createRunnerDurableRuntime", () => ({

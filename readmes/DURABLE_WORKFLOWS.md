@@ -88,6 +88,7 @@ import { resources, tags } from "@bluelibs/runner/node";
 const durable = resources.memoryWorkflow.fork("app-durable"); // forking is just making a copy
 
 const durableRegistration = durable.with({
+  persist: { filePath: "./.runner/durable-memory.json" }, // Optional: persist memory store state to disk for local restart drills
   queue: { consume: true }, // Optional: test queue-mode semantics
   polling: { enabled: true }, // Drive timers/sleeps/timeouts with bounded fan-out
   recovery: { onStartup: true }, // Recover orphaned executions on boot
@@ -102,6 +103,10 @@ const durableRegistration = durable.with({
 | `queue: { consume: true }` | Work dispatched through `MemoryQueue` + `DurableWorker`  |
 
 Use `queue: { consume: true }` when testing production-like topology (signals, child workflows). Omit for simpler tests.
+
+`persist: { filePath }` makes `resources.memoryWorkflow` reload its durable store state from a local file on boot.
+This is designed for single-process local/dev workflows and crash-recovery testing.
+It does not turn the memory backend into a shared multi-node store, and it does not persist in-process `MemoryQueue` / `MemoryEventBus` subscribers.
 
 ### 2. Define a durable workflow task
 
