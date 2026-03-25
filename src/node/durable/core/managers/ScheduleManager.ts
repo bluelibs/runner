@@ -152,9 +152,9 @@ export class ScheduleManager {
 
   async reschedule(
     schedule: Schedule,
-    options?: { lastRunAt?: Date },
+    options?: { lastRunAt?: Date; nextRunAnchorMs?: number },
   ): Promise<void> {
-    const nextRun = this.computeNextRun(schedule);
+    const nextRun = this.computeNextRun(schedule, options?.nextRunAnchorMs);
     await this.saveScheduleWithTimer({
       ...schedule,
       lastRun: options?.lastRunAt ?? schedule.lastRun,
@@ -220,8 +220,13 @@ export class ScheduleManager {
     };
 
     // Fail fast before persisting an invalid cadence update.
+    const updatedIntervalAnchorMs =
+      cadenceChanged && type === ScheduleType.Interval
+        ? (existing.lastRun?.getTime() ?? updatedAt.getTime())
+        : undefined;
+
     if (cadenceChanged) {
-      this.computeNextRun(updatedSchedule);
+      this.computeNextRun(updatedSchedule, updatedIntervalAnchorMs);
     }
 
     if (existing.status !== ScheduleStatus.Active) {
@@ -236,7 +241,9 @@ export class ScheduleManager {
     }
 
     if (cadenceChanged) {
-      await this.reschedule(updatedSchedule);
+      await this.reschedule(updatedSchedule, {
+        nextRunAnchorMs: updatedIntervalAnchorMs,
+      });
       return;
     }
 
@@ -257,7 +264,7 @@ export class ScheduleManager {
     });
   }
 
-  private computeNextRun(schedule: Schedule): Date {
+  private computeNextRun(schedule: Schedule, anchorMs?: number): Date {
     if (schedule.type === ScheduleType.Cron) {
       return CronParser.getNextRun(
         schedule.pattern,
@@ -274,17 +281,19 @@ export class ScheduleManager {
     }
 
     const nowMs = Date.now();
-    const anchorMs =
+    const resolvedAnchorMs =
+      anchorMs ??
       schedule.nextRun?.getTime() ??
       schedule.lastRun?.getTime() ??
       schedule.createdAt.getTime();
-    const firstCandidateMs = anchorMs + intervalMs;
+    const firstCandidateMs = resolvedAnchorMs + intervalMs;
     if (firstCandidateMs > nowMs) {
       return new Date(firstCandidateMs);
     }
 
-    const intervalsBehind = Math.floor((nowMs - anchorMs) / intervalMs) + 1;
-    return new Date(anchorMs + intervalsBehind * intervalMs);
+    const intervalsBehind =
+      Math.floor((nowMs - resolvedAnchorMs) / intervalMs) + 1;
+    return new Date(resolvedAnchorMs + intervalsBehind * intervalMs);
   }
 
   private async saveScheduleWithTimer(schedule: Schedule): Promise<void> {
