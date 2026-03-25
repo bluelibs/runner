@@ -136,6 +136,31 @@ describe("durable: waiter core helpers", () => {
     expect(fallbackWithoutExtraCleanup.saveStepResult).toHaveBeenCalled();
   });
 
+  it("keeps fallback wait cleanup best-effort after the step result is durable", async () => {
+    const store = createStoreMock();
+    const onFallbackCommitted = jest.fn(async () => {
+      throw new Error("cleanup failed");
+    });
+
+    await expect(
+      commitDurableWaitCompletion({
+        store,
+        stepResult: {
+          executionId: "parent",
+          stepId: "step",
+          result: { state: "completed" },
+          completedAt: new Date(),
+        },
+        timerId: "timer-1",
+        onFallbackCommitted,
+      }),
+    ).resolves.toBe(true);
+
+    expect(store.saveStepResult).toHaveBeenCalled();
+    expect(onFallbackCommitted).toHaveBeenCalled();
+    expect(store.deleteTimer).toHaveBeenCalledWith("timer-1");
+  });
+
   it("re-arms, creates, and skips timeout timers as needed", async () => {
     const rearmStore = createStoreMock();
     await expect(

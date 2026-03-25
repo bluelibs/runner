@@ -53,7 +53,7 @@ export async function commitDurableWaitCompletion(params: {
   await params.store.saveStepResult(params.stepResult);
 
   if (params.onFallbackCommitted) {
-    await params.onFallbackCommitted();
+    await runBestEffortCleanup(params.onFallbackCommitted);
   }
 
   await deleteWaitTimerBestEffort(params.store, params.timerId);

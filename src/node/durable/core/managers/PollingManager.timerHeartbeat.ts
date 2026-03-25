@@ -18,7 +18,7 @@ export function startTimerClaimHeartbeat(params: {
     return () => {};
   }
 
-  const intervalMs = Math.max(1_000, Math.floor(params.claimTtlMs / 3));
+  const intervalMs = Math.max(1, Math.floor(params.claimTtlMs / 3));
   let stopped = false;
   let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 

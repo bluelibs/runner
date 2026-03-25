@@ -48,10 +48,11 @@ function startTimerClaimHeartbeat(
   manager: PollingManager,
   timerId: string,
   claimState: { lossError: Error | null } = { lossError: null },
+  claimTtlMs = 3_000,
 ): () => void {
   return (manager as unknown as TestPollingManager).startTimerClaimHeartbeat(
     timerId,
-    3_000,
+    claimTtlMs,
     claimState,
   );
 }
@@ -222,6 +223,29 @@ describe("durable: PollingManager heartbeat (unit)", () => {
         }),
       ]),
     );
+    stopHeartbeat();
+  });
+
+  it("renews sub-second timer claims before their TTL elapses", async () => {
+    const store = new MemoryStore();
+    const renewTimerClaimSpy = jest.spyOn(store, "renewTimerClaim");
+    const manager = createPollingManager(store);
+    const stopHeartbeat = startTimerClaimHeartbeat(
+      manager,
+      "timer-sub-second",
+      { lossError: null },
+      999,
+    );
+
+    await advanceTimers(333);
+
+    expect(renewTimerClaimSpy).toHaveBeenCalledTimes(1);
+    expect(renewTimerClaimSpy).toHaveBeenCalledWith(
+      "timer-sub-second",
+      "worker-1",
+      999,
+    );
+
     stopHeartbeat();
   });
 });
