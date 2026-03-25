@@ -14,6 +14,7 @@ import { buildRpcLaneAuthHeaders } from "../../rpc-lanes/rpcLanes.auth";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { genericError } from "../../../errors";
 import { Serializer } from "../../../serializer";
+import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
 import {
   createClientRpcLaneTopology,
   createMockRpcLaneCommunicator,
@@ -399,7 +400,7 @@ describe("rpcLanes auth", () => {
           kind: "rpc-event",
           targetId: remoteEventId,
           payloadHash: hashRemoteLanePayload(
-            serializer.stringify({ payload: { value: 1 } }),
+            serializer.stringify(buildEventRequestBody({ value: 1 })),
           ),
         },
       }),
@@ -477,7 +478,9 @@ describe("rpcLanes auth", () => {
           kind: "rpc-event",
           targetId: remoteEventId,
           payloadHash: hashRemoteLanePayload(
-            serializer.stringify({ payload: { value: 1 } }),
+            serializer.stringify(
+              buildEventRequestBody({ value: 1 }, { returnPayload: true }),
+            ),
           ),
         },
       }),

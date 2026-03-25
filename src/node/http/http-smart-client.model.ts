@@ -5,6 +5,7 @@ import type { SerializerLike } from "../../serializer";
 import type { ProtocolEnvelope } from "../../remote-lanes/http/protocol";
 import {
   assertOkEnvelope,
+  buildEventRequestBody,
   RemoteLaneTransportError,
 } from "../../remote-lanes/http/protocol";
 import type { IAsyncContext } from "../../types/asyncContext";
@@ -645,7 +646,7 @@ export function createHttpSmartClient(
         const r = await postJson<ProtocolEnvelope<void>>(
           cfg,
           url,
-          { payload },
+          buildEventRequestBody(payload),
           options?.headers,
           options?.signal,
         );
@@ -667,10 +668,7 @@ export function createHttpSmartClient(
         const r = await postJson<ProtocolEnvelope<P>>(
           cfg,
           url,
-          {
-            payload,
-            returnPayload: true,
-          },
+          buildEventRequestBody(payload, { returnPayload: true }),
           options?.headers,
           options?.signal,
         );

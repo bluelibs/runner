@@ -1,5 +1,6 @@
 import {
   assertOkEnvelope,
+  buildEventRequestBody,
   type ProtocolEnvelope,
   RemoteLaneTransportError,
 } from "./remote-lanes/http/protocol";
@@ -218,7 +219,7 @@ export function createExposureFetch(
       const r: ProtocolEnvelope<void> = await postSerialized({
         fetch: fetchImpl,
         url,
-        body: { payload },
+        body: buildEventRequestBody(payload),
         headers: {
           ...buildHeaders(),
           ...(options?.headers ?? {}),
@@ -251,7 +252,7 @@ export function createExposureFetch(
       const r: ProtocolEnvelope<P> = await postSerialized({
         fetch: fetchImpl,
         url,
-        body: { payload, returnPayload: true },
+        body: buildEventRequestBody(payload, { returnPayload: true }),
         headers: {
           ...buildHeaders(),
           ...(options?.headers ?? {}),

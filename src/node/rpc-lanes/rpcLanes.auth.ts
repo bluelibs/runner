@@ -108,7 +108,7 @@ export function authorizeRpcLaneRequest(
   bindingAuth: RemoteLaneBindingAuth | undefined,
   target: Pick<RemoteLaneTokenTarget, "kind" | "targetId">,
   options?: {
-    payloadText?: string;
+    bodyText?: string;
   },
 ): JsonResponse | null {
   if (!bindingAuth || bindingAuth.mode === "none") {
@@ -128,8 +128,8 @@ export function authorizeRpcLaneRequest(
       requiredCapability: "produce",
       expectedTarget: {
         ...target,
-        payloadHash: options?.payloadText
-          ? hashRemoteLanePayload(options.payloadText)
+        payloadHash: options?.bodyText
+          ? hashRemoteLanePayload(options.bodyText)
           : undefined,
       },
     });

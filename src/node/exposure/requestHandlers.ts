@@ -60,12 +60,12 @@ export interface RequestProcessingDeps {
   authorizeTaskBody?: (
     req: IncomingMessage,
     taskId: string,
-    payloadText?: string,
+    bodyText?: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
   authorizeEventBody?: (
     req: IncomingMessage,
     eventId: string,
-    payloadText?: string,
+    bodyText?: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
 }
 

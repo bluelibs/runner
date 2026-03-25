@@ -3,6 +3,7 @@ import {
   symbolRpcLanePolicy,
   symbolRpcLaneRoutedBy,
 } from "../../types/symbols";
+import { buildEventRequestBody } from "../../remote-lanes/http/protocol";
 import { buildAsyncContextHeader } from "../remote-lanes/asyncContextAllowlist";
 import { hashRemoteLanePayload } from "../remote-lanes/laneAuth";
 import { buildRpcLaneAuthHeaders } from "./rpcLanes.auth";
@@ -91,7 +92,9 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
         kind: "rpc-event",
         targetId: eventId,
         payloadHash: hashRemoteLanePayload(
-          dependencies.serializer.stringify({ payload: emission.data }),
+          dependencies.serializer.stringify(
+            buildEventRequestBody(emission.data, { returnPayload: true }),
+          ),
         ),
       });
       const result = await binding.communicator.eventWithResult(
@@ -112,7 +115,9 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
         kind: "rpc-event",
         targetId: eventId,
         payloadHash: hashRemoteLanePayload(
-          dependencies.serializer.stringify({ payload: emission.data }),
+          dependencies.serializer.stringify(
+            buildEventRequestBody(emission.data),
+          ),
         ),
       });
       if (headers) {

@@ -68,7 +68,7 @@ export async function startRpcLanesExposure(
             targetId: canonicalEventId,
           });
         },
-        authorizeTaskBody: async (req, taskId, payloadText) => {
+        authorizeTaskBody: async (req, taskId, bodyText) => {
           const lane = resolved.taskLaneByTaskId.get(taskId);
           if (!lane || !resolved.serveLaneIds.has(lane.id)) {
             return null;
@@ -82,10 +82,10 @@ export async function startRpcLanesExposure(
               kind: "rpc-task",
               targetId: taskId,
             },
-            { payloadText },
+            { bodyText },
           );
         },
-        authorizeEventBody: async (req, eventId, payloadText) => {
+        authorizeEventBody: async (req, eventId, bodyText) => {
           const lane = resolved.eventLaneByEventId.get(eventId);
           if (!lane || !resolved.serveLaneIds.has(lane.id)) {
             return null;
@@ -99,7 +99,7 @@ export async function startRpcLanesExposure(
               kind: "rpc-event",
               targetId: eventId,
             },
-            { payloadText },
+            { bodyText },
           );
         },
       },

@@ -21,6 +21,7 @@ import { getRequestId } from "../requestIdentity";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { resolveRequestedIdFromStore } from "../../../models/StoreLookup";
+import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
 
 interface EventHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -44,7 +45,7 @@ interface EventHandlerDeps {
   authorizeEventBody?: (
     req: IncomingMessage,
     eventId: string,
-    payloadText?: string,
+    bodyText?: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
   sourceResourceId?: string;
 }
@@ -146,17 +147,19 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
         respondJson(res, body.response, serializer);
         return;
       }
+      const returnPayload = Boolean(body.value?.returnPayload);
       const bodyAuthError = await authorizeEventBody(
         req,
         policyEventId,
-        serializer.stringify({ payload: body.value?.payload }),
+        serializer.stringify(
+          buildEventRequestBody(body.value?.payload, { returnPayload }),
+        ),
       );
       if (bodyAuthError) {
         applyCorsActual(req, res, cors);
         respondJson(res, bodyAuthError, serializer);
         return;
       }
-      const returnPayload = Boolean(body.value?.returnPayload);
       if (returnPayload && storeEvent.event.parallel) {
         applyCorsActual(req, res, cors);
         respondJson(

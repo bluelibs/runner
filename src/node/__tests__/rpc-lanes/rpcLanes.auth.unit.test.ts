@@ -2,6 +2,7 @@ import {
   hashRemoteLanePayload,
   issueRemoteLaneToken,
 } from "../../remote-lanes/laneAuth";
+import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
 import {
   authorizeRpcLaneRequest,
   buildRpcLaneAuthHeaders,
@@ -93,7 +94,7 @@ describe("rpcLanes auth helpers", () => {
           kind: "rpc-task",
           targetId: "task.id",
         },
-        { payloadText },
+        { bodyText: payloadText },
       ),
     ).toBeNull();
 
@@ -107,7 +108,7 @@ describe("rpcLanes auth helpers", () => {
           targetId: "task.id",
         },
         {
-          payloadText: JSON.stringify({ input: { value: 2 } }),
+          bodyText: JSON.stringify({ input: { value: 2 } }),
         },
       ),
     ).toMatchObject({ status: 401 });
@@ -124,7 +125,7 @@ describe("rpcLanes auth helpers", () => {
           kind: "rpc-task",
           targetId: "task.id",
         },
-        { payloadText },
+        { bodyText: payloadText },
       ),
     ).toMatchObject({ status: 401 });
 
@@ -138,11 +139,55 @@ describe("rpcLanes auth helpers", () => {
           kind: "rpc-task",
           targetId: "task.id",
         },
-        { payloadText },
+        { bodyText: payloadText },
       ),
     ).toMatchObject({
       status: 401,
     });
+
+    const eventBodyText = JSON.stringify(buildEventRequestBody({ value: 1 }));
+    const eventBodyWithResultText = JSON.stringify(
+      buildEventRequestBody({ value: 1 }, { returnPayload: true }),
+    );
+    const eventToken = issueRemoteLaneToken({
+      laneId: lane.id,
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "rpc-event",
+        targetId: "event.id",
+        payloadHash: hashRemoteLanePayload(eventBodyText),
+      },
+    })!;
+    const reqWithEventToken = {
+      headers: { authorization: `Bearer ${eventToken}` },
+    } as any;
+
+    expect(
+      authorizeRpcLaneRequest(
+        reqWithEventToken,
+        lane,
+        bindingAuth,
+        {
+          kind: "rpc-event",
+          targetId: "event.id",
+        },
+        { bodyText: eventBodyText },
+      ),
+    ).toBeNull();
+
+    expect(
+      authorizeRpcLaneRequest(
+        reqWithEventToken,
+        lane,
+        bindingAuth,
+        {
+          kind: "rpc-event",
+          targetId: "event.id",
+        },
+        { bodyText: eventBodyWithResultText },
+      ),
+    ).toMatchObject({ status: 401 });
 
     expect(
       authorizeRpcLaneRequest(

@@ -52,7 +52,7 @@ interface TaskHandlerDeps {
   authorizeTaskBody?: (
     req: IncomingMessage,
     taskId: string,
-    payloadText?: string,
+    bodyText?: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
   sourceResourceId?: string;
 }
