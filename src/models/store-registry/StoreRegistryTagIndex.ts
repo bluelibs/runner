@@ -92,7 +92,7 @@ export class StoreRegistryTagIndex {
   // Tag accessor — builds a lazy, cached, visibility-filtered accessor
   // ---------------------------------------------------------------------------
 
-  getTagAccessor<TTag extends ITag<any, any, any>>(
+  getTagAccessor<TTag extends ITag<any, any, any, any>>(
     tag: TTag,
     options?: { consumerId?: string; includeSelf?: boolean },
   ): TagDependencyAccessor<TTag> {

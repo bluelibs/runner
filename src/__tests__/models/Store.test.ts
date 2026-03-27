@@ -219,6 +219,18 @@ describe("Store", () => {
     );
   });
 
+  it("should switch to aborting once and keep it idempotent after shutdown progressed", () => {
+    store.beginAborting();
+    expect(store.getLifecycleAdmissionController().getPhase()).toBe("aborting");
+
+    store.beginAborting();
+    expect(store.getLifecycleAdmissionController().getPhase()).toBe("aborting");
+
+    store.beginDrained();
+    store.beginAborting();
+    expect(store.getLifecycleAdmissionController().getPhase()).toBe("drained");
+  });
+
   it("should ignore duplicate calls to recordResourceInitialized", () => {
     store.recordResourceInitialized("dup");
     store.recordResourceInitialized("dup");

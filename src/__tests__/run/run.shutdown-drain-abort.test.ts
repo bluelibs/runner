@@ -67,8 +67,8 @@ describe("run shutdown drain abort", () => {
     expect(abortReasons).toEqual(["Runtime shutdown drain budget expired"]);
   });
 
-  it("does not abort in-flight task signals when abort window is disabled", async () => {
-    let aborted = false;
+  it("aborts in-flight task signals immediately when abort window is zero", async () => {
+    const abortReasons: string[] = [];
 
     const cooperativeTask = defineTask({
       id: "tests-shutdown-drain-abort-disabled-task",
@@ -76,11 +76,22 @@ describe("run shutdown drain abort", () => {
       async run(_input, _deps, context) {
         const signal = context?.signal;
 
-        return await new Promise<never>(() => {
-          signal?.addEventListener(
+        return await new Promise<never>((_resolve, reject) => {
+          if (!signal) {
+            reject(new Error("Expected task signal"));
+            return;
+          }
+
+          signal.addEventListener(
             "abort",
             () => {
-              aborted = true;
+              abortReasons.push(String(signal.reason));
+              reject(
+                createCancellationErrorFromSignal(
+                  signal,
+                  "Shutdown abort without extra abort wait",
+                ),
+              );
             },
             { once: true },
           );
@@ -105,13 +116,15 @@ describe("run shutdown drain abort", () => {
       },
     });
 
-    void runtime.runTask(cooperativeTask).catch(() => undefined);
+    const taskPromise = runtime.runTask(cooperativeTask);
     await tick();
 
     await runtime.dispose();
-    await tick(10);
 
-    expect(aborted).toBe(false);
+    await expect(taskPromise).rejects.toThrow(
+      /Runtime shutdown drain budget expired/,
+    );
+    expect(abortReasons).toEqual(["Runtime shutdown drain budget expired"]);
   });
 
   it("aborts in-flight task signals when drain waiting is disabled but abort window is enabled", async () => {

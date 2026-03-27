@@ -327,6 +327,7 @@ export class Store {
     return (
       phase === RuntimeLifecyclePhase.CoolingDown ||
       phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Aborting ||
       phase === RuntimeLifecyclePhase.Drained ||
       phase === RuntimeLifecyclePhase.Disposed
     );
@@ -340,6 +341,7 @@ export class Store {
     const phase = this.lifecycleAdmissionController.getPhase();
     if (
       phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Aborting ||
       phase === RuntimeLifecyclePhase.Drained ||
       phase === RuntimeLifecyclePhase.Disposed
     ) {
@@ -353,12 +355,25 @@ export class Store {
     if (
       phase === RuntimeLifecyclePhase.CoolingDown ||
       phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Aborting ||
       phase === RuntimeLifecyclePhase.Drained ||
       phase === RuntimeLifecyclePhase.Disposed
     ) {
       return;
     }
     this.lifecycleAdmissionController.beginCoolingDown();
+  }
+
+  public beginAborting() {
+    const phase = this.lifecycleAdmissionController.getPhase();
+    if (
+      phase === RuntimeLifecyclePhase.Aborting ||
+      phase === RuntimeLifecyclePhase.Drained ||
+      phase === RuntimeLifecyclePhase.Disposed
+    ) {
+      return;
+    }
+    this.lifecycleAdmissionController.beginAborting();
   }
 
   public beginDrained() {
@@ -1005,7 +1020,7 @@ export class Store {
   /**
    * Provides a way to access tagged elements from the store.
    */
-  public getTagAccessor<TTag extends ITag<any, any, any>>(
+  public getTagAccessor<TTag extends ITag<any, any, any, any>>(
     tag: TTag,
     options?: { consumerId?: string; includeSelf?: boolean },
   ): TagDependencyAccessor<TTag> {

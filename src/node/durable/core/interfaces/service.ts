@@ -274,15 +274,24 @@ export interface RecoverReportType {
 export interface IDurableService {
   /**
    * Stops worker, polling, recovery, and other background durable ownership for
-   * this runtime instance while still allowing task-level durable interactions
-   * needed by already-admitted Runner work to settle during drain.
+   * this runtime instance and closes admission for new direct durable starts
+   * and signals while still keeping already-admitted work recoverable.
    */
   cooldown(): Promise<void>;
 
   /**
+   * Cooperatively interrupts only the live in-process durable attempts owned by
+   * this runtime instance.
+   *
+   * Runner uses this during the shutdown abort window so active durable steps
+   * can stop promptly without being marked failed or cancelled.
+   */
+  interruptActiveAttempts(reason?: string): void;
+
+  /**
    * Starts a workflow execution.
-   * Task-level admission stays owned by Runner; durable only rejects starts once
-   * this durable runtime has been fully disposed.
+   * Task-level admission stays owned by Runner, but durable rejects direct
+   * starts once this runtime has begun cooldown.
    */
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
@@ -310,8 +319,8 @@ export interface IDurableService {
 
   /**
    * Starts a workflow and waits for completion.
-   * Task-level admission stays owned by Runner; durable only rejects starts once
-   * this durable runtime has been fully disposed.
+   * Task-level admission stays owned by Runner, but durable rejects direct
+   * starts once this runtime has begun cooldown.
    * Returns the started execution id together with the workflow result payload.
    */
   startAndWait<TInput, TResult>(
@@ -376,8 +385,6 @@ export interface IDurableService {
 
   /**
    * Deliver a signal payload to a workflow execution.
-   * Remains available during shutdown drain so draining workflows blocked in
-   * `waitForSignal()` can still be resumed before the durable service is disposed.
    * Missing or terminal executions ignore new signals.
    * Live executions retain signal history at the execution level and queue
    * unawaited signals per `signalId` for `waitForSignal()` to consume in FIFO

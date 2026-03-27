@@ -4,6 +4,7 @@ import {
   disposeDurableService,
   initDurableService,
 } from "../../../../durable/core/DurableService";
+import { durableShutdownInterruptionReason } from "../../../../durable/core/shutdownInterruption";
 import { DurableWorker } from "../../../../durable/core/DurableWorker";
 import type { IDurableQueue } from "../../../../durable/core/interfaces/queue";
 import type { Schedule, Timer } from "../../../../durable/core/types";
@@ -173,7 +174,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     expect(pollingCooldown).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps task-level durable interactions available during cooldown", async () => {
+  it("rejects task-level durable interactions once cooldown begins", async () => {
     const store = new MemoryStore();
     const task = okTask("t-cooldown-guard");
     const service = await initDurableService({
@@ -184,17 +185,14 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
 
     await service.cooldown();
 
-    await expect(service.start(task)).resolves.toEqual(expect.any(String));
-    await expect(service.startAndWait(task)).resolves.toEqual({
-      durable: { executionId: expect.any(String) },
-      data: "ok",
-    });
+    expect(() => service.start(task)).toThrow("shutting down");
+    await expect(service.startAndWait(task)).rejects.toThrow("shutting down");
     await expect(
       service.signal("e1", { id: "sig" } as any, undefined),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("shutting down");
   });
 
-  it("keeps task-level durable starts available during disposing", async () => {
+  it("rejects task-level durable starts during disposing", async () => {
     const store = new MemoryStore();
     const task = okTask("t-disposing-task-start");
     const service = await initDurableService({
@@ -209,11 +207,8 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
       }
     ).lifecycleState = "disposing";
 
-    await expect(service.start(task)).resolves.toEqual(expect.any(String));
-    await expect(service.startAndWait(task)).resolves.toEqual({
-      durable: { executionId: expect.any(String) },
-      data: "ok",
-    });
+    expect(() => service.start(task)).toThrow("shutting down");
+    await expect(service.startAndWait(task)).rejects.toThrow("shutting down");
   });
 
   it("rejects background durable admissions after cooldown begins", async () => {
@@ -237,7 +232,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     await expect(service.recover()).rejects.toThrow("shutting down");
   });
 
-  it("rejects task-level durable interactions after disposal completes", async () => {
+  it("rejects task-level durable interactions once shutdown has started", async () => {
     const store = new MemoryStore();
     const task = okTask("t-disposing-guard");
     const service = await initDurableService({
@@ -253,14 +248,11 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
       }
     ).lifecycleState = "disposing";
 
-    await expect(service.start(task)).resolves.toEqual(expect.any(String));
-    await expect(service.startAndWait(task)).resolves.toEqual({
-      durable: { executionId: expect.any(String) },
-      data: "ok",
-    });
+    expect(() => service.start(task)).toThrow("shutting down");
+    await expect(service.startAndWait(task)).rejects.toThrow("shutting down");
     await expect(
       service.signal("e1", { id: "sig" } as any, undefined),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("shutting down");
 
     (
       service as unknown as {
@@ -272,7 +264,79 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     await expect(service.startAndWait(task)).rejects.toThrow("shutting down");
     await expect(
       service.signal("e1", { id: "sig" } as any, undefined),
-    ).rejects.toThrow("disposing resources");
+    ).rejects.toThrow("shutting down");
+  });
+
+  it("interrupts active attempts cooperatively during the shutdown abort window", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-shutdown-interrupt");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    const controller = new AbortController();
+    const abort = jest.spyOn(controller, "abort");
+    (
+      service._executionManager as unknown as {
+        activeAttemptControllers: Map<string, AbortController>;
+      }
+    ).activeAttemptControllers.set("execution-1", controller);
+
+    service.interruptActiveAttempts("shutdown");
+    service.interruptActiveAttempts("shutdown");
+
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(abort).toHaveBeenCalledWith("shutdown");
+  });
+
+  it("uses the default shutdown reason when interrupting active attempts", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-shutdown-interrupt-default-reason");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    const controller = new AbortController();
+    const abort = jest.spyOn(controller, "abort");
+    (
+      service._executionManager as unknown as {
+        activeAttemptControllers: Map<string, AbortController>;
+      }
+    ).activeAttemptControllers.set("execution-1", controller);
+
+    service.interruptActiveAttempts();
+
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(abort).toHaveBeenCalledWith(durableShutdownInterruptionReason);
+  });
+
+  it("skips already-aborted attempts during shutdown interruption fan-out", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-shutdown-interrupt-skips-aborted");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    const controller = new AbortController();
+    const abort = jest.spyOn(controller, "abort");
+    controller.abort("already-aborted");
+
+    (
+      service._executionManager as unknown as {
+        activeAttemptControllers: Map<string, AbortController>;
+      }
+    ).activeAttemptControllers.set("execution-1", controller);
+
+    service.interruptActiveAttempts("shutdown");
+
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(abort).toHaveBeenCalledWith("already-aborted");
   });
 
   it("stops registered worker consumers before finishing service shutdown", async () => {

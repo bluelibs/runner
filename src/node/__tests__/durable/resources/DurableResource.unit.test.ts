@@ -36,6 +36,7 @@ function createMockService(
 
   return {
     cooldown: mockFn(undefined),
+    interruptActiveAttempts: jest.fn(),
     start: mockFn("e1"),
     wait: mockFn("ok"),
     startAndWait: mockFn({ durable: { executionId: "e1" }, data: "ok" }),

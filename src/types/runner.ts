@@ -64,8 +64,9 @@ export type RuntimeDisposeOptions = {
    * Skips any remaining graceful shutdown orchestration that has not started
    * yet and jumps toward direct resource disposal. This can bypass
    * `dispose.cooldownWindowMs`, `events.disposing`, graceful drain wait,
-   * `dispose.abortWindowMs`, and `events.drained`, but it does not preempt
-   * work already in flight such as an active `cooldown()` call.
+   * `events.aborting`, `dispose.abortWindowMs`, and `events.drained`, but it
+   * does not preempt work already in flight such as an active `cooldown()`
+   * call.
    */
   force?: boolean;
 };
@@ -144,7 +145,8 @@ export type DisposeOptions = {
   /**
    * Total disposal budget (milliseconds) for the shutdown lifecycle.
    * This budget covers `cooldown()`, the post-cooldown window, `disposing`
-   * hooks, drain wait, `drained` hooks, and resource disposal.
+   * hooks, drain wait, `aborting` hooks, the abort wait window, `drained`
+   * hooks, and resource disposal.
    * Once exhausted, Runner stops waiting and returns.
    */
   totalBudgetMs?: number;
@@ -153,8 +155,8 @@ export type DisposeOptions = {
    * (tasks + event listeners) after entering `disposing`.
    * Effective wait is capped by remaining `dispose.totalBudgetMs`.
    * Set to `0` to skip drain waiting. Runner still performs an immediate drain
-   * check, so when work remains in flight and `abortWindowMs > 0`, shutdown can
-   * enter the cooperative-abort phase right away.
+   * check, so when work remains in flight, shutdown can enter the
+   * cooperative-abort phase right away.
    */
   drainingBudgetMs?: number;
   /**
@@ -162,8 +164,8 @@ export type DisposeOptions = {
    * Runner aborts its tracked task-local signals, then waits up to this window
    * for in-flight business work to settle. Effective wait is capped by
    * remaining `dispose.totalBudgetMs`. When `drainingBudgetMs` is `0`, this can
-   * still run immediately after the initial drain check. Set to `0` to skip
-   * this phase.
+   * still run immediately after the initial drain check. Set to `0` to abort
+   * immediately without any extra post-abort wait.
    */
   abortWindowMs?: number;
   /**

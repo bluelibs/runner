@@ -532,6 +532,7 @@ export class RunResult<V> implements IRuntime<V> {
     if (
       phase === RuntimeLifecyclePhase.CoolingDown ||
       phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Aborting ||
       phase === RuntimeLifecyclePhase.Drained ||
       phase === RuntimeLifecyclePhase.Disposed
     ) {
@@ -692,6 +693,7 @@ export class RunResult<V> implements IRuntime<V> {
       const phase = this.store.getLifecycleAdmissionController().getPhase();
       if (
         phase === RuntimeLifecyclePhase.Disposing ||
+        phase === RuntimeLifecyclePhase.Aborting ||
         phase === RuntimeLifecyclePhase.Drained
       ) {
         // A second force request during an already-running shutdown should wake

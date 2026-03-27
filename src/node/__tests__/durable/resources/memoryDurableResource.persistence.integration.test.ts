@@ -5,7 +5,15 @@ import { r, resources, run, tags } from "../../../node";
 import { ExecutionStatus } from "../../../durable/core/types";
 import { waitUntil } from "../../../durable/test-utils";
 
-function buildPersistedMemoryApp(filePath: string) {
+type PersistedWorkflowControl = {
+  beforeRuns: number;
+  afterRuns: number;
+};
+
+function buildPersistedMemoryApp(
+  filePath: string,
+  control?: PersistedWorkflowControl,
+) {
   const durable = resources.memoryWorkflow.fork(
     "durable-tests-memory-persist-resource",
   );
@@ -20,9 +28,27 @@ function buildPersistedMemoryApp(filePath: string) {
     ])
     .run(async (_input: undefined, { durable }) => {
       const ctx = durable.use();
-      const before = await ctx.step("before", async () => "before");
+      const before = await ctx.step("before", async () => {
+        control && (control.beforeRuns += 1);
+        return "before";
+      });
       await ctx.sleep(100, { stepId: "nap" });
-      const after = await ctx.step("after", async () => "after");
+      const after = await ctx.step("after", async ({ signal }) => {
+        control && (control.afterRuns += 1);
+
+        if (control && control.afterRuns === 1) {
+          await new Promise<void>((resolve) => {
+            if (signal.aborted) {
+              resolve();
+              return;
+            }
+            signal.addEventListener("abort", () => resolve(), { once: true });
+          });
+          throw new Error("Interrupted by durable shutdown");
+        }
+
+        return "after";
+      });
       return { before, after };
     })
     .build();
@@ -96,6 +122,71 @@ describe("durable: memoryDurableResource persistence (integration)", () => {
         before: "before",
         after: "after",
       });
+    } finally {
+      await secondRuntime.dispose();
+    }
+  });
+
+  it("resumes an interrupted in-flight step after restart when shutdown enters the abort window", async () => {
+    const control: PersistedWorkflowControl = {
+      beforeRuns: 0,
+      afterRuns: 0,
+    };
+    const firstRuntimeShape = buildPersistedMemoryApp(filePath, control);
+    const firstRuntime = await run(firstRuntimeShape.app, {
+      logs: { printThreshold: null },
+      dispose: {
+        totalBudgetMs: 2_000,
+        drainingBudgetMs: 0,
+        abortWindowMs: 100,
+        cooldownWindowMs: 0,
+      },
+    });
+
+    const firstDurable = firstRuntime.getResourceValue(
+      firstRuntimeShape.durable,
+    );
+    const executionId = await firstDurable.start(firstRuntimeShape.task);
+
+    await waitUntil(
+      async () => {
+        const detail =
+          await firstDurable.operator.getExecutionDetail(executionId);
+        return (
+          detail.execution?.status === ExecutionStatus.Running &&
+          detail.execution.current?.kind === "step" &&
+          detail.execution.current.stepId === "after"
+        );
+      },
+      { timeoutMs: 2_000, intervalMs: 5 },
+    );
+
+    await firstRuntime.dispose();
+
+    expect(control.beforeRuns).toBe(1);
+    expect(control.afterRuns).toBe(1);
+
+    const secondRuntimeShape = buildPersistedMemoryApp(filePath, control);
+    const secondRuntime = await run(secondRuntimeShape.app, {
+      logs: { printThreshold: null },
+    });
+    const secondDurable = secondRuntime.getResourceValue(
+      secondRuntimeShape.durable,
+    );
+
+    try {
+      await expect(
+        secondDurable.wait(executionId, {
+          timeout: 5_000,
+          waitPollIntervalMs: 5,
+        }),
+      ).resolves.toEqual({
+        before: "before",
+        after: "after",
+      });
+
+      expect(control.beforeRuns).toBe(1);
+      expect(control.afterRuns).toBe(2);
     } finally {
       await secondRuntime.dispose();
     }

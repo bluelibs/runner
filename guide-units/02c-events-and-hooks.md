@@ -337,11 +337,20 @@ const auditSome = r
 
 ### System Events
 
-Runner exposes a minimal system event surface:
+Runner exposes a minimal system event surface. In chronological order this is
+`events.ready`, then during shutdown `events.disposing`, `events.aborting`, and
+finally `events.drained`:
 
 - `events.ready`
 - `events.disposing`
+- `events.aborting`
 - `events.drained`
+
+Important: `events.aborting` is conditional. It is emitted only when graceful
+drain did not finish and Runner escalates into cooperative abort. Resource
+authors can use it for escalation behavior, but must not rely on it for
+required shutdown correctness because a clean drain or force disposal can skip
+it.
 
 ```typescript
 const systemReadyHook = r

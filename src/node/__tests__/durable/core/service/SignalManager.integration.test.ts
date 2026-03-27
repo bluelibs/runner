@@ -131,7 +131,7 @@ describe("durable: signals integration", () => {
     await runtime.dispose();
   });
 
-  it("allows signaling sleeping executions while the service is cooling down", async () => {
+  it("rejects signaling sleeping executions once the service enters cooldown", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
@@ -176,11 +176,9 @@ describe("durable: signals integration", () => {
     );
 
     await service.service.cooldown();
-    await service.signal(executionId, Paid, { paidAt: Date.now() });
-
     await expect(
-      service.wait(executionId, { timeout: 5_000, waitPollIntervalMs: 5 }),
-    ).resolves.toEqual(expect.objectContaining({ ok: true }));
+      service.signal(executionId, Paid, { paidAt: Date.now() }),
+    ).rejects.toThrow("shutting down");
 
     await runtime.dispose();
   });

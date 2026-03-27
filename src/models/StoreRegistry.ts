@@ -539,7 +539,7 @@ export class StoreRegistry {
     return this.cloneHookTargetResolutions(cachedTargets);
   }
 
-  getTagAccessor<TTag extends ITag<any, any, any>>(
+  getTagAccessor<TTag extends ITag<any, any, any, any>>(
     tag: TTag,
     options?: { consumerId?: string; includeSelf?: boolean },
   ): TagDependencyAccessor<TTag> {

@@ -171,7 +171,7 @@ Lifecycle order:
   - optionally keep broader admissions open for `dispose.cooldownWindowMs`
   - enter `disposing` -> emit `events.disposing`
   - drain in-flight work within remaining shutdown budget
-  - optionally abort Runner-owned active task signals and wait `dispose.abortWindowMs`
+  - if drain is still incomplete, enter `aborting` -> emit `events.aborting`, abort Runner-owned active task signals, then optionally wait `dispose.abortWindowMs`
   - emit `events.drained`
   - run `dispose()` in reverse dependency order
 
@@ -618,6 +618,7 @@ Key rules:
 - Contract tags can shape task or resource typing without changing runtime behavior.
 - Built-in tags affect framework behavior: `tags.excludeFromGlobalHooks`, `tags.debug`, `tags.failWhenUnhealthy.with([db, cache])` (blocks task execution on `unhealthy` only; `degraded` still runs, bootstrap-time calls are not gated, sleeping lazy resources are skipped).
 - Tags are often the cleanest way to implement route discovery, cron scheduling, cache warmers, or internal policies without manual registries.
+- Prefer depending on the tag itself when you want discovery. Avoid injecting `resources.store` just to call `store.getTagAccessor(tag)` unless you also need other store-only APIs.
 
 Use a normal tag dependency for normal dependency graph resolution. Use `tag.startup()` when the accessor must exist earlier, during bootstrap tree building.
 

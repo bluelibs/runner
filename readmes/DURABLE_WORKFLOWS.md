@@ -410,6 +410,12 @@ await durable.signal(executionId, Paid, { paidAt: Date.now() });
 await durable.cancelExecution(executionId, "User requested");
 ```
 
+Once the durable runtime enters `cooldown()`, new `start(...)`,
+`startAndWait(...)`, and `signal(...)` calls are rejected. Existing executions
+remain durable: sleeping workflows stay persisted as-is, and Runner shutdown can
+cooperatively interrupt an in-flight step during the runtime abort window so the
+execution resumes on the next runtime instead of being marked failed.
+
 If the execution is currently running inside a step, cancellation becomes a live request first:
 
 - `cancelRequestedAt` is stored immediately

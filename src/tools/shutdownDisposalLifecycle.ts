@@ -10,9 +10,12 @@ import {
 } from "./shutdownDrainWarning";
 import { ForceDisposalController } from "./ForceDisposalController";
 
+const shutdownAbortReason = "Runtime shutdown drain budget expired";
+
 type LifecycleStore = {
   beginCoolingDown(): void;
   beginDisposing(): void;
+  beginAborting(): void;
   cooldown(options?: { shouldStop?: () => boolean }): Promise<void>;
   beginDrained(): void;
   waitForDrain(timeoutMs: number): Promise<boolean>;
@@ -117,18 +120,24 @@ export async function runShutdownDisposalLifecycle(
   let effectiveAbortWindowMs = 0;
   let abortWaitResult: ShutdownDrainWaitResult = { completed: false };
 
-  if (
-    drainWaitResult.completed &&
-    drainWaitResult.drained === false &&
-    input.dispose.abortWindowMs > 0
-  ) {
+  if (drainWaitResult.completed && drainWaitResult.drained === false) {
+    input.store.beginAborting();
+    await emitLifecycleEvent(
+      input.store,
+      input.eventManager,
+      globalEvents.aborting,
+      input.runtimeLifecycleSource,
+    );
+    if (input.forceDisposal.isRequested) {
+      await disposeImmediately(input);
+      return;
+    }
+
+    input.store.abortInFlightTaskSignals(shutdownAbortReason);
     effectiveAbortWindowMs = disposalBudget.capByRemainingBudget(
       input.dispose.abortWindowMs,
     );
     if (effectiveAbortWindowMs > 0) {
-      input.store.abortInFlightTaskSignals(
-        "Runtime shutdown drain budget expired",
-      );
       abortWaitResult = await waitForDrainWithinBudget(
         input.store,
         effectiveAbortWindowMs,
