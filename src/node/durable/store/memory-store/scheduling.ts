@@ -1,7 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { ScheduleStatus, type Schedule, type Timer } from "../../core/types";
 import { cloneSchedule, cloneTimer } from "./shared";
+import type { ScheduleUpdate } from "../../core/interfaces/store";
+import { durableExecutionInvariantError } from "../../../../errors";
 import type { MemoryStoreRuntime } from "./runtime";
+
+function assertStableScheduleIdentity(id: string, updates: object): void {
+  const updatedId = Reflect.get(updates, "id");
+  if (updatedId === undefined || updatedId === id) {
+    return;
+  }
+
+  return durableExecutionInvariantError.throw({
+    message:
+      `Cannot change durable schedule id from '${id}' to '${String(updatedId)}' via updateSchedule(). ` +
+      "Create a new schedule instead.",
+  });
+}
 
 export async function createSchedule(
   runtime: MemoryStoreRuntime,
@@ -22,14 +37,15 @@ export async function getSchedule(
 export async function updateSchedule(
   runtime: MemoryStoreRuntime,
   id: string,
-  updates: Partial<Schedule>,
+  updates: ScheduleUpdate,
 ): Promise<void> {
   const schedule = runtime.schedules.get(id);
   if (!schedule) {
     return;
   }
 
-  runtime.schedules.set(id, cloneSchedule({ ...schedule, ...updates }));
+  assertStableScheduleIdentity(id, updates);
+  runtime.schedules.set(id, cloneSchedule({ ...schedule, ...updates, id }));
   await runtime.persistDurableMutation();
 }
 

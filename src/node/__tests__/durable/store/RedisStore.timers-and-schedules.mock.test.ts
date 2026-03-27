@@ -203,6 +203,33 @@ describe("durable: RedisStore timers and schedules (mock)", () => {
     await store.deleteSchedule("s1");
   });
 
+  it("fails fast when schedule updates attempt to change storage identity", async () => {
+    const { redisMock, store } = harness;
+    const schedule: Schedule = {
+      id: "s1",
+      workflowKey: "t",
+      type: "interval",
+      pattern: "1000",
+      input: undefined,
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await store.createSchedule(schedule);
+    redisMock.hset.mockClear();
+    redisMock.hget.mockResolvedValue(serializer.stringify(schedule));
+
+    const invalidUpdate = {
+      id: "s2",
+    } as unknown as Parameters<typeof store.updateSchedule>[1];
+
+    await expect(store.updateSchedule("s1", invalidUpdate)).rejects.toThrow(
+      "Cannot change durable schedule id from 's1' to 's2' via updateSchedule()",
+    );
+    expect(redisMock.hset).not.toHaveBeenCalled();
+  });
+
   it("saves recurring schedules and timers atomically", async () => {
     const { redisMock, store } = harness;
     const schedule: Schedule = {

@@ -345,6 +345,34 @@ describe("durable: MemoryStore runtime surfaces", () => {
     await store.deleteSchedule("s2");
   });
 
+  it("fails fast when schedule updates attempt to change storage identity", async () => {
+    const store = new MemoryStore();
+    const now = new Date();
+
+    await store.createSchedule({
+      id: "s1",
+      workflowKey: "t1",
+      type: "interval",
+      pattern: "1000",
+      input: undefined,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const invalidUpdate = {
+      id: "s2",
+    } as unknown as Parameters<MemoryStore["updateSchedule"]>[1];
+
+    await expect(store.updateSchedule("s1", invalidUpdate)).rejects.toThrow(
+      "Cannot change durable schedule id from 's1' to 's2' via updateSchedule()",
+    );
+    await expect(store.getSchedule("s1")).resolves.toEqual(
+      expect.objectContaining({ id: "s1" }),
+    );
+    await expect(store.getSchedule("s2")).resolves.toBeNull();
+  });
+
   it("acquires and releases locks", async () => {
     const store = new MemoryStore();
     const lockId = await store.acquireLock("res", 1000);
