@@ -188,7 +188,7 @@
     "lru-cache": "^11.1.0"
   },
   "optionalDependencies": {
-    "amqplib": "^0.10.9",
+    "amqplib": "^1.0.2",
     "busboy": "^1.6.0",
     "ioredis": "^5.7.0"
   },
