@@ -20,14 +20,18 @@ export const durableShutdownAbortingHook = defineHook({
       try {
         resource.value.service.interruptActiveAttempts();
       } catch (error) {
-        await logger.warn(
-          "Durable shutdown interruption failed for one runtime; continuing abort fan-out.",
-          {
-            source: "durable.shutdown",
-            data: { resourceId: resource.definition.id },
-            error,
-          },
-        );
+        try {
+          await logger.warn(
+            "Durable shutdown interruption failed for one runtime; continuing abort fan-out.",
+            {
+              source: "durable.shutdown",
+              data: { resourceId: resource.definition.id },
+              error,
+            },
+          );
+        } catch {
+          // Logging must never stop the remaining runtimes from being interrupted.
+        }
       }
     }
   },

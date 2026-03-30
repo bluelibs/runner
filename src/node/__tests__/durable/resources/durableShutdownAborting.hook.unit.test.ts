@@ -131,4 +131,45 @@ describe("durable: durableShutdownAbortingHook", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(healthyService.interruptActiveAttempts).toHaveBeenCalledTimes(1);
   });
+
+  it("continues fan-out when warning logging fails", async () => {
+    const logger = createLogger();
+    const warn = jest
+      .spyOn(logger, "warn")
+      .mockRejectedValueOnce(new Error("warn-failed"));
+    const failingService = createMockDurableService();
+    const healthyService = createMockDurableService();
+
+    (
+      failingService.interruptActiveAttempts as unknown as jest.Mock
+    ).mockImplementation(() => {
+      throw new Error("interrupt-failed");
+    });
+
+    const durableRuntimes = createTaggedDurableResources([
+      {
+        definition: { id: "tests.failing", tags: [durableRuntimeTag] } as any,
+        config: undefined,
+        value: new DurableResource(
+          failingService,
+          new AsyncLocalStorage<IDurableContext>(),
+        ),
+      },
+      {
+        definition: { id: "tests.healthy", tags: [durableRuntimeTag] } as any,
+        config: undefined,
+        value: new DurableResource(
+          healthyService,
+          new AsyncLocalStorage<IDurableContext>(),
+        ),
+      },
+    ]);
+
+    const deps = { durableRuntimes, logger } satisfies HookRunDeps;
+
+    await durableShutdownAbortingHook.run?.(undefined as never, deps);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(healthyService.interruptActiveAttempts).toHaveBeenCalledTimes(1);
+  });
 });

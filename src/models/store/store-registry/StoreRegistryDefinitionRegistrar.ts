@@ -67,6 +67,7 @@ export class StoreRegistryDefinitionRegistrar {
     this.validator.checkIfIDExists(item.id);
     this.collections.tags.set(item.id, item);
     this.finalizeStoredDefinition(item.id, [item]);
+    this.refreshTaggedDefinitionIndexes();
   }
 
   storeHook<_C>(item: IHook<any, any>, overrideMode: StoringMode) {
@@ -183,6 +184,10 @@ export class StoreRegistryDefinitionRegistrar {
       this.getRuntimeMode(),
       prepared.id,
     );
+    prepared.middleware =
+      this.referenceNormalizer.normalizeConfiguredResourceMiddlewareAttachments(
+        prepared,
+      );
     prepared.subtree =
       this.referenceNormalizer.normalizeResourceSubtreeMiddlewareAttachments(
         prepared,
@@ -323,5 +328,69 @@ export class StoreRegistryDefinitionRegistrar {
       this.tagReferenceNormalizer.normalizeDefinitionTags(tags);
     this.tagIndex.reindexDefinitionTags(category, canonicalId, normalizedTags);
     this.visibilityTracker.recordDefinitionTags(canonicalId, normalizedTags);
+  }
+
+  private refreshTaggedDefinitionIndexes(): void {
+    this.reindexTaggedDefinitions(
+      this.collections.tasks.values(),
+      IndexedTagCategory.Tasks,
+      (entry) => entry.task.id,
+      (entry) => entry.task.tags,
+    );
+    this.reindexTaggedDefinitions(
+      this.collections.resources.values(),
+      IndexedTagCategory.Resources,
+      (entry) => entry.resource.id,
+      (entry) => entry.resource.tags,
+    );
+    this.reindexTaggedDefinitions(
+      this.collections.events.values(),
+      IndexedTagCategory.Events,
+      (entry) => entry.event.id,
+      (entry) => entry.event.tags,
+    );
+    this.reindexTaggedDefinitions(
+      this.collections.hooks.values(),
+      IndexedTagCategory.Hooks,
+      (entry) => entry.hook.id,
+      (entry) => entry.hook.tags,
+    );
+    this.reindexTaggedDefinitions(
+      this.collections.taskMiddlewares.values(),
+      IndexedTagCategory.TaskMiddlewares,
+      (entry) => entry.middleware.id,
+      (entry) => entry.middleware.tags,
+    );
+    this.reindexTaggedDefinitions(
+      this.collections.resourceMiddlewares.values(),
+      IndexedTagCategory.ResourceMiddlewares,
+      (entry) => entry.middleware.id,
+      (entry) => entry.middleware.tags,
+    );
+    this.reindexTaggedDefinitions(
+      this.collections.errors.values(),
+      IndexedTagCategory.Errors,
+      (entry) => entry.id,
+      (entry) => entry.tags,
+    );
+  }
+
+  private reindexTaggedDefinitions<TEntry>(
+    entries: Iterable<TEntry>,
+    category: IndexedTagCategory,
+    getDefinitionId: (entry: TEntry) => string,
+    getTags: (entry: TEntry) => ReadonlyArray<{ id: string }> | undefined,
+  ): void {
+    for (const entry of entries) {
+      const definitionId = getDefinitionId(entry);
+      const normalizedTags =
+        this.tagReferenceNormalizer.normalizeDefinitionTags(getTags(entry));
+      this.tagIndex.reindexDefinitionTags(
+        category,
+        definitionId,
+        normalizedTags,
+      );
+      this.visibilityTracker.recordDefinitionTags(definitionId, normalizedTags);
+    }
   }
 }

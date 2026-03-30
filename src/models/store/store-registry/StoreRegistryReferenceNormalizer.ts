@@ -49,6 +49,15 @@ export class StoreRegistryReferenceNormalizer {
     );
   }
 
+  normalizeConfiguredResourceMiddlewareAttachments(
+    resource: IResource<any, any, any>,
+  ): IResource<any, any, any>["middleware"] {
+    return this.normalizeKnownMiddlewareAttachments(
+      RegisterableKind.ResourceMiddleware,
+      resource.middleware,
+    );
+  }
+
   normalizeResourceSubtreeMiddlewareAttachments(
     resource: IResource<any, any, any>,
     config: unknown,
@@ -190,6 +199,21 @@ export class StoreRegistryReferenceNormalizer {
     );
   }
 
+  private normalizeKnownMiddlewareAttachments<
+    TAttachment extends { id: string },
+  >(
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    attachments: TAttachment[],
+  ): TAttachment[] {
+    if (!Array.isArray(attachments) || attachments.length === 0) {
+      return attachments;
+    }
+
+    return attachments.map((attachment) =>
+      this.registerKnownMiddlewareAttachmentAlias(kind, attachment),
+    );
+  }
+
   private normalizeSubtreeMiddlewareEntry<
     TAttachment extends { id: string },
     TEntry extends TAttachment | ({ use: TAttachment } & object),
@@ -261,6 +285,24 @@ export class StoreRegistryReferenceNormalizer {
     return attachment;
   }
 
+  private registerKnownMiddlewareAttachmentAlias<
+    TAttachment extends { id: string },
+  >(
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    attachment: TAttachment,
+  ): TAttachment {
+    const resolvedId = this.aliasResolver.resolveDefinitionId(attachment);
+    if (
+      typeof resolvedId === "string" &&
+      resolvedId !== attachment.id &&
+      this.isRegisteredMiddlewareId(kind, resolvedId)
+    ) {
+      this.aliasResolver.registerDefinitionAlias(attachment, resolvedId);
+    }
+
+    return attachment;
+  }
+
   private resolveMiddlewareAttachmentId<TAttachment extends { id: string }>(
     ownerScope: OwnerScope,
     kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
@@ -297,12 +339,14 @@ export class StoreRegistryReferenceNormalizer {
       return ownerScopeOrResourceId;
     }
 
+    const ownerScope = createOwnerScope(ownerScopeOrResourceId);
+    if (typeof entryOrUsesFrameworkRootIds !== "boolean") {
+      return ownerScope;
+    }
+
     return {
-      resourceId: ownerScopeOrResourceId,
-      usesFrameworkRootIds:
-        typeof entryOrUsesFrameworkRootIds === "boolean"
-          ? entryOrUsesFrameworkRootIds
-          : false,
+      ...ownerScope,
+      usesFrameworkRootIds: entryOrUsesFrameworkRootIds,
     };
   }
 }

@@ -5,6 +5,7 @@ import {
   ExecutionStatus,
   type Execution,
 } from "../../../../durable/core/types";
+import { withTimeout } from "../../../../durable/core/utils";
 
 function createRunningExecution(): Execution {
   return {
@@ -116,5 +117,49 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
     });
 
     expect(scheduleRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks timeout failures with the timed_out reason", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const transitionToFailed = jest.fn(async () => undefined);
+      const timeoutPromise = withTimeout(
+        new Promise<never>(() => undefined),
+        1,
+        "Execution execution-1 timed out",
+      );
+
+      jest.advanceTimersByTime(1);
+      const timeoutError = await timeoutPromise.catch((error) => error);
+
+      await handleExecutionAttemptError({
+        error: timeoutError,
+        runningExecution: createRunningExecution(),
+        guards: {
+          assertLockOwnership: () => undefined,
+          raceWithLockLoss: async <T>(promise: Promise<T>) => await promise,
+          canPersistOutcome: async () => true,
+          getCancellationState: async () => null,
+        },
+        executionLockState: createLockState(),
+        getShutdownInterruptionReason: () => null,
+        transitionToCancelled: jest.fn(async () => undefined),
+        transitionToFailed,
+        suspendAttempt: jest.fn(async () => undefined),
+        scheduleRetry: jest.fn(async () => undefined),
+      });
+
+      expect(transitionToFailed).toHaveBeenCalledWith({
+        execution: expect.objectContaining({ id: "execution-1" }),
+        from: ExecutionStatus.Running,
+        reason: "timed_out",
+        error: expect.objectContaining({
+          message: "Execution execution-1 timed out",
+        }),
+      });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

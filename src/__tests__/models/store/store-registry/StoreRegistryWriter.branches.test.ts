@@ -1,4 +1,6 @@
 import {
+  defineEvent,
+  defineHook,
   defineResource,
   defineResourceMiddleware,
   defineTag,
@@ -7,6 +9,8 @@ import {
 } from "../../../../define";
 import type { IResource } from "../../../../defs";
 import { defineError } from "../../../../definers/defineError";
+import { SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID } from "../../../../models/createSyntheticFrameworkRoot";
+import { createOwnerScope } from "../../../../models/store/store-registry/OwnerScope";
 import { createTestFixture } from "../../../test-utils";
 
 describe("StoreRegistryWriter branches", () => {
@@ -32,12 +36,12 @@ describe("StoreRegistryWriter branches", () => {
       ) => string;
       normalizeTaskMiddlewareAttachments: (task: any) => unknown;
       normalizeSubtreeTaskMiddlewareEntry: (
-        ownerResourceId: string,
+        ownerResourceId: unknown,
         ownerIsTransparentOrEntry: boolean | unknown,
         entry?: unknown,
       ) => unknown;
       normalizeSubtreeResourceMiddlewareEntry: (
-        ownerResourceId: string,
+        ownerResourceId: unknown,
         ownerIsTransparentOrEntry: boolean | unknown,
         entry?: unknown,
       ) => unknown;
@@ -193,6 +197,52 @@ describe("StoreRegistryWriter branches", () => {
     expect(() => writer.computeRegistrationDeeply(root)).not.toThrow();
   });
 
+  it("does not keep aliases when deep registration fails", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const writer = registry.writer as {
+      storeGenericItem: (item: unknown) => void;
+      resolveRegisteredReferenceId: (reference: unknown) => string | undefined;
+    };
+    const child = defineResource<{ enabled: boolean }>({
+      id: "child",
+    });
+    const configuredChild = child.with({ enabled: true });
+    const ownerDefinition = defineResource({
+      id: "owner",
+      register: [configuredChild],
+    });
+    expect(Array.isArray(ownerDefinition.register)).toBe(true);
+    if (!Array.isArray(ownerDefinition.register)) {
+      return;
+    }
+
+    const owner = {
+      ...ownerDefinition,
+      register: [...ownerDefinition.register],
+    };
+    const storeGenericItem = jest
+      .spyOn(writer, "storeGenericItem")
+      .mockImplementation(() => {
+        throw new Error("boom");
+      });
+
+    try {
+      expect(() => registry.computeRegistrationDeeply(owner, {})).toThrow(
+        "boom",
+      );
+      expect(registry.resolveRegisteredReferenceId(child)).toBeUndefined();
+      expect(
+        registry.resolveRegisteredReferenceId(configuredChild),
+      ).toBeUndefined();
+      expect(
+        registry.resolveRegisteredReferenceId(owner.register[0]),
+      ).toBeUndefined();
+    } finally {
+      storeGenericItem.mockRestore();
+    }
+  });
+
   it("stores framework-root tasks under top-level ids", () => {
     const writer = getWriter();
     const task = defineTask({
@@ -288,6 +338,33 @@ describe("StoreRegistryWriter branches", () => {
     expect(normalizedTaskEntry.use.id).toBe(
       "app-owner.middleware.task.legacyDefaultTaskMw",
     );
+  });
+
+  it("keeps framework-root owner scope semantics for string overloads", () => {
+    const writer = getWriter();
+    const middleware = defineResourceMiddleware({
+      id: "frameworkRootMw",
+      run: async ({ next }) => next(),
+    });
+
+    const normalizedFromString = writer.normalizeSubtreeResourceMiddlewareEntry(
+      SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID,
+      {
+        use: middleware,
+      },
+    ) as { use: { id: string } };
+    const normalizedFromOwnerScope =
+      writer.normalizeSubtreeResourceMiddlewareEntry(
+        createOwnerScope(SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID),
+        {
+          use: middleware,
+        },
+      ) as { use: { id: string } };
+
+    expect(normalizedFromString.use.id).toBe(
+      "middleware.resource.frameworkRootMw",
+    );
+    expect(normalizedFromString.use.id).toBe(normalizedFromOwnerScope.use.id);
   });
 
   it("normalizes resource subtree policies for both local and dotted middleware ids", () => {
@@ -511,6 +588,52 @@ describe("StoreRegistryWriter branches", () => {
     expect(normalized.id).toBe("app.tags.localTag");
     expect(normalized.exists([configured])).toBe(true);
     expect(normalized.extract([configured])).toEqual({ scope: "x" });
+  });
+
+  it("reindexes late-registered hook tags after canonical tag ids become known", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+
+    const tag = defineTag({
+      id: "late-hook-tag",
+    });
+    const event = defineEvent({
+      id: "late-hook-event",
+    });
+    const hook = defineHook({
+      id: "late-hook",
+      on: event,
+      tags: [tag],
+      run: async () => undefined,
+    });
+    const root = defineResource({
+      id: "late-hook-root",
+      register: [event, hook, tag],
+    });
+
+    registry.computeRegistrationDeeply(root, {});
+
+    expect(registry.getTagAccessor(tag).hooks).toHaveLength(1);
+  });
+
+  it("covers owned-registration alias guard branches for unknown and id-less items", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const compiler = (registry.writer as any).ownedRegistrationCompiler as {
+      registerCompiledItemAliases: (
+        originalItem: unknown,
+        compiledItem: unknown,
+      ) => void;
+    };
+    const task = defineTask({
+      id: "alias-guard-task",
+      run: async () => "ok",
+    });
+
+    expect(() => compiler.registerCompiledItemAliases(123, 123)).not.toThrow();
+    expect(() =>
+      compiler.registerCompiledItemAliases(task, undefined),
+    ).not.toThrow();
   });
 
   it("preserves error helper methods when compiling scoped local ids", () => {

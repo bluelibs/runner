@@ -241,4 +241,67 @@ describe("Store private seam coverage", () => {
       ),
     ).toThrow(/cooldown/i);
   });
+
+  it("waits for all parallel ready hooks to settle before surfacing a failure", async () => {
+    const fixture = createTestFixture();
+    const lifecycle = (fixture.store as any).lifecycleCoordinator as any;
+    let releaseSlowReady!: () => void;
+    let slowReadyCompleted = false;
+    const slowReadyGate = new Promise<void>((resolve) => {
+      releaseSlowReady = resolve;
+    });
+    const failure = new Error("ready-wave-failure");
+    const fastFailingResource = {
+      isInitialized: true,
+      resource: {
+        id: "store-ready-wave-fast-failure",
+        ready: jest.fn(async () => {
+          throw failure;
+        }),
+      },
+      value: undefined,
+      config: undefined,
+      computedDependencies: undefined,
+      context: undefined,
+    };
+    const slowResource = {
+      isInitialized: true,
+      resource: {
+        id: "store-ready-wave-slow",
+        ready: jest.fn(async () => {
+          await slowReadyGate;
+          slowReadyCompleted = true;
+        }),
+      },
+      value: undefined,
+      config: undefined,
+      computedDependencies: undefined,
+      context: undefined,
+    };
+
+    const readyWavePromise = lifecycle.readyWave({
+      parallel: true,
+      resources: [fastFailingResource, slowResource],
+    });
+
+    const pendingState = await Promise.race([
+      readyWavePromise.then(
+        () => "settled",
+        () => "settled",
+      ),
+      new Promise<"pending">((resolve) =>
+        setTimeout(() => resolve("pending"), 0),
+      ),
+    ]);
+
+    expect(pendingState).toBe("pending");
+    expect(fastFailingResource.resource.ready).toHaveBeenCalledTimes(1);
+    expect(slowResource.resource.ready).toHaveBeenCalledTimes(1);
+    expect(slowReadyCompleted).toBe(false);
+
+    releaseSlowReady();
+
+    await expect(readyWavePromise).rejects.toThrow("ready-wave-failure");
+    expect(slowReadyCompleted).toBe(true);
+  });
 });

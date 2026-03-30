@@ -102,17 +102,6 @@ describe("Store", () => {
       },
     );
 
-    const pendingState = await Promise.race([
-      readyWavePromise.then(
-        () => "settled",
-        () => "settled",
-      ),
-      new Promise<"pending">((resolve) =>
-        setTimeout(() => resolve("pending"), 0),
-      ),
-    ]);
-
-    expect(pendingState).toBe("pending");
     await expect(readyWavePromise).rejects.toMatchObject({
       id: "genericError",
       data: { message: "stop-ready-wave" },

@@ -114,17 +114,52 @@ describe("StoreRegistry facade delegates", () => {
       "override",
     );
 
+    const configuredTag = defineTag({
+      id: "registry-delegate-configured-tag",
+    });
+    const configuredResourceMiddleware = defineResourceMiddleware({
+      id: "registry-delegate-configured-resource-middleware",
+      run: async ({ next }) => next(),
+    });
+    const knownConfiguredResourceMiddleware = defineResourceMiddleware({
+      id: "registry-delegate-known-configured-resource-middleware",
+      run: async ({ next }) => next(),
+    });
+    const canonicalKnownConfiguredResourceMiddleware = {
+      ...defineResourceMiddleware({
+        id: "registry-delegate-known-configured-resource-middleware",
+        run: async ({ next }) => next(),
+      }),
+      id: "registry-known-owner.middleware.resource.registry-delegate-known-configured-resource-middleware",
+    };
     const withConfigResource = defineResource<{ enabled: boolean }>({
       id: "registry-delegate-resource-with-config",
-      tags: [tag],
+      tags: [configuredTag],
+      middleware: [configuredResourceMiddleware],
+      register: [configuredResourceMiddleware],
       init: async (config) => config.enabled,
     });
+    const withKnownConfiguredMiddleware = defineResource<{ enabled: boolean }>({
+      id: "registry-delegate-resource-with-known-middleware",
+      middleware: [knownConfiguredResourceMiddleware],
+      init: async (config) => config.enabled,
+    });
+    registry.registerDefinitionAlias(
+      configuredTag,
+      "registry-delegate-tag-canonical",
+    );
+    registry.storeResourceMiddleware(
+      canonicalKnownConfiguredResourceMiddleware,
+    );
+    registry.registerDefinitionAlias(
+      knownConfiguredResourceMiddleware,
+      canonicalKnownConfiguredResourceMiddleware.id,
+    );
     registry.storeResourceWithConfig(
       withConfigResource.with({ enabled: true }),
     );
     registry.storeResourceWithConfig(
-      withConfigResource.with({ enabled: false }),
-      "override",
+      withKnownConfiguredMiddleware.with({ enabled: true }),
     );
 
     const typedError = defineError({
@@ -147,6 +182,16 @@ describe("StoreRegistry facade delegates", () => {
     expect(store.tasks.has(task.id)).toBe(true);
     expect(store.resources.has(resource.id)).toBe(true);
     expect(store.resources.has(withConfigResource.id)).toBe(true);
+    expect(registry.resolveDefinitionId(configuredResourceMiddleware)).toBe(
+      "registry-delegate-resource-with-config.middleware.resource.registry-delegate-configured-resource-middleware",
+    );
+    expect(
+      registry.resolveDefinitionId(knownConfiguredResourceMiddleware),
+    ).toBe(canonicalKnownConfiguredResourceMiddleware.id);
+    expect(store.getTagAccessor(configuredTag).resources).toHaveLength(1);
+    expect(
+      store.resources.get(withConfigResource.id)?.resource.tags?.[0]?.id,
+    ).toBe(configuredTag.id);
     expect(store.errors.has(typedError.id)).toBe(true);
     expect(store.asyncContexts.has(asyncContext.id)).toBe(true);
   });

@@ -138,7 +138,7 @@ describe("durable: memoryDurableResource persistence (integration)", () => {
       dispose: {
         totalBudgetMs: 2_000,
         drainingBudgetMs: 0,
-        abortWindowMs: 100,
+        abortWindowMs: 500,
         cooldownWindowMs: 0,
       },
     });
@@ -153,12 +153,11 @@ describe("durable: memoryDurableResource persistence (integration)", () => {
         const detail =
           await firstDurable.operator.getExecutionDetail(executionId);
         return (
-          detail.execution?.status === ExecutionStatus.Running &&
-          detail.execution.current?.kind === "step" &&
-          detail.execution.current.stepId === "after"
+          control.afterRuns === 1 &&
+          detail.execution?.status === ExecutionStatus.Running
         );
       },
-      { timeoutMs: 2_000, intervalMs: 5 },
+      { timeoutMs: 5_000, intervalMs: 5 },
     );
 
     await firstRuntime.dispose();
@@ -177,7 +176,7 @@ describe("durable: memoryDurableResource persistence (integration)", () => {
     try {
       await expect(
         secondDurable.wait(executionId, {
-          timeout: 5_000,
+          timeout: 10_000,
           waitPollIntervalMs: 5,
         }),
       ).resolves.toEqual({

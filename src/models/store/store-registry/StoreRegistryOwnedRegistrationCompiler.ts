@@ -13,6 +13,11 @@ import type { StoreRegistryAliasResolver } from "./StoreRegistryWriter.types";
 
 type StoreGenericItemHandler = (item: RegisterableItem) => void;
 
+type CompiledOwnedItem = {
+  originalItem: RegisterableItem;
+  compiledItem: RegisterableItem;
+};
+
 export class StoreRegistryOwnedRegistrationCompiler {
   constructor(
     private readonly canonicalIdCompiler: CanonicalIdCompiler,
@@ -39,11 +44,12 @@ export class StoreRegistryOwnedRegistrationCompiler {
       this.compileOwnedItem(ownerScope, item),
     );
 
-    for (const item of scopedItems) {
-      this.visibilityTracker.recordOwnership(element.id, item);
-      const itemId = this.resolveRegisterableId(item);
+    for (const { originalItem, compiledItem } of scopedItems) {
+      this.visibilityTracker.recordOwnership(element.id, compiledItem);
+      const itemId = this.resolveRegisterableId(compiledItem);
       try {
-        storeGenericItem(item);
+        storeGenericItem(compiledItem);
+        this.registerCompiledItemAliases(originalItem, compiledItem);
       } catch (error) {
         if (itemId) {
           this.visibilityTracker.rollbackOwnershipTree(itemId);
@@ -114,13 +120,61 @@ export class StoreRegistryOwnedRegistrationCompiler {
     element.register = items;
   }
 
+  private registerCompiledItemAliases(
+    originalItem: RegisterableItem,
+    compiledItem: RegisterableItem,
+  ): void {
+    const kind = resolveRegisterableKind(originalItem);
+    if (!kind) {
+      return;
+    }
+
+    if (kind === RegisterableKind.ResourceWithConfig) {
+      const withConfig = originalItem as IResourceWithConfig<any, any, any>;
+      const compiledWithConfig = compiledItem as IResourceWithConfig<
+        any,
+        any,
+        any
+      >;
+
+      this.aliasResolver.registerDefinitionAlias(
+        originalItem,
+        compiledWithConfig.id,
+      );
+      this.aliasResolver.registerDefinitionAlias(
+        withConfig.resource,
+        compiledWithConfig.id,
+      );
+      this.aliasResolver.registerDefinitionAlias(
+        compiledWithConfig,
+        compiledWithConfig.id,
+      );
+      this.aliasResolver.registerDefinitionAlias(
+        compiledWithConfig.resource,
+        compiledWithConfig.id,
+      );
+      return;
+    }
+
+    const resolvedId = this.resolveRegisterableId(compiledItem);
+    if (!resolvedId) {
+      return;
+    }
+
+    this.aliasResolver.registerDefinitionAlias(originalItem, resolvedId);
+    this.aliasResolver.registerDefinitionAlias(compiledItem, resolvedId);
+  }
+
   private compileOwnedItem(
     ownerScope: OwnerScope,
     item: RegisterableItem,
-  ): RegisterableItem {
+  ): CompiledOwnedItem {
     const kind = resolveRegisterableKind(item);
     if (!kind) {
-      return item;
+      return {
+        originalItem: item,
+        compiledItem: item,
+      };
     }
 
     if (kind === RegisterableKind.ResourceWithConfig) {
@@ -135,21 +189,10 @@ export class StoreRegistryOwnedRegistrationCompiler {
         compiledResource.id,
       ) as IResourceWithConfig<any, any, any>;
       compiledWithConfig.resource = compiledResource;
-
-      this.aliasResolver.registerDefinitionAlias(item, compiledResource.id);
-      this.aliasResolver.registerDefinitionAlias(
-        withConfig.resource,
-        compiledResource.id,
-      );
-      this.aliasResolver.registerDefinitionAlias(
-        compiledWithConfig,
-        compiledResource.id,
-      );
-      this.aliasResolver.registerDefinitionAlias(
-        compiledWithConfig.resource,
-        compiledResource.id,
-      );
-      return compiledWithConfig;
+      return {
+        originalItem: item,
+        compiledItem: compiledWithConfig,
+      };
     }
 
     const compiled = this.compileOwnedDefinitionWithScope(
@@ -157,10 +200,10 @@ export class StoreRegistryOwnedRegistrationCompiler {
       item,
       kind,
     );
-    const resolvedId = this.resolveRegisterableId(compiled)!;
-    this.aliasResolver.registerDefinitionAlias(item, resolvedId);
-    this.aliasResolver.registerDefinitionAlias(compiled, resolvedId);
-    return compiled;
+    return {
+      originalItem: item,
+      compiledItem: compiled,
+    };
   }
 
   private compileOwnedDefinitionWithScope(

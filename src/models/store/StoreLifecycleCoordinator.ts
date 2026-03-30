@@ -311,15 +311,17 @@ export class StoreLifecycleCoordinator {
       } catch (error) {
         if (runningReadyPromises.length > 0) {
           await Promise.allSettled(runningReadyPromises);
-          await new Promise<void>((resolve) => setTimeout(resolve, 0));
         }
         throw this.normalizeError(error);
       }
 
-      try {
-        await Promise.all(runningReadyPromises);
-      } catch (error) {
-        throw this.normalizeError(error);
+      const settledResults = await Promise.allSettled(runningReadyPromises);
+      const rejectedResult = settledResults.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      );
+      if (rejectedResult) {
+        throw this.normalizeError(rejectedResult.reason);
       }
 
       return;
