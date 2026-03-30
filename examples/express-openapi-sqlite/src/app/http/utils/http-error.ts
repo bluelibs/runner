@@ -19,6 +19,6 @@ export function resolveHttpError(error: unknown) {
 
   return {
     statusCode: 500,
-    message: error instanceof Error ? error.message : "Internal server error",
+    message: "Internal server error",
   };
 }
