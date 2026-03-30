@@ -6,9 +6,9 @@ import type {
   ResourceStoreElementType,
   TaskMiddlewareStoreElementType,
   TaskStoreElementType,
-} from "../../defs";
-import type { IAsyncContext } from "../../types/asyncContext";
-import type { IErrorHelper } from "../../types/error";
+} from "../../../defs";
+import type { IAsyncContext } from "../../../types/asyncContext";
+import type { IErrorHelper } from "../../../types/error";
 
 export type StoreRegistryCollections = {
   tasks: Map<string, TaskStoreElementType>;

@@ -9,7 +9,7 @@ import type { EventLanesDiagnostics } from "./EventLanesDiagnostics";
 import type { EventLanesResourceConfig } from "./types";
 import type { EventLanesResourceContext } from "./EventLanesInternals";
 import type { EventManager } from "../../models/EventManager";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import type { SerializerLike } from "../../serializer";
 import { resolveRemoteLanesMode } from "../remote-lanes/mode";
 

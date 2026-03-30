@@ -9,7 +9,7 @@ import {
 } from "../../define";
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
 import { defineError } from "../../definers/defineError";
-import { Store } from "../../models/Store";
+import { Store } from "../../models/store/Store";
 import {
   symbolDefinitionIdentity,
   symbolResourceWithConfig,

@@ -1,6 +1,6 @@
 import type { EventManager } from "../../models/EventManager";
 import type { Logger } from "../../models/Logger";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import type { Serializer } from "../../serializer";
 import { transactionalEventLaneConflictError } from "../../errors";
 import type { EventLaneMessage, EventLanesResourceConfig } from "./types";

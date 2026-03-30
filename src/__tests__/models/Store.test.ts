@@ -1,4 +1,4 @@
-import { Store } from "../../models/Store";
+import { Store } from "../../models/store/Store";
 import {
   defineResource,
   defineTask,
@@ -30,6 +30,17 @@ describe("Store", () => {
 
   it("should expose some helpers", () => {
     expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
+  });
+
+  it("should delegate markDisposed to the lifecycle admission controller", () => {
+    const markDisposedSpy = jest.spyOn(
+      store.getLifecycleAdmissionController(),
+      "markDisposed",
+    );
+
+    store.markDisposed();
+
+    expect(markDisposedSpy).toHaveBeenCalledTimes(1);
   });
 
   it("should skip cooldown wave resources once force escalation requests a stop", async () => {

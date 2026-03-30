@@ -1,5 +1,5 @@
-import { isResourceWithConfig } from "../define";
-import type { RegisterableItem } from "../defs";
+import { isResourceWithConfig } from "../../define";
+import type { RegisterableItem } from "../../defs";
 
 type DefinitionWithOptionalId = {
   id?: unknown;

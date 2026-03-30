@@ -1,9 +1,9 @@
 import { defineEvent, defineTask, defineResource } from "../../define";
-import { Store } from "../../models/Store";
+import { Store } from "../../models/store/Store";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { MiddlewareManager } from "../../models/MiddlewareManager";
 import { DependencyExtractor } from "../../models/dependency-processor/DependencyExtractor";
-import * as storeLookup from "../../models/StoreLookup";
+import * as storeLookup from "../../models/store/StoreLookup";
 import { run } from "../../run";
 import { ResourceLifecycleMode } from "../../types/runner";
 import { resources } from "../../index";

@@ -11,12 +11,12 @@ import {
   RegisterableItem,
   SubtreeResourceMiddlewareEntry,
   SubtreeTaskMiddlewareEntry,
-} from "../../defs";
-import { unknownItemTypeError } from "../../errors";
-import type { IAsyncContext } from "../../types/asyncContext";
-import type { IErrorHelper } from "../../types/error";
-import type { RunnerMode } from "../../types/runner";
-import { VisibilityTracker } from "../VisibilityTracker";
+} from "../../../defs";
+import { unknownItemTypeError } from "../../../errors";
+import type { IAsyncContext } from "../../../types/asyncContext";
+import type { IErrorHelper } from "../../../types/error";
+import type { RunnerMode } from "../../../types/runner";
+import { VisibilityTracker } from "../../VisibilityTracker";
 import { CanonicalIdCompiler } from "./CanonicalIdCompiler";
 import { StoreRegistryDefinitionCloner } from "./StoreRegistryDefinitionCloner";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";

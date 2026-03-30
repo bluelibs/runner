@@ -1,6 +1,10 @@
-import { IResource, IResourceWithConfig, RegisterableItem } from "../../defs";
-import type { RunnerMode } from "../../types/runner";
-import { VisibilityTracker } from "../VisibilityTracker";
+import {
+  IResource,
+  IResourceWithConfig,
+  RegisterableItem,
+} from "../../../defs";
+import type { RunnerMode } from "../../../types/runner";
+import { VisibilityTracker } from "../../VisibilityTracker";
 import { CanonicalIdCompiler } from "./CanonicalIdCompiler";
 import { createOwnerScope, type OwnerScope } from "./OwnerScope";
 import { RegisterableKind, resolveRegisterableKind } from "./registerableKind";

@@ -1,8 +1,8 @@
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import {
   resolveRequestedIdFromStore,
   toCanonicalDefinitionFromStore,
-} from "../../models/StoreLookup";
+} from "../../models/store/StoreLookup";
 
 type LaneWithId = {
   id: string;

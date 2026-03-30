@@ -1,9 +1,9 @@
 import { StoringMode } from "./types";
-import type { RunnerMode } from "../../types/runner";
+import type { RunnerMode } from "../../../types/runner";
 import {
   overrideTargetNotRegisteredError,
   validationError,
-} from "../../errors";
+} from "../../../errors";
 
 type OverrideTargetType =
   | "Task"

@@ -1,6 +1,6 @@
-import { defineTag } from "../../../define";
-import { StoreRegistryTagMatchCollector } from "../../../models/store-registry/StoreRegistryTagMatchCollector";
-import type { TagIndexedCollections } from "../../../models/store-registry/types";
+import { defineTag } from "../../../../define";
+import { StoreRegistryTagMatchCollector } from "../../../../models/store/store-registry/StoreRegistryTagMatchCollector";
+import type { TagIndexedCollections } from "../../../../models/store/store-registry/types";
 
 function createCollections(): TagIndexedCollections {
   return {

@@ -1,5 +1,5 @@
-import { CanonicalIdCompiler } from "../../../models/store-registry/CanonicalIdCompiler";
-import { RegisterableKind } from "../../../models/store-registry/registerableKind";
+import { CanonicalIdCompiler } from "../../../../models/store/store-registry/CanonicalIdCompiler";
+import { RegisterableKind } from "../../../../models/store/store-registry/registerableKind";
 
 describe("CanonicalIdCompiler", () => {
   const compiler = new CanonicalIdCompiler();

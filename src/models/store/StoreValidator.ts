@@ -1,4 +1,4 @@
-import { duplicateRegistrationError } from "../errors";
+import { duplicateRegistrationError } from "../../errors";
 import type { StoreRegistry } from "./StoreRegistry";
 import {
   ValidatorContext,
@@ -10,8 +10,8 @@ import {
   validateIsolationPolicies,
   normalizeIsolationEntries as normalizeIsolationEntriesImpl,
   normalizeExportEntries as normalizeExportEntriesImpl,
-} from "./validators";
-import type { IsolationExportsTarget, IsolationTarget } from "../defs";
+} from "../validators";
+import type { IsolationExportsTarget, IsolationTarget } from "../../defs";
 
 /**
  * Orchestrates all store validation checks.

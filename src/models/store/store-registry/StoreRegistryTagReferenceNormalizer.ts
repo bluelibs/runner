@@ -1,4 +1,4 @@
-import { TagType } from "../../defs";
+import { TagType } from "../../../defs";
 import { StoreRegistryDefinitionCloner } from "./StoreRegistryDefinitionCloner";
 import type { StoreRegistryAliasResolver } from "./StoreRegistryWriter.types";
 import { normalizeTags } from "./types";

@@ -1,5 +1,5 @@
 import { ResourceInitializer } from "../../models/ResourceInitializer";
-import { Store } from "../../models/Store";
+import { Store } from "../../models/store/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
 import { Logger, OnUnhandledError } from "../../models";

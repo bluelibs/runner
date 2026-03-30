@@ -4,13 +4,13 @@ import {
   SubtreeResourceMiddlewareEntry,
   SubtreeTaskMiddlewareEntry,
   symbolResourceSubtreeDeclarations,
-} from "../../defs";
-import type { RunnerMode } from "../../types/runner";
+} from "../../../defs";
+import type { RunnerMode } from "../../../types/runner";
 import {
   getSubtreeResourceMiddlewareAttachment,
   getSubtreeTaskMiddlewareAttachment,
-} from "../../tools/subtreeMiddleware";
-import { resolveResourceSubtreeDeclarations } from "../../definers/subtreePolicy";
+} from "../../../tools/subtreeMiddleware";
+import { resolveResourceSubtreeDeclarations } from "../../../definers/subtreePolicy";
 import { CanonicalIdCompiler } from "./CanonicalIdCompiler";
 import { createOwnerScope, type OwnerScope } from "./OwnerScope";
 import { RegisterableKind } from "./registerableKind";

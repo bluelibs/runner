@@ -7,7 +7,7 @@ import {
   TagDependencyTaskMatch,
   TaggedResource,
   TaggedTask,
-} from "../../defs";
+} from "../../../defs";
 import { normalizeTags, TagIndexedCollections } from "./types";
 
 export class StoreRegistryTagMatchCollector {

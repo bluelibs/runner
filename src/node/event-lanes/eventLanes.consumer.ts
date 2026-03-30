@@ -7,7 +7,7 @@ import {
 } from "../../errors";
 import type { EventManager } from "../../models/EventManager";
 import type { Logger } from "../../models/Logger";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import type { SerializerLike } from "../../serializer";
 import { handleEventLaneConsumerFailure } from "./EventLanesFailureHandler";
 import type { EventLanesDiagnostics } from "./EventLanesDiagnostics";

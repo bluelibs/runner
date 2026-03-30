@@ -8,8 +8,8 @@ import {
   type TagType,
   type TaskMiddlewareStoreElementType,
   type TaskStoreElementType,
-} from "../../defs";
-import type { IErrorHelper } from "../../types/error";
+} from "../../../defs";
+import type { IErrorHelper } from "../../../types/error";
 
 function isTagLike(value: unknown): value is TagType {
   if (!value || typeof value !== "object") {

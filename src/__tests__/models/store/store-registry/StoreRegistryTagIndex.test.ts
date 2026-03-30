@@ -1,7 +1,7 @@
-import { defineResource, defineTag, defineTask } from "../../../define";
-import { VisibilityTracker } from "../../../models/VisibilityTracker";
-import { StoreRegistryTagIndex } from "../../../models/store-registry/StoreRegistryTagIndex";
-import { IndexedTagCategory } from "../../../models/store-registry/types";
+import { defineResource, defineTag, defineTask } from "../../../../define";
+import { VisibilityTracker } from "../../../../models/VisibilityTracker";
+import { StoreRegistryTagIndex } from "../../../../models/store/store-registry/StoreRegistryTagIndex";
+import { IndexedTagCategory } from "../../../../models/store/store-registry/types";
 
 describe("StoreRegistryTagIndex", () => {
   it("returns tagged task and resource matches through the accessor", () => {

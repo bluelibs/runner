@@ -1,4 +1,4 @@
-import { SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID } from "../createSyntheticFrameworkRoot";
+import { SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID } from "../../createSyntheticFrameworkRoot";
 
 export type OwnerScope = Readonly<{
   resourceId: string;

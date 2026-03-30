@@ -10,7 +10,7 @@ import type { TaskCallOptions } from "../types/utilities";
 // For RunResult convenience API, preserve the original simple messages
 import type { EventManager } from "./EventManager";
 import type { Logger } from "./Logger";
-import type { Store } from "./Store";
+import type { Store } from "./store/Store";
 import type { TaskRunner } from "./TaskRunner";
 import {
   lazyResourceAccessDisabledError,

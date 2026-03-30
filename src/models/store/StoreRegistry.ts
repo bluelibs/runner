@@ -17,30 +17,30 @@ import {
   HookStoreElementType,
   symbolMiddlewareConfiguredFrom,
   symbolTagConfiguredFrom,
-} from "../defs";
-import { isResourceWithConfig } from "../define";
+} from "../../defs";
+import { isResourceWithConfig } from "../../define";
 import { StoreValidator } from "./StoreValidator";
 import { Store } from "./Store";
 import {
   buildDependencyGraph,
   buildEventEmissionGraph as buildEmissionGraph,
-} from "./utils/buildDependencyGraph";
-import { IErrorHelper } from "../types/error";
-import type { IAsyncContext } from "../types/asyncContext";
-import { LockableMap } from "../tools/LockableMap";
-import { VisibilityTracker } from "./VisibilityTracker";
+} from "../utils/buildDependencyGraph";
+import { IErrorHelper } from "../../types/error";
+import type { IAsyncContext } from "../../types/asyncContext";
+import { LockableMap } from "../../tools/LockableMap";
+import { VisibilityTracker } from "../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./store-registry/StoreRegistryDefinitionPreparer";
 import { StoreRegistryTagIndex } from "./store-registry/StoreRegistryTagIndex";
 import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { RegisterableKind } from "./store-registry/registerableKind";
-import { validationError } from "../errors";
-import { getDefinitionIdentity } from "../tools/isSameDefinition";
-import type { RunnerMode } from "../types/runner";
+import { validationError } from "../../errors";
+import { getDefinitionIdentity } from "../../tools/isSameDefinition";
+import type { RunnerMode } from "../../types/runner";
 import {
   resolveHookTargets,
   type HookTargetResolutionEntry,
-} from "./hook/resolveHookTargets";
+} from "../hook/resolveHookTargets";
 
 /**
  * Any object reference used as a definition identity key.

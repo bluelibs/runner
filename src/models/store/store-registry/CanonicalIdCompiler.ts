@@ -1,5 +1,5 @@
-import { validationError } from "../../errors";
-import { isReservedDefinitionLocalName } from "../../definers/assertDefinitionId";
+import { validationError } from "../../../errors";
+import { isReservedDefinitionLocalName } from "../../../definers/assertDefinitionId";
 import { RegisterableKind } from "./registerableKind";
 import type { OwnerScope } from "./OwnerScope";
 

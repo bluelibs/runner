@@ -4,7 +4,7 @@ import type {
   IRpcLaneDefinition,
 } from "../../../defs";
 import { globalTags } from "../../../globals/globalTags";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import { resolveRpcLaneAssignments } from "../../rpc-lanes/RpcLaneAssignments";
 import { EVENT_LANES_RESOURCE_ID } from "../../event-lanes/eventLanes.resource";
 

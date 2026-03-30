@@ -3,8 +3,8 @@ import {
   TagDependencyAccessor,
   TagDependencyMatch,
   TagType,
-} from "../../defs";
-import { VisibilityTracker } from "../VisibilityTracker";
+} from "../../../defs";
+import { VisibilityTracker } from "../../VisibilityTracker";
 import { StoreRegistryTagMatchCollector } from "./StoreRegistryTagMatchCollector";
 import {
   createTagIndexBucket,
@@ -89,7 +89,7 @@ export class StoreRegistryTagIndex {
   }
 
   // ---------------------------------------------------------------------------
-  // Tag accessor — builds a lazy, cached, visibility-filtered accessor
+  // Tag accessor â€” builds a lazy, cached, visibility-filtered accessor
   // ---------------------------------------------------------------------------
 
   getTagAccessor<TTag extends ITag<any, any, any, any>>(

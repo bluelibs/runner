@@ -8,8 +8,8 @@ import {
   symbolTag,
   symbolTask,
   symbolTaskMiddleware,
-} from "../../defs";
-import { symbolAsyncContext, symbolError } from "../../types/symbols";
+} from "../../../defs";
+import { symbolAsyncContext, symbolError } from "../../../types/symbols";
 
 export enum RegisterableKind {
   Task = "task",

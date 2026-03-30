@@ -9,7 +9,7 @@ import {
 } from "../../define";
 import { defineError } from "../../definers/defineError";
 import { run } from "../../run";
-import { normalizeTags } from "../../models/store-registry/types";
+import { normalizeTags } from "../../models/store/store-registry/types";
 
 describe("Tag dependency accessor caching", () => {
   it("returns cached results on repeated accessor property reads", async () => {

@@ -10,13 +10,13 @@ import {
   ITaskMiddleware,
   RegisterableItem,
   symbolResourceIsolateDeclarations,
-} from "../../defs";
-import type { IAsyncContext } from "../../types/asyncContext";
-import type { IErrorHelper } from "../../types/error";
-import type { RunnerMode } from "../../types/runner";
-import { HookDependencyState } from "../../types/storeTypes";
-import { resolveIsolatePolicyDeclarations } from "../../definers/isolatePolicy";
-import { VisibilityTracker } from "../VisibilityTracker";
+} from "../../../defs";
+import type { IAsyncContext } from "../../../types/asyncContext";
+import type { IErrorHelper } from "../../../types/error";
+import type { RunnerMode } from "../../../types/runner";
+import { HookDependencyState } from "../../../types/storeTypes";
+import { resolveIsolatePolicyDeclarations } from "../../../definers/isolatePolicy";
+import { VisibilityTracker } from "../../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";
 import { StoreRegistryOwnedRegistrationCompiler } from "./StoreRegistryOwnedRegistrationCompiler";
 import { StoreRegistryReferenceNormalizer } from "./StoreRegistryReferenceNormalizer";

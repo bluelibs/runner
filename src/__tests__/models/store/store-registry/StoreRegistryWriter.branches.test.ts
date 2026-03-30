@@ -4,10 +4,10 @@ import {
   defineTag,
   defineTask,
   defineTaskMiddleware,
-} from "../../../define";
-import type { IResource } from "../../../defs";
-import { defineError } from "../../../definers/defineError";
-import { createTestFixture } from "../../test-utils";
+} from "../../../../define";
+import type { IResource } from "../../../../defs";
+import { defineError } from "../../../../definers/defineError";
+import { createTestFixture } from "../../../test-utils";
 
 describe("StoreRegistryWriter branches", () => {
   type ResourceSubtreeWithMiddlewareIds = {

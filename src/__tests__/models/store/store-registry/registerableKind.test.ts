@@ -6,14 +6,14 @@ import {
   defineTag,
   defineTask,
   defineTaskMiddleware,
-} from "../../../define";
-import { defineAsyncContext } from "../../../definers/defineAsyncContext";
-import { defineError } from "../../../definers/defineError";
+} from "../../../../define";
+import { defineAsyncContext } from "../../../../definers/defineAsyncContext";
+import { defineError } from "../../../../definers/defineError";
 import {
   describeRegisterableKind,
   RegisterableKind,
   resolveRegisterableKind,
-} from "../../../models/store-registry/registerableKind";
+} from "../../../../models/store/store-registry/registerableKind";
 
 describe("registerableKind", () => {
   it("classifies every supported registerable kind", () => {

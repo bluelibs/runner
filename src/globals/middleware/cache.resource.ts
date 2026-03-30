@@ -27,7 +27,7 @@ import { isResource, isResourceWithConfig } from "../../define";
 import { storeResource } from "../resources/store.resource";
 import { loggerResource } from "../resources/logger.resource";
 import { normalizeCacheRefs } from "./cache.key";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import { MiddlewareResolver } from "../../models/middleware/MiddlewareResolver";
 import { getSubtreeMiddlewareDuplicateKey } from "../../tools/subtreeMiddleware";
 

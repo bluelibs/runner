@@ -1,5 +1,5 @@
 import { defineEvent, defineResource } from "../../define";
-import { toCanonicalDefinitionFromStore } from "../../models/StoreLookup";
+import { toCanonicalDefinitionFromStore } from "../../models/store/StoreLookup";
 import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
 
