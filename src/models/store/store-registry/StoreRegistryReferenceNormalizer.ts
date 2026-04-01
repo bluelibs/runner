@@ -213,7 +213,6 @@ export class StoreRegistryReferenceNormalizer {
       this.registerKnownMiddlewareAttachmentAlias(kind, attachment),
     );
   }
-
   private normalizeSubtreeMiddlewareEntry<
     TAttachment extends { id: string },
     TEntry extends TAttachment | ({ use: TAttachment } & object),
@@ -302,7 +301,6 @@ export class StoreRegistryReferenceNormalizer {
 
     return attachment;
   }
-
   private resolveMiddlewareAttachmentId<TAttachment extends { id: string }>(
     ownerScope: OwnerScope,
     kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,

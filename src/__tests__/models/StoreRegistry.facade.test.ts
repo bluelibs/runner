@@ -190,10 +190,29 @@ describe("StoreRegistry facade delegates", () => {
     ).toBe(canonicalKnownConfiguredResourceMiddleware.id);
     expect(store.getTagAccessor(configuredTag).resources).toHaveLength(1);
     expect(
+      registry.resolveDefinitionId(
+        store.resources.get(withConfigResource.id)?.resource.middleware?.[0],
+      ),
+    ).toBe(
+      "registry-delegate-resource-with-config.middleware.resource.registry-delegate-configured-resource-middleware",
+    );
+    expect(
       store.resources.get(withConfigResource.id)?.resource.tags?.[0]?.id,
     ).toBe(configuredTag.id);
     expect(store.errors.has(typedError.id)).toBe(true);
     expect(store.asyncContexts.has(asyncContext.id)).toBe(true);
+  });
+
+  it("fails with a runner error when overriding a missing resource", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const missingResource = defineResource({
+      id: "registry-missing-resource-override",
+      init: async () => "missing",
+    });
+
+    expect(() => registry.storeResource(missingResource, "override")).toThrow(
+      /Override target Resource "registry-missing-resource-override"/,
+    );
   });
 
   it("covers writer id resolution fallbacks for null and id-less values", () => {

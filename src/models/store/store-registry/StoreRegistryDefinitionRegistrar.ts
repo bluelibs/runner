@@ -16,6 +16,7 @@ import type { IErrorHelper } from "../../../types/error";
 import type { RunnerMode } from "../../../types/runner";
 import { HookDependencyState } from "../../../types/storeTypes";
 import { resolveIsolatePolicyDeclarations } from "../../../definers/isolatePolicy";
+import { overrideTargetNotRegisteredError } from "../../../errors";
 import { VisibilityTracker } from "../../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";
 import { StoreRegistryOwnedRegistrationCompiler } from "./StoreRegistryOwnedRegistrationCompiler";
@@ -222,8 +223,16 @@ export class StoreRegistryDefinitionRegistrar {
       overrideMode === "override"
         ? this.collections.resources.get(item.id)
         : undefined;
+    if (overrideMode === "override" && !existingResourceEntry) {
+      overrideTargetNotRegisteredError.throw({
+        targetId: item.id,
+        targetType: "Resource",
+      });
+    }
     const configForResource =
-      overrideMode === "override" ? existingResourceEntry!.config : {};
+      overrideMode === "override" && existingResourceEntry
+        ? existingResourceEntry.config
+        : {};
 
     const prepared = this.definitionPreparer.prepareFreshValue({
       item,
