@@ -62,7 +62,9 @@ export const routeRegistrationHook = r
           );
           res.status(200).json(result);
         } catch (err) {
-          const { statusCode, message } = resolveHttpError(err);
+          const { statusCode, message, validationErrors } = resolveHttpError(
+            err,
+          );
           const error = err instanceof Error ? err : new Error(String(err));
 
           if (statusCode >= 500) {
@@ -74,6 +76,7 @@ export const routeRegistrationHook = r
           res.status(statusCode).json({
             success: false,
             error: message,
+            ...(validationErrors ? { validationErrors } : {}),
           });
         }
       };
