@@ -4,12 +4,12 @@ import {
   disposeDurableService,
   initDurableService,
 } from "../../../../durable/core/DurableService";
-import { durableShutdownInterruptionReason } from "../../../../durable/core/shutdownInterruption";
 import { DurableWorker } from "../../../../durable/core/DurableWorker";
 import type { IDurableQueue } from "../../../../durable/core/interfaces/queue";
 import type { Schedule, Timer } from "../../../../durable/core/types";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
 import { waitUntil } from "../../../../durable/test-utils";
+import { runtimeShutdownAbortReason } from "../../../../../tools/runtimeShutdownAbortReason";
 import {
   createBareStore,
   createTaskExecutor,
@@ -311,7 +311,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     service.interruptActiveAttempts();
 
     expect(abort).toHaveBeenCalledTimes(1);
-    expect(abort).toHaveBeenCalledWith(durableShutdownInterruptionReason);
+    expect(abort).toHaveBeenCalledWith(runtimeShutdownAbortReason);
   });
 
   it("skips already-aborted attempts during shutdown interruption fan-out", async () => {

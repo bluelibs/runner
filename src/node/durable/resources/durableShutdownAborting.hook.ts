@@ -1,6 +1,7 @@
 import { defineHook } from "../../../definers/defineHook";
 import { globalEvents } from "../../../globals/globalEvents";
 import { resources } from "../../../public";
+import { runtimeShutdownAbortReason } from "../../../tools/runtimeShutdownAbortReason";
 import { durableRuntimeTag } from "../tags/durableRuntime.tag";
 
 export const durableShutdownAbortingHook = defineHook({
@@ -18,7 +19,9 @@ export const durableShutdownAbortingHook = defineHook({
       }
 
       try {
-        resource.value.service.interruptActiveAttempts();
+        resource.value.service.interruptActiveAttempts(
+          runtimeShutdownAbortReason,
+        );
       } catch (error) {
         try {
           await logger.warn(

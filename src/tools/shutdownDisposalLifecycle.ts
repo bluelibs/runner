@@ -9,8 +9,7 @@ import {
   ShutdownDrainWaitResult,
 } from "./shutdownDrainWarning";
 import { ForceDisposalController } from "./ForceDisposalController";
-
-const shutdownAbortReason = "Runtime shutdown drain budget expired";
+import { runtimeShutdownAbortReason } from "./runtimeShutdownAbortReason";
 
 type LifecycleStore = {
   beginCoolingDown(): void;
@@ -133,7 +132,7 @@ export async function runShutdownDisposalLifecycle(
       return;
     }
 
-    input.store.abortInFlightTaskSignals(shutdownAbortReason);
+    input.store.abortInFlightTaskSignals(runtimeShutdownAbortReason);
     effectiveAbortWindowMs = disposalBudget.capByRemainingBudget(
       input.dispose.abortWindowMs,
     );

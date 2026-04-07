@@ -1,4 +1,5 @@
 import { Logger } from "../../../../models/Logger";
+import { runtimeShutdownAbortReason } from "../../../../tools/runtimeShutdownAbortReason";
 import { DurableResource } from "../../../durable/core/DurableResource";
 import { durableShutdownAbortingHook } from "../../../durable/resources/durableShutdownAborting.hook";
 import type { IDurableService } from "../../../durable/core/interfaces/service";
@@ -91,6 +92,9 @@ describe("durable: durableShutdownAbortingHook", () => {
     await durableShutdownAbortingHook.run?.(undefined as never, deps);
 
     expect(durableService.interruptActiveAttempts).toHaveBeenCalledTimes(1);
+    expect(durableService.interruptActiveAttempts).toHaveBeenCalledWith(
+      runtimeShutdownAbortReason,
+    );
   });
 
   it("logs and continues when one durable runtime fails to interrupt", async () => {
@@ -130,6 +134,9 @@ describe("durable: durableShutdownAbortingHook", () => {
 
     expect(warn).toHaveBeenCalledTimes(1);
     expect(healthyService.interruptActiveAttempts).toHaveBeenCalledTimes(1);
+    expect(healthyService.interruptActiveAttempts).toHaveBeenCalledWith(
+      runtimeShutdownAbortReason,
+    );
   });
 
   it("continues fan-out when warning logging fails", async () => {
@@ -171,5 +178,8 @@ describe("durable: durableShutdownAbortingHook", () => {
 
     expect(warn).toHaveBeenCalledTimes(1);
     expect(healthyService.interruptActiveAttempts).toHaveBeenCalledTimes(1);
+    expect(healthyService.interruptActiveAttempts).toHaveBeenCalledWith(
+      runtimeShutdownAbortReason,
+    );
   });
 });

@@ -1,11 +1,11 @@
 import { cancellationError } from "../../../../../errors";
 import { handleExecutionAttemptError } from "../../../../durable/core/managers/ExecutionManager.attempt";
-import { durableShutdownInterruptionReason } from "../../../../durable/core/shutdownInterruption";
 import {
   ExecutionStatus,
   type Execution,
 } from "../../../../durable/core/types";
 import { withTimeout } from "../../../../durable/core/utils";
+import { runtimeShutdownAbortReason } from "../../../../../tools/runtimeShutdownAbortReason";
 
 function createRunningExecution(): Execution {
   return {
@@ -41,7 +41,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
 
     await handleExecutionAttemptError({
       error: cancellationError.new({
-        reason: durableShutdownInterruptionReason,
+        reason: runtimeShutdownAbortReason,
       }),
       runningExecution: createRunningExecution(),
       guards: {
@@ -51,7 +51,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
         getCancellationState: async () => null,
       },
       executionLockState: createLockState(),
-      getShutdownInterruptionReason: () => durableShutdownInterruptionReason,
+      getShutdownInterruptionReason: () => runtimeShutdownAbortReason,
       transitionToCancelled,
       transitionToFailed,
       suspendAttempt,
@@ -69,7 +69,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
 
     await handleExecutionAttemptError({
       error: cancellationError.new({
-        reason: durableShutdownInterruptionReason,
+        reason: runtimeShutdownAbortReason,
       }),
       runningExecution: createRunningExecution(),
       guards: {
@@ -79,7 +79,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
         getCancellationState: async () => ({ reason: "User requested" }),
       },
       executionLockState: createLockState(),
-      getShutdownInterruptionReason: () => durableShutdownInterruptionReason,
+      getShutdownInterruptionReason: () => runtimeShutdownAbortReason,
       transitionToCancelled,
       transitionToFailed: jest.fn(async () => undefined),
       suspendAttempt: jest.fn(async () => undefined),
@@ -109,7 +109,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
         getCancellationState: async () => null,
       },
       executionLockState: createLockState(),
-      getShutdownInterruptionReason: () => durableShutdownInterruptionReason,
+      getShutdownInterruptionReason: () => runtimeShutdownAbortReason,
       transitionToCancelled: jest.fn(async () => undefined),
       transitionToFailed: jest.fn(async () => undefined),
       suspendAttempt: jest.fn(async () => undefined),
