@@ -1,34 +1,36 @@
-import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { journal as journalHelper } from "../../models/ExecutionJournal";
-import { Match } from "../../tools/check";
-import type { ValidationSchemaInput } from "../../types/utilities";
-import { loggerResource } from "../resources/logger.resource";
-import { identityContextResource } from "../resources/identityContext.resource";
-import { globalTags } from "../globalTags";
+import { defineTaskMiddleware } from "../../../definers/defineTaskMiddleware";
+import { journal as journalHelper } from "../../../models/ExecutionJournal";
+import { Match } from "../../../tools/check";
+import type { ValidationSchemaInput } from "../../../types/utilities";
+import { loggerResource } from "../../resources/logger.resource";
+import { identityContextResource } from "../../resources/identityContext.resource";
+import { globalTags } from "../../globalTags";
 import {
   normalizeCacheKeyBuilderResult,
   type CacheKeyBuilderResult,
-} from "./cache.key";
-import { defaultTaskKeyBuilder } from "./keyBuilder.shared";
+} from "./key";
+import { defaultTaskKeyBuilder } from "../keyBuilder.shared";
 import {
   applyIdentityScopeToKey,
   identityScopePattern,
   type IdentityScopedMiddlewareConfig,
-} from "./identityScope.shared";
+} from "../identityScope.shared";
 import {
   cacheResource,
   createCacheInstance,
   type CacheFactoryOptions,
-} from "./cache.resource";
+} from "./resource";
 
 export {
   cacheProviderResource,
   cacheResource,
   createCacheInstance,
-} from "./cache.resource";
+} from "./resource";
 export type {
+  CacheInvalidateKeysOptions,
   CacheEntryMetadata,
   CacheFactoryOptions,
+  CacheKey,
   CacheProvider,
   CacheProviderInput,
   CacheProviderResource,
@@ -36,8 +38,8 @@ export type {
   CacheResourceValue,
   CacheRef,
   ICacheProvider,
-} from "./cache.resource";
-export type { CacheKeyBuilderResult } from "./cache.key";
+} from "./resource";
+export type { CacheKeyBuilderResult } from "./key";
 
 type CacheMiddlewareConfig = CacheFactoryOptions &
   IdentityScopedMiddlewareConfig & {

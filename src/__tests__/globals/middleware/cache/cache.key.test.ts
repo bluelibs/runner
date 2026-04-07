@@ -1,9 +1,19 @@
 import {
+  normalizeCacheKeys,
   normalizeCacheKeyBuilderResult,
   normalizeCacheRefs,
-} from "../../globals/middleware/cache.key";
+} from "../../../../globals/middleware/cache/key";
 
 describe("cache.key", () => {
+  it("normalizes cache keys and rejects non-string values", () => {
+    expect(normalizeCacheKeys(undefined)).toEqual([]);
+    expect(normalizeCacheKeys(["user:1", "user:1"])).toEqual(["user:1"]);
+
+    expect(() => normalizeCacheKeys(["user:1", 42 as never])).toThrow(
+      /cache keys must be strings/i,
+    );
+  });
+
   it("normalizes cache refs and rejects non-string values", () => {
     expect(normalizeCacheRefs(undefined)).toEqual([]);
     expect(normalizeCacheRefs(["user:1", "user:1"])).toEqual(["user:1"]);

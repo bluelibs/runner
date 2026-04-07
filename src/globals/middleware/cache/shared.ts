@@ -1,8 +1,12 @@
 import { LRUCache } from "lru-cache";
-import { normalizeCacheRefs, type CacheEntryMetadata } from "./cache.key";
-import { safeStringify } from "../../models/utils/safeStringify";
+import {
+  normalizeCacheKeys,
+  normalizeCacheRefs,
+  type CacheEntryMetadata,
+} from "./key";
+import { safeStringify } from "../../../models/utils/safeStringify";
 
-export type { CacheEntryMetadata, CacheRef } from "./cache.key";
+export type { CacheEntryMetadata, CacheKey, CacheRef } from "./key";
 
 /**
  * Low-level cache instance contract used by task cache middleware.
@@ -16,8 +20,12 @@ export interface ICacheProvider {
   ): unknown | Promise<unknown>;
   clear(): void | Promise<void>;
   /**
-   * Invalidates refs after the caller has already normalized and tenant-scoped
-   * them via normalizeCacheRefs() and applyIdentityScopeToKey().
+   * Invalidates concrete storage keys after the caller has already normalized
+   * and identity-scoped them.
+   */
+  invalidateKeys(keys: readonly string[]): number | Promise<number>;
+  /**
+   * Invalidates semantic refs after the caller has already normalized them.
    */
   invalidateRefs(refs: readonly string[]): number | Promise<number>;
   has?(key: string): boolean | Promise<boolean>;
@@ -198,6 +206,15 @@ function createRefIndexedCacheInstance({
       refIndex.refsByKey.clear();
       refIndex.keysByRef.clear();
       sharedBudget && removeBudgetEntriesForTask(sharedBudget, taskId);
+    },
+    invalidateKeys(keys: readonly string[]) {
+      let deletedCount = 0;
+
+      for (const key of normalizeCacheKeys(keys)) {
+        deletedCount += Number(localCache.delete(key));
+      }
+
+      return deletedCount;
     },
     invalidateRefs(refs: readonly string[]) {
       const keys = new Set<string>();

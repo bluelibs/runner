@@ -1,4 +1,9 @@
-import { validationError } from "../../errors";
+import { validationError } from "../../../errors";
+
+/**
+ * Concrete cache storage key returned by `keyBuilder(...)`.
+ */
+export type CacheKey = string;
 
 /**
  * Semantic cache reference used for cross-task invalidation.
@@ -20,7 +25,7 @@ export interface CacheEntryMetadata {
  */
 export interface CacheKeyDescriptor {
   /** Concrete storage key used by the cache provider. */
-  cacheKey: string;
+  cacheKey: CacheKey;
   /** Optional semantic refs indexed for later invalidation. */
   refs?: readonly CacheRef[];
 }
@@ -37,8 +42,30 @@ export type CacheKeyBuilderResult = string | CacheKeyDescriptor;
  * Normalized cache key payload used internally by cache middleware/providers.
  */
 export interface NormalizedCacheKeyDescriptor {
-  cacheKey: string;
+  cacheKey: CacheKey;
   refs: readonly CacheRef[];
+}
+
+export function normalizeCacheKeys(
+  keys: CacheKey | readonly CacheKey[] | undefined,
+): readonly CacheKey[] {
+  if (keys === undefined) {
+    return [];
+  }
+
+  const values = Array.isArray(keys) ? keys : [keys];
+
+  for (const key of values) {
+    if (typeof key !== "string") {
+      validationError.throw({
+        subject: "Cache keys",
+        id: "cache",
+        originalError: `Cache keys must be strings. Received ${typeof key}.`,
+      });
+    }
+  }
+
+  return [...new Set(values)];
 }
 
 export function normalizeCacheRefs(

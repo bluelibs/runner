@@ -2,9 +2,9 @@ import {
   cacheMiddleware,
   journalKeys,
   resolveCacheMiddlewareConfig,
-} from "../../globals/middleware/cache.middleware";
-import { defaultStorageTaskKeyBuilder } from "../../globals/middleware/keyBuilder.shared";
-import { Serializer } from "../../serializer";
+} from "../../../../globals/middleware/cache/middleware";
+import { defaultStorageTaskKeyBuilder } from "../../../../globals/middleware/keyBuilder.shared";
+import { Serializer } from "../../../../serializer";
 
 describe("cache middleware coverage", () => {
   it("falls back to the default key builder when config explicitly sets keyBuilder to undefined", () => {

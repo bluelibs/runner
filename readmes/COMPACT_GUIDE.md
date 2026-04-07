@@ -425,11 +425,13 @@ Operational notes:
 
 - Register `resources.cache` in a parent resource before using task cache middleware.
 - `cache.keyBuilder(canonicalTaskId, input)` may return either a plain key string or `{ cacheKey, refs? }`.
+- Call `resources.cache.invalidateKeys(key | key[], options?)` to delete cached entries by concrete storage key, or opt into identity scoping for the provided base key.
 - Call `resources.cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `debounce`, `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast on non-serializable input. `rateLimit` defaults to `canonicalTaskId` (shared quota per task). The `canonicalTaskId` is the full runtime id, so sibling resources with the same local id don't share state by accident.
 - See [Security](#security) for `identityScope` and identity-aware partitioning.
+- `invalidateKeys(...)` is raw by default. Pass `invalidateKeys(key, { identityScope })` when you want Runner to scope the provided base key through the active identity namespace before invalidation.
 - Cache refs stay raw. For tenant-aware invalidation, build refs through an app helper (e.g., `CacheRefs.getTenantId()`) so `keyBuilder` and `invalidateRefs(...)` share the same format.
 - Middleware tags can enforce config contracts flowing into dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
 - `tags.identityScoped`: middleware supports optional `identityScope`; subtree policy may fill or require it. See [Security](#security).
@@ -759,6 +761,7 @@ When `identityScope` object is present with `tenant: true`, `required` defaults 
 If your SaaS only has users and no real tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and use `{ tenant: true, user: true }` for per-user buckets.
 
 Cache refs stay raw. For tenant-aware or user-aware invalidation, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same ref format.
+Cache key invalidation is raw by default. If `identityScope` prefixes stored keys, either pass the full scoped key yourself, for example `acme:profile`, or opt into helper scoping with `cache.invalidateKeys("profile", { identityScope: { tenant: true } })`.
 
 Task identity gates (separate from middleware partitioning):
 

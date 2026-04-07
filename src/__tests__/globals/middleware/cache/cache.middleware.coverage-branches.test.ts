@@ -1,5 +1,5 @@
-import { cacheMiddleware } from "../../../globals/middleware/cache.middleware";
-import type { ICacheProvider } from "../../../globals/middleware/cache.resource";
+import { cacheMiddleware } from "../../../../globals/middleware/cache/middleware";
+import type { ICacheProvider } from "../../../../globals/middleware/cache/resource";
 
 describe("cache middleware coverage branches", () => {
   it("keeps task ids unchanged when they do not include canonical `.tasks.` marker", async () => {
@@ -9,6 +9,7 @@ describe("cache middleware coverage branches", () => {
       has: jest.fn(async () => false),
       set: jest.fn(async () => undefined),
       clear: jest.fn(async () => undefined),
+      invalidateKeys: jest.fn(async () => 0),
       invalidateRefs: jest.fn(async () => 0),
     };
     const cache = {

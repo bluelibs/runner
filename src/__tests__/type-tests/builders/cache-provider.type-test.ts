@@ -2,7 +2,7 @@ import { r, resources } from "../../../";
 import type {
   CacheProvider,
   ICacheProvider,
-} from "../../../globals/middleware/cache.middleware";
+} from "../../../globals/middleware/cache/middleware";
 
 // Type-only tests for cache provider wiring through resources.cache.with(...)
 {
@@ -13,6 +13,7 @@ import type {
         get: async (_key: string) => undefined,
         set: async (_key: string, _value: unknown) => undefined,
         clear: async () => undefined,
+        invalidateKeys: async (_keys: readonly string[]) => 0,
         invalidateRefs: async (_refs: readonly string[]) => 0,
         has: async (_key: string) => true,
       });
@@ -30,6 +31,7 @@ import type {
         get: async (_key: string) => undefined,
         set: async (_key: string, _value: unknown) => undefined,
         clear: async () => undefined,
+        invalidateKeys: async (_keys: readonly string[]) => 0,
         invalidateRefs: async (_refs: readonly string[]) => 0,
         has: async (_key: string) => true,
       };
@@ -66,6 +68,7 @@ import type {
       get: async (_key: string) => undefined,
       set: async (_key: string, _value: unknown) => undefined,
       clear: async () => undefined,
+      invalidateKeys: async (_keys: readonly string[]) => 0,
       invalidateRefs: async (_refs: readonly string[]) => 0,
       has: async (_key: string) => "yes",
     }))
@@ -82,6 +85,7 @@ import type {
       get: async (_key: string) => options,
       set: async (_key: string, _value: unknown) => undefined,
       clear: async () => undefined,
+      invalidateKeys: async (_keys: readonly string[]) => 0,
       invalidateRefs: async (_refs: readonly string[]) => 0,
     }))
     .build();

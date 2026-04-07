@@ -2053,6 +2053,7 @@ interface ICacheProvider {
     metadata?: { refs?: readonly string[] },
   ): unknown | Promise<unknown>;
   clear(): void | Promise<void>;
+  invalidateKeys(keys: readonly string[]): number | Promise<number>;
   invalidateRefs(refs: readonly string[]): number | Promise<number>;
   has?(key: string): boolean | Promise<boolean>;
 }
@@ -2070,6 +2071,7 @@ Notes:
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - When `keyBuilder(...)` returns `{ cacheKey, refs }`, middleware passes those refs to `set(..., metadata)` for provider-side indexing.
 - Without `keyBuilder`, cache keys default to `taskId + serialized input` and fail fast when the input cannot be serialized.
+- `resources.cache.invalidateKeys(key | key[], options?)` fans out across cache-enabled tasks and deletes matching concrete storage keys.
 - `resources.cache.invalidateRefs(ref | ref[])` fans out across cache-enabled tasks and deletes matching entries.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
@@ -2155,6 +2157,8 @@ const updateUser = r
 Notes:
 
 - `keyBuilder(canonicalTaskId, input)` may return either a plain string or `{ cacheKey, refs? }`.
+- `resources.cache.invalidateKeys(...)` is raw by default and expects the concrete storage key.
+- Pass `resources.cache.invalidateKeys(key, { identityScope })` when you want Runner to scope the provided base key through the active identity namespace before invalidation.
 - Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`. (refs are used for cache invalidation)
 - Refs do not follow `identityScope` intentionally. If you want tenant-aware invalidation, read the active identity inside your app helper, for example `CacheRefs.getTenantId()`, and build the ref string there so writes and invalidations always match.
 
@@ -2248,6 +2252,10 @@ class RedisCache {
   }
 
   async invalidateRefs(_refs: readonly string[]): Promise<number> {
+    return 0;
+  }
+
+  async invalidateKeys(_keys: readonly string[]): Promise<number> {
     return 0;
   }
 
@@ -5856,6 +5864,7 @@ This is the "partition state" part of the story. It affects middleware-managed b
 - `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
 - When user-aware identity scope is enabled, `userId` must also be a non-empty string and cannot contain `:`.
 - When roles are present on the identity payload, they must be a string array with no empty entries.
+- Cache key invalidation is raw by default. You may either pass the fully scoped key yourself or opt into helper scoping with `cache.invalidateKeys(key, { identityScope })`.
 - Cache refs stay raw. If invalidation should respect tenant or user boundaries, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same tenant-aware ref format.
 
 Quick choice guide:

@@ -1,16 +1,16 @@
-import { defineResource, defineTask } from "../../define";
-import { run } from "../../run";
+import { defineResource, defineTask } from "../../../../define";
+import { run } from "../../../../run";
 import {
   type CacheFactoryOptions,
   type CacheProvider,
   cacheMiddleware,
   cacheResource,
-} from "../../globals/middleware/cache.middleware";
-import { loggerResource } from "../../globals/resources/logger.resource";
-import { storeResource } from "../../globals/resources/store.resource";
-import { MiddlewareResolver } from "../../models/middleware/MiddlewareResolver";
-import { getSubtreeMiddlewareDuplicateKey } from "../../tools/subtreeMiddleware";
-import { genericError } from "../../errors";
+} from "../../../../globals/middleware/cache/middleware";
+import { loggerResource } from "../../../../globals/resources/logger.resource";
+import { storeResource } from "../../../../globals/resources/store.resource";
+import { MiddlewareResolver } from "../../../../models/middleware/MiddlewareResolver";
+import { getSubtreeMiddlewareDuplicateKey } from "../../../../tools/subtreeMiddleware";
+import { genericError } from "../../../../errors";
 
 describe("cache resource invalidateRefs", () => {
   it("reuses transient custom providers created for invalidation", async () => {
@@ -30,6 +30,7 @@ describe("cache resource invalidateRefs", () => {
             get: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
+            invalidateKeys: async () => 0,
             invalidateRefs: async (refs) => {
               invalidationCalls.push({ refs, taskId });
               return 0;
@@ -104,6 +105,7 @@ describe("cache resource invalidateRefs", () => {
           get: async () => undefined,
           set: async () => undefined,
           clear: async () => undefined,
+          invalidateKeys: async () => 0,
           invalidateRefs: async () => 0,
         };
       },
@@ -163,6 +165,7 @@ describe("cache resource invalidateRefs", () => {
             get: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
+            invalidateKeys: async () => 0,
             invalidateRefs: async (refs) => {
               invalidationCalls.push({ refs, taskId });
               if (
@@ -260,6 +263,7 @@ describe("cache resource invalidateRefs", () => {
           get: async () => undefined,
           set: async () => undefined,
           clear: async () => undefined,
+          invalidateKeys: async () => 0,
           invalidateRefs: async (refs) => {
             invalidationCalls.push({ refs, taskId });
             return 1;
@@ -335,6 +339,7 @@ describe("cache resource invalidateRefs", () => {
           get: async () => undefined,
           set: async () => undefined,
           clear: async () => undefined,
+          invalidateKeys: async () => 1,
           invalidateRefs: async () => {
             if (
               taskId ===

@@ -1,7 +1,7 @@
 import {
   cacheMiddleware,
   journalKeys as cacheJournalKeys,
-} from "./middleware/cache.middleware";
+} from "./middleware/cache/middleware";
 import { concurrencyTaskMiddleware } from "./middleware/concurrency.middleware";
 import {
   circuitBreakerMiddleware,

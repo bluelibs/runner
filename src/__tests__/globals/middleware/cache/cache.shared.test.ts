@@ -5,7 +5,7 @@ import {
   createDefaultCacheProvider,
   createSharedCacheBudgetState,
   isBuiltInCacheProvider,
-} from "../../globals/middleware/cache.shared";
+} from "../../../../globals/middleware/cache/shared";
 
 describe("cache.shared", () => {
   it("marks the built-in provider and creates task-scoped caches", async () => {
@@ -17,6 +17,7 @@ describe("cache.shared", () => {
         get: () => undefined,
         set: () => undefined,
         clear: () => undefined,
+        invalidateKeys: () => 0,
         invalidateRefs: () => 0,
       })),
     ).toBe(false);

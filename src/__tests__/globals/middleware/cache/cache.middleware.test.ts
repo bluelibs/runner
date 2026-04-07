@@ -1,5 +1,9 @@
-import { defineResource, defineTask, defineTaskMiddleware } from "../../define";
-import { run } from "../../run";
+import {
+  defineResource,
+  defineTask,
+  defineTaskMiddleware,
+} from "../../../../define";
+import { run } from "../../../../run";
 import {
   CacheFactoryOptions,
   CacheProvider,
@@ -9,9 +13,9 @@ import {
   createCacheInstance,
   ICacheProvider,
   journalKeys as cacheJournalKeys,
-} from "../../globals/middleware/cache.middleware";
-import { genericError } from "../../errors";
-import { r } from "../..";
+} from "../../../../globals/middleware/cache/middleware";
+import { genericError } from "../../../../errors";
+import { r } from "../../../..";
 
 enum CacheNoHasId {
   App = "cache-nohas-app",
@@ -140,6 +144,7 @@ describe("Caching System", () => {
               get: async (_key: string) => undefined,
               set: async (_key: string, _value: unknown) => undefined,
               clear: async () => undefined,
+              invalidateKeys: async () => 0,
               invalidateRefs: async () => 0,
             };
           },
@@ -219,6 +224,10 @@ describe("Caching System", () => {
           this.store.clear();
         }
 
+        invalidateKeys() {
+          return 0;
+        }
+
         invalidateRefs() {
           return 0;
         }
@@ -286,6 +295,10 @@ describe("Caching System", () => {
 
         clear() {
           this.store.clear();
+        }
+
+        invalidateKeys() {
+          return 0;
         }
 
         invalidateRefs() {
@@ -380,6 +393,10 @@ describe("Caching System", () => {
           this.store.clear();
         }
 
+        invalidateKeys() {
+          return 0;
+        }
+
         invalidateRefs() {
           return 0;
         }
@@ -436,6 +453,10 @@ describe("Caching System", () => {
 
         clear() {
           this.store.clear();
+        }
+
+        invalidateKeys() {
+          return 0;
         }
 
         invalidateRefs() {
@@ -702,6 +723,7 @@ describe("Caching System", () => {
             get: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
+            invalidateKeys: async () => 0,
             invalidateRefs: async (refs) => {
               invalidationCalls.push({ taskId, refs, options });
               return 0;
@@ -781,6 +803,10 @@ describe("Caching System", () => {
 
         clear() {
           this.store.clear();
+        }
+
+        invalidateKeys() {
+          return 0;
         }
 
         invalidateRefs() {
@@ -940,6 +966,10 @@ describe("Caching System", () => {
           this.store.clear();
         }
 
+        invalidateKeys() {
+          return 0;
+        }
+
         invalidateRefs() {
           return 0;
         }
@@ -1028,6 +1058,10 @@ describe("Caching System", () => {
       }
       async clear() {
         this.store.clear();
+      }
+
+      async invalidateKeys() {
+        return 0;
       }
 
       async invalidateRefs() {
@@ -1360,6 +1394,10 @@ describe("Caching System", () => {
           this.store.clear();
         }
 
+        invalidateKeys() {
+          return 0;
+        }
+
         invalidateRefs() {
           return 0;
         }
@@ -1459,6 +1497,10 @@ describe("Caching System", () => {
         async clear() {
           this.disposed = true;
           this.store.clear();
+        }
+
+        async invalidateKeys() {
+          return 0;
         }
 
         async invalidateRefs() {

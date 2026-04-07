@@ -1,4 +1,4 @@
-import { cacheMiddleware } from "../../globals/middleware/cache.middleware";
+import { cacheMiddleware } from "../../../../globals/middleware/cache/middleware";
 
 describe("cache middleware stable task id coverage", () => {
   it("keeps plain task ids unchanged when no `.tasks.` marker exists", async () => {
@@ -7,6 +7,7 @@ describe("cache middleware stable task id coverage", () => {
       has: jest.fn(async () => false),
       set: jest.fn(async () => undefined),
       clear: jest.fn(async () => undefined),
+      invalidateKeys: jest.fn(async () => 0),
       invalidateRefs: jest.fn(async () => 0),
     };
     const deps = {
