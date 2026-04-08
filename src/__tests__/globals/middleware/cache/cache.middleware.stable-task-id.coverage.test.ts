@@ -21,6 +21,8 @@ describe("cache middleware stable task id coverage", () => {
     };
     const next = jest.fn(async () => "fresh");
     const journal = {
+      get: jest.fn(),
+      has: jest.fn(),
       set: jest.fn(),
     };
 

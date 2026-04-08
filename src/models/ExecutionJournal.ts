@@ -30,6 +30,10 @@ export class ExecutionJournalImpl implements ExecutionJournal {
   has<T>(key: JournalKey<T>): boolean {
     return this.store.has(key.id);
   }
+
+  delete<T>(key: JournalKey<T>): void {
+    this.store.delete(key.id);
+  }
 }
 
 /**

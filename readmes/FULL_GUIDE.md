@@ -2138,7 +2138,10 @@ const getUser = r
       }),
     }),
   ])
-  .run(async (input) => {
+  .run(async (input, _deps, context) => {
+    context?.journal
+      .get(middleware.task.cache.journalKeys.refs)
+      ?.add(`tenant:${CacheRefs.getTenantId()}:user-profile:${input.userId}`);
     return await doExpensiveCalculation(input.userId);
   })
   .build();
@@ -2157,6 +2160,8 @@ const updateUser = r
 Notes:
 
 - `keyBuilder(canonicalTaskId, input)` may return either a plain string or `{ cacheKey, refs? }`.
+- During an active cache miss, tasks may attach additional refs through `context.journal.get(middleware.task.cache.journalKeys.refs)?.add(...)`.
+- Refs from `keyBuilder(...)` and refs added through the journal collector accumulate into the same cached entry metadata.
 - `resources.cache.invalidateKeys(...)` is raw by default and expects the concrete storage key.
 - Pass `resources.cache.invalidateKeys(key, { identityScope })` when you want Runner to scope the provided base key through the active identity namespace before invalidation.
 - Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`. (refs are used for cache invalidation)

@@ -1,11 +1,13 @@
 import { defineTaskMiddleware } from "../../../definers/defineTaskMiddleware";
 import { journal as journalHelper } from "../../../models/ExecutionJournal";
 import { Match } from "../../../tools/check";
+import type { ExecutionJournal } from "../../../types/executionJournal";
 import type { ValidationSchemaInput } from "../../../types/utilities";
 import { loggerResource } from "../../resources/logger.resource";
 import { identityContextResource } from "../../resources/identityContext.resource";
 import { globalTags } from "../../globalTags";
 import {
+  normalizeCacheRefs,
   normalizeCacheKeyBuilderResult,
   type CacheKeyBuilderResult,
 } from "./key";
@@ -15,9 +17,11 @@ import {
   identityScopePattern,
   type IdentityScopedMiddlewareConfig,
 } from "../identityScope.shared";
+import { journalKeys as retryJournalKeys } from "../retry.middleware";
 import {
   cacheResource,
   createCacheInstance,
+  type CacheRef,
   type CacheFactoryOptions,
 } from "./resource";
 
@@ -40,6 +44,15 @@ export type {
   ICacheProvider,
 } from "./resource";
 export type { CacheKeyBuilderResult } from "./key";
+
+/**
+ * Journal-scoped collector exposed during active cache misses so task code can
+ * attach semantic refs discovered during execution.
+ */
+export interface CacheRefCollector {
+  /** Adds one or more semantic refs to the active cache-miss collector. */
+  add(refs: CacheRef | readonly CacheRef[]): void;
+}
 
 type CacheMiddlewareConfig = CacheFactoryOptions &
   IdentityScopedMiddlewareConfig & {
@@ -91,7 +104,47 @@ const cacheMiddlewareConfigPattern: ValidationSchemaInput<CacheMiddlewareConfig>
 export const journalKeys = {
   /** Whether the result was served from cache (true) or freshly computed (false) */
   hit: journalHelper.createKey<boolean>("runner.middleware.task.cache.hit"),
+  /** Collector available during active cache misses for late ref attachment. */
+  refs: journalHelper.createKey<CacheRefCollector | undefined>(
+    "runner.middleware.task.cache.refs",
+  ),
 } as const;
+
+function resolveRetryAttempt(journal: ExecutionJournal): number {
+  const attempt = journal.get(retryJournalKeys.attempt);
+
+  return typeof attempt === "number" &&
+    Number.isInteger(attempt) &&
+    attempt >= 0
+    ? attempt
+    : 0;
+}
+
+function createCacheRefCollector(journal: ExecutionJournal) {
+  const refsByAttempt = new Map<number, Set<CacheRef>>();
+  const collector: CacheRefCollector = {
+    add(refs) {
+      const attempt = resolveRetryAttempt(journal);
+      let refsForAttempt = refsByAttempt.get(attempt);
+
+      if (!refsForAttempt) {
+        refsForAttempt = new Set<CacheRef>();
+        refsByAttempt.set(attempt, refsForAttempt);
+      }
+
+      for (const ref of normalizeCacheRefs(refs)) {
+        refsForAttempt.add(ref);
+      }
+    },
+  };
+
+  return {
+    collector,
+    getRefs() {
+      return [...(refsByAttempt.get(resolveRetryAttempt(journal)) ?? [])];
+    },
+  };
+}
 
 export function resolveCacheMiddlewareConfig(
   config: CacheMiddlewareConfig | undefined,
@@ -173,7 +226,6 @@ export const cacheMiddleware = defineTaskMiddleware({
       resolvedConfig.identityScope,
       identityContext?.tryUse,
     );
-    const refs = cacheKey.refs;
 
     const cachedValue = await cacheHolderForTask.get(key);
     const hasCachedEntry =
@@ -187,21 +239,42 @@ export const cacheMiddleware = defineTaskMiddleware({
     }
 
     journal.set(journalKeys.hit, false, { override: true });
-    const result = await next(task!.input);
+    const previousCollectorExists = journal.has(journalKeys.refs);
+    const previousCollector = journal.get(journalKeys.refs);
+    const cacheRefCollector = createCacheRefCollector(journal);
+    journal.set(journalKeys.refs, cacheRefCollector.collector, {
+      override: true,
+    });
 
     try {
-      await cacheHolderForTask.set(key, result, { refs });
-    } catch (error) {
-      await logger?.error(
-        "Cache middleware write failed; returning fresh result.",
-        {
-          taskId,
-          data: { key, refs },
-          error: error instanceof Error ? error : new Error(String(error)),
-        },
-      );
-    }
+      const result = await next(task!.input);
+      const refs = normalizeCacheRefs([
+        ...cacheKey.refs,
+        ...cacheRefCollector.getRefs(),
+      ]);
 
-    return result;
+      try {
+        await cacheHolderForTask.set(key, result, { refs });
+      } catch (error) {
+        await logger?.error(
+          "Cache middleware write failed; returning fresh result.",
+          {
+            taskId,
+            data: { key, refs },
+            error: error instanceof Error ? error : new Error(String(error)),
+          },
+        );
+      }
+
+      return result;
+    } finally {
+      if (previousCollectorExists) {
+        journal.set(journalKeys.refs, previousCollector, { override: true });
+      } else if (typeof journal.delete === "function") {
+        journal.delete(journalKeys.refs);
+      } else {
+        journal.set(journalKeys.refs, undefined as never, { override: true });
+      }
+    }
   },
 });

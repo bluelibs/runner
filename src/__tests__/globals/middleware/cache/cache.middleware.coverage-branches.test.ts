@@ -18,7 +18,11 @@ describe("cache middleware coverage branches", () => {
       defaultOptions: {},
     };
     const next = jest.fn(async (input: unknown) => ({ input }));
-    const journal = { set: jest.fn() };
+    const journal = {
+      get: jest.fn(),
+      has: jest.fn(),
+      set: jest.fn(),
+    };
 
     const result = await cacheMiddleware.run(
       {

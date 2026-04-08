@@ -75,6 +75,8 @@ describe("cache middleware coverage", () => {
     const get = jest.fn(async () => undefined);
     const set = jest.fn(async () => undefined);
     const journal = {
+      get: jest.fn(),
+      has: jest.fn(),
       set: jest.fn(),
     };
     const next = jest.fn(async () => "fresh-value");
@@ -113,5 +115,60 @@ describe("cache middleware coverage", () => {
     expect(journal.set).toHaveBeenCalledWith(journalKeys.hit, false, {
       override: true,
     });
+  });
+
+  it("wraps non-Error cache write failures before logging them", async () => {
+    const journalStore = new Map<string, unknown>();
+    const journal = {
+      delete: jest.fn((key) => {
+        journalStore.delete(key.id);
+      }),
+      get: jest.fn((key) => journalStore.get(key.id)),
+      has: jest.fn((key) => journalStore.has(key.id)),
+      set: jest.fn((key, value) => {
+        journalStore.set(key.id, value);
+      }),
+    };
+    const logger = {
+      error: jest.fn(async () => undefined),
+    };
+
+    await cacheMiddleware.run!(
+      {
+        task: {
+          definition: { id: "cache-non-error-write-task" },
+          input: undefined,
+        } as never,
+        next: async () => "fresh-value",
+        journal: journal as never,
+      },
+      {
+        cache: {
+          map: new Map([
+            [
+              "cache-non-error-write-task",
+              {
+                get: async () => undefined,
+                set: async () => {
+                  throw "write failed";
+                },
+              },
+            ],
+          ]),
+          pendingCreates: new Map(),
+          defaultOptions: {},
+        },
+        identityContext: undefined,
+        logger,
+      } as never,
+      {},
+    );
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "Cache middleware write failed; returning fresh result.",
+      expect.objectContaining({
+        error: expect.any(Error),
+      }),
+    );
   });
 });

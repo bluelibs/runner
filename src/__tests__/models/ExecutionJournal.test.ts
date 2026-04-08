@@ -73,6 +73,17 @@ describe("ExecutionJournal", () => {
 
       expect(journal.get(key)).toBe("second");
     });
+
+    it("deletes stored values by key", () => {
+      const journal = new ExecutionJournalImpl();
+      const key = journalFactory.createKey<string>("delete-key");
+
+      journal.set(key, "value");
+      journal.delete(key);
+
+      expect(journal.has(key)).toBe(false);
+      expect(journal.get(key)).toBeUndefined();
+    });
   });
 
   describe("createJournalKey", () => {

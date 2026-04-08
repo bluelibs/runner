@@ -425,6 +425,7 @@ Operational notes:
 
 - Register `resources.cache` in a parent resource before using task cache middleware.
 - `cache.keyBuilder(canonicalTaskId, input)` may return either a plain key string or `{ cacheKey, refs? }`.
+- During an active cache miss, task code may add extra refs through `context.journal.get(middleware.task.cache.journalKeys.refs)!.add(...)`.
 - Call `resources.cache.invalidateKeys(key | key[], options?)` to delete cached entries by concrete storage key, or opt into identity scoping for the provided base key.
 - Call `resources.cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
@@ -433,6 +434,7 @@ Operational notes:
 - See [Security](#security) for `identityScope` and identity-aware partitioning.
 - `invalidateKeys(...)` is raw by default. Pass `invalidateKeys(key, { identityScope })` when you want Runner to scope the provided base key through the active identity namespace before invalidation.
 - Cache refs stay raw. For tenant-aware invalidation, build refs through an app helper (e.g., `CacheRefs.getTenantId()`) so `keyBuilder` and `invalidateRefs(...)` share the same format.
+- Refs from `keyBuilder(...)` and refs added through the journal collector accumulate.
 - Middleware tags can enforce config contracts flowing into dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
 - `tags.identityScoped`: middleware supports optional `identityScope`; subtree policy may fill or require it. See [Security](#security).
 

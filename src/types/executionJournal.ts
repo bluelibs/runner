@@ -33,4 +33,6 @@ export interface ExecutionJournal {
   get<T>(key: JournalKey<T>): T | undefined;
   /** Reports whether a value exists for the given key. */
   has<T>(key: JournalKey<T>): boolean;
+  /** Removes any value stored under the given key when supported. */
+  delete?<T>(key: JournalKey<T>): void;
 }
