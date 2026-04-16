@@ -29,14 +29,13 @@ export class StoreRegistryDefinitionCloner {
     const descriptor = Object.getOwnPropertyDescriptor(target, "id");
     if (descriptor?.writable) {
       (target as { id: string }).id = id;
-      return;
+    } else {
+      Object.defineProperty(target, "id", {
+        value: id,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
-
-    Object.defineProperty(target, "id", {
-      value: id,
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    });
   }
 }

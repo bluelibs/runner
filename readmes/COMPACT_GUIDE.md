@@ -302,6 +302,7 @@ For lifecycle-owned timers, prefer `resources.timers` inside a task or resource:
 - Use it when middleware and tasks need to share execution-local state.
 - `journal.set(key, value)` fails if the key already exists. Pass `{ override: true }` when replacement is intentional.
 - Create custom keys with `journal.createKey<T>(id)`.
+- Custom task middleware may declare those keys up front and expose them through `.journalKeys`.
 
 ## Events and Hooks
 
@@ -384,6 +385,8 @@ Core rules:
 - Owner-scoped auto-application is available through `resource.subtree({ tasks/resources: { middleware: [...] } })`.
 - Contract middleware can constrain task input and output types.
 - Middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment.
+- Custom task middleware can declare execution-local keys with `.journal({ ... })` or `defineTaskMiddleware({ journal: { ... } })` and consume them through `.journalKeys`.
+- For middleware-local journal state, use short local labels like `journal.createKey<Type>("traceId")`. Journal sharing only happens when the same key object is reused.
 - When a runtime predicate must match one exact definition, prefer `isSameDefinition(candidate, definitionRef)` over comparing public ids directly, including configured wrappers such as `resource.with(...)` and middleware `.with(...)`.
 
 Task vs resource middleware:
@@ -668,7 +671,9 @@ const myTask = r
   .run(async () => {
     const execution = asyncContexts.execution.use();
     const { correlationId, signal } = execution;
-    if (execution.framesMode === "full") { execution.frames; }
+    if (execution.framesMode === "full") {
+      execution.frames;
+    }
   })
   .build();
 ```
@@ -749,14 +754,14 @@ Identity-aware middleware (`cache`, `rateLimit`, `debounce`, `throttle`, `concur
 
 `identityScope` controls middleware key partitioning:
 
-| Scope | Behavior |
-|-------|----------|
-| *(omit)* | Default tenant scope. Cross-tenant sharing only when no identity context exists. |
-| `{ tenant: false }` | Disable identity-based partitioning; shared keyspace. |
-| `{ tenant: true }` | Require `tenantId`; partition as `<tenantId>:...` |
-| `{ tenant: true, user: true }` | Require `tenantId` + `userId`; partition as `<tenantId>:<userId>:...` |
-| `{ required: false, tenant: true }` | Optional `<tenantId>:...` partitioning. |
-| `{ required: false, tenant: true, user: true }` | Optional `<tenantId>:<userId>:...` partitioning. |
+| Scope                                           | Behavior                                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| _(omit)_                                        | Default tenant scope. Cross-tenant sharing only when no identity context exists. |
+| `{ tenant: false }`                             | Disable identity-based partitioning; shared keyspace.                            |
+| `{ tenant: true }`                              | Require `tenantId`; partition as `<tenantId>:...`                                |
+| `{ tenant: true, user: true }`                  | Require `tenantId` + `userId`; partition as `<tenantId>:<userId>:...`            |
+| `{ required: false, tenant: true }`             | Optional `<tenantId>:...` partitioning.                                          |
+| `{ required: false, tenant: true, user: true }` | Optional `<tenantId>:<userId>:...` partitioning.                                 |
 
 When `identityScope` object is present with `tenant: true`, `required` defaults to `true`. Missing required identity fields fail fast with `identityContextRequiredError`.
 

@@ -4,10 +4,7 @@ import {
   retryTaskMiddleware,
   abortableDelay,
 } from "../../globals/middleware/retry.middleware";
-import {
-  timeoutTaskMiddleware,
-  journalKeys as timeoutJournalKeys,
-} from "../../globals/middleware/timeout.middleware";
+import { timeoutTaskMiddleware } from "../../globals/middleware/timeout.middleware";
 import { run } from "../../run";
 import { genericError } from "../../errors";
 
@@ -210,7 +207,7 @@ describe("Retry Middleware", () => {
           if (attempts === 1 && context?.journal) {
             const abortController = new AbortController();
             context.journal.set(
-              timeoutJournalKeys.abortController,
+              timeoutTaskMiddleware.journalKeys.abortController,
               abortController,
             );
             // Abort it immediately so retry sees it as aborted on next catch

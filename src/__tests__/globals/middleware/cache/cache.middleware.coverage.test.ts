@@ -1,6 +1,5 @@
 import {
   cacheMiddleware,
-  journalKeys,
   resolveCacheMiddlewareConfig,
 } from "../../../../globals/middleware/cache/middleware";
 import { defaultStorageTaskKeyBuilder } from "../../../../globals/middleware/keyBuilder.shared";
@@ -112,9 +111,13 @@ describe("cache middleware coverage", () => {
         refs: [],
       },
     );
-    expect(journal.set).toHaveBeenCalledWith(journalKeys.hit, false, {
-      override: true,
-    });
+    expect(journal.set).toHaveBeenCalledWith(
+      cacheMiddleware.journalKeys.hit,
+      false,
+      {
+        override: true,
+      },
+    );
   });
 
   it("wraps non-Error cache write failures before logging them", async () => {

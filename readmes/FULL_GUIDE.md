@@ -1228,9 +1228,7 @@ The journal is the clean way for middleware layers to coordinate without polluti
 import { journal, r } from "@bluelibs/runner";
 
 export const journalKeys = {
-  abortController: journal.createKey<AbortController>(
-    "timeout.abortController",
-  ),
+  abortController: journal.createKey<AbortController>("abortController"),
 } as const;
 
 export const timeoutMiddleware = r.middleware
@@ -1851,6 +1849,7 @@ Key rules that keep the middleware model predictable:
 - task middleware can attach only to tasks or `subtree.tasks.middleware`
 - resource middleware can attach only to resources or `subtree.resources.middleware`
 - middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment
+- custom task middleware can declare reusable journal keys and expose them through `.journalKeys`
 
 ```mermaid
 flowchart LR
@@ -1879,6 +1878,47 @@ The two middleware channels serve different wrapping targets:
 - resource middleware wraps resource initialization or resource value resolution and receives `{ resource, next }`
 - task middleware is where auth, retry, cache, timeout, tracing, and admission policies usually live
 - resource middleware is where retry or timeout around startup/resource creation usually lives
+
+### Custom Middleware Journal Keys
+
+When your task middleware needs stable execution-local slots, create keys with `journal.createKey<T>(id)` and expose them through the middleware definition.
+
+- For middleware-local state, use short local labels such as `journal.createKey<string>("traceId")`.
+- Sharing is by key object reuse, not by matching id strings. Reuse an existing key only when you intentionally want to share the same journal slot with another runtime path.
+
+```typescript
+import { journal, r } from "@bluelibs/runner";
+
+const traceMiddleware = r.middleware
+  .task("traceMiddleware")
+  .journal({
+    traceId: journal.createKey<string>("traceId"),
+  })
+  .run(async ({ task, next, journal }) => {
+    journal.set(
+      traceMiddleware.journalKeys.traceId,
+      `trace:${task.definition.id}`,
+      { override: true },
+    );
+    return next(task.input);
+  })
+  .build();
+
+const tracedTask = r
+  .task("tracedTask")
+  .middleware([traceMiddleware])
+  .run(async (_input, _deps, context) => {
+    return context!.journal.get(traceMiddleware.journalKeys.traceId);
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([traceMiddleware, tracedTask])
+  .build();
+```
+
+This matches the ergonomics of built-in middleware such as `middleware.task.cache.journalKeys` and `middleware.task.retry.journalKeys`.
 
 ### Cross-Cutting Middleware
 
@@ -2139,9 +2179,13 @@ const getUser = r
     }),
   ])
   .run(async (input, _deps, context) => {
-    context?.journal
-      .get(middleware.task.cache.journalKeys.refs)
-      ?.add(`tenant:${CacheRefs.getTenantId()}:user-profile:${input.userId}`);
+    const cacheRefCollector = context!.journal.get(
+      middleware.task.cache.journalKeys.refs,
+    )!;
+
+    cacheRefCollector.add(
+      `tenant:${CacheRefs.getTenantId()}:user-profile:${input.userId}`,
+    );
     return await doExpensiveCalculation(input.userId);
   })
   .build();
@@ -2160,7 +2204,7 @@ const updateUser = r
 Notes:
 
 - `keyBuilder(canonicalTaskId, input)` may return either a plain string or `{ cacheKey, refs? }`.
-- During an active cache miss, tasks may attach additional refs through `context.journal.get(middleware.task.cache.journalKeys.refs)?.add(...)`.
+- During an active cache miss, tasks may attach additional refs through `context.journal.get(middleware.task.cache.journalKeys.refs)!.add(...)`.
 - Refs from `keyBuilder(...)` and refs added through the journal collector accumulate into the same cached entry metadata.
 - `resources.cache.invalidateKeys(...)` is raw by default and expects the concrete storage key.
 - Pass `resources.cache.invalidateKeys(key, { identityScope })` when you want Runner to scope the provided base key through the active identity namespace before invalidation.

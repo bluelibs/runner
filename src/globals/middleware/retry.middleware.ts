@@ -1,5 +1,5 @@
 import { defineResourceMiddleware } from "../../definers/defineResourceMiddleware";
-import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { taskMiddlewareBuilder } from "../../definers/builders/middleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { getTaskAbortSignalLink } from "../../models/runtime/taskCancellation";
 import { Match } from "../../tools/check";
@@ -31,76 +31,75 @@ const retryConfigPattern = Match.ObjectIncluding({
   delayStrategy: Match.Optional(Function),
 });
 
-/**
- * Journal keys exposed by the retry middleware.
- * Use these to access shared state from downstream middleware or tasks.
- */
-export const journalKeys = {
-  /** Current retry attempt number (0 = first attempt, 1 = first retry, etc.) */
-  attempt: journalHelper.createKey<number>("runner.middleware.retry.attempt"),
-  /** The last error that caused a retry */
-  lastError: journalHelper.createKey<Error>(
-    "runner.middleware.retry.lastError",
-  ),
-} as const;
-
-export const retryTaskMiddleware = defineTaskMiddleware({
-  id: "retry",
-  meta: {
+export const retryTaskMiddleware = taskMiddlewareBuilder("retry")
+  .journal({
+    /** Current retry attempt number (0 = first attempt, 1 = first retry, etc.). */
+    attempt: journalHelper.createKey<number>("attempt"),
+    /** The last error that caused a retry. */
+    lastError: journalHelper.createKey<Error>("lastError"),
+  })
+  .meta({
     title: "Retry",
     description:
       "Retries failed task executions with configurable attempt limits, delays, and stop conditions.",
-  },
-  configSchema: retryConfigPattern,
-  async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
-    const input = task?.input;
-    let attempts = 0;
+  })
+  .configSchema(retryConfigPattern)
+  .run(
+    async ({ task, next, journal }, _deps, config: RetryMiddlewareConfig) => {
+      const input = task?.input;
+      let attempts = 0;
 
-    // Set defaults for required parameters
-    const maxRetries = config.retries ?? 3;
-    const shouldStop = config.stopRetryIf ?? (() => false);
+      // Set defaults for required parameters
+      const maxRetries = config.retries ?? 3;
+      const shouldStop = config.stopRetryIf ?? (() => false);
 
-    // Set initial attempt count
-    journal.set(journalKeys.attempt, attempts, { override: true });
+      // Set initial attempt count
+      journal.set(retryTaskMiddleware.journalKeys.attempt, attempts, {
+        override: true,
+      });
 
-    while (true) {
-      try {
-        return await next(input);
-      } catch (error) {
-        const err = error as Error;
-        const signalLink = getTaskAbortSignalLink(journal);
-        const signal = signalLink.signal;
-
+      while (true) {
         try {
-          if (signal?.aborted) {
-            throw error;
+          return await next(input);
+        } catch (error) {
+          const err = error as Error;
+          const signalLink = getTaskAbortSignalLink(journal);
+          const signal = signalLink.signal;
+
+          try {
+            if (signal?.aborted) {
+              throw error;
+            }
+
+            if (shouldStop(err) || attempts >= maxRetries) {
+              throw error;
+            }
+
+            // Calculate delay using custom strategy or default exponential backoff
+            const delay = config.delayStrategy
+              ? config.delayStrategy(attempts, err)
+              : getDefaultRetryDelayMs(attempts);
+
+            if (delay > 0) {
+              await abortableDelay(delay, signal);
+            }
+          } finally {
+            signalLink.cleanup();
           }
 
-          if (shouldStop(err) || attempts >= maxRetries) {
-            throw error;
-          }
-
-          // Calculate delay using custom strategy or default exponential backoff
-          const delay = config.delayStrategy
-            ? config.delayStrategy(attempts, err)
-            : getDefaultRetryDelayMs(attempts);
-
-          if (delay > 0) {
-            await abortableDelay(delay, signal);
-          }
-        } finally {
-          signalLink.cleanup();
+          attempts++;
+          // Update journal with current attempt and last error
+          journal.set(retryTaskMiddleware.journalKeys.attempt, attempts, {
+            override: true,
+          });
+          journal.set(retryTaskMiddleware.journalKeys.lastError, err, {
+            override: true,
+          });
         }
-
-        attempts++;
-        // Update journal with current attempt and last error
-        journal.set(journalKeys.attempt, attempts, { override: true });
-        journal.set(journalKeys.lastError, err, { override: true });
       }
-    }
-  },
-});
-
+    },
+  )
+  .build();
 export const retryResourceMiddleware = defineResourceMiddleware({
   id: "retry",
   meta: {

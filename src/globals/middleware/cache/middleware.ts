@@ -1,4 +1,4 @@
-import { defineTaskMiddleware } from "../../../definers/defineTaskMiddleware";
+import { taskMiddlewareBuilder } from "../../../definers/builders/middleware";
 import { journal as journalHelper } from "../../../models/ExecutionJournal";
 import { Match } from "../../../tools/check";
 import type { ExecutionJournal } from "../../../types/executionJournal";
@@ -17,7 +17,7 @@ import {
   identityScopePattern,
   type IdentityScopedMiddlewareConfig,
 } from "../identityScope.shared";
-import { journalKeys as retryJournalKeys } from "../retry.middleware";
+import { retryTaskMiddleware } from "../retry.middleware";
 import {
   cacheResource,
   createCacheInstance,
@@ -97,21 +97,8 @@ const cacheMiddlewareConfigPattern: ValidationSchemaInput<CacheMiddlewareConfig>
     stale: Match.Optional(Boolean),
   });
 
-/**
- * Journal keys exposed by the cache middleware.
- * Use these to access shared state from downstream middleware or tasks.
- */
-export const journalKeys = {
-  /** Whether the result was served from cache (true) or freshly computed (false) */
-  hit: journalHelper.createKey<boolean>("runner.middleware.task.cache.hit"),
-  /** Collector available during active cache misses for late ref attachment. */
-  refs: journalHelper.createKey<CacheRefCollector | undefined>(
-    "runner.middleware.task.cache.refs",
-  ),
-} as const;
-
 function resolveRetryAttempt(journal: ExecutionJournal): number {
-  const attempt = journal.get(retryJournalKeys.attempt);
+  const attempt = journal.get(retryTaskMiddleware.journalKeys.attempt);
 
   return typeof attempt === "number" &&
     Number.isInteger(attempt) &&
@@ -169,21 +156,26 @@ export function resolveCacheMiddlewareConfig(
   };
 }
 
-export const cacheMiddleware = defineTaskMiddleware({
-  id: "cache",
-  tags: [globalTags.identityScoped],
-  meta: {
+export const cacheMiddleware = taskMiddlewareBuilder("cache")
+  .journal({
+    /** Whether the result was served from cache (true) or freshly computed (false). */
+    hit: journalHelper.createKey<boolean>("hit"),
+    /** Collector available during active cache misses for late ref attachment. */
+    refs: journalHelper.createKey<CacheRefCollector | undefined>("refs"),
+  })
+  .tags([globalTags.identityScoped])
+  .meta({
     title: "Task Cache",
     description:
       "Caches task results by computed key and optional identity scope, reusing task-local providers from resources.cache.",
-  },
-  configSchema: cacheMiddlewareConfigPattern,
-  dependencies: () => ({
+  })
+  .configSchema(cacheMiddlewareConfigPattern)
+  .dependencies(() => ({
     cache: cacheResource,
     logger: loggerResource.optional(),
     identityContext: identityContextResource,
-  }),
-  async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
+  }))
+  .run(async ({ task, next, journal }, deps, config: CacheMiddlewareConfig) => {
     const { cache, logger, identityContext } = deps;
     const resolvedConfig = resolveCacheMiddlewareConfig(
       config,
@@ -234,15 +226,17 @@ export const cacheMiddleware = defineTaskMiddleware({
         : cachedValue !== undefined;
 
     if (hasCachedEntry) {
-      journal.set(journalKeys.hit, true, { override: true });
+      journal.set(cacheMiddleware.journalKeys.hit, true, { override: true });
       return cachedValue;
     }
 
-    journal.set(journalKeys.hit, false, { override: true });
-    const previousCollectorExists = journal.has(journalKeys.refs);
-    const previousCollector = journal.get(journalKeys.refs);
+    journal.set(cacheMiddleware.journalKeys.hit, false, { override: true });
+    const previousCollectorExists = journal.has(
+      cacheMiddleware.journalKeys.refs,
+    );
+    const previousCollector = journal.get(cacheMiddleware.journalKeys.refs);
     const cacheRefCollector = createCacheRefCollector(journal);
-    journal.set(journalKeys.refs, cacheRefCollector.collector, {
+    journal.set(cacheMiddleware.journalKeys.refs, cacheRefCollector.collector, {
       override: true,
     });
 
@@ -269,12 +263,16 @@ export const cacheMiddleware = defineTaskMiddleware({
       return result;
     } finally {
       if (previousCollectorExists) {
-        journal.set(journalKeys.refs, previousCollector, { override: true });
+        journal.set(cacheMiddleware.journalKeys.refs, previousCollector, {
+          override: true,
+        });
       } else if (typeof journal.delete === "function") {
-        journal.delete(journalKeys.refs);
+        journal.delete(cacheMiddleware.journalKeys.refs);
       } else {
-        journal.set(journalKeys.refs, undefined as never, { override: true });
+        journal.set(cacheMiddleware.journalKeys.refs, undefined as never, {
+          override: true,
+        });
       }
     }
-  },
-});
+  })
+  .build();

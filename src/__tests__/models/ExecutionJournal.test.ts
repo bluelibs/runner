@@ -92,13 +92,32 @@ describe("ExecutionJournal", () => {
       expect(key.id).toBe("my-key-id");
     });
 
-    it("keys with same id share the same storage slot", () => {
+    it("keys with same id remain isolated unless the same key object is reused", () => {
       const journal = new ExecutionJournalImpl();
       const key1 = journalFactory.createKey<string>("shared-id");
       const key2 = journalFactory.createKey<string>("shared-id");
 
       journal.set(key1, "value");
-      expect(journal.get(key2)).toBe("value");
+      expect(journal.get(key2)).toBeUndefined();
+    });
+
+    it("shares state when the same key reference is reused", () => {
+      const journal = new ExecutionJournalImpl();
+      const key = journalFactory.createKey<string>("shared-id");
+      const alias = key;
+
+      journal.set(key, "value");
+      expect(journal.get(alias)).toBe("value");
+    });
+
+    it("supports plain journal-key-shaped values by reference", () => {
+      const journal = new ExecutionJournalImpl();
+      const plainKey = { id: "plain-key" } as ReturnType<
+        typeof journalFactory.createKey<string>
+      >;
+
+      journal.set(plainKey, "value");
+      expect(journal.get(plainKey)).toBe("value");
     });
   });
 

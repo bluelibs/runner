@@ -12,7 +12,6 @@ import {
   cacheMiddleware,
   createCacheInstance,
   ICacheProvider,
-  journalKeys as cacheJournalKeys,
 } from "../../../../globals/middleware/cache/middleware";
 import { genericError } from "../../../../errors";
 import { r } from "../../../..";
@@ -855,7 +854,7 @@ describe("Caching System", () => {
         id: "cache-hit-capture",
         async run({ task, journal, next }) {
           const result = await next(task.input);
-          capturedHits.push(journal.get(cacheJournalKeys.hit));
+          capturedHits.push(journal.get(cacheMiddleware.journalKeys.hit));
           return result;
         },
       });

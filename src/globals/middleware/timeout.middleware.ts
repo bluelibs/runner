@@ -1,5 +1,5 @@
 import { defineResourceMiddleware } from "../../definers/defineResourceMiddleware";
-import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { taskMiddlewareBuilder } from "../../definers/builders/middleware";
 import { RunnerError } from "../../definers/defineError";
 import {
   getOrCreateTaskAbortController,
@@ -43,94 +43,89 @@ export class TimeoutError extends RunnerError<{ message: string }> {
   }
 }
 
-/**
- * Journal keys exposed by the timeout middleware.
- * Use these to access shared state from downstream middleware or tasks.
- */
-export const journalKeys = {
-  /** The AbortController created by the timeout middleware */
-  abortController: taskCancellationJournalKeys.abortController,
-} as const;
-
-export const timeoutTaskMiddleware = defineTaskMiddleware({
-  id: "timeout",
-  meta: {
+export const timeoutTaskMiddleware = taskMiddlewareBuilder("timeout")
+  .journal({
+    /** The AbortController created by the timeout middleware. */
+    abortController: taskCancellationJournalKeys.abortController,
+  })
+  .meta({
     title: "Timeout",
     description:
       "Aborts task execution when it exceeds the configured time budget.",
-  },
-  throws: [middlewareTimeoutError],
-  configSchema: timeoutConfigPattern,
-  async run({ task, next, journal }, _deps, config: TimeoutMiddlewareConfig) {
-    const input = task?.input;
+  })
+  .throws([middlewareTimeoutError])
+  .configSchema(timeoutConfigPattern)
+  .run(
+    async ({ task, next, journal }, _deps, config: TimeoutMiddlewareConfig) => {
+      const input = task?.input;
 
-    const ttl = Math.max(0, config.ttl ?? 5000);
-    const message = `Operation timed out after ${ttl}ms`;
-    const timeoutError = new TimeoutError(message);
+      const ttl = Math.max(0, config.ttl ?? 5000);
+      const message = `Operation timed out after ${ttl}ms`;
+      const timeoutError = new TimeoutError(message);
 
-    // Fast-path: immediate timeout
-    if (ttl === 0) {
-      throw timeoutError;
-    }
+      // Fast-path: immediate timeout
+      if (ttl === 0) {
+        throw timeoutError;
+      }
 
-    const controller = getOrCreateTaskAbortController(journal);
+      const controller = getOrCreateTaskAbortController(journal);
 
-    return await new Promise((resolve, reject) => {
-      let settled = false;
+      return await new Promise((resolve, reject) => {
+        let settled = false;
 
-      const abortHandler = () => {
-        const reason = controller.signal.reason;
-        if (reason instanceof TimeoutError) {
+        const abortHandler = () => {
+          const reason = controller.signal.reason;
+          if (reason instanceof TimeoutError) {
+            settle("reject", timeoutError);
+            return;
+          }
+
+          settle(
+            "reject",
+            createCancellationErrorFromSignal(
+              controller.signal,
+              `Operation cancelled before timeout after ${ttl}ms`,
+            ),
+          );
+        };
+
+        const settle = (kind: "resolve" | "reject", value?: unknown) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          controller.signal.removeEventListener(
+            AbortSignalEventType.Abort,
+            abortHandler,
+          );
+          if (kind === "resolve") {
+            resolve(value);
+          } else {
+            reject(value);
+          }
+        };
+
+        const timeoutId = setTimeout(() => {
+          controller.abort(timeoutError);
           settle("reject", timeoutError);
-          return;
-        }
+        }, ttl);
 
-        settle(
-          "reject",
-          createCancellationErrorFromSignal(
-            controller.signal,
-            `Operation cancelled before timeout after ${ttl}ms`,
-          ),
-        );
-      };
-
-      const settle = (kind: "resolve" | "reject", value?: unknown) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        controller.signal.removeEventListener(
+        controller.signal.addEventListener(
           AbortSignalEventType.Abort,
           abortHandler,
         );
-        if (kind === "resolve") {
-          resolve(value);
-        } else {
-          reject(value);
-        }
-      };
 
-      const timeoutId = setTimeout(() => {
-        controller.abort(timeoutError);
-        settle("reject", timeoutError);
-      }, ttl);
+        const finish = (cb: () => Promise<unknown>) => {
+          cb().then(
+            (result) => settle("resolve", result),
+            (error) => settle("reject", error),
+          );
+        };
 
-      controller.signal.addEventListener(
-        AbortSignalEventType.Abort,
-        abortHandler,
-      );
-
-      const finish = (cb: () => Promise<unknown>) => {
-        cb().then(
-          (result) => settle("resolve", result),
-          (error) => settle("reject", error),
-        );
-      };
-
-      finish(() => next(input as unknown));
-    });
-  },
-});
-
+        finish(() => next(input as unknown));
+      });
+    },
+  )
+  .build();
 export const timeoutResourceMiddleware = defineResourceMiddleware({
   id: "timeout",
   meta: {

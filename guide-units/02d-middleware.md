@@ -36,6 +36,7 @@ Key rules that keep the middleware model predictable:
 - task middleware can attach only to tasks or `subtree.tasks.middleware`
 - resource middleware can attach only to resources or `subtree.resources.middleware`
 - middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment
+- custom task middleware can declare reusable journal keys and expose them through `.journalKeys`
 
 ```mermaid
 flowchart LR
@@ -64,6 +65,47 @@ The two middleware channels serve different wrapping targets:
 - resource middleware wraps resource initialization or resource value resolution and receives `{ resource, next }`
 - task middleware is where auth, retry, cache, timeout, tracing, and admission policies usually live
 - resource middleware is where retry or timeout around startup/resource creation usually lives
+
+### Custom Middleware Journal Keys
+
+When your task middleware needs stable execution-local slots, create keys with `journal.createKey<T>(id)` and expose them through the middleware definition.
+
+- For middleware-local state, use short local labels such as `journal.createKey<string>("traceId")`.
+- Sharing is by key object reuse, not by matching id strings. Reuse an existing key only when you intentionally want to share the same journal slot with another runtime path.
+
+```typescript
+import { journal, r } from "@bluelibs/runner";
+
+const traceMiddleware = r.middleware
+  .task("traceMiddleware")
+  .journal({
+    traceId: journal.createKey<string>("traceId"),
+  })
+  .run(async ({ task, next, journal }) => {
+    journal.set(
+      traceMiddleware.journalKeys.traceId,
+      `trace:${task.definition.id}`,
+      { override: true },
+    );
+    return next(task.input);
+  })
+  .build();
+
+const tracedTask = r
+  .task("tracedTask")
+  .middleware([traceMiddleware])
+  .run(async (_input, _deps, context) => {
+    return context!.journal.get(traceMiddleware.journalKeys.traceId);
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([traceMiddleware, tracedTask])
+  .build();
+```
+
+This matches the ergonomics of built-in middleware such as `middleware.task.cache.journalKeys` and `middleware.task.retry.journalKeys`.
 
 ### Cross-Cutting Middleware
 
