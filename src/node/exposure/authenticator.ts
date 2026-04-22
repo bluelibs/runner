@@ -6,9 +6,9 @@ import type {
   AuthValidatorResult,
 } from "./types";
 import type { ITask } from "../../defs";
-import { resolveRequestedIdFromStore } from "../../models/StoreLookup";
+import { resolveRequestedIdFromStore } from "../../models/store/StoreLookup";
 import type { TaskRunner } from "../../models/TaskRunner";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import { RPC_LANES_RESOURCE_ID } from "../rpc-lanes/rpcLanes.resource";
 import { runtimeSource } from "../../types/runtimeSource";
 

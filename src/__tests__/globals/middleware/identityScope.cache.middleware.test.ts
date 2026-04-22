@@ -1,6 +1,6 @@
 import { asyncContexts, defineResource, defineTask, run } from "../../../";
-import { cacheResource } from "../../../globals/middleware/cache.middleware";
-import { cacheMiddleware } from "../../../globals/middleware/cache.middleware";
+import { cacheResource } from "../../../globals/middleware/cache/middleware";
+import { cacheMiddleware } from "../../../globals/middleware/cache/middleware";
 
 const tenantScope = { tenant: true } as const;
 const userScope = { tenant: true, user: true } as const;

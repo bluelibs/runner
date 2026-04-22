@@ -255,6 +255,14 @@ await durableRuntime.signal(executionId, Paid, { paidAt: Date.now() });
 await durableRuntime.cancelExecution(executionId, "User requested");
 ```
 
+After `cooldown()` starts, new top-level `start(...)`, `startAndWait(...)`, and
+`signal(...)` calls reject, and background durable ownership stops taking new
+work. Already-admitted executions can still be observed with `wait(...)`, and
+cancellation remains available until final shutdown. If drain still stalls,
+Runner can cooperatively
+interrupt an active step during the abort window so the execution resumes on the
+next runtime instead of being failed.
+
 If a step is actively running, cancellation sets `cancelRequestedAt` immediately, aborts the step signal, and marks the execution `cancelled` once that attempt exits. Sleeping or waiting executions still cancel immediately.
 
 ### Scheduling

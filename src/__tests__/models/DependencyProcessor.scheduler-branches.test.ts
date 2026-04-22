@@ -9,7 +9,7 @@ import {
 } from "../../define";
 import { symbolResourceWithConfig, type DependencyMapType } from "../../defs";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
-import * as storeLookup from "../../models/StoreLookup";
+import * as storeLookup from "../../models/store/StoreLookup";
 import { HookDependencyState } from "../../types/storeTypes";
 import { ResourceLifecycleMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";

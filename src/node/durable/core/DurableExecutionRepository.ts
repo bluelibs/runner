@@ -1,9 +1,9 @@
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import { durableExecutionInvariantError } from "../../../errors";
 import {
   resolveRequestedIdFromStore,
   toCanonicalDefinitionFromStore,
-} from "../../../models/StoreLookup";
+} from "../../../models/store/StoreLookup";
 import { check, Match } from "../../../tools/check";
 import type { ITask } from "../../../types/task";
 import {

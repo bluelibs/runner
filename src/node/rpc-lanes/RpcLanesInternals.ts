@@ -1,4 +1,4 @@
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import {
   rpcLaneDuplicateBindingError,
   rpcLaneBindingNotFoundError,

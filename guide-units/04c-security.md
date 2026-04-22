@@ -141,6 +141,7 @@ This is the "partition state" part of the story. It affects middleware-managed b
 - `tenantId` must be a non-empty string, cannot contain `:`, and cannot be `__global__` because identity-aware middleware reserves those for internal namespace partitioning.
 - When user-aware identity scope is enabled, `userId` must also be a non-empty string and cannot contain `:`.
 - When roles are present on the identity payload, they must be a string array with no empty entries.
+- Cache key invalidation is raw by default. You may either pass the fully scoped key yourself or opt into helper scoping with `cache.invalidateKeys(key, { identityScope })`.
 - Cache refs stay raw. If invalidation should respect tenant or user boundaries, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same tenant-aware ref format.
 
 Quick choice guide:

@@ -1,5 +1,5 @@
 import type { IsolationChannel } from "../../defs";
-import type { StoreRegistry } from "../StoreRegistry";
+import type { StoreRegistry } from "../store/StoreRegistry";
 import { getAccessViolation } from "./accessEvaluator";
 import type { VisibilityTrackerState } from "./state";
 import {

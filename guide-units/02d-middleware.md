@@ -36,6 +36,7 @@ Key rules that keep the middleware model predictable:
 - task middleware can attach only to tasks or `subtree.tasks.middleware`
 - resource middleware can attach only to resources or `subtree.resources.middleware`
 - middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment
+- custom task middleware can declare reusable journal keys and expose them through `.journalKeys`
 
 ```mermaid
 flowchart LR
@@ -64,6 +65,47 @@ The two middleware channels serve different wrapping targets:
 - resource middleware wraps resource initialization or resource value resolution and receives `{ resource, next }`
 - task middleware is where auth, retry, cache, timeout, tracing, and admission policies usually live
 - resource middleware is where retry or timeout around startup/resource creation usually lives
+
+### Custom Middleware Journal Keys
+
+When your task middleware needs stable execution-local slots, create keys with `journal.createKey<T>(id)` and expose them through the middleware definition.
+
+- For middleware-local state, use short local labels such as `journal.createKey<string>("traceId")`.
+- Sharing is by key object reuse, not by matching id strings. Reuse an existing key only when you intentionally want to share the same journal slot with another runtime path.
+
+```typescript
+import { journal, r } from "@bluelibs/runner";
+
+const traceMiddleware = r.middleware
+  .task("traceMiddleware")
+  .journal({
+    traceId: journal.createKey<string>("traceId"),
+  })
+  .run(async ({ task, next, journal }) => {
+    journal.set(
+      traceMiddleware.journalKeys.traceId,
+      `trace:${task.definition.id}`,
+      { override: true },
+    );
+    return next(task.input);
+  })
+  .build();
+
+const tracedTask = r
+  .task("tracedTask")
+  .middleware([traceMiddleware])
+  .run(async (_input, _deps, context) => {
+    return context!.journal.get(traceMiddleware.journalKeys.traceId);
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([traceMiddleware, tracedTask])
+  .build();
+```
+
+This matches the ergonomics of built-in middleware such as `middleware.task.cache.journalKeys` and `middleware.task.retry.journalKeys`.
 
 ### Cross-Cutting Middleware
 
@@ -238,6 +280,7 @@ interface ICacheProvider {
     metadata?: { refs?: readonly string[] },
   ): unknown | Promise<unknown>;
   clear(): void | Promise<void>;
+  invalidateKeys(keys: readonly string[]): number | Promise<number>;
   invalidateRefs(refs: readonly string[]): number | Promise<number>;
   has?(key: string): boolean | Promise<boolean>;
 }
@@ -255,6 +298,7 @@ Notes:
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - When `keyBuilder(...)` returns `{ cacheKey, refs }`, middleware passes those refs to `set(..., metadata)` for provider-side indexing.
 - Without `keyBuilder`, cache keys default to `taskId + serialized input` and fail fast when the input cannot be serialized.
+- `resources.cache.invalidateKeys(key | key[], options?)` fans out across cache-enabled tasks and deletes matching concrete storage keys.
 - `resources.cache.invalidateRefs(ref | ref[])` fans out across cache-enabled tasks and deletes matching entries.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
@@ -321,7 +365,14 @@ const getUser = r
       }),
     }),
   ])
-  .run(async (input) => {
+  .run(async (input, _deps, context) => {
+    const cacheRefCollector = context!.journal.get(
+      middleware.task.cache.journalKeys.refs,
+    )!;
+
+    cacheRefCollector.add(
+      `tenant:${CacheRefs.getTenantId()}:user-profile:${input.userId}`,
+    );
     return await doExpensiveCalculation(input.userId);
   })
   .build();
@@ -340,6 +391,10 @@ const updateUser = r
 Notes:
 
 - `keyBuilder(canonicalTaskId, input)` may return either a plain string or `{ cacheKey, refs? }`.
+- During an active cache miss, tasks may attach additional refs through `context.journal.get(middleware.task.cache.journalKeys.refs)!.add(...)`.
+- Refs from `keyBuilder(...)` and refs added through the journal collector accumulate into the same cached entry metadata.
+- `resources.cache.invalidateKeys(...)` is raw by default and expects the concrete storage key.
+- Pass `resources.cache.invalidateKeys(key, { identityScope })` when you want Runner to scope the provided base key through the active identity namespace before invalidation.
 - Runner stores refs as plain strings. Type safety usually lives in app helpers such as `CacheRefs.user(id)`. (refs are used for cache invalidation)
 - Refs do not follow `identityScope` intentionally. If you want tenant-aware invalidation, read the active identity inside your app helper, for example `CacheRefs.getTenantId()`, and build the ref string there so writes and invalidations always match.
 
@@ -433,6 +488,10 @@ class RedisCache {
   }
 
   async invalidateRefs(_refs: readonly string[]): Promise<number> {
+    return 0;
+  }
+
+  async invalidateKeys(_keys: readonly string[]): Promise<number> {
     return 0;
   }
 

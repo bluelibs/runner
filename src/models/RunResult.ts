@@ -10,7 +10,7 @@ import type { TaskCallOptions } from "../types/utilities";
 // For RunResult convenience API, preserve the original simple messages
 import type { EventManager } from "./EventManager";
 import type { Logger } from "./Logger";
-import type { Store } from "./Store";
+import type { Store } from "./store/Store";
 import type { TaskRunner } from "./TaskRunner";
 import {
   lazyResourceAccessDisabledError,
@@ -532,6 +532,7 @@ export class RunResult<V> implements IRuntime<V> {
     if (
       phase === RuntimeLifecyclePhase.CoolingDown ||
       phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Aborting ||
       phase === RuntimeLifecyclePhase.Drained ||
       phase === RuntimeLifecyclePhase.Disposed
     ) {
@@ -692,6 +693,7 @@ export class RunResult<V> implements IRuntime<V> {
       const phase = this.store.getLifecycleAdmissionController().getPhase();
       if (
         phase === RuntimeLifecyclePhase.Disposing ||
+        phase === RuntimeLifecyclePhase.Aborting ||
         phase === RuntimeLifecyclePhase.Drained
       ) {
         // A second force request during an already-running shutdown should wake

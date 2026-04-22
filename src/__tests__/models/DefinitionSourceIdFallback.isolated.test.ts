@@ -1,12 +1,12 @@
 describe("definition source id fallbacks (isolated)", () => {
   afterEach(() => {
     jest.resetModules();
-    jest.unmock("../../models/StoreLookup");
+    jest.unmock("../../models/store/StoreLookup");
   });
 
   it("covers ResourceScheduler source-id fallback helper branches", () => {
     jest.isolateModules(() => {
-      jest.doMock("../../models/StoreLookup", () => ({
+      jest.doMock("../../models/store/StoreLookup", () => ({
         resolveCanonicalIdFromStore: () => null,
         extractRequestedId: () => null,
       }));
@@ -48,7 +48,7 @@ describe("definition source id fallbacks (isolated)", () => {
 
   it("covers DependencyExtractor source-id fallback helper branches", () => {
     jest.isolateModules(() => {
-      jest.doMock("../../models/StoreLookup", () => ({
+      jest.doMock("../../models/store/StoreLookup", () => ({
         resolveCanonicalIdFromStore: () => null,
         extractRequestedId: () => null,
       }));

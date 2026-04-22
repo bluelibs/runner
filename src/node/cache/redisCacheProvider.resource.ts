@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { validationError } from "../../errors";
-import { type CacheProvider } from "../../globals/middleware/cache.shared";
+import { type CacheProvider } from "../../globals/middleware/cache/shared";
 import { Match } from "../../tools/check";
 import { r, resources } from "../../index";
 import { createIORedisClient } from "../durable/optionalDeps/ioredis";

@@ -3,7 +3,6 @@ import { run } from "../../run";
 import {
   timeoutTaskMiddleware as timeoutMiddleware,
   timeoutResourceMiddleware,
-  journalKeys as timeoutJournalKeys,
 } from "../../globals/middleware/timeout.middleware";
 import { journal as executionJournal } from "../../models/ExecutionJournal";
 import { genericError } from "../../errors";
@@ -32,7 +31,9 @@ describe("Timeout Middleware", () => {
       { ttl: 50 },
     );
 
-    expect(journalInstance.has(timeoutJournalKeys.abortController)).toBe(true);
+    expect(
+      journalInstance.has(timeoutMiddleware.journalKeys.abortController),
+    ).toBe(true);
 
     resolveNext("ok");
     await expect(promise).resolves.toBe("ok");
@@ -61,7 +62,10 @@ describe("Timeout Middleware", () => {
   it("reuses pre-set abort controller from journal", async () => {
     const journalInstance = executionJournal.create();
     const presetController = new AbortController();
-    journalInstance.set(timeoutJournalKeys.abortController, presetController);
+    journalInstance.set(
+      timeoutMiddleware.journalKeys.abortController,
+      presetController,
+    );
 
     const result = await timeoutMiddleware.run(
       {
@@ -74,9 +78,9 @@ describe("Timeout Middleware", () => {
     );
 
     expect(result).toBe("ok");
-    expect(journalInstance.get(timeoutJournalKeys.abortController)).toBe(
-      presetController,
-    );
+    expect(
+      journalInstance.get(timeoutMiddleware.journalKeys.abortController),
+    ).toBe(presetController);
   });
 
   it("should cleanup abort listener on success (resource middleware)", async () => {
@@ -221,7 +225,9 @@ describe("Timeout Middleware", () => {
     const abortingMiddleware = defineTaskMiddleware({
       id: "timeout-abort-trigger",
       async run({ task, journal, next }) {
-        const controller = journal.get(timeoutJournalKeys.abortController);
+        const controller = journal.get(
+          timeoutMiddleware.journalKeys.abortController,
+        );
         if (!controller) {
           throw genericError.new({ message: "AbortController not set" });
         }

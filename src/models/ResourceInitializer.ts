@@ -4,7 +4,7 @@ import {
   ResourceDependencyValuesType,
 } from "../defs";
 import { EventManager } from "./EventManager";
-import { Store } from "./Store";
+import { Store } from "./store/Store";
 import { Logger } from "./Logger";
 import type { MiddlewareManager } from "./MiddlewareManager";
 

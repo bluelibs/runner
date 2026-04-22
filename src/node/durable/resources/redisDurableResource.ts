@@ -10,6 +10,7 @@ import { deriveDurableIsolation } from "./isolation";
 import { Logger } from "../../../models/Logger";
 import type { IResource } from "../../../defs";
 import type { Serializer } from "../../../serializer";
+import { durableRuntimeTag } from "../tags/durableRuntime.tag";
 
 type DurableSerializerResource = IResource<
   any,
@@ -58,6 +59,7 @@ export interface RedisDurableResourceContext {
 
 export const redisDurableResource = r
   .resource<RedisDurableResourceConfig>("base-durable-redis")
+  .tags([durableRuntimeTag])
   .dependencies((config) => ({
     taskRunner: resources.taskRunner,
     eventManager: resources.eventManager,

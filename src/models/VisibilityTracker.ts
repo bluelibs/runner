@@ -3,7 +3,7 @@ import type {
   IsolationPolicy,
   RegisterableItem,
 } from "../defs";
-import type { StoreRegistry } from "./StoreRegistry";
+import type { StoreRegistry } from "./store/StoreRegistry";
 import {
   getAccessViolation,
   getRootAccessInfo,

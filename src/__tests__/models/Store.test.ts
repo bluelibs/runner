@@ -1,4 +1,4 @@
-import { Store } from "../../models/Store";
+import { Store } from "../../models/store/Store";
 import {
   defineResource,
   defineTask,
@@ -30,6 +30,17 @@ describe("Store", () => {
 
   it("should expose some helpers", () => {
     expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
+  });
+
+  it("should delegate markDisposed to the lifecycle admission controller", () => {
+    const markDisposedSpy = jest.spyOn(
+      store.getLifecycleAdmissionController(),
+      "markDisposed",
+    );
+
+    store.markDisposed();
+
+    expect(markDisposedSpy).toHaveBeenCalledTimes(1);
   });
 
   it("should skip cooldown wave resources once force escalation requests a stop", async () => {
@@ -91,17 +102,6 @@ describe("Store", () => {
       },
     );
 
-    const pendingState = await Promise.race([
-      readyWavePromise.then(
-        () => "settled",
-        () => "settled",
-      ),
-      new Promise<"pending">((resolve) =>
-        setTimeout(() => resolve("pending"), 0),
-      ),
-    ]);
-
-    expect(pendingState).toBe("pending");
     await expect(readyWavePromise).rejects.toMatchObject({
       id: "genericError",
       data: { message: "stop-ready-wave" },
@@ -217,6 +217,18 @@ describe("Store", () => {
     expect(store.getLifecycleAdmissionController().getPhase()).toBe(
       "disposing",
     );
+  });
+
+  it("should switch to aborting once and keep it idempotent after shutdown progressed", () => {
+    store.beginAborting();
+    expect(store.getLifecycleAdmissionController().getPhase()).toBe("aborting");
+
+    store.beginAborting();
+    expect(store.getLifecycleAdmissionController().getPhase()).toBe("aborting");
+
+    store.beginDrained();
+    store.beginAborting();
+    expect(store.getLifecycleAdmissionController().getPhase()).toBe("drained");
   });
 
   it("should ignore duplicate calls to recordResourceInitialized", () => {

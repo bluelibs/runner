@@ -8,6 +8,7 @@ export const RuntimeLifecyclePhase = {
   Paused: "paused",
   CoolingDown: "coolingDown",
   Disposing: "disposing",
+  Aborting: "aborting",
   Drained: "drained",
   Disposed: "disposed",
 } as const;
@@ -46,6 +47,7 @@ export class LifecycleAdmissionController {
   public isShutdownLockdown(): boolean {
     return (
       this.phase === RuntimeLifecyclePhase.Disposing ||
+      this.phase === RuntimeLifecyclePhase.Aborting ||
       this.phase === RuntimeLifecyclePhase.Drained ||
       this.phase === RuntimeLifecyclePhase.Disposed
     );
@@ -71,7 +73,8 @@ export class LifecycleAdmissionController {
   public allowShutdownResourceSource(resourcePath: string): void {
     if (
       this.phase !== RuntimeLifecyclePhase.CoolingDown &&
-      this.phase !== RuntimeLifecyclePhase.Disposing
+      this.phase !== RuntimeLifecyclePhase.Disposing &&
+      this.phase !== RuntimeLifecyclePhase.Aborting
     ) {
       return;
     }
@@ -83,6 +86,7 @@ export class LifecycleAdmissionController {
     if (
       this.phase === RuntimeLifecyclePhase.CoolingDown ||
       this.phase === RuntimeLifecyclePhase.Disposing ||
+      this.phase === RuntimeLifecyclePhase.Aborting ||
       this.phase === RuntimeLifecyclePhase.Drained ||
       this.phase === RuntimeLifecyclePhase.Disposed
     ) {
@@ -96,12 +100,25 @@ export class LifecycleAdmissionController {
   public beginDisposing(): void {
     if (
       this.phase === RuntimeLifecyclePhase.Disposing ||
+      this.phase === RuntimeLifecyclePhase.Aborting ||
       this.phase === RuntimeLifecyclePhase.Drained ||
       this.phase === RuntimeLifecyclePhase.Disposed
     ) {
       return;
     }
     this.phase = RuntimeLifecyclePhase.Disposing;
+    this.resolveDrainWaitersIfDrained();
+  }
+
+  public beginAborting(): void {
+    if (
+      this.phase === RuntimeLifecyclePhase.Aborting ||
+      this.phase === RuntimeLifecyclePhase.Drained ||
+      this.phase === RuntimeLifecyclePhase.Disposed
+    ) {
+      return;
+    }
+    this.phase = RuntimeLifecyclePhase.Aborting;
     this.resolveDrainWaitersIfDrained();
   }
 
@@ -233,7 +250,10 @@ export class LifecycleAdmissionController {
       return true;
     }
 
-    if (this.phase === RuntimeLifecyclePhase.Disposing) {
+    if (
+      this.phase === RuntimeLifecyclePhase.Disposing ||
+      this.phase === RuntimeLifecyclePhase.Aborting
+    ) {
       if (source.kind === RuntimeCallSourceKind.Runtime) {
         return false;
       }

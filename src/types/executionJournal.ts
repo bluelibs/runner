@@ -1,15 +1,28 @@
 /**
  * Typed key used to store/retrieve values from an ExecutionJournal.
- * The `id` is used as the storage slot.
+ * The `id` is a stable label exposed to callers for docs and debugging.
  */
 declare const journalKeyBrand: unique symbol;
 
 export type JournalKey<T> = {
-  /** Stable storage slot id used inside the journal. */
+  /** Stable key label exposed for debugging, docs, and runtime introspection. */
   readonly id: string;
   /** Phantom brand preserving the key's value type in TypeScript. */
-  readonly [journalKeyBrand]?: (value: T) => T;
+  readonly [journalKeyBrand]?: {
+    readonly in: (value: T) => void;
+    readonly out: () => T;
+  };
 };
+
+/** Named collection of typed journal keys. */
+export type JournalKeyBag = Record<string, JournalKey<any>>;
+
+/**
+ * Helper alias used where we want to signal "this must already be a valid
+ * journal-key bag" without widening away the bag's exact property names.
+ */
+export type EnsureJournalKeyBag<TJournalKeys extends JournalKeyBag> =
+  TJournalKeys;
 
 /**
  * Options for setting values in the journal.
@@ -33,4 +46,6 @@ export interface ExecutionJournal {
   get<T>(key: JournalKey<T>): T | undefined;
   /** Reports whether a value exists for the given key. */
   has<T>(key: JournalKey<T>): boolean;
+  /** Removes any value stored under the given key when supported. */
+  delete?<T>(key: JournalKey<T>): void;
 }

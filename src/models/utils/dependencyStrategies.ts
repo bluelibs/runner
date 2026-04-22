@@ -1,5 +1,5 @@
 import * as utils from "../../define";
-import type { Store } from "../Store";
+import type { Store } from "../store/Store";
 
 /**
  * Maps a type-guard to its dependency-resolution logic.

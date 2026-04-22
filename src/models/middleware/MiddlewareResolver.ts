@@ -7,7 +7,7 @@ import {
   type IRpcLanePolicy,
   type RpcLaneMiddlewareId,
 } from "../../defs";
-import { Store } from "../Store";
+import { Store } from "../store/Store";
 import {
   subtreeMiddlewareConflictError,
   taskNotRegisteredError,
@@ -22,7 +22,7 @@ import {
 import {
   extractRequestedId,
   resolveCanonicalIdFromStore,
-} from "../StoreLookup";
+} from "../store/StoreLookup";
 import { globalTags } from "../../globals/globalTags";
 import {
   identityScopesMatch,

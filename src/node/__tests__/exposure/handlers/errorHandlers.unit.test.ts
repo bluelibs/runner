@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 
 import { Logger } from "../../../../models/Logger";
-import type { Store } from "../../../../models/Store";
+import type { Store } from "../../../../models/store/Store";
 import { Serializer } from "../../../../serializer";
 import {
   ExposureErrorLogKey,

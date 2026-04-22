@@ -1,5 +1,5 @@
 import { defineResource } from "../../definers/defineResource";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 
 export const storeResource = defineResource<void, Promise<Store>>({
   id: "store",

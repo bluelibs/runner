@@ -33,11 +33,16 @@ export * from "./types/runner";
 export * from "./types/runtimeSource";
 export * from "./types/asyncContext";
 export * from "./types/executionContext";
+export * from "./types/executionJournal";
 export * from "./types/error";
 export * from "./types/contracts";
 export * from "./types/tagged";
 export * from "./types/inputFile";
 
 // Useful other types that are kind-of spread out.
-export type { ICacheProvider } from "./globals/middleware/cache.resource";
+export type {
+  CacheInvalidateKeysOptions,
+  CacheKey,
+  ICacheProvider,
+} from "./globals/middleware/cache/resource";
 export * from "./types/storeTypes";

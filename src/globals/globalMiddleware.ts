@@ -1,57 +1,65 @@
-import {
-  cacheMiddleware,
-  journalKeys as cacheJournalKeys,
-} from "./middleware/cache.middleware";
+import { cacheMiddleware } from "./middleware/cache/middleware";
 import { concurrencyTaskMiddleware } from "./middleware/concurrency.middleware";
-import {
-  circuitBreakerMiddleware,
-  journalKeys as circuitBreakerJournalKeys,
-} from "./middleware/circuitBreaker.middleware";
+import { circuitBreakerMiddleware } from "./middleware/circuitBreaker.middleware";
 import { requireContextTaskMiddleware } from "./middleware/requireContext.middleware";
 import { identityCheckerTaskMiddleware } from "./middleware/identityChecker.middleware";
 import {
   retryTaskMiddleware,
   retryResourceMiddleware,
-  journalKeys as retryJournalKeys,
 } from "./middleware/retry.middleware";
 import {
   timeoutTaskMiddleware,
   timeoutResourceMiddleware,
-  journalKeys as timeoutJournalKeys,
 } from "./middleware/timeout.middleware";
 import {
   debounceTaskMiddleware,
   throttleTaskMiddleware,
 } from "./middleware/temporal.middleware";
-import {
-  fallbackTaskMiddleware,
-  journalKeys as fallbackJournalKeys,
-} from "./middleware/fallback.middleware";
-import {
-  rateLimitTaskMiddleware,
-  journalKeys as rateLimitJournalKeys,
-} from "./middleware/rateLimit.middleware";
+import { fallbackTaskMiddleware } from "./middleware/fallback.middleware";
+import { rateLimitTaskMiddleware } from "./middleware/rateLimit.middleware";
 import { symbolMiddlewareConfiguredFrom } from "../types/symbols";
 
-type MiddlewareWithJournalKeys<TMiddleware, TJournalKeys> = TMiddleware & {
-  journalKeys: TJournalKeys;
-};
-
-const withJournalKeys = <TMiddleware extends object, TJournalKeys>(
+const createMiddlewareAlias = <TMiddleware extends object>(
   middleware: TMiddleware,
-  journalKeys: TJournalKeys,
-): MiddlewareWithJournalKeys<TMiddleware, TJournalKeys> => {
-  const wrapped = {
+): TMiddleware => {
+  const alias = {
     ...middleware,
-    journalKeys,
-  } as MiddlewareWithJournalKeys<TMiddleware, TJournalKeys> & {
+  } as TMiddleware & {
     [symbolMiddlewareConfiguredFrom]?: unknown;
   };
 
-  wrapped[symbolMiddlewareConfiguredFrom] = middleware;
+  // Keep public namespace references distinct so they can coexist with
+  // framework-registered or resource-owned registrations of the same middleware.
+  alias[symbolMiddlewareConfiguredFrom] = middleware;
 
-  return Object.freeze(wrapped);
+  return Object.freeze(alias);
 };
+
+const requireContextMiddlewareAlias = createMiddlewareAlias(
+  requireContextTaskMiddleware,
+);
+const identityCheckerMiddlewareAlias = createMiddlewareAlias(
+  identityCheckerTaskMiddleware,
+);
+const cacheMiddlewareAlias = createMiddlewareAlias(cacheMiddleware);
+const concurrencyMiddlewareAlias = createMiddlewareAlias(
+  concurrencyTaskMiddleware,
+);
+const debounceMiddlewareAlias = createMiddlewareAlias(debounceTaskMiddleware);
+const throttleMiddlewareAlias = createMiddlewareAlias(throttleTaskMiddleware);
+const fallbackMiddlewareAlias = createMiddlewareAlias(fallbackTaskMiddleware);
+const rateLimitMiddlewareAlias = createMiddlewareAlias(rateLimitTaskMiddleware);
+const retryTaskMiddlewareAlias = createMiddlewareAlias(retryTaskMiddleware);
+const timeoutTaskMiddlewareAlias = createMiddlewareAlias(timeoutTaskMiddleware);
+const circuitBreakerMiddlewareAlias = createMiddlewareAlias(
+  circuitBreakerMiddleware,
+);
+const retryResourceMiddlewareAlias = createMiddlewareAlias(
+  retryResourceMiddleware,
+);
+const timeoutResourceMiddlewareAlias = createMiddlewareAlias(
+  timeoutResourceMiddleware,
+);
 
 type GlobalMiddlewares = {
   requireContext: typeof requireContextTaskMiddleware;
@@ -59,33 +67,15 @@ type GlobalMiddlewares = {
   task: {
     requireContext: typeof requireContextTaskMiddleware;
     identityChecker: typeof identityCheckerTaskMiddleware;
-    cache: MiddlewareWithJournalKeys<
-      typeof cacheMiddleware,
-      typeof cacheJournalKeys
-    >;
+    cache: typeof cacheMiddleware;
     concurrency: typeof concurrencyTaskMiddleware;
     debounce: typeof debounceTaskMiddleware;
     throttle: typeof throttleTaskMiddleware;
-    fallback: MiddlewareWithJournalKeys<
-      typeof fallbackTaskMiddleware,
-      typeof fallbackJournalKeys
-    >;
-    rateLimit: MiddlewareWithJournalKeys<
-      typeof rateLimitTaskMiddleware,
-      typeof rateLimitJournalKeys
-    >;
-    retry: MiddlewareWithJournalKeys<
-      typeof retryTaskMiddleware,
-      typeof retryJournalKeys
-    >;
-    timeout: MiddlewareWithJournalKeys<
-      typeof timeoutTaskMiddleware,
-      typeof timeoutJournalKeys
-    >;
-    circuitBreaker: MiddlewareWithJournalKeys<
-      typeof circuitBreakerMiddleware,
-      typeof circuitBreakerJournalKeys
-    >;
+    fallback: typeof fallbackTaskMiddleware;
+    rateLimit: typeof rateLimitTaskMiddleware;
+    retry: typeof retryTaskMiddleware;
+    timeout: typeof timeoutTaskMiddleware;
+    circuitBreaker: typeof circuitBreakerMiddleware;
   };
   resource: {
     retry: typeof retryResourceMiddleware;
@@ -100,27 +90,24 @@ type GlobalMiddlewares = {
  * and shared shorthands remain available where that improves ergonomics.
  */
 export const globalMiddlewares: GlobalMiddlewares = {
-  requireContext: requireContextTaskMiddleware,
-  identityChecker: identityCheckerTaskMiddleware,
+  requireContext: requireContextMiddlewareAlias,
+  identityChecker: identityCheckerMiddlewareAlias,
   task: {
-    requireContext: requireContextTaskMiddleware,
-    identityChecker: identityCheckerTaskMiddleware,
-    cache: withJournalKeys(cacheMiddleware, cacheJournalKeys),
-    concurrency: concurrencyTaskMiddleware,
-    debounce: debounceTaskMiddleware,
-    throttle: throttleTaskMiddleware,
-    fallback: withJournalKeys(fallbackTaskMiddleware, fallbackJournalKeys),
-    rateLimit: withJournalKeys(rateLimitTaskMiddleware, rateLimitJournalKeys),
+    requireContext: createMiddlewareAlias(requireContextTaskMiddleware),
+    identityChecker: createMiddlewareAlias(identityCheckerTaskMiddleware),
+    cache: cacheMiddlewareAlias,
+    concurrency: concurrencyMiddlewareAlias,
+    debounce: debounceMiddlewareAlias,
+    throttle: throttleMiddlewareAlias,
+    fallback: fallbackMiddlewareAlias,
+    rateLimit: rateLimitMiddlewareAlias,
     // common with resources
-    retry: withJournalKeys(retryTaskMiddleware, retryJournalKeys),
-    timeout: withJournalKeys(timeoutTaskMiddleware, timeoutJournalKeys),
-    circuitBreaker: withJournalKeys(
-      circuitBreakerMiddleware,
-      circuitBreakerJournalKeys,
-    ),
+    retry: retryTaskMiddlewareAlias,
+    timeout: timeoutTaskMiddlewareAlias,
+    circuitBreaker: circuitBreakerMiddlewareAlias,
   },
   resource: {
-    retry: retryResourceMiddleware,
-    timeout: timeoutResourceMiddleware,
+    retry: retryResourceMiddlewareAlias,
+    timeout: timeoutResourceMiddlewareAlias,
   },
 };

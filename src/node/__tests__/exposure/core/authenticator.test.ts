@@ -1,6 +1,6 @@
 import { createAuthenticator } from "../../../exposure/authenticator";
 import { TaskRunner } from "../../../../models/TaskRunner";
-import { Store } from "../../../../models/Store";
+import { Store } from "../../../../models/store/Store";
 import { ITask } from "../../../../defs";
 import { IncomingMessage } from "http";
 import {
