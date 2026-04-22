@@ -131,7 +131,7 @@ describe("durable: signals integration", () => {
     await runtime.dispose();
   });
 
-  it("rejects signaling sleeping executions once the service enters cooldown", async () => {
+  it("rejects signaling sleeping executions once cooldown begins", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 

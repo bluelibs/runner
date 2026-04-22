@@ -221,7 +221,7 @@ Resources model shared services and state. They are Runner's primary composition
 - `init(config, deps, context)` creates the value.
 - `ready(value, config, deps, context)` starts ingress after startup lock.
 - `cooldown(value, config, deps, context)` stops accepting new external work at shutdown start.
-  Fully awaited before narrowing admissions; time counts against `dispose.totalBudgetMs`. During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, broader admissions stay open for an extra window after `cooldown()` completes. Once `disposing`, fresh admissions narrow to the cooling resource, definitions from `cooldown()`, and in-flight continuations. `runtime.dispose({ force: true })` skips `cooldown()`.
+  Fully awaited before narrowing admissions. During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, broader admissions stay open for an extra window after `cooldown()` completes. Once `disposing`, fresh admissions narrow to the cooling resource, definitions from `cooldown()`, and in-flight continuations. `runtime.dispose({ force: true })` skips `cooldown()`.
 - `dispose(value, config, deps, context)` performs final teardown after drain. With `runtime.dispose({ force: true })`, this becomes the first resource lifecycle phase reached during shutdown.
 - `health(value, config, deps, context)` is an optional probe returning `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()`. Their resolved value is `undefined`.

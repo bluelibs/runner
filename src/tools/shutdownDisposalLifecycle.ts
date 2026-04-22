@@ -127,12 +127,13 @@ export async function runShutdownDisposalLifecycle(
       globalEvents.aborting,
       input.runtimeLifecycleSource,
     );
+
+    input.store.abortInFlightTaskSignals(runtimeShutdownAbortReason);
     if (input.forceDisposal.isRequested) {
       await disposeImmediately(input);
       return;
     }
 
-    input.store.abortInFlightTaskSignals(runtimeShutdownAbortReason);
     effectiveAbortWindowMs = disposalBudget.capByRemainingBudget(
       input.dispose.abortWindowMs,
     );

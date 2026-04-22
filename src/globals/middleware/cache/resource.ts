@@ -244,7 +244,49 @@ export function createCacheInstance({
     sharedBudget: cache.sharedBudget,
   };
 
-  return cache.cacheProvider(input);
+  return Promise.resolve(cache.cacheProvider(input)).then((instance) =>
+    validateCacheProviderInstance(instance, taskId),
+  );
+}
+
+function validateCacheProviderInstance(
+  cacheInstance: ICacheProvider,
+  taskId: string,
+): ICacheProvider {
+  assertCacheProviderMethod(cacheInstance, taskId, "get");
+  assertCacheProviderMethod(cacheInstance, taskId, "set");
+  assertCacheProviderMethod(cacheInstance, taskId, "clear");
+  assertCacheProviderMethod(cacheInstance, taskId, "invalidateKeys");
+  assertCacheProviderMethod(cacheInstance, taskId, "invalidateRefs");
+
+  if (
+    cacheInstance.has !== undefined &&
+    typeof cacheInstance.has !== "function"
+  ) {
+    validationError.throw({
+      subject: "Cache provider",
+      id: "cache",
+      originalError: `Cache provider instance for task "${taskId}" must implement optional has(key) as a function when provided.`,
+    });
+  }
+
+  return cacheInstance;
+}
+
+function assertCacheProviderMethod(
+  cacheInstance: ICacheProvider,
+  taskId: string,
+  methodName: "get" | "set" | "clear" | "invalidateKeys" | "invalidateRefs",
+): void {
+  if (typeof cacheInstance[methodName] === "function") {
+    return;
+  }
+
+  validationError.throw({
+    subject: "Cache provider",
+    id: "cache",
+    originalError: `Cache provider instance for task "${taskId}" must implement ${methodName}(...) as a function.`,
+  });
 }
 
 function getCacheEnabledTaskIds(

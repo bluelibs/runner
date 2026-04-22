@@ -274,8 +274,9 @@ export interface RecoverReportType {
 export interface IDurableService {
   /**
    * Stops worker, polling, recovery, and other background durable ownership for
-   * this runtime instance and closes admission for new direct durable starts
-   * and signals while still keeping already-admitted work recoverable.
+   * this runtime instance, closes new background durable admissions, and
+   * rejects new top-level durable starts while still letting already-admitted
+   * executions settle during shutdown drain.
    */
   cooldown(): Promise<void>;
 
@@ -290,7 +291,7 @@ export interface IDurableService {
 
   /**
    * Starts a workflow execution.
-   * Task-level admission stays owned by Runner, but durable rejects direct
+   * Task-level admission stays owned by Runner, but durable rejects new
    * starts once this runtime has begun cooldown.
    */
   start<TInput, TResult>(
@@ -319,7 +320,7 @@ export interface IDurableService {
 
   /**
    * Starts a workflow and waits for completion.
-   * Task-level admission stays owned by Runner, but durable rejects direct
+   * Task-level admission stays owned by Runner, but durable rejects new
    * starts once this runtime has begun cooldown.
    * Returns the started execution id together with the workflow result payload.
    */

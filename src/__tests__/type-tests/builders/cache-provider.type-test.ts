@@ -79,6 +79,21 @@ import type {
     provider: invalidHasProvider,
   });
 
+  const invalidNoInvalidateKeysProvider = r
+    .resource("types-cache-provider-invalid-no-invalidate-keys")
+    .init(async () => async (_input: Record<string, unknown>) => ({
+      get: async (_key: string) => undefined,
+      set: async (_key: string, _value: unknown) => undefined,
+      clear: async () => undefined,
+      invalidateRefs: async (_refs: readonly string[]) => 0,
+    }))
+    .build();
+
+  resources.cache.with({
+    // @ts-expect-error provider-produced cache object must implement invalidateKeys()
+    provider: invalidNoInvalidateKeysProvider,
+  });
+
   const invalidLegacyProvider = r
     .resource("types-cache-provider-invalid-legacy")
     .init(async () => async (options: Record<string, unknown>) => ({

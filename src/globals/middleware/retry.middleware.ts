@@ -100,6 +100,7 @@ export const retryTaskMiddleware = taskMiddlewareBuilder("retry")
     },
   )
   .build();
+
 export const retryResourceMiddleware = defineResourceMiddleware({
   id: "retry",
   meta: {

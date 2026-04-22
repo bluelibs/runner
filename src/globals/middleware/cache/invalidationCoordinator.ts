@@ -90,7 +90,10 @@ export class CacheInvalidationCoordinator {
   }: {
     kind: "key" | "ref";
     payload: { keys: readonly CacheKey[] } | { refs: readonly CacheRef[] };
-    invalidate: (cacheInstance: ICacheProvider) => Promise<number> | number;
+    invalidate: (
+      cacheInstance: ICacheProvider,
+      taskId: string,
+    ) => Promise<number> | number;
   }): Promise<number> {
     const cacheTargets = this.config.getTargets();
     let deletedCount = 0;
@@ -104,8 +107,11 @@ export class CacheInvalidationCoordinator {
           continue;
         }
 
-        deletedCount += await invalidate(cacheInstance);
+        deletedCount += await invalidate(cacheInstance, target.taskId);
       } catch (error) {
+        if (validationError.is(error)) {
+          throw error;
+        }
         this.logInvalidationFailure(kind, target.taskId, payload, error);
       }
     }

@@ -410,9 +410,11 @@ await durable.signal(executionId, Paid, { paidAt: Date.now() });
 await durable.cancelExecution(executionId, "User requested");
 ```
 
-Once the durable runtime enters `cooldown()`, new `start(...)`,
-`startAndWait(...)`, and `signal(...)` calls are rejected. Existing executions
-remain durable: sleeping workflows stay persisted as-is, and Runner shutdown can
+Once the durable runtime enters `cooldown()`, new top-level `start(...)` and
+`startAndWait(...)`, `signal(...)`, and background durable ownership all stop
+accepting new work. Existing executions can still be observed with `wait(...)`,
+and cooperative cancellation remains available for already-admitted work. If
+drain still does not complete, Runner can
 cooperatively interrupt an in-flight step during the runtime abort window so the
 execution resumes on the next runtime instead of being marked failed.
 

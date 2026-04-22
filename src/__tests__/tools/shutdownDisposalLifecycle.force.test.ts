@@ -277,10 +277,11 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       "waitForDrain",
       "beginAborting",
       `emit:${globalEvents.aborting.id}`,
+      "abort:Runtime shutdown drain budget expired",
       "beginDisposing",
       "disposeAll",
     ]);
-    expect(context.store.abortInFlightTaskSignals).not.toHaveBeenCalled();
+    expect(context.store.abortInFlightTaskSignals).toHaveBeenCalledTimes(1);
   });
 
   it("enters the abort window immediately when drain waiting is disabled", async () => {
@@ -532,8 +533,6 @@ describe("runShutdownDisposalLifecycle force handling", () => {
 
     expect(context.calls).toContain("waitForDrain");
     expect(context.calls).toContain(`emit:${globalEvents.disposing.id}`);
-    expect(context.calls).toContain("beginAborting");
-    expect(context.calls).toContain(`emit:${globalEvents.aborting.id}`);
     expect(context.calls).toContain(
       "abort:Runtime shutdown drain budget expired",
     );
@@ -543,6 +542,62 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       context.calls.filter((call) => call === "waitForDrain"),
     ).toHaveLength(1);
     expect(context.store.abortInFlightTaskSignals).toHaveBeenCalledTimes(1);
+  });
+
+  it("awaits aborting hooks before continuing toward drained", async () => {
+    jest.useFakeTimers();
+
+    const context = createLifecycleInput({
+      dispose: {
+        totalBudgetMs: 20,
+        drainingBudgetMs: 0,
+        abortWindowMs: 20,
+      },
+    });
+
+    let abortingHookCompleted = false;
+
+    context.store.waitForDrain.mockImplementation(
+      async (...args: [number?]) => {
+        const timeoutMs = args[0];
+        context.calls.push(`waitForDrain:${timeoutMs}`);
+        return false;
+      },
+    );
+    context.eventManager.emitLifecycle.mockImplementation(
+      async (eventDefinition: { id: string }) => {
+        context.calls.push(`emit:${eventDefinition.id}`);
+        if (eventDefinition.id !== globalEvents.aborting.id) {
+          return;
+        }
+
+        await new Promise<void>((resolve) => {
+          setTimeout(() => {
+            abortingHookCompleted = true;
+            resolve();
+          }, 50);
+        });
+      },
+    );
+
+    const shutdownPromise = runShutdownDisposalLifecycle(context.input);
+    await jest.advanceTimersByTimeAsync(50);
+    await shutdownPromise;
+
+    expect(abortingHookCompleted).toBe(true);
+    expect(context.calls).toEqual([
+      "beginCoolingDown",
+      "cooldown",
+      "beginDisposing",
+      `emit:${globalEvents.disposing.id}`,
+      "waitForDrain:0",
+      "beginAborting",
+      `emit:${globalEvents.aborting.id}`,
+      "abort:Runtime shutdown drain budget expired",
+      "beginDrained",
+      `emit:${globalEvents.drained.id}`,
+      "disposeAll",
+    ]);
   });
 
   it("does not start an abort window when drain completes gracefully", async () => {

@@ -174,7 +174,7 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     expect(pollingCooldown).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects task-level durable interactions once cooldown begins", async () => {
+  it("rejects new top-level durable starts once cooldown begins", async () => {
     const store = new MemoryStore();
     const task = okTask("t-cooldown-guard");
     const service = await initDurableService({
@@ -187,9 +187,44 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
 
     expect(() => service.start(task)).toThrow("shutting down");
     await expect(service.startAndWait(task)).rejects.toThrow("shutting down");
+  });
+
+  it("rejects durable child starts during cooldown even when parentExecutionId is present", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-cooldown-continuation-start");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    await service.cooldown();
+
+    expect(() =>
+      service.start(task, undefined, { parentExecutionId: "parent-1" }),
+    ).toThrow("shutting down");
+  });
+
+  it("rejects task-level durable signals during cooldown drain", async () => {
+    const store = new MemoryStore();
+    const task = okTask("t-cooldown-signal");
+    const service = await initDurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+    });
+
+    const signalHandler = (
+      service as unknown as { signalHandler: { signal: jest.Mock } }
+    ).signalHandler;
+    signalHandler.signal = jest.fn(async () => undefined);
+
+    await service.cooldown();
+
     await expect(
       service.signal("e1", { id: "sig" } as any, undefined),
     ).rejects.toThrow("shutting down");
+    expect(signalHandler.signal).not.toHaveBeenCalled();
   });
 
   it("rejects task-level durable starts during disposing", async () => {

@@ -6,7 +6,7 @@ import {
   cacheMiddleware,
   cacheResource,
 } from "../../../../globals/middleware/cache/middleware";
-import { genericError } from "../../../../errors";
+import { genericError, validationError } from "../../../../errors";
 import { loggerResource } from "../../../../globals/resources/logger.resource";
 
 describe("cache resource invalidateKeys", () => {
@@ -138,6 +138,88 @@ describe("cache resource invalidateKeys", () => {
       async init(_, { cache }) {
         expect(await cache.invalidateKeys([])).toBe(0);
         expect(await cache.invalidateKeys("user:u1")).toBe(0);
+      },
+    });
+
+    await run(app);
+  });
+
+  it("fails fast when a legacy custom provider lacks invalidateKeys", async () => {
+    const customProvider = defineResource({
+      id: "cache-key-invalidation-legacy-provider",
+      init: async (): Promise<CacheProvider> => async () =>
+        ({
+          get: async () => undefined,
+          set: async () => undefined,
+          clear: async () => undefined,
+          invalidateRefs: async () => 0,
+        }) as any,
+    });
+
+    const cachedTask = defineTask({
+      id: "cache-key-invalidation-legacy-task",
+      middleware: [
+        cacheMiddleware.with({
+          keyBuilder: (_taskId: string, input: { userId: string }) =>
+            `user:${input.userId}`,
+        }),
+      ],
+      run: async () => "never-called",
+    });
+
+    const app = defineResource({
+      id: "cache-key-invalidation-legacy-app",
+      register: [cacheResource.with({ provider: customProvider }), cachedTask],
+      dependencies: { cache: cacheResource },
+      async init(_, { cache }) {
+        try {
+          await cache.invalidateKeys("user:u1");
+          throw new Error("Expected cache.invalidateKeys to reject");
+        } catch (error) {
+          expect(validationError.is(error)).toBe(true);
+        }
+      },
+    });
+
+    await run(app);
+  });
+
+  it("fails fast when a custom provider exposes has as a non-function", async () => {
+    const customProvider = defineResource({
+      id: "cache-key-invalidation-invalid-has-provider",
+      init: async (): Promise<CacheProvider> => async () =>
+        ({
+          get: async () => undefined,
+          set: async () => undefined,
+          clear: async () => undefined,
+          invalidateKeys: async () => 0,
+          invalidateRefs: async () => 0,
+          has: true,
+        }) as any,
+    });
+
+    const cachedTask = defineTask({
+      id: "cache-key-invalidation-invalid-has-task",
+      middleware: [
+        cacheMiddleware.with({
+          keyBuilder: (_taskId: string, input: { userId: string }) =>
+            `user:${input.userId}`,
+        }),
+      ],
+      run: async () => "never-called",
+    });
+
+    const app = defineResource({
+      id: "cache-key-invalidation-invalid-has-app",
+      register: [cacheResource.with({ provider: customProvider }), cachedTask],
+      dependencies: { cache: cacheResource },
+      async init(_, { cache }) {
+        try {
+          await cache.invalidateKeys("user:u1");
+          throw new Error("Expected cache.invalidateKeys to reject");
+        } catch (error) {
+          expect(validationError.is(error)).toBe(true);
+        }
       },
     });
 

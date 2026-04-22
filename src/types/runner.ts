@@ -144,10 +144,11 @@ export interface IRuntime<V = unknown> extends IHealthReporter {
 export type DisposeOptions = {
   /**
    * Total disposal budget (milliseconds) for the shutdown lifecycle.
-   * This budget covers `cooldown()`, the post-cooldown window, `disposing`
-   * hooks, drain wait, `aborting` hooks, the abort wait window, `drained`
-   * hooks, and resource disposal.
-   * Once exhausted, Runner stops waiting and returns.
+   * This budget covers the post-cooldown window, graceful drain wait, and the
+   * optional abort wait window.
+   * Lifecycle hooks (`disposing`, `aborting`, `drained`) and final resource
+   * disposal are still awaited once Runner has already entered those phases,
+   * and `cooldown()` itself is fully awaited before those bounded waits begin.
    */
   totalBudgetMs?: number;
   /**
@@ -161,11 +162,12 @@ export type DisposeOptions = {
   drainingBudgetMs?: number;
   /**
    * Optional bounded cooperative-abort window after graceful drain expires.
-   * Runner aborts its tracked task-local signals, then waits up to this window
-   * for in-flight business work to settle. Effective wait is capped by
-   * remaining `dispose.totalBudgetMs`. When `drainingBudgetMs` is `0`, this can
-   * still run immediately after the initial drain check. Set to `0` to abort
-   * immediately without any extra post-abort wait.
+   * Runner emits `events.aborting`, aborts its tracked task-local signals,
+   * then waits up to this window for in-flight business work to settle.
+   * Effective wait is capped by remaining `dispose.totalBudgetMs`. When
+   * `drainingBudgetMs` is `0`, this can still run immediately after the
+   * initial drain check. Set to `0` to abort immediately without any extra
+   * post-abort wait.
    */
   abortWindowMs?: number;
   /**
