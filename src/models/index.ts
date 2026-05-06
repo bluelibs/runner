@@ -1,6 +1,6 @@
 export * from "./EventManager";
 export * from "./Logger";
-export * from "./Store";
+export * from "./store/Store";
 export * from "./TaskRunner";
 export * from "./MiddlewareManager";
 export { LogPrinter } from "./LogPrinter";

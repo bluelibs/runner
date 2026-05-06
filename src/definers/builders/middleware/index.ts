@@ -39,12 +39,13 @@ export function taskMiddlewareBuilder<
   D extends DependencyMapType = {},
 >(id: string): TaskMiddlewareFluentBuilder<C, In, Out, D> {
   const filePath = getCallerFile();
-  const initial: TaskMwState<C, In, Out, D, TaskMiddlewareTagType[]> =
+  const initial: TaskMwState<C, In, Out, D, TaskMiddlewareTagType[], {}> =
     Object.freeze({
       id,
       filePath,
       dependencies: {} as D,
       configSchema: undefined,
+      journal: {} as {},
       run: undefined,
       meta: {} as IMiddlewareMeta,
       tags: [] as TaskMiddlewareTagType[],

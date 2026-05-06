@@ -58,6 +58,7 @@ import {
   runTaskAttempt as runTaskAttemptFn,
   handleExecutionAttemptError as handleAttemptErrorFn,
 } from "./ExecutionManager.attempt";
+import { durableShutdownInterruptionReason } from "../shutdownInterruption";
 
 export interface ExecutionManagerConfig {
   store: IDurableStore;
@@ -91,6 +92,7 @@ export class ExecutionManager {
     string,
     AbortController
   >();
+  private shutdownInterruptionReason: string | null = null;
   private liveCancellationListenerStop: (() => Promise<void>) | null = null;
   private readonly eventBus: IEventBus;
   private readonly liveCancellationEventBus: IEventBus | null;
@@ -153,6 +155,16 @@ export class ExecutionManager {
     }
 
     await stop();
+  }
+
+  interruptActiveAttempts(reason = durableShutdownInterruptionReason): void {
+    this.shutdownInterruptionReason = reason;
+
+    for (const controller of this.activeAttemptControllers.values()) {
+      if (!controller.signal.aborted) {
+        controller.abort(reason);
+      }
+    }
   }
 
   async start(
@@ -610,6 +622,7 @@ export class ExecutionManager {
   }): Promise<void> {
     await handleAttemptErrorFn({
       ...params,
+      getShutdownInterruptionReason: () => this.shutdownInterruptionReason,
       transitionToCancelled: (p) =>
         this.transitionRunningExecutionToCancelled(p),
       transitionToFailed: (p) => this.transitionExecutionToFailed(p),

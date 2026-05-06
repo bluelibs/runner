@@ -1,4 +1,11 @@
-import type { TagTarget, TagType, ValidationSchemaInput } from "../defs";
+import type {
+  EnsureJournalKeyBag,
+  JournalKey,
+  JournalKeyBag,
+  TagTarget,
+  TagType,
+  ValidationSchemaInput,
+} from "../defs";
 import type { DependencyMapType } from "../types/utilities";
 import type { ThrowsList } from "../types/error";
 import {
@@ -33,18 +40,23 @@ export type MiddlewareVariant = {
  * the core definer accesses directly; additional fields survive
  * via the object spread.
  */
-interface MiddlewareDefCore<TDeps extends DependencyMapType> {
+interface MiddlewareDefCore<
+  TDeps extends DependencyMapType,
+  TJournalKeys extends JournalKeyBag = {},
+> {
   id: string;
   configSchema?: ValidationSchemaInput<any>;
   tags?: TagType[];
   dependencies?: TDeps | ((config: any) => TDeps);
+  journal?: EnsureJournalKeyBag<TJournalKeys>;
   throws?: ThrowsList;
 }
 
 export type MiddlewareDefWithInferredSchema<
   TSchema extends ValidationSchemaInput<any>,
   TDeps extends DependencyMapType,
-> = Omit<MiddlewareDefCore<TDeps>, "configSchema"> & {
+  TJournalKeys extends JournalKeyBag = {},
+> = Omit<MiddlewareDefCore<TDeps, TJournalKeys>, "configSchema"> & {
   configSchema: TSchema;
 };
 
@@ -53,10 +65,14 @@ export type MiddlewareDefWithInferredSchema<
  * The two public definers delegate here, keeping the identical
  * normalisation → wrap → freeze pipeline in a single place.
  */
-export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
+export function defineMiddlewareCore<
+  TConfig,
+  TDeps extends DependencyMapType,
+  TJournalKeys extends JournalKeyBag = {},
+>(
   variant: MiddlewareVariant,
   filePath: string,
-  middlewareDef: MiddlewareDefCore<TDeps>,
+  middlewareDef: MiddlewareDefCore<TDeps, TJournalKeys>,
 ): Record<string | symbol, unknown> {
   assertDefinitionId(variant.label, middlewareDef.id);
 
@@ -72,11 +88,20 @@ export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
     middlewareDef.tags,
   );
 
+  const journalKeys = normalizeJournalKeys(
+    variant,
+    middlewareDef.id,
+    middlewareDef.journal,
+  );
+
+  const { journal: _journal, ...middlewareDefWithoutJournal } = middlewareDef;
+
   const base = {
     [symbolFilePath]: filePath,
     [variant.typeSymbol]: true,
     config: {} as TConfig,
-    ...middlewareDef,
+    ...middlewareDefWithoutJournal,
+    journalKeys,
     tags: middlewareDef.tags ?? [],
     configSchema,
     dependencies: middlewareDef.dependencies || ({} as TDeps),
@@ -153,4 +178,47 @@ export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
   };
 
   return deepFreeze(wrap(base as Obj));
+}
+
+function normalizeJournalKeys<TJournalKeys extends JournalKeyBag>(
+  variant: MiddlewareVariant,
+  middlewareId: string,
+  declaredJournal: EnsureJournalKeyBag<TJournalKeys> | undefined,
+): EnsureJournalKeyBag<TJournalKeys> {
+  const journalKeys =
+    declaredJournal ?? ({} as EnsureJournalKeyBag<TJournalKeys>);
+  const normalizedJournalKeys = {} as Record<string, JournalKey<unknown>>;
+
+  for (const [propertyName, key] of Object.entries(journalKeys)) {
+    if (!isJournalKey(key)) {
+      validationError.throw({
+        subject: `${variant.label} journal`,
+        id: middlewareId,
+        originalError: `Journal key "${propertyName}" must be created via journal.createKey<T>(id).`,
+      });
+    }
+
+    if (key.id.length === 0) {
+      validationError.throw({
+        subject: `${variant.label} journal`,
+        id: middlewareId,
+        originalError: `Journal key "${propertyName}" must have a non-empty id.`,
+      });
+    }
+
+    normalizedJournalKeys[propertyName] = key;
+  }
+
+  return Object.freeze(
+    normalizedJournalKeys,
+  ) as EnsureJournalKeyBag<TJournalKeys>;
+}
+
+function isJournalKey(value: unknown): value is JournalKey<unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "id" in value &&
+    typeof value.id === "string"
+  );
 }

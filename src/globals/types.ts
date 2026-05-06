@@ -8,10 +8,11 @@ export type {
 export { CronOnError } from "./cron/types";
 export * from "./debug";
 export type {
+  CacheInvalidateKeysOptions,
   CacheProviderInput,
   CacheResourceConfig,
   ICacheProvider,
-} from "./middleware/cache.resource";
+} from "./middleware/cache/resource";
 export type { CircuitBreakerOpenError } from "./middleware/circuitBreaker.middleware";
 export type {
   CircuitBreakerMiddlewareConfig,

@@ -1,4 +1,4 @@
-import { StoreValidator } from "../../models/StoreValidator";
+import { StoreValidator } from "../../models/store/StoreValidator";
 import { defineTag } from "../../define";
 import { createTestFixture } from "../test-utils";
 import { scope, subtreeOf } from "../../public";

@@ -156,6 +156,19 @@ const serializer: SerializerLike = {
 };
 
 describe("RedisCache ref bookkeeping", () => {
+  it("treats empty ref invalidation as a no-op", async () => {
+    const redis = new FakeRedis();
+    const cache = new RedisCache({
+      options: {},
+      prefix: "tests:redis:empty-ref-invalidation",
+      redis,
+      serializer,
+      taskId: "tests-redis-empty-ref-invalidation",
+    });
+
+    await expect(cache.invalidateRefs([])).resolves.toBe(0);
+  });
+
   it("cleans the evicted entry from its own task ref set during shared-budget eviction", async () => {
     const redis = new FakeRedis();
     const firstCache = new RedisCache({

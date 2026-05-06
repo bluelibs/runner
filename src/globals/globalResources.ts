@@ -1,7 +1,7 @@
 import {
   cacheProviderResource,
   cacheResource,
-} from "./middleware/cache.resource";
+} from "./middleware/cache/resource";
 import { circuitBreakerResource } from "./middleware/circuitBreaker.middleware";
 import { concurrencyResource } from "./middleware/concurrency.middleware";
 import { rateLimitResource } from "./middleware/rateLimit.resource";

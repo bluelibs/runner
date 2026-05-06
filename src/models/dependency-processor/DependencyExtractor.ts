@@ -26,7 +26,7 @@ import {
 } from "../../errors";
 import { EventManager } from "../EventManager";
 import { Logger } from "../Logger";
-import { Store } from "../Store";
+import { Store } from "../store/Store";
 import { TaskRunner } from "../TaskRunner";
 import {
   ResourceStoreElementType,
@@ -45,7 +45,7 @@ import { globalResources } from "../../globals/globalResources";
 import {
   extractRequestedId,
   resolveCanonicalIdFromStore,
-} from "../StoreLookup";
+} from "../store/StoreLookup";
 
 const MIDDLEWARE_MANAGER_RESOURCE_ID = globalResources.middlewareManager.id;
 

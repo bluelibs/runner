@@ -5,7 +5,7 @@ import {
   resolveCanonicalIdFromStore,
   resolveRequestedIdFromStore,
   toCanonicalDefinitionFromStore,
-} from "../../models/StoreLookup";
+} from "../../models/store/StoreLookup";
 
 describe("StoreLookup coverage", () => {
   it("extracts requested ids from strings, configured resources, functions, and rejects invalid ids", () => {

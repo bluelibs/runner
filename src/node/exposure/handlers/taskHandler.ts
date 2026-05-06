@@ -26,7 +26,7 @@ import type { MultipartLimits } from "../multipart";
 import { respondTaskResult } from "./taskResult";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 import { runtimeSource } from "../../../types/runtimeSource";
-import { resolveRequestedIdFromStore } from "../../../models/StoreLookup";
+import { resolveRequestedIdFromStore } from "../../../models/store/StoreLookup";
 
 interface TaskHandlerDeps {
   store: NodeExposureDeps["store"];

@@ -1,6 +1,6 @@
 import { parallelInitSchedulingError } from "../../errors";
 import { ResourceStoreElementType } from "../../types/storeTypes";
-import { Store } from "../Store";
+import { Store } from "../store/Store";
 import {
   isHook,
   isOptional,
@@ -23,7 +23,7 @@ import type {
 import {
   extractRequestedId,
   resolveCanonicalIdFromStore,
-} from "../StoreLookup";
+} from "../store/StoreLookup";
 
 type DependencyTraversalState = {
   resourceIds: Set<string>;

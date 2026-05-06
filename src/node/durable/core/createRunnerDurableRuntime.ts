@@ -7,7 +7,7 @@ import type { DurableAuditEntry } from "./audit";
 import { createDurableRunnerAuditEmitter } from "../emitters/runnerAuditEmitter";
 import type { EventManager } from "../../../models/EventManager";
 import type { TaskRunner } from "../../../models/TaskRunner";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import type { Logger } from "../../../models/Logger";
 import type { ITask } from "../../../types/task";
 import { initDurableWorker } from "./DurableWorker";

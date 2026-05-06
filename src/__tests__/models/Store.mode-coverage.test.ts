@@ -1,4 +1,4 @@
-import { Store } from "../../models/Store";
+import { Store } from "../../models/store/Store";
 import { EventManager } from "../../models/EventManager";
 import { Logger } from "../../models/Logger";
 import { OnUnhandledError } from "../../models/UnhandledError";

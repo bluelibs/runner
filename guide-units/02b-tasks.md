@@ -174,9 +174,7 @@ The journal is the clean way for middleware layers to coordinate without polluti
 import { journal, r } from "@bluelibs/runner";
 
 export const journalKeys = {
-  abortController: journal.createKey<AbortController>(
-    "timeout.abortController",
-  ),
+  abortController: journal.createKey<AbortController>("abortController"),
 } as const;
 
 export const timeoutMiddleware = r.middleware

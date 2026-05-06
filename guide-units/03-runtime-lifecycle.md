@@ -201,6 +201,7 @@ Runner applies source-aware admission rules during shutdown:
 | `running`     | Admit all task/event calls.                                                                                                                                                                                                                    |
 | `coolingDown` | Shutdown has started and resources are running `cooldown()`. Business admissions remain open through cooldown execution and, when configured, the bounded `dispose.cooldownWindowMs` window that follows.                                      |
 | `disposing`   | Reject fresh external admissions (`runtime`, `resource`) except for cooldown-assembled resource-origin allowances. Allow in-flight internal continuations (`task`, `hook`, `middleware`) while their originating execution is still active.    |
+| `aborting`    | Graceful drain did not finish and Runner is escalating into cooperative abort. Lifecycle hooks on `events.aborting` still fire, then Runner aborts tracked in-flight task signals and, when budget remains, waits the bounded abort window.     |
 | `drained`     | Reject all new business task/event admissions. Lifecycle events (`events.drained`) are lifecycle-bypassed — their hooks fire, but those hooks cannot start new tasks or emit additional events. Lifecycle flow continues to resource disposal. |
 
 Practical effect for HTTP resources:
@@ -208,9 +209,11 @@ Practical effect for HTTP resources:
 - In `coolingDown`, stop ingress quickly and assemble any shutdown-specific admission allowances.
 - In `disposing`, stop accepting new requests and apply the final shutdown admission policy.
 - Let already in-flight request work finish during the drain budget window.
-- If the drain budget expires first and `dispose.abortWindowMs > 0`, Runner aborts its active task signals and waits that extra bounded window before continuing into `drained`.
+- If the drain budget expires first, Runner emits `events.aborting`, aborts its active task signals, and, when any abort budget remains, waits that extra bounded window before continuing into `drained`.
   These are the task-local cooperative `AbortSignal`s Runner created for currently in-flight task trees, not arbitrary external caller signals.
-- If `dispose.drainingBudgetMs` is `0`, Runner skips the graceful wait but still checks whether business work is already drained; when it is not and `dispose.abortWindowMs > 0`, the cooperative-abort window starts immediately.
+- If `dispose.drainingBudgetMs` is `0`, Runner skips the graceful wait but still checks whether business work is already drained; when it is not, cooperative abort starts immediately.
+- In `aborting`, lifecycle listeners can react before Runner fans out cooperative aborts to tracked in-flight work.
+- Treat `events.aborting` as an optional escalation checkpoint for resources, not a mandatory shutdown hook. `cooldown()` must still stop ingress and `dispose()` must still remain correct if abort escalation never happens.
 - In `drained`, business admissions are fully closed; resource cleanup/disposal starts.
 
 ```mermaid
@@ -218,12 +221,15 @@ stateDiagram-v2
     [*] --> running
     running --> coolingDown : dispose() or signal
     coolingDown --> disposing : cooldown done + optional window
+    disposing --> aborting : drain timed out
     disposing --> drained : in‑flight work drained
+    aborting --> drained : abort window complete
     drained --> [*] : resources disposed
 
     running : Admit all task/event calls
     coolingDown : Business admissions stay open\ncooldown() runs, then optional cooldownWindowMs
     disposing : Reject fresh external admissions\nAllow in‑flight continuations + allowlisted origins
+    aborting : Lifecycle hooks fire\nCooperative abort window runs
     drained : All business admissions blocked\nLifecycle events fire, then resource disposal
 ```
 
@@ -364,7 +370,7 @@ Signal-based shutdown follows the standard disposal lifecycle sequence described
 
 If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup, stops remaining `ready()` / `events.ready` work at the next safe boundary, and performs the same graceful teardown path.
 
-Signal-based shutdown, `run(..., { signal })`, and manual `runtime.dispose()` follow the same graceful shutdown lifecycle (`coolingDown`, `disposing`, `drained`) and the same admission rules.
+Signal-based shutdown, `run(..., { signal })`, and manual `runtime.dispose()` follow the same graceful shutdown lifecycle (`coolingDown`, `disposing`, `aborting`, `drained`) and the same admission rules.
 
 ```typescript
 await run(app, {
@@ -414,7 +420,8 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 4. transition to `disposing`
 5. `events.disposing` (awaited)
 6. drain wait (`dispose.drainingBudgetMs`, capped by remaining `dispose.totalBudgetMs`)
-7. optionally abort Runner-owned active task signals and wait `dispose.abortWindowMs` (also capped by remaining `dispose.totalBudgetMs`)
+7. optionally emit `events.aborting`, abort Runner-owned active task signals, and wait up to `dispose.abortWindowMs` (capped by remaining `dispose.totalBudgetMs`)
+   This is an escalation checkpoint, not a guaranteed shutdown phase.
 8. transition to `drained`
 9. `events.drained` (lifecycle-bypassed, awaited)
 10. fully awaited resource disposal
@@ -427,9 +434,10 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 4. this can skip `dispose.cooldownWindowMs`
 5. this can skip `events.disposing`
 6. this can skip drain wait
-7. this can skip `dispose.abortWindowMs`
-8. this can skip `events.drained`
-9. fully awaited resource disposal
+7. this can skip `events.aborting`
+8. this can skip `dispose.abortWindowMs`
+9. this can skip `events.drained`
+10. fully awaited resource disposal
 
 Important: `force: true` does not preempt lifecycle work that is already in flight, such as an active `cooldown()` call that has already started running.
 
@@ -455,6 +463,13 @@ sequenceDiagram
         Runner->>Runner: drain in‑flight work (drainingBudgetMs)
     end
 
+    rect rgb(255, 235, 205)
+        Note over Runner: aborting — cooperative abort + optional wait window
+        Runner->>Runner: events.aborting
+        Runner->>Runner: abort tracked task signals
+        Runner->>Runner: wait abortWindowMs
+    end
+
     rect rgb(224, 224, 255)
         Note over Runner: drained — all business admissions blocked
         Runner->>Runner: events.drained (lifecycle‑bypassed)
@@ -470,7 +485,11 @@ sequenceDiagram
 
 Important: hooks registered on `events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
 
-Important: `runtime.dispose({ force: true })` does not emit `events.disposing` or `events.drained`. It is meant for operator-controlled "stop waiting and tear down now" situations.
+Important: `events.aborting` is only emitted when graceful drain did not finish and Runner is entering cooperative abort. Clean drains and force disposal that skips ahead can bypass it.
+
+Important: resource authors may use `events.aborting` for escalation behavior such as interrupting long-running work or force-closing lingering connections, but shutdown correctness must not depend on it. Resources should remain correct with just `cooldown()` plus `dispose()`.
+
+Important: `runtime.dispose({ force: true })` does not emit `events.disposing`, `events.aborting`, or `events.drained`. It is meant for operator-controlled "stop waiting and tear down now" situations.
 
 ### Error Boundary Integration
 

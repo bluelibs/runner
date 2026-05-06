@@ -1,6 +1,21 @@
 import * as crypto from "node:crypto";
 import { ScheduleStatus, type Schedule, type Timer } from "../core/types";
+import type { ScheduleUpdate } from "../core/interfaces/store";
+import { durableExecutionInvariantError } from "../../../errors";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
+
+function assertStableScheduleIdentity(id: string, updates: object): void {
+  const updatedId = Reflect.get(updates, "id");
+  if (updatedId === undefined || updatedId === id) {
+    return;
+  }
+
+  return durableExecutionInvariantError.throw({
+    message:
+      `Cannot change durable schedule id from '${id}' to '${String(updatedId)}' via updateSchedule(). ` +
+      "Create a new schedule instead.",
+  });
+}
 
 export async function createSchedule(
   runtime: RedisStoreRuntime,
@@ -26,11 +41,12 @@ export async function getSchedule(
 export async function updateSchedule(
   runtime: RedisStoreRuntime,
   id: string,
-  updates: Partial<Schedule>,
+  updates: ScheduleUpdate,
 ): Promise<void> {
   const current = await getSchedule(runtime, id);
   if (!current) return;
-  await createSchedule(runtime, { ...current, ...updates });
+  assertStableScheduleIdentity(id, updates);
+  await createSchedule(runtime, { ...current, ...updates, id });
 }
 
 export async function saveScheduleWithTimer(

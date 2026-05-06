@@ -34,14 +34,10 @@ interface ActiveTaskAbortControllerState {
 }
 
 export const taskCancellationJournalKeys = {
-  callerSignal: journal.createKey<TaskCallerSignalState>(
-    "runner.execution.abortSignal",
-  ),
-  abortController: journal.createKey<AbortController>(
-    "runner.middleware.timeout.abortController",
-  ),
+  callerSignal: journal.createKey<TaskCallerSignalState>("callerSignal"),
+  abortController: journal.createKey<AbortController>("abortController"),
   activeAbortController: journal.createKey<ActiveTaskAbortControllerState>(
-    "runner.execution.activeAbortController",
+    "activeAbortController",
   ),
 } as const;
 

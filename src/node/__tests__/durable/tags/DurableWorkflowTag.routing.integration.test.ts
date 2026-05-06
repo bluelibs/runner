@@ -1,0 +1,139 @@
+import { r, resources, run, tags } from "../../../node";
+
+describe("durable: durableWorkflowTag execution boundaries (integration)", () => {
+  it("fails fast when durable support is not registered", async () => {
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-routing-missing",
+    );
+    const durableRegistration = durable.with({});
+
+    const task = r
+      .task("durable-tests-routing-missing-task")
+      .dependencies({ durable })
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
+      .run(async (_input: { v: number }, { durable }) => {
+        const ctx = durable.use();
+        await ctx.step("double", async () => 2);
+        return { value: 2 };
+      })
+      .build();
+
+    const app = r
+      .resource("durable-tests-routing-missing-app")
+      .register([durableRegistration, task])
+      .build();
+
+    await expect(run(app, { logs: { printThreshold: null } })).rejects.toThrow(
+      /tag.*durableWorkflow/i,
+    );
+  });
+
+  it("does not auto-route runtime.runTask(task) for tagged workflows", async () => {
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-routing-direct",
+    );
+    const durableRegistration = durable.with({});
+
+    const task = r
+      .task("durable-tests-routing-direct-task")
+      .dependencies({ durable })
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
+      .run(async (input: { v: number }, { durable }) => {
+        const ctx = durable.use();
+        const value = await ctx.step("double", async () => input.v * 2);
+        return { value };
+      })
+      .build();
+
+    const app = r
+      .resource("durable-tests-routing-direct-app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
+    const runtime = await run(app, { logs: { printThreshold: null } });
+
+    await expect(runtime.runTask(task, { v: 2 })).rejects.toThrow(
+      "Durable context is not available",
+    );
+
+    await runtime.dispose();
+  });
+
+  it("executes tagged workflows explicitly via durable.startAndWait()", async () => {
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-routing-execute",
+    );
+    const durableRegistration = durable.with({});
+
+    const task = r
+      .task("durable-tests-routing-execute-task")
+      .dependencies({ durable })
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
+      .run(async (input: { v: number }, { durable }) => {
+        const ctx = durable.use();
+        const value = await ctx.step("double", async () => input.v * 2);
+        return { value };
+      })
+      .build();
+
+    const app = r
+      .resource("durable-tests-routing-execute-app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
+    const runtime = await run(app, { logs: { printThreshold: null } });
+    const durableRuntime = runtime.getResourceValue(durable);
+
+    await expect(durableRuntime.startAndWait(task, { v: 2 })).resolves.toEqual(
+      expect.objectContaining({
+        durable: { executionId: expect.any(String) },
+        data: { value: 4 },
+      }),
+    );
+
+    const persistedTaskId = runtime.store.findIdByDefinition(task);
+    const executions = await durableRuntime.operator.listExecutions({
+      workflowKey: persistedTaskId,
+    });
+    expect(executions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          workflowKey: persistedTaskId,
+          status: "completed",
+          result: { value: 4 },
+        }),
+      ]),
+    );
+
+    await runtime.dispose();
+  });
+
+  it("can start tagged workflows by id and wait by execution id", async () => {
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-routing-start",
+    );
+    const durableRegistration = durable.with({});
+
+    const task = r
+      .task("durable-tests-routing-start-task")
+      .dependencies({ durable })
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
+      .run(async (input: { v: number }, { durable }) => {
+        const ctx = durable.use();
+        const value = await ctx.step("double", async () => input.v * 2);
+        return { value };
+      })
+      .build();
+
+    const app = r
+      .resource("durable-tests-routing-start-app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
+    const runtime = await run(app, { logs: { printThreshold: null } });
+    const durableRuntime = runtime.getResourceValue(durable);
+
+    const executionId = await durableRuntime.start(task.id, { v: 3 });
+    const result = await durableRuntime.wait<{ value: number }>(executionId);
+    expect(result).toEqual({ value: 6 });
+
+    await runtime.dispose();
+  });
+});

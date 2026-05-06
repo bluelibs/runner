@@ -1,7 +1,7 @@
 import type { DependencyMapType, RegisterableItem } from "../../defs";
 import * as utils from "../../define";
 import { validationError } from "../../errors";
-import type { StoreRegistry } from "../StoreRegistry";
+import type { StoreRegistry } from "../store/StoreRegistry";
 
 type ItemTypeRegistryKey =
   | "tasks"

@@ -11,7 +11,7 @@ import {
   eventLaneQueueReferenceInvalidError,
   eventLaneRetryPolicyInvalidError,
 } from "../../errors";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import type { EventLaneRoute } from "./EventLaneAssignments";
 import type {
   EventLaneBinding,

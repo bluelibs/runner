@@ -20,7 +20,7 @@ import { ExposureErrorLogKey, handleRequestError } from "./errorHandlers";
 import { getRequestId } from "../requestIdentity";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 import { runtimeSource } from "../../../types/runtimeSource";
-import { resolveRequestedIdFromStore } from "../../../models/StoreLookup";
+import { resolveRequestedIdFromStore } from "../../../models/store/StoreLookup";
 import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
 
 interface EventHandlerDeps {

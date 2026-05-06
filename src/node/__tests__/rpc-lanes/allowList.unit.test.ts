@@ -1,5 +1,5 @@
 import { globalTags } from "../../../globals/globalTags";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import { computeRpcLaneAllowList } from "../../rpc-lanes";
 
 function createStore(

@@ -171,7 +171,7 @@ Lifecycle order:
   - optionally keep broader admissions open for `dispose.cooldownWindowMs`
   - enter `disposing` -> emit `events.disposing`
   - drain in-flight work within remaining shutdown budget
-  - optionally abort Runner-owned active task signals and wait `dispose.abortWindowMs`
+  - if drain is still incomplete, enter `aborting` -> emit `events.aborting`, abort Runner-owned active task signals, then optionally wait `dispose.abortWindowMs`
   - emit `events.drained`
   - run `dispose()` in reverse dependency order
 
@@ -221,7 +221,7 @@ Resources model shared services and state. They are Runner's primary composition
 - `init(config, deps, context)` creates the value.
 - `ready(value, config, deps, context)` starts ingress after startup lock.
 - `cooldown(value, config, deps, context)` stops accepting new external work at shutdown start.
-  Fully awaited before narrowing admissions; time counts against `dispose.totalBudgetMs`. During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, broader admissions stay open for an extra window after `cooldown()` completes. Once `disposing`, fresh admissions narrow to the cooling resource, definitions from `cooldown()`, and in-flight continuations. `runtime.dispose({ force: true })` skips `cooldown()`.
+  Fully awaited before narrowing admissions. During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, broader admissions stay open for an extra window after `cooldown()` completes. Once `disposing`, fresh admissions narrow to the cooling resource, definitions from `cooldown()`, and in-flight continuations. `runtime.dispose({ force: true })` skips `cooldown()`.
 - `dispose(value, config, deps, context)` performs final teardown after drain. With `runtime.dispose({ force: true })`, this becomes the first resource lifecycle phase reached during shutdown.
 - `health(value, config, deps, context)` is an optional probe returning `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()`. Their resolved value is `undefined`.
@@ -302,6 +302,7 @@ For lifecycle-owned timers, prefer `resources.timers` inside a task or resource:
 - Use it when middleware and tasks need to share execution-local state.
 - `journal.set(key, value)` fails if the key already exists. Pass `{ override: true }` when replacement is intentional.
 - Create custom keys with `journal.createKey<T>(id)`.
+- Custom task middleware may declare those keys up front and expose them through `.journalKeys`.
 
 ## Events and Hooks
 
@@ -384,6 +385,8 @@ Core rules:
 - Owner-scoped auto-application is available through `resource.subtree({ tasks/resources: { middleware: [...] } })`.
 - Contract middleware can constrain task input and output types.
 - Middleware definitions expose `.extract(entry)` to read config from a matching configured middleware attachment.
+- Custom task middleware can declare execution-local keys with `.journal({ ... })` or `defineTaskMiddleware({ journal: { ... } })` and consume them through `.journalKeys`.
+- For middleware-local journal state, use short local labels like `journal.createKey<Type>("traceId")`. Journal sharing only happens when the same key object is reused.
 - When a runtime predicate must match one exact definition, prefer `isSameDefinition(candidate, definitionRef)` over comparing public ids directly, including configured wrappers such as `resource.with(...)` and middleware `.with(...)`.
 
 Task vs resource middleware:
@@ -425,12 +428,16 @@ Operational notes:
 
 - Register `resources.cache` in a parent resource before using task cache middleware.
 - `cache.keyBuilder(canonicalTaskId, input)` may return either a plain key string or `{ cacheKey, refs? }`.
+- During an active cache miss, task code may add extra refs through `context.journal.get(middleware.task.cache.journalKeys.refs)!.add(...)`.
+- Call `resources.cache.invalidateKeys(key | key[], options?)` to delete cached entries by concrete storage key, or opt into identity scoping for the provided base key.
 - Call `resources.cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `debounce`, `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast on non-serializable input. `rateLimit` defaults to `canonicalTaskId` (shared quota per task). The `canonicalTaskId` is the full runtime id, so sibling resources with the same local id don't share state by accident.
 - See [Security](#security) for `identityScope` and identity-aware partitioning.
+- `invalidateKeys(...)` is raw by default. Pass `invalidateKeys(key, { identityScope })` when you want Runner to scope the provided base key through the active identity namespace before invalidation.
 - Cache refs stay raw. For tenant-aware invalidation, build refs through an app helper (e.g., `CacheRefs.getTenantId()`) so `keyBuilder` and `invalidateRefs(...)` share the same format.
+- Refs from `keyBuilder(...)` and refs added through the journal collector accumulate.
 - Middleware tags can enforce config contracts flowing into dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
 - `tags.identityScoped`: middleware supports optional `identityScope`; subtree policy may fill or require it. See [Security](#security).
 
@@ -618,6 +625,7 @@ Key rules:
 - Contract tags can shape task or resource typing without changing runtime behavior.
 - Built-in tags affect framework behavior: `tags.excludeFromGlobalHooks`, `tags.debug`, `tags.failWhenUnhealthy.with([db, cache])` (blocks task execution on `unhealthy` only; `degraded` still runs, bootstrap-time calls are not gated, sleeping lazy resources are skipped).
 - Tags are often the cleanest way to implement route discovery, cron scheduling, cache warmers, or internal policies without manual registries.
+- Prefer depending on the tag itself when you want discovery. Avoid injecting `resources.store` just to call `store.getTagAccessor(tag)` unless you also need other store-only APIs.
 
 Use a normal tag dependency for normal dependency graph resolution. Use `tag.startup()` when the accessor must exist earlier, during bootstrap tree building.
 
@@ -663,7 +671,9 @@ const myTask = r
   .run(async () => {
     const execution = asyncContexts.execution.use();
     const { correlationId, signal } = execution;
-    if (execution.framesMode === "full") { execution.frames; }
+    if (execution.framesMode === "full") {
+      execution.frames;
+    }
   })
   .build();
 ```
@@ -744,20 +754,21 @@ Identity-aware middleware (`cache`, `rateLimit`, `debounce`, `throttle`, `concur
 
 `identityScope` controls middleware key partitioning:
 
-| Scope | Behavior |
-|-------|----------|
-| *(omit)* | Default tenant scope. Cross-tenant sharing only when no identity context exists. |
-| `{ tenant: false }` | Disable identity-based partitioning; shared keyspace. |
-| `{ tenant: true }` | Require `tenantId`; partition as `<tenantId>:...` |
-| `{ tenant: true, user: true }` | Require `tenantId` + `userId`; partition as `<tenantId>:<userId>:...` |
-| `{ required: false, tenant: true }` | Optional `<tenantId>:...` partitioning. |
-| `{ required: false, tenant: true, user: true }` | Optional `<tenantId>:<userId>:...` partitioning. |
+| Scope                                           | Behavior                                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| _(omit)_                                        | Default tenant scope. Cross-tenant sharing only when no identity context exists. |
+| `{ tenant: false }`                             | Disable identity-based partitioning; shared keyspace.                            |
+| `{ tenant: true }`                              | Require `tenantId`; partition as `<tenantId>:...`                                |
+| `{ tenant: true, user: true }`                  | Require `tenantId` + `userId`; partition as `<tenantId>:<userId>:...`            |
+| `{ required: false, tenant: true }`             | Optional `<tenantId>:...` partitioning.                                          |
+| `{ required: false, tenant: true, user: true }` | Optional `<tenantId>:<userId>:...` partitioning.                                 |
 
 When `identityScope` object is present with `tenant: true`, `required` defaults to `true`. Missing required identity fields fail fast with `identityContextRequiredError`.
 
 If your SaaS only has users and no real tenant model, provide a constant tenant such as `tenantId: "app"` at ingress and use `{ tenant: true, user: true }` for per-user buckets.
 
 Cache refs stay raw. For tenant-aware or user-aware invalidation, build refs through an app helper such as `CacheRefs.getTenantId()` so `keyBuilder` and `invalidateRefs(...)` share the exact same ref format.
+Cache key invalidation is raw by default. If `identityScope` prefixes stored keys, either pass the full scoped key yourself, for example `acme:profile`, or opt into helper scoping with `cache.invalidateKeys("profile", { identityScope: { tenant: true } })`.
 
 Task identity gates (separate from middleware partitioning):
 

@@ -8,7 +8,7 @@ import {
   rpcLaneTaskAssignmentConflictError,
 } from "../../errors";
 import { globalTags } from "../../globals/globalTags";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
 import { eventLanesResource } from "../event-lanes/eventLanes.resource";
 import {

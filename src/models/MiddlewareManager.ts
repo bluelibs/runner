@@ -4,7 +4,7 @@ import {
   IResource,
   ResourceDependencyValuesType,
 } from "../defs";
-import { Store } from "./Store";
+import { Store } from "./store/Store";
 import { ITaskMiddleware, IResourceMiddleware } from "../defs";
 import { isResourceMiddleware, isTaskMiddleware } from "../define";
 import { InterceptorRegistry } from "./middleware/InterceptorRegistry";

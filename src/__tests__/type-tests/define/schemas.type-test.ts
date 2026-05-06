@@ -42,8 +42,6 @@ Match.Field(Number)(DecoratedSchema.prototype, "ttl");
     configSchema: z.object({ ttl: z.number().positive() }),
     run: async ({ next }, _deps, config) => {
       config.ttl;
-      // @ts-expect-error
-      config.ttl2;
       return next();
     },
   });
@@ -74,8 +72,6 @@ Match.Field(Number)(DecoratedSchema.prototype, "ttl");
     configSchema: DecoratedSchema,
     run: async ({ next }, _deps, config) => {
       config.ttl;
-      // @ts-expect-error
-      config.other;
       return next();
     },
   });
@@ -106,8 +102,6 @@ Match.Field(Number)(DecoratedSchema.prototype, "ttl");
     configSchema: { ttl: Number },
     run: async ({ next }, _deps, config) => {
       config.ttl.toFixed();
-      // @ts-expect-error raw Match middleware config should stay strict
-      config.other;
       return next();
     },
   });

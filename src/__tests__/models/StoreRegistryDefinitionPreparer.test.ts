@@ -1,4 +1,4 @@
-import { StoreRegistryDefinitionPreparer } from "../../models/store-registry/StoreRegistryDefinitionPreparer";
+import { StoreRegistryDefinitionPreparer } from "../../models/store/store-registry/StoreRegistryDefinitionPreparer";
 import { RunnerMode } from "../../types/runner";
 
 describe("StoreRegistryDefinitionPreparer", () => {

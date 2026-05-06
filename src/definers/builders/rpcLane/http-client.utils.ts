@@ -1,6 +1,6 @@
 import { Serializer } from "../../../serializer";
 import type { SerializerLike } from "../../../serializer";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import type { IErrorHelper } from "../../../types/error";
 
 type RpcLaneRequestOptions = {

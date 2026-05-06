@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { IEventLaneDefinition } from "../../defs";
 import type { IEventEmission } from "../../types/event";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import type { SerializerLike } from "../../serializer";
 import {
   buildAsyncContextHeader,

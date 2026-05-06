@@ -10,6 +10,7 @@ import type { DurableResource } from "../core/DurableResource";
 import { Logger } from "../../../models/Logger";
 import type { IResource } from "../../../defs";
 import type { Serializer } from "../../../serializer";
+import { durableRuntimeTag } from "../tags/durableRuntime.tag";
 
 type DurableSerializerResource = IResource<
   any,
@@ -57,6 +58,7 @@ export interface MemoryDurableResourceContext {
 
 export const memoryDurableResource = r
   .resource<MemoryDurableResourceConfig>("base-durable-memory")
+  .tags([durableRuntimeTag])
   .dependencies((config) => ({
     taskRunner: resources.taskRunner,
     eventManager: resources.eventManager,

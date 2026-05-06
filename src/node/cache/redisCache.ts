@@ -5,8 +5,11 @@ import {
   type CacheEntryMetadata,
   type CacheFactoryOptions,
   type ICacheProvider,
-} from "../../globals/middleware/cache.shared";
-import { normalizeCacheRefs } from "../../globals/middleware/cache.key";
+} from "../../globals/middleware/cache/shared";
+import {
+  normalizeCacheKeys,
+  normalizeCacheRefs,
+} from "../../globals/middleware/cache/key";
 
 export interface RedisCacheClient {
   del(...keys: string[]): Promise<unknown>;
@@ -14,6 +17,7 @@ export interface RedisCacheClient {
   get(key: string): Promise<unknown>;
   hdel(key: string, ...fields: string[]): Promise<unknown>;
   hget(key: string, field: string): Promise<unknown>;
+  hmget?(key: string, ...fields: string[]): Promise<readonly unknown[]>;
   hset(key: string, field: string, value: string): Promise<unknown>;
   incrby(key: string, increment: number): Promise<unknown>;
   quit?(): Promise<unknown>;
@@ -124,9 +128,7 @@ export class RedisCache implements ICacheProvider {
   async clear(): Promise<void> {
     const members = await this.getTaskMembers();
 
-    for (const member of members) {
-      await this.removeTrackedEntry(member);
-    }
+    await this.removeTrackedEntries(members);
 
     await this.config.redis.del(
       this.taskMembersKey,
@@ -136,23 +138,32 @@ export class RedisCache implements ICacheProvider {
   }
 
   async invalidateRefs(refs: readonly string[]): Promise<number> {
+    const normalizedRefs = normalizeCacheRefs(refs);
+
+    if (normalizedRefs.length === 0) {
+      return 0;
+    }
+
+    const memberLists = await Promise.all(
+      normalizedRefs.map((ref) =>
+        this.config.redis.smembers(this.getRefMembersKey(ref)),
+      ),
+    );
     const entryIds = new Set<string>();
 
-    for (const ref of normalizeCacheRefs(refs)) {
-      const members = await this.config.redis.smembers(
-        this.getRefMembersKey(ref),
-      );
+    for (const members of memberLists) {
       for (const member of toStringArray(members)) {
         entryIds.add(member);
       }
     }
 
-    let deletedCount = 0;
-    for (const entryId of entryIds) {
-      deletedCount += Number(await this.removeTrackedEntry(entryId));
-    }
+    return this.removeTrackedEntries([...entryIds]);
+  }
 
-    return deletedCount;
+  async invalidateKeys(keys: readonly string[]): Promise<number> {
+    return this.removeTrackedEntries(
+      normalizeCacheKeys(keys).map((key) => this.createEntryId(key)),
+    );
   }
 
   async has(key: string): Promise<boolean> {
@@ -262,17 +273,9 @@ export class RedisCache implements ICacheProvider {
   }
 
   private async getStoredRefs(entryId: string): Promise<readonly string[]> {
-    const raw = await this.config.redis.hget(this.entryRefsKey, entryId);
-
-    if (typeof raw !== "string") {
-      return [];
-    }
-
-    try {
-      return normalizeCacheRefs(JSON.parse(raw));
-    } catch {
-      return [];
-    }
+    return normalizeStoredRefs(
+      (await this.readHashValues(this.entryRefsKey, [entryId]))[0],
+    );
   }
 
   private async touch(entryId: string) {
@@ -301,48 +304,100 @@ export class RedisCache implements ICacheProvider {
   }
 
   private async removeTrackedEntry(entryId: string): Promise<boolean> {
-    const refs = await this.getStoredRefs(entryId);
-    const entrySize = await this.getStoredSize(entryId);
-    const taskToken = getTaskToken(entryId);
-    const dataKey = this.getEntryDataKey(entryId);
-    const existed = toInteger(await this.config.redis.exists(dataKey)) > 0;
+    return (await this.removeTrackedEntries([entryId])) > 0;
+  }
 
-    await this.config.redis.del(dataKey);
-    await this.config.redis.hdel(this.entryRefsKey, entryId);
-    await this.config.redis.hdel(this.entrySizesKey, entryId);
-    await this.config.redis.zrem(this.globalLruKey, entryId);
-    await this.config.redis.zrem(
-      this.createKey(`task:${taskToken}:lru`),
-      entryId,
-    );
-    await this.config.redis.srem(
-      this.createKey(`task:${taskToken}:members`),
-      entryId,
-    );
+  private async removeTrackedEntries(
+    entryIds: readonly string[],
+  ): Promise<number> {
+    const uniqueEntryIds = [...new Set(entryIds)];
 
-    for (const ref of refs) {
+    if (uniqueEntryIds.length === 0) {
+      return 0;
+    }
+
+    const [storedRefsByEntryId, storedSizesByEntryId] = await Promise.all([
+      this.readStoredRefsByEntryId(uniqueEntryIds),
+      this.readStoredSizesByEntryId(uniqueEntryIds),
+    ]);
+    const entryIdsByTaskToken = new Map<string, string[]>();
+    const entryIdsByRefMembersKey = new Map<string, string[]>();
+    const bytesRemovedByTaskToken = new Map<string, number>();
+    let totalBytesRemoved = 0;
+
+    for (const entryId of uniqueEntryIds) {
+      const taskToken = getTaskToken(entryId);
+      const taskEntries = entryIdsByTaskToken.get(taskToken) ?? [];
+      taskEntries.push(entryId);
+      entryIdsByTaskToken.set(taskToken, taskEntries);
+
+      const entrySize = storedSizesByEntryId.get(entryId)!;
+      if (entrySize !== 0) {
+        totalBytesRemoved += entrySize;
+        bytesRemovedByTaskToken.set(
+          taskToken,
+          (bytesRemovedByTaskToken.get(taskToken) ?? 0) + entrySize,
+        );
+      }
+
+      for (const ref of storedRefsByEntryId.get(entryId)!) {
+        const refMembersKey = this.getRefMembersKeyForTask(ref, taskToken);
+        const refMembers = entryIdsByRefMembersKey.get(refMembersKey) ?? [];
+        refMembers.push(entryId);
+        entryIdsByRefMembersKey.set(refMembersKey, refMembers);
+      }
+    }
+
+    const dataKeys = uniqueEntryIds.map((entryId) =>
+      this.getEntryDataKey(entryId),
+    );
+    const deletionOperations: Array<Promise<unknown>> = [
+      this.config.redis.del(...dataKeys),
+      this.config.redis.hdel(this.entryRefsKey, ...uniqueEntryIds),
+      this.config.redis.hdel(this.entrySizesKey, ...uniqueEntryIds),
+      this.config.redis.zrem(this.globalLruKey, ...uniqueEntryIds),
+    ];
+
+    for (const [taskToken, taskEntryIds] of entryIdsByTaskToken) {
+      deletionOperations.push(
+        this.config.redis.zrem(this.getTaskLruKey(taskToken), ...taskEntryIds),
+      );
+      deletionOperations.push(
+        this.config.redis.srem(
+          this.getTaskMembersKey(taskToken),
+          ...taskEntryIds,
+        ),
+      );
+    }
+
+    for (const [refMembersKey, refEntryIds] of entryIdsByRefMembersKey) {
       // Shared-budget eviction can remove entries that belong to a different
-      // task cache than the current RedisCache instance. Use the evicted
-      // entry's task token so we unlink the correct ref membership set.
-      await this.config.redis.srem(
-        this.getRefMembersKeyForTask(ref, taskToken),
-        entryId,
+      // task cache than the current RedisCache instance. Group by the evicted
+      // entry's task token so we unlink the correct ref membership sets.
+      deletionOperations.push(
+        this.config.redis.srem(refMembersKey, ...refEntryIds),
       );
     }
 
-    if (entrySize !== 0) {
-      await this.adjustTrackedBytes(this.globalBytesKey, -entrySize);
-      await this.adjustTrackedBytes(
-        this.createKey(`task:${taskToken}:bytes`),
-        -entrySize,
+    const [deletedCount] = await Promise.all(deletionOperations);
+
+    if (totalBytesRemoved !== 0) {
+      await this.adjustTrackedBytes(this.globalBytesKey, -totalBytesRemoved);
+
+      await Promise.all(
+        [...bytesRemovedByTaskToken.entries()].map(([taskToken, taskBytes]) =>
+          this.adjustTrackedBytes(this.getTaskBytesKey(taskToken), -taskBytes),
+        ),
       );
     }
 
-    return existed;
+    return toInteger(deletedCount);
   }
 
   private async getStoredSize(entryId: string) {
-    return toInteger(await this.config.redis.hget(this.entrySizesKey, entryId));
+    return toInteger(
+      (await this.readHashValues(this.entrySizesKey, [entryId]))[0],
+    );
   }
 
   private async getTrackedBytes(bytesKey: string) {
@@ -370,6 +425,36 @@ export class RedisCache implements ICacheProvider {
     return toStringArray(await this.config.redis.smembers(this.taskMembersKey));
   }
 
+  private async readStoredRefsByEntryId(entryIds: readonly string[]) {
+    const rawRefs = await this.readHashValues(this.entryRefsKey, entryIds);
+
+    return new Map(
+      entryIds.map((entryId, index) => [
+        entryId,
+        normalizeStoredRefs(rawRefs[index]),
+      ]),
+    );
+  }
+
+  private async readStoredSizesByEntryId(entryIds: readonly string[]) {
+    const rawSizes = await this.readHashValues(this.entrySizesKey, entryIds);
+
+    return new Map(
+      entryIds.map((entryId, index) => [entryId, toInteger(rawSizes[index])]),
+    );
+  }
+
+  private async readHashValues(hashKey: string, fields: readonly string[]) {
+    const { hmget } = this.config.redis;
+    if (typeof hmget === "function") {
+      return hmget.call(this.config.redis, hashKey, ...fields);
+    }
+
+    return Promise.all(
+      fields.map((field) => this.config.redis.hget(hashKey, field)),
+    );
+  }
+
   private createEntryId(key: string) {
     return `${this.taskToken}:${hashValue(key)}`;
   }
@@ -384,6 +469,18 @@ export class RedisCache implements ICacheProvider {
 
   private getRefMembersKeyForTask(ref: string, taskToken: string) {
     return this.createKey(`task:${taskToken}:ref:${hashValue(ref)}:members`);
+  }
+
+  private getTaskBytesKey(taskToken: string) {
+    return this.createKey(`task:${taskToken}:bytes`);
+  }
+
+  private getTaskLruKey(taskToken: string) {
+    return this.createKey(`task:${taskToken}:lru`);
+  }
+
+  private getTaskMembersKey(taskToken: string) {
+    return this.createKey(`task:${taskToken}:members`);
   }
 
   private createKey(suffix: string) {
@@ -417,4 +514,16 @@ function toStringArray(value: unknown) {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string")
     : [];
+}
+
+function normalizeStoredRefs(value: unknown) {
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  try {
+    return normalizeCacheRefs(JSON.parse(value));
+  } catch {
+    return [];
+  }
 }

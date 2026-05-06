@@ -27,6 +27,11 @@ export type ExpectedExecutionStatuses = readonly [
   ...ExecutionStatus[],
 ];
 
+/**
+ * Durable schedule updates may change cadence or payload, but never storage identity.
+ */
+export type ScheduleUpdate = Omit<Partial<Schedule>, "id">;
+
 export interface IDurableStore {
   saveExecution(execution: Execution): Promise<void>;
   /**
@@ -236,7 +241,7 @@ export interface IDurableStore {
 
   createSchedule(schedule: Schedule): Promise<void>;
   getSchedule(id: string): Promise<Schedule | null>;
-  updateSchedule(id: string, updates: Partial<Schedule>): Promise<void>;
+  updateSchedule(id: string, updates: ScheduleUpdate): Promise<void>;
   /**
    * Atomically persists the active schedule record together with its current
    * pending timer so recurring schedule state cannot diverge mid-update.

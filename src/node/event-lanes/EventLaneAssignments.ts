@@ -6,7 +6,7 @@ import {
   eventLaneAssignmentConflictError,
   eventLaneAssignmentRpcLaneConflictError,
 } from "../../errors";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
 import {
   assignLaneTargetOrThrow,

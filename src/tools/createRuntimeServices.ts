@@ -1,7 +1,7 @@
 import { TaskRunner } from "../models/TaskRunner";
 import { DependencyProcessor } from "../models/DependencyProcessor";
 import { EventManager } from "../models/EventManager";
-import { Store } from "../models/Store";
+import { Store } from "../models/store/Store";
 import { Logger, LogLevels, PrintStrategy } from "../models/Logger";
 import {
   OnUnhandledError,

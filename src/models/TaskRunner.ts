@@ -1,6 +1,6 @@
 import { DependencyMapType, ITask } from "../defs";
 import { EventManager } from "./EventManager";
-import { Store } from "./Store";
+import { Store } from "./store/Store";
 import { Logger } from "./Logger";
 import { MiddlewareManager } from "./MiddlewareManager";
 import {

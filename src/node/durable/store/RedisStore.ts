@@ -14,6 +14,7 @@ import type {
   ExpectedExecutionStatuses,
   IDurableStore,
   ListExecutionsOptions,
+  ScheduleUpdate,
 } from "../core/interfaces/store";
 import type { DurableAuditEntry } from "../core/audit";
 import {
@@ -399,7 +400,7 @@ export class RedisStore implements IDurableStore {
     return await schedulingOps.getSchedule(this.runtime, id);
   }
 
-  async updateSchedule(id: string, updates: Partial<Schedule>): Promise<void> {
+  async updateSchedule(id: string, updates: ScheduleUpdate): Promise<void> {
     await schedulingOps.updateSchedule(this.runtime, id, updates);
   }
 
