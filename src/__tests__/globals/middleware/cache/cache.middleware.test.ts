@@ -141,6 +141,7 @@ describe("Caching System", () => {
 
             return {
               get: async (_key: string) => undefined,
+              getEntry: async (_key: string) => undefined,
               set: async (_key: string, _value: unknown) => undefined,
               clear: async () => undefined,
               invalidateKeys: async () => 0,
@@ -215,6 +216,12 @@ describe("Caching System", () => {
           return this.store.get(key);
         }
 
+        getEntry(key: string) {
+          return this.store.has(key)
+            ? { value: this.store.get(key) }
+            : undefined;
+        }
+
         set(key: string, value: any) {
           this.store.set(key, value);
         }
@@ -272,6 +279,10 @@ describe("Caching System", () => {
         private store = new Map<string, { value: any; expiry?: number }>();
 
         get(key: string) {
+          return this.getEntry(key)?.value;
+        }
+
+        getEntry(key: string) {
           const entry = this.store.get(key);
           if (!entry) return undefined;
 
@@ -280,7 +291,7 @@ describe("Caching System", () => {
             return undefined;
           }
 
-          return entry.value;
+          return { value: entry.value };
         }
 
         set(key: string, value: any) {
@@ -376,12 +387,18 @@ describe("Caching System", () => {
       await run(app);
     });
 
-    it("should use cachedValue when cache lacks has()", async () => {
+    it("serves cached values through getEntry without an optional has()", async () => {
       class NoHasCache implements ICacheProvider {
         private store = new Map<string, number>();
 
         get(key: string) {
           return this.store.get(key);
+        }
+
+        getEntry(key: string) {
+          return this.store.has(key)
+            ? { value: this.store.get(key) }
+            : undefined;
         }
 
         set(key: string, value: number) {
@@ -433,8 +450,8 @@ describe("Caching System", () => {
       await run(app);
     });
 
-    it("should await async has() implementations", async () => {
-      class AsyncHasCache implements ICacheProvider {
+    it("awaits async getEntry implementations", async () => {
+      class AsyncGetEntryCache implements ICacheProvider {
         private store = new Map<string, number>();
 
         get(key: string) {
@@ -445,9 +462,11 @@ describe("Caching System", () => {
           this.store.set(key, value);
         }
 
-        async has(key: string) {
+        async getEntry(key: string) {
           await Promise.resolve();
-          return this.store.has(key);
+          return this.store.has(key)
+            ? { value: this.store.get(key) }
+            : undefined;
         }
 
         clear() {
@@ -465,7 +484,7 @@ describe("Caching System", () => {
 
       const cacheProviderOverride = r.override(
         cacheProviderResource,
-        async () => async (_input: any) => new AsyncHasCache(),
+        async () => async (_input: any) => new AsyncGetEntryCache(),
       );
 
       let callCount = 0;
@@ -720,6 +739,7 @@ describe("Caching System", () => {
           async (): Promise<CacheProvider> =>
           async ({ options, taskId }) => ({
             get: async () => undefined,
+            getEntry: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
             invalidateKeys: async () => 0,
@@ -796,8 +816,10 @@ describe("Caching System", () => {
           throw genericError.new({ message: "cache write failed" });
         }
 
-        has(key: string) {
-          return this.store.has(key);
+        getEntry(key: string) {
+          return this.store.has(key)
+            ? { value: this.store.get(key) }
+            : undefined;
         }
 
         clear() {
@@ -957,8 +979,10 @@ describe("Caching System", () => {
           throw "cache write failed";
         }
 
-        has(key: string) {
-          return this.store.has(key);
+        getEntry(key: string) {
+          return this.store.has(key)
+            ? { value: this.store.get(key) }
+            : undefined;
         }
 
         clear() {
@@ -1051,6 +1075,9 @@ describe("Caching System", () => {
       store = new Map<string, any>();
       async get(key: string) {
         return this.store.get(key);
+      }
+      async getEntry(key: string) {
+        return this.store.has(key) ? { value: this.store.get(key) } : undefined;
       }
       async set(key: string, value: any) {
         this.store.set(key, value);
@@ -1386,6 +1413,11 @@ describe("Caching System", () => {
         get(key: string) {
           return this.store.get(key);
         }
+        getEntry(key: string) {
+          return this.store.has(key)
+            ? { value: this.store.get(key) }
+            : undefined;
+        }
         set(key: string, value: any) {
           this.store.set(key, value);
         }
@@ -1485,6 +1517,14 @@ describe("Caching System", () => {
           if (this.disposed)
             throw genericError.new({ message: "Cache disposed" });
           return this.store.get(key);
+        }
+
+        async getEntry(key: string) {
+          if (this.disposed)
+            throw genericError.new({ message: "Cache disposed" });
+          return this.store.has(key)
+            ? { value: this.store.get(key) }
+            : undefined;
         }
 
         async set(key: string, value: any) {

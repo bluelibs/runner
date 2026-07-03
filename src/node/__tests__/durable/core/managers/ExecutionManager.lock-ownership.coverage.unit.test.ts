@@ -28,7 +28,10 @@ describe("durable: ExecutionManager lock ownership coverage", () => {
     );
 
     jest
-      .spyOn(service._executionManager as any, "assertStoreLockOwnership")
+      .spyOn(
+        (service._executionManager as any).attemptRunner,
+        "assertStoreLockOwnership",
+      )
       .mockRejectedValue(genericError.new({ message: "ownership-recheck" }));
 
     await expect(

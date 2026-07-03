@@ -1,10 +1,36 @@
 import { RecoveryManager } from "../../../../durable/core/managers/RecoveryManager";
-import { ExecutionStatus } from "../../../../durable/core/types";
+import { ExecutionStatus, TimerType } from "../../../../durable/core/types";
 import { flushMicrotasks } from "../../helpers/DurableService.unit.helpers";
 
 describe("durable: RecoveryManager coverage", () => {
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it("keeps a sleeping execution parked on a waitForExecution timeout instead of recovering it", () => {
+    const manager = new RecoveryManager(
+      {} as any,
+      { recoverExecution: jest.fn(async () => {}) } as any,
+      { error: jest.fn(async () => {}) } as any,
+    );
+    const sleeping = { id: "e-wait", status: ExecutionStatus.Sleeping };
+
+    // waitForExecution(..., { timeoutMs }) arms a `Timeout` timer; a sleeping
+    // parent waiting on a child must be treated as parked, not recovered.
+    expect(
+      (manager as any).getRecoverabilityDecision(
+        sleeping,
+        new Map([["e-wait", new Set([TimerType.Timeout])]]),
+      ),
+    ).toEqual({ kind: "skip", reason: "pending_timer" });
+
+    // No pending wait timer means the sleeper was orphaned and should recover.
+    expect(
+      (manager as any).getRecoverabilityDecision(
+        sleeping,
+        new Map<string, Set<TimerType>>(),
+      ),
+    ).toEqual({ kind: "recover" });
   });
 
   it("reports recovery failures and exercises claim-state helpers", async () => {

@@ -192,8 +192,6 @@ describe("tools/check schema support", () => {
     expect(Match.Integer.toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",
       type: "integer",
-      minimum: -2147483648,
-      maximum: 2147483647,
     });
     expect(Match.PositiveInteger.toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -499,8 +497,6 @@ describe("tools/check schema support", () => {
         id: { type: "string", minLength: 1 },
         retries: {
           type: "integer",
-          minimum: -2147483648,
-          maximum: 2147483647,
         },
       },
       required: ["id"],

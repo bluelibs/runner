@@ -104,9 +104,11 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    expect((manager as any).getCancellationState(null)).toBeNull();
     expect(
-      (manager as any).getCancellationState(
+      (manager as any).attemptRunner.getCancellationState(null),
+    ).toBeNull();
+    expect(
+      (manager as any).attemptRunner.getCancellationState(
         createExecution({ status: ExecutionStatus.Running }),
       ),
     ).toBeNull();
@@ -124,14 +126,17 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     expect(() =>
-      (manager as any).abortActiveAttempt("missing", "ignored"),
+      (manager as any).cancellation.abortActiveAttempt("missing", "ignored"),
     ).not.toThrow();
 
     const controller = new AbortController();
     controller.abort("already-aborted");
-    (manager as any).activeAttemptControllers.set("e-aborted", controller);
+    (manager as any).cancellation.activeAttemptControllers.set(
+      "e-aborted",
+      controller,
+    );
 
-    (manager as any).abortActiveAttempt("e-aborted", "ignored");
+    (manager as any).cancellation.abortActiveAttempt("e-aborted", "ignored");
 
     expect(controller.signal.reason).toBe("already-aborted");
   });
@@ -585,7 +590,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).transitionRunningExecutionToCancelled({
+    await (manager as any).attemptRunner.transitionRunningExecutionToCancelled({
       execution: createExecution({
         id: "e-finalize-cancel",
         cancelRequestedAt: new Date("2024-02-01T00:00:00.000Z"),
@@ -624,7 +629,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).transitionRunningExecutionToCancelled({
+    await (manager as any).attemptRunner.transitionRunningExecutionToCancelled({
       execution: createExecution({ id: "e-legacy-running-cancel" }),
       reason: "cancel me",
       canPersistOutcome: async () => true,
@@ -658,7 +663,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).transitionRunningExecutionToCancelled({
+    await (manager as any).attemptRunner.transitionRunningExecutionToCancelled({
       execution: createExecution({ id: "e-missing-requested-at" }),
       reason: "cancel me",
       canPersistOutcome: async () => true,
@@ -698,7 +703,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).completeExecutionAttempt(
+    await (manager as any).attemptRunner.completeExecutionAttempt(
       createExecution({ id: "e-complete-cancel-race" }),
       { ok: true },
       async () => true,
@@ -734,7 +739,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).transitionRunningExecutionToCancelled({
+    await (manager as any).attemptRunner.transitionRunningExecutionToCancelled({
       execution: createExecution({ id: "e-missing-cancel" }),
       reason: "cancel me",
       canPersistOutcome: async () => true,
@@ -762,7 +767,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).transitionRunningExecutionToCancelled({
+    await (manager as any).attemptRunner.transitionRunningExecutionToCancelled({
       execution: createExecution({ id: "e-cancel-cas-lost" }),
       reason: "cancel me",
       canPersistOutcome: async () => true,
@@ -784,7 +789,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).transitionRunningExecutionToCancelled({
+    await (manager as any).attemptRunner.transitionRunningExecutionToCancelled({
       execution: createExecution({ id: "e-no-cancel" }),
       reason: "cancel me",
       canPersistOutcome: async () => true,
@@ -806,7 +811,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     await expect(
-      (manager as any).finalizeCancellationIfRequested(
+      (manager as any).attemptRunner.finalizeCancellationIfRequested(
         createExecution({ id: "e-no-cancel-request" }),
       ),
     ).resolves.toBe(false);
@@ -832,7 +837,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     await expect(
-      (manager as any).finalizeCancellationIfRequested(
+      (manager as any).attemptRunner.finalizeCancellationIfRequested(
         createExecution({ id: "e-already-cancelled" }),
       ),
     ).resolves.toBe(true);
@@ -861,7 +866,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).transitionExecutionToFailed({
+    await (manager as any).attemptRunner.transitionExecutionToFailed({
       execution: createExecution({ id: "e-failed-cancel-race" }),
       from: ExecutionStatus.Running,
       reason: "failed",
@@ -898,7 +903,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    await (manager as any).transitionRunningExecutionToCancelled({
+    await (manager as any).attemptRunner.transitionRunningExecutionToCancelled({
       execution: createExecution({ id: "e-no-persist" }),
       reason: "late-cancel",
       canPersistOutcome: async () => false,

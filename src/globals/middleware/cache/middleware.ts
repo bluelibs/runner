@@ -44,6 +44,7 @@ export type {
   ICacheProvider,
 } from "./resource";
 export type { CacheKeyBuilderResult } from "./key";
+export type { CacheHitEnvelope } from "./resource";
 
 /**
  * Journal-scoped collector exposed during active cache misses so task code can
@@ -219,15 +220,11 @@ export const cacheMiddleware = taskMiddlewareBuilder("cache")
       identityContext?.tryUse,
     );
 
-    const cachedValue = await cacheHolderForTask.get(key);
-    const hasCachedEntry =
-      typeof cacheHolderForTask.has === "function"
-        ? await cacheHolderForTask.has(key)
-        : cachedValue !== undefined;
+    const cacheHit = await cacheHolderForTask.getEntry(key);
 
-    if (hasCachedEntry) {
+    if (cacheHit) {
       journal.set(cacheMiddleware.journalKeys.hit, true, { override: true });
-      return cachedValue;
+      return cacheHit.value;
     }
 
     journal.set(cacheMiddleware.journalKeys.hit, false, { override: true });

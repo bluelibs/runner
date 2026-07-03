@@ -28,6 +28,7 @@ describe("cache resource invalidateRefs", () => {
           createCount += 1;
           return {
             get: async () => undefined,
+            getEntry: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
             invalidateKeys: async () => 0,
@@ -103,6 +104,7 @@ describe("cache resource invalidateRefs", () => {
         await providerGate;
         return {
           get: async () => undefined,
+          getEntry: async () => undefined,
           set: async () => undefined,
           clear: async () => undefined,
           invalidateKeys: async () => 0,
@@ -163,6 +165,7 @@ describe("cache resource invalidateRefs", () => {
           createdOptions.set(taskId, options);
           return {
             get: async () => undefined,
+            getEntry: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
             invalidateKeys: async () => 0,
@@ -261,6 +264,7 @@ describe("cache resource invalidateRefs", () => {
         async (): Promise<CacheProvider> =>
         async ({ taskId }) => ({
           get: async () => undefined,
+          getEntry: async () => undefined,
           set: async () => undefined,
           clear: async () => undefined,
           invalidateKeys: async () => 0,
@@ -337,6 +341,7 @@ describe("cache resource invalidateRefs", () => {
         async (): Promise<CacheProvider> =>
         async ({ taskId }) => ({
           get: async () => undefined,
+          getEntry: async () => undefined,
           set: async () => undefined,
           clear: async () => undefined,
           invalidateKeys: async () => 1,

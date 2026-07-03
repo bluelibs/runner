@@ -259,8 +259,13 @@ export class RecoveryManager {
     }
 
     if (execution.status === ExecutionStatus.Sleeping) {
+      // A sleeping execution is correctly parked when any of its wait timers is
+      // still pending: `Sleep` for sleep(), `SignalTimeout` for waitForSignal()
+      // and `Timeout` for waitForExecution(..., { timeoutMs }). Recovering it
+      // anyway would replay a parent that is legitimately waiting on a child.
       return pendingTimerTypes.has(TimerType.Sleep) ||
-        pendingTimerTypes.has(TimerType.SignalTimeout)
+        pendingTimerTypes.has(TimerType.SignalTimeout) ||
+        pendingTimerTypes.has(TimerType.Timeout)
         ? { kind: "skip", reason: "pending_timer" }
         : { kind: "recover" };
     }

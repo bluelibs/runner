@@ -4,6 +4,7 @@ import {
   computeEntrySize,
   type CacheEntryMetadata,
   type CacheFactoryOptions,
+  type CacheHitEnvelope,
   type ICacheProvider,
 } from "../../globals/middleware/cache/shared";
 import {
@@ -66,6 +67,10 @@ export class RedisCache implements ICacheProvider {
   }
 
   async get(key: string): Promise<unknown | undefined> {
+    return (await this.getEntry(key))?.value;
+  }
+
+  async getEntry(key: string): Promise<CacheHitEnvelope | undefined> {
     const entryId = this.createEntryId(key);
     const payload = await this.config.redis.get(this.getEntryDataKey(entryId));
 
@@ -77,7 +82,7 @@ export class RedisCache implements ICacheProvider {
     try {
       const value = this.config.serializer.parse(payload);
       await this.touch(entryId);
-      return value;
+      return { value };
     } catch {
       await this.removeTrackedEntry(entryId);
       return undefined;

@@ -14,6 +14,20 @@ export type ExecutionStatus =
   (typeof ExecutionStatus)[keyof typeof ExecutionStatus];
 
 /**
+ * Whether an execution has reached a final state and will not transition again.
+ * Used to short-circuit work (kickoff, cancellation, delivery failure) against
+ * executions that are already done.
+ */
+export function isExecutionTerminal(status: ExecutionStatus): boolean {
+  return (
+    status === ExecutionStatus.Completed ||
+    status === ExecutionStatus.Failed ||
+    status === ExecutionStatus.CompensationFailed ||
+    status === ExecutionStatus.Cancelled
+  );
+}
+
+/**
  * Extra metadata for active durable step tracking.
  *
  * `childWorkflowKey` uses the durable persisted workflow identity so

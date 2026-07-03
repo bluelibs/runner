@@ -72,6 +72,7 @@ describe("cache middleware coverage", () => {
 
   it("keeps raw task ids unchanged when no canonical task marker is present", async () => {
     const get = jest.fn(async () => undefined);
+    const getEntry = jest.fn(async () => undefined);
     const set = jest.fn(async () => undefined);
     const journal = {
       get: jest.fn(),
@@ -92,7 +93,7 @@ describe("cache middleware coverage", () => {
       },
       {
         cache: {
-          map: new Map([[rawTaskId, { get, set }]]),
+          map: new Map([[rawTaskId, { get, getEntry, set }]]),
           pendingCreates: new Map(),
           defaultOptions: {},
         },
@@ -103,7 +104,7 @@ describe("cache middleware coverage", () => {
 
     expect(result).toBe("fresh-value");
     expect(next).toHaveBeenCalledWith({ ok: true });
-    expect(get).toHaveBeenCalledWith(`${rawTaskId}:{"ok":true}`);
+    expect(getEntry).toHaveBeenCalledWith(`${rawTaskId}:{"ok":true}`);
     expect(set).toHaveBeenCalledWith(
       `${rawTaskId}:{"ok":true}`,
       "fresh-value",
@@ -152,6 +153,7 @@ describe("cache middleware coverage", () => {
               "cache-non-error-write-task",
               {
                 get: async () => undefined,
+                getEntry: async () => undefined,
                 set: async () => {
                   throw "write failed";
                 },

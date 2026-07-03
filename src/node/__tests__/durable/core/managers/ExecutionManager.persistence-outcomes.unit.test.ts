@@ -9,40 +9,32 @@ import {
   pendingExecution,
 } from "../../helpers/DurableService.unit.helpers";
 
+type TestLockState = {
+  lost: boolean;
+  lossError: Error | null;
+  triggerLoss: (error: Error) => void;
+  waitForLoss: Promise<never>;
+  lockId?: string | "no-lock";
+  lockResource?: string;
+  lockTtlMs?: number;
+};
+
 type TestExecutionManager = {
-  assertStoreLockOwnership: (lockState: {
-    lost: boolean;
-    lossError: Error | null;
-    triggerLoss: (error: Error) => void;
-    waitForLoss: Promise<never>;
-    lockId?: string | "no-lock";
-    lockResource?: string;
-    lockTtlMs?: number;
-  }) => Promise<void>;
-  runExecutionAttempt: (
-    execution: Execution,
-    taskDef: ReturnType<typeof okTask>,
-    lockState: {
-      lost: boolean;
-      lossError: Error | null;
-      triggerLoss: (error: Error) => void;
-      waitForLoss: Promise<never>;
-      lockId?: string | "no-lock";
-      lockResource?: string;
-      lockTtlMs?: number;
-    },
-  ) => Promise<void>;
+  attemptRunner: {
+    assertStoreLockOwnership: (lockState: TestLockState) => Promise<void>;
+    runExecutionAttempt: (
+      execution: Execution,
+      taskDef: ReturnType<typeof okTask>,
+      lockState: TestLockState,
+    ) => Promise<void>;
+  };
 };
 
 function getManager(service: DurableService): TestExecutionManager {
   return service._executionManager as unknown as TestExecutionManager;
 }
 
-function createLockState(
-  overrides?: Partial<
-    Parameters<TestExecutionManager["assertStoreLockOwnership"]>[0]
-  >,
-) {
+function createLockState(overrides?: Partial<TestLockState>) {
   return {
     lost: false,
     lossError: null,
@@ -70,7 +62,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
       workflowKey: sleepTask.id,
     });
     await sleepStore.saveExecution(sleepingExecution);
-    await getManager(sleepService).runExecutionAttempt(
+    await getManager(sleepService).attemptRunner.runExecutionAttempt(
       sleepingExecution,
       sleepTask,
       createLockState(),
@@ -97,7 +89,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
       maxAttempts: 2,
     });
     await retryStore.saveExecution(retryExecution);
-    await getManager(retryService).runExecutionAttempt(
+    await getManager(retryService).attemptRunner.runExecutionAttempt(
       retryExecution,
       retryTask,
       createLockState(),
@@ -136,7 +128,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
       workflowKey: sleepTask.id,
     });
     await sleepStore.saveExecution(sleepingExecution);
-    await getManager(sleepService).runExecutionAttempt(
+    await getManager(sleepService).attemptRunner.runExecutionAttempt(
       sleepingExecution,
       sleepTask,
       createLockState({
@@ -168,7 +160,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
       maxAttempts: 2,
     });
     await retryStore.saveExecution(retryExecution);
-    await getManager(retryService).runExecutionAttempt(
+    await getManager(retryService).attemptRunner.runExecutionAttempt(
       retryExecution,
       retryTask,
       createLockState({
@@ -205,16 +197,16 @@ describe("durable: ExecutionManager persistence outcomes", () => {
     });
     await store.saveExecution(execution);
 
-    const manager = getManager(service) as unknown as {
-      runExecutionAttempt: TestExecutionManager["runExecutionAttempt"];
+    const runner = getManager(service).attemptRunner as unknown as {
+      runExecutionAttempt: TestExecutionManager["attemptRunner"]["runExecutionAttempt"];
       assertStoreLockOwnership: () => Promise<void>;
     };
     jest
-      .spyOn(manager, "assertStoreLockOwnership")
+      .spyOn(runner, "assertStoreLockOwnership")
       .mockRejectedValue(new Error("unexpected-recheck"));
 
     await expect(
-      manager.runExecutionAttempt(execution, task, createLockState()),
+      runner.runExecutionAttempt(execution, task, createLockState()),
     ).rejects.toThrow("unexpected-recheck");
   });
 
@@ -246,7 +238,7 @@ describe("durable: ExecutionManager persistence outcomes", () => {
     await store.saveExecution(execution);
     jest.spyOn(store, "saveExecutionIfStatus").mockResolvedValueOnce(false);
 
-    await getManager(service).runExecutionAttempt(
+    await getManager(service).attemptRunner.runExecutionAttempt(
       execution,
       task,
       createLockState(),

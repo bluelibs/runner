@@ -11,6 +11,7 @@ import type {
     .init(async (): Promise<CacheProvider> => {
       return async (_input): Promise<ICacheProvider> => ({
         get: async (_key: string) => undefined,
+        getEntry: async (_key: string) => undefined,
         set: async (_key: string, _value: unknown) => undefined,
         clear: async () => undefined,
         invalidateKeys: async (_keys: readonly string[]) => 0,
@@ -29,6 +30,7 @@ import type {
 
       return {
         get: async (_key: string) => undefined,
+        getEntry: async (_key: string) => undefined,
         set: async (_key: string, _value: unknown) => undefined,
         clear: async () => undefined,
         invalidateKeys: async (_keys: readonly string[]) => 0,
@@ -66,6 +68,7 @@ import type {
     .resource("types-cache-provider-invalid-has")
     .init(async () => async (_input: Record<string, unknown>) => ({
       get: async (_key: string) => undefined,
+      getEntry: async (_key: string) => undefined,
       set: async (_key: string, _value: unknown) => undefined,
       clear: async () => undefined,
       invalidateKeys: async (_keys: readonly string[]) => 0,
@@ -83,6 +86,7 @@ import type {
     .resource("types-cache-provider-invalid-no-invalidate-keys")
     .init(async () => async (_input: Record<string, unknown>) => ({
       get: async (_key: string) => undefined,
+      getEntry: async (_key: string) => undefined,
       set: async (_key: string, _value: unknown) => undefined,
       clear: async () => undefined,
       invalidateRefs: async (_refs: readonly string[]) => 0,
@@ -98,6 +102,7 @@ import type {
     .resource("types-cache-provider-invalid-legacy")
     .init(async () => async (options: Record<string, unknown>) => ({
       get: async (_key: string) => options,
+      getEntry: async (_key: string) => undefined,
       set: async (_key: string, _value: unknown) => undefined,
       clear: async () => undefined,
       invalidateKeys: async (_keys: readonly string[]) => 0,

@@ -420,6 +420,65 @@ describe("durable: PollingManager timer handlers (unit)", () => {
     });
   });
 
+  it("resolves against a terminal target instead of timing out when the timer fires after the child completed", async () => {
+    const store = new MemoryStore();
+    // Crash-window scenario: the child reached a terminal state but its waiter
+    // notification never landed, leaving the parent parked until the timer fires.
+    await store.saveExecution({
+      id: "child",
+      workflowKey: "child-wf",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      result: 42,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "parent",
+      stepId: "__execution:child",
+      result: {
+        state: "waiting",
+        targetExecutionId: "child",
+        timerId: "timeout:hit",
+        timeoutAtMs: Date.now() + 1000,
+      },
+      completedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "parent",
+      targetExecutionId: "child",
+      stepId: "__execution:child",
+    });
+
+    await expect(
+      handleExecutionWaitTimeoutTimer({
+        store,
+        timer: {
+          id: "timeout:hit",
+          type: TimerType.Timeout,
+          executionId: "parent",
+          stepId: "__execution:child",
+          fireAt: new Date(),
+          status: "pending",
+        },
+      }),
+    ).resolves.toBe(true);
+
+    // The parent resolves with the child's actual result, not a spurious timeout.
+    expect(
+      (await store.getStepResult("parent", "__execution:child"))?.result,
+    ).toEqual({
+      state: "completed",
+      targetExecutionId: "child",
+      workflowKey: "child-wf",
+      result: 42,
+    });
+    // The waiter is cleaned up just as the timed-out path does.
+    expect(await store.listExecutionWaiters("child")).toEqual([]);
+  });
+
   it("ignores stale timeout timers whose timer id no longer matches the waiting state", async () => {
     const store = new MemoryStore();
     const logger = new Logger({

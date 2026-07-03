@@ -36,6 +36,7 @@ import { getSubtreeMiddlewareDuplicateKey } from "../../../tools/subtreeMiddlewa
 export type {
   CacheEntryMetadata,
   CacheFactoryOptions,
+  CacheHitEnvelope,
   CacheKey,
   CacheProvider,
   CacheProviderInput,

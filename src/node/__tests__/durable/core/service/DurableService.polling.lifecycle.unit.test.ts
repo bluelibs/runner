@@ -315,9 +315,11 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     const abort = jest.spyOn(controller, "abort");
     (
       service._executionManager as unknown as {
-        activeAttemptControllers: Map<string, AbortController>;
+        cancellation: {
+          activeAttemptControllers: Map<string, AbortController>;
+        };
       }
-    ).activeAttemptControllers.set("execution-1", controller);
+    ).cancellation.activeAttemptControllers.set("execution-1", controller);
 
     service.interruptActiveAttempts("shutdown");
     service.interruptActiveAttempts("shutdown");
@@ -339,9 +341,11 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
     const abort = jest.spyOn(controller, "abort");
     (
       service._executionManager as unknown as {
-        activeAttemptControllers: Map<string, AbortController>;
+        cancellation: {
+          activeAttemptControllers: Map<string, AbortController>;
+        };
       }
-    ).activeAttemptControllers.set("execution-1", controller);
+    ).cancellation.activeAttemptControllers.set("execution-1", controller);
 
     service.interruptActiveAttempts();
 
@@ -364,9 +368,11 @@ describe("durable: DurableService polling lifecycle (unit)", () => {
 
     (
       service._executionManager as unknown as {
-        activeAttemptControllers: Map<string, AbortController>;
+        cancellation: {
+          activeAttemptControllers: Map<string, AbortController>;
+        };
       }
-    ).activeAttemptControllers.set("execution-1", controller);
+    ).cancellation.activeAttemptControllers.set("execution-1", controller);
 
     service.interruptActiveAttempts("shutdown");
 

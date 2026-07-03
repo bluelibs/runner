@@ -8,6 +8,7 @@ export type {
 export { CronOnError } from "./cron/types";
 export * from "./debug";
 export type {
+  CacheHitEnvelope,
   CacheInvalidateKeysOptions,
   CacheProviderInput,
   CacheResourceConfig,

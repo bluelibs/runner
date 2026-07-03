@@ -32,6 +32,29 @@ describe("cache.shared", () => {
     expect(typeof defaultCache.invalidateRefs).toBe("function");
   });
 
+  it("resolves presence and value atomically via getEntry, including stored undefined", async () => {
+    const provider = createDefaultCacheProvider();
+    const cache = await provider({
+      taskId: "task",
+      options: { max: 10 },
+    });
+
+    expect(await cache.getEntry?.("absent")).toBeUndefined();
+
+    await cache.set("present", 0);
+    await cache.set("nullish", undefined);
+
+    // A stored falsy value (0) and a stored `undefined` must both report as
+    // hits — that is the whole point of the envelope over a bare get().
+    expect(await cache.getEntry?.("present")).toEqual({ value: 0 });
+    expect(await cache.getEntry?.("nullish")).toEqual({ value: undefined });
+
+    // get() stays value-only and is layered on the same atomic lookup.
+    expect(await cache.get("present")).toBe(0);
+    expect(await cache.get("nullish")).toBeUndefined();
+    expect(await cache.get("absent")).toBeUndefined();
+  });
+
   it("invalidates ref-indexed entries and keeps plain entries untouched", async () => {
     const provider = createDefaultCacheProvider();
     const cache = await provider({

@@ -9,10 +9,27 @@ import { safeStringify } from "../../../models/utils/safeStringify";
 export type { CacheEntryMetadata, CacheKey, CacheRef } from "./key";
 
 /**
+ * Presence-aware hit envelope returned by {@link ICacheProvider.getEntry}.
+ * A returned envelope always means "the key is cached" — even when `value` is
+ * `undefined` — while `undefined` from `getEntry` means "cache miss".
+ */
+export type CacheHitEnvelope = { value: unknown };
+
+/**
  * Low-level cache instance contract used by task cache middleware.
  */
 export interface ICacheProvider {
   get(key: string): unknown | Promise<unknown>;
+  /**
+   * Atomic presence-aware lookup: resolves to a {@link CacheHitEnvelope} when
+   * the key is cached (even for a stored `undefined`) or to `undefined` on a
+   * miss. This is the cache middleware's read primitive — it answers presence
+   * and value in a single backend round-trip, so it must be implemented by
+   * every provider (no racy `get()`+`has()` probe).
+   */
+  getEntry(
+    key: string,
+  ): CacheHitEnvelope | undefined | Promise<CacheHitEnvelope | undefined>;
   set(
     key: string,
     value: unknown,
@@ -162,15 +179,23 @@ function createRefIndexedCacheInstance({
 
   sharedBudget?.localCaches.set(taskId, localCache);
 
+  const lookupEntry = (key: string): CacheHitEnvelope | undefined => {
+    const entry = localCache.get(key);
+
+    if (entry === undefined && !localCache.has(key)) {
+      return undefined;
+    }
+
+    sharedBudget && touchBudgetEntry(sharedBudget, taskId, key);
+    return { value: entry?.value };
+  };
+
   return {
     get(key: string) {
-      const entry = localCache.get(key);
-
-      if (entry !== undefined || localCache.has(key)) {
-        sharedBudget && touchBudgetEntry(sharedBudget, taskId, key);
-      }
-
-      return entry?.value;
+      return lookupEntry(key)?.value;
+    },
+    getEntry(key: string) {
+      return lookupEntry(key);
     },
     set(key: string, value: unknown, metadata?: CacheEntryMetadata) {
       const entry: CacheStoredEnvelope = {

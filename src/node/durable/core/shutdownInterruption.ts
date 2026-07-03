@@ -1,12 +1,11 @@
 import { cancellationError } from "../../../errors";
-import { runtimeShutdownAbortReason } from "../../../tools/runtimeShutdownAbortReason";
 
 /**
- * Internal durable cancellation reason used when Runner's abort window asks a
- * live attempt to stop now and resume on the next runtime.
+ * Whether an error is the cooperative shutdown-abort interruption Runner raises
+ * when its drain budget expires and it asks a live attempt to stop now and
+ * resume on the next runtime. `expectedReason` is the latched abort reason from
+ * the cancellation controller (null when no shutdown interruption is active).
  */
-export const durableShutdownInterruptionReason = runtimeShutdownAbortReason;
-
 export function isDurableShutdownInterruptionError(
   error: unknown,
   expectedReason: string | null,

@@ -100,6 +100,7 @@ describe("default keyed middleware behavior", () => {
           createCalls.push(taskId);
           return {
             get: async () => undefined,
+            getEntry: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
             invalidateKeys: async () => 1,

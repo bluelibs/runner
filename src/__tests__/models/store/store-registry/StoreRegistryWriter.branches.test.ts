@@ -624,6 +624,7 @@ describe("StoreRegistryWriter branches", () => {
         originalItem: unknown,
         compiledItem: unknown,
       ) => void;
+      resolveRegisterableId: (item: unknown) => string | undefined;
     };
     const task = defineTask({
       id: "alias-guard-task",
@@ -634,6 +635,16 @@ describe("StoreRegistryWriter branches", () => {
     expect(() =>
       compiler.registerCompiledItemAliases(task, undefined),
     ).not.toThrow();
+
+    const configured = defineResource<{ enabled: boolean }>({
+      id: "alias-guard-config",
+    }).with({ enabled: true });
+    expect(compiler.resolveRegisterableId(configured)).toBe(
+      "alias-guard-config",
+    );
+    expect(compiler.resolveRegisterableId(task)).toBe("alias-guard-task");
+    expect(compiler.resolveRegisterableId(undefined)).toBeUndefined();
+    expect(compiler.resolveRegisterableId(123)).toBeUndefined();
   });
 
   it("preserves error helper methods when compiling scoped local ids", () => {

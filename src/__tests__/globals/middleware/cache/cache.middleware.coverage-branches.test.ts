@@ -6,7 +6,7 @@ describe("cache middleware coverage branches", () => {
     const keyBuilder = jest.fn(() => "cache-key");
     const cacheInstance: ICacheProvider = {
       get: jest.fn(async () => undefined),
-      has: jest.fn(async () => false),
+      getEntry: jest.fn(async () => undefined),
       set: jest.fn(async () => undefined),
       clear: jest.fn(async () => undefined),
       invalidateKeys: jest.fn(async () => 0),

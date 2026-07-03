@@ -134,8 +134,14 @@ describe("durable: ExecutionManager cancellation", () => {
 
     const matching = new AbortController();
     const other = new AbortController();
-    (manager as any).activeAttemptControllers.set("e-match", matching);
-    (manager as any).activeAttemptControllers.set("e-other", other);
+    (manager as any).cancellation.activeAttemptControllers.set(
+      "e-match",
+      matching,
+    );
+    (manager as any).cancellation.activeAttemptControllers.set(
+      "e-other",
+      other,
+    );
 
     await manager.startLiveCancellationListener();
     await bus.publish(DURABLE_EXECUTION_CONTROL_CHANNEL, {
@@ -159,7 +165,10 @@ describe("durable: ExecutionManager cancellation", () => {
     });
 
     const controller = new AbortController();
-    (manager as any).activeAttemptControllers.set("e-ignore", controller);
+    (manager as any).cancellation.activeAttemptControllers.set(
+      "e-ignore",
+      controller,
+    );
 
     await manager.startLiveCancellationListener();
     await bus.publish(DURABLE_EXECUTION_CONTROL_CHANNEL, {
@@ -185,7 +194,10 @@ describe("durable: ExecutionManager cancellation", () => {
     });
 
     const controller = new AbortController();
-    (manager as any).activeAttemptControllers.set("e-stop", controller);
+    (manager as any).cancellation.activeAttemptControllers.set(
+      "e-stop",
+      controller,
+    );
 
     await manager.startLiveCancellationListener();
     await manager.stopLiveCancellationListener();
@@ -279,7 +291,9 @@ describe("durable: ExecutionManager cancellation", () => {
     });
 
     await manager.startLiveCancellationListener();
-    const registrationPromise = (manager as any).registerAttemptCancellation({
+    const registrationPromise = (
+      manager as any
+    ).cancellation.registerAttemptCancellation({
       executionId: "e-race",
     });
     deferred.resolve(
@@ -314,7 +328,9 @@ describe("durable: ExecutionManager cancellation", () => {
     });
 
     await manager.startLiveCancellationListener();
-    const registration = await (manager as any).registerAttemptCancellation({
+    const registration = await (
+      manager as any
+    ).cancellation.registerAttemptCancellation({
       executionId: "e-live",
     });
 
@@ -350,7 +366,9 @@ describe("durable: ExecutionManager cancellation", () => {
       .mockResolvedValue(undefined);
 
     await manager.startLiveCancellationListener();
-    const registration = await (manager as any).registerAttemptCancellation({
+    const registration = await (
+      manager as any
+    ).cancellation.registerAttemptCancellation({
       executionId: "e-recheck-fallback",
     });
     execution = createExecution({
@@ -389,18 +407,20 @@ describe("durable: ExecutionManager cancellation", () => {
     const warnSpy = jest
       .spyOn((manager as any).logger, "warn")
       .mockImplementation(async () => {
-        (manager as any).abortActiveAttempt(
+        (manager as any).cancellation.abortActiveAttempt(
           "e-recheck-aborted",
           "aborted-during-warn",
         );
       });
     const pollingSpy = jest.spyOn(
-      manager as any,
-      "startExecutionCancellationPollingFallback",
+      (manager as any).cancellation,
+      "startPollingFallback",
     );
 
     await manager.startLiveCancellationListener();
-    const registration = await (manager as any).registerAttemptCancellation({
+    const registration = await (
+      manager as any
+    ).cancellation.registerAttemptCancellation({
       executionId: "e-recheck-aborted",
     });
 
@@ -422,32 +442,32 @@ describe("durable: ExecutionManager cancellation", () => {
 
     const firstRegistration = await (
       manager as any
-    ).registerAttemptCancellation({
+    ).cancellation.registerAttemptCancellation({
       executionId: "e-reused",
     });
     const secondRegistration = await (
       manager as any
-    ).registerAttemptCancellation({
+    ).cancellation.registerAttemptCancellation({
       executionId: "e-reused",
     });
 
     firstRegistration.stop();
 
     expect(
-      (manager as any).activeAttemptControllers.get("e-reused"),
+      (manager as any).cancellation.activeAttemptControllers.get("e-reused"),
     ).toBeDefined();
     expect(
       (
-        (manager as any).activeAttemptControllers.get(
+        (manager as any).cancellation.activeAttemptControllers.get(
           "e-reused",
         ) as AbortController
       ).signal,
     ).toBe(secondRegistration.signal);
 
     secondRegistration.stop();
-    expect((manager as any).activeAttemptControllers.has("e-reused")).toBe(
-      false,
-    );
+    expect(
+      (manager as any).cancellation.activeAttemptControllers.has("e-reused"),
+    ).toBe(false);
   });
 
   it("falls back to polling when no live event bus is configured", async () => {
@@ -460,7 +480,9 @@ describe("durable: ExecutionManager cancellation", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    const registration = await (manager as any).registerAttemptCancellation({
+    const registration = await (
+      manager as any
+    ).cancellation.registerAttemptCancellation({
       executionId: "e-poll",
     });
     execution = createExecution({
@@ -491,7 +513,9 @@ describe("durable: ExecutionManager cancellation", () => {
     });
 
     await manager.startLiveCancellationListener();
-    const registration = await (manager as any).registerAttemptCancellation({
+    const registration = await (
+      manager as any
+    ).cancellation.registerAttemptCancellation({
       executionId: "e-fallback",
     });
     execution = createExecution({
@@ -517,9 +541,7 @@ describe("durable: ExecutionManager cancellation", () => {
       taskExecutor: createFixedTaskExecutor(undefined),
     });
 
-    const stopWatcher = (
-      manager as any
-    ).startExecutionCancellationPollingFallback({
+    const stopWatcher = (manager as any).cancellation.startPollingFallback({
       executionId: "e-stop",
       controller: new AbortController(),
     });
@@ -532,7 +554,7 @@ describe("durable: ExecutionManager cancellation", () => {
     abortedController.abort("done");
     const stopAbortedWatcher = (
       manager as any
-    ).startExecutionCancellationPollingFallback({
+    ).cancellation.startPollingFallback({
       executionId: "e-stop-aborted",
       controller: abortedController,
     });
@@ -554,9 +576,7 @@ describe("durable: ExecutionManager cancellation", () => {
     });
 
     const controller = new AbortController();
-    const stopWatcher = (
-      manager as any
-    ).startExecutionCancellationPollingFallback({
+    const stopWatcher = (manager as any).cancellation.startPollingFallback({
       executionId: "e-watch-failure",
       controller,
     });

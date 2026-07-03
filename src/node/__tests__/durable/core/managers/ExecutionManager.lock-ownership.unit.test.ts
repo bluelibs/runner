@@ -1,6 +1,7 @@
 import { DurableService } from "../../../../durable/core/DurableService";
 import { SuspensionSignal } from "../../../../durable/core/interfaces/context";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
+import { createExecutionLockState } from "../../../../durable/core/managers/ExecutionManager.locking";
 import {
   createTaskExecutor,
   okTask,
@@ -14,10 +15,10 @@ describe("durable: ExecutionManager lock ownership", () => {
       tasks: [],
     });
     const manager = (service as any)._executionManager;
-    const lockState = (manager as any).createExecutionLockState();
+    const lockState = createExecutionLockState();
 
     await expect(
-      (manager as any).assertStoreLockOwnership(lockState),
+      (manager as any).attemptRunner.assertStoreLockOwnership(lockState),
     ).resolves.toBeUndefined();
   });
 
@@ -27,13 +28,13 @@ describe("durable: ExecutionManager lock ownership", () => {
       tasks: [],
     });
     const manager = (service as any)._executionManager;
-    const lockState = (manager as any).createExecutionLockState();
+    const lockState = createExecutionLockState();
     const lossError = new Error("lock-lost");
     lockState.lost = true;
     lockState.lossError = lossError;
 
     await expect(
-      (manager as any).assertStoreLockOwnership(lockState),
+      (manager as any).attemptRunner.assertStoreLockOwnership(lockState),
     ).rejects.toThrow("lock-lost");
   });
 

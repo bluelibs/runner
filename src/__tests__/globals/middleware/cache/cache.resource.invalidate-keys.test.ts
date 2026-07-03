@@ -70,6 +70,7 @@ describe("cache resource invalidateKeys", () => {
           createCount += 1;
           return {
             get: async () => undefined,
+            getEntry: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
             invalidateKeys: async (keys) => {
@@ -241,6 +242,7 @@ describe("cache resource invalidateKeys", () => {
           createdOptions.set(taskId, options);
           return {
             get: async () => undefined,
+            getEntry: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
             invalidateKeys: async (keys) => {
@@ -330,6 +332,7 @@ describe("cache resource invalidateKeys", () => {
         async (): Promise<CacheProvider> =>
         async ({ taskId }) => ({
           get: async () => undefined,
+          getEntry: async () => undefined,
           set: async () => undefined,
           clear: async () => undefined,
           invalidateKeys: async () => {

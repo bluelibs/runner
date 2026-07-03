@@ -2,7 +2,10 @@ import { DurableService } from "../../../../durable/core/DurableService";
 import { DurableContext } from "../../../../durable/core/DurableContext";
 import { SuspensionSignal } from "../../../../durable/core/interfaces/context";
 import type { Execution } from "../../../../durable/core/types";
-import { ExecutionStatus } from "../../../../durable/core/types";
+import {
+  ExecutionStatus,
+  isExecutionTerminal,
+} from "../../../../durable/core/types";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
 import {
   toExecutionErrorInfo,
@@ -16,17 +19,18 @@ import {
   pendingExecution,
 } from "../../helpers/DurableService.unit.helpers";
 
-type TestExecutionManager = {
-  assertStoreLockOwnership: (lockState: {
-    lost: boolean;
-    lossError: Error | null;
-    triggerLoss: (error: Error) => void;
-    waitForLoss: Promise<never>;
-    lockId?: string | "no-lock";
-    lockResource?: string;
-    lockTtlMs?: number;
-  }) => Promise<void>;
-  assertTaskExecutorConfigured: () => void;
+type TestLockState = {
+  lost: boolean;
+  lossError: Error | null;
+  triggerLoss: (error: Error) => void;
+  waitForLoss: Promise<never>;
+  lockId?: string | "no-lock";
+  lockResource?: string;
+  lockTtlMs?: number;
+};
+
+type TestAttemptRunner = {
+  assertStoreLockOwnership: (lockState: TestLockState) => Promise<void>;
   completeExecutionAttempt: (
     runningExecution: Execution,
     result: unknown,
@@ -37,34 +41,10 @@ type TestExecutionManager = {
     taskDef: ReturnType<typeof okTask>,
     assertLockOwnership: () => void,
   ) => DurableContext;
-  failExecutionDeliveryExhausted: (
-    executionId: string,
-    details: {
-      messageId: string;
-      attempts: number;
-      maxAttempts: number;
-      errorMessage: string;
-    },
-  ) => Promise<void>;
-  kickoffExecution: (executionId: string) => Promise<void>;
-  notifyExecutionFinished: (execution: Execution) => Promise<void>;
-  processExecution: (executionId: string) => Promise<void>;
-  resolveTaskReference: (
-    taskRef: string | ReturnType<typeof okTask>,
-    apiMethod: string,
-  ) => ReturnType<typeof okTask>;
   runExecutionAttempt: (
     execution: Execution,
     taskDef: ReturnType<typeof okTask>,
-    lockState: {
-      lost: boolean;
-      lossError: Error | null;
-      triggerLoss: (error: Error) => void;
-      waitForLoss: Promise<never>;
-      lockId?: string | "no-lock";
-      lockResource?: string;
-      lockTtlMs?: number;
-    },
+    lockState: TestLockState,
   ) => Promise<void>;
   runTaskAttempt: (params: {
     task: ReturnType<typeof okTask>;
@@ -99,18 +79,34 @@ type TestExecutionManager = {
   transitionExecutionToRunning: (
     execution: Execution,
   ) => Promise<Execution | null>;
-  isExecutionTerminal: (status: ExecutionStatus) => boolean;
+};
+
+type TestExecutionManager = {
+  assertTaskExecutorConfigured: () => void;
+  failExecutionDeliveryExhausted: (
+    executionId: string,
+    details: {
+      messageId: string;
+      attempts: number;
+      maxAttempts: number;
+      errorMessage: string;
+    },
+  ) => Promise<void>;
+  kickoffExecution: (executionId: string) => Promise<void>;
+  notifyExecutionFinished: (execution: Execution) => Promise<void>;
+  processExecution: (executionId: string) => Promise<void>;
+  resolveTaskReference: (
+    taskRef: string | ReturnType<typeof okTask>,
+    apiMethod: string,
+  ) => ReturnType<typeof okTask>;
+  attemptRunner: TestAttemptRunner;
 };
 
 function getManager(service: DurableService): TestExecutionManager {
   return service._executionManager as unknown as TestExecutionManager;
 }
 
-function createLockState(
-  overrides?: Partial<
-    Parameters<TestExecutionManager["assertStoreLockOwnership"]>[0]
-  >,
-) {
+function createLockState(overrides?: Partial<TestLockState>) {
   return {
     lost: false,
     lossError: null,
@@ -127,7 +123,7 @@ describe("durable: ExecutionManager coverage", () => {
     const manager = getManager(service);
 
     await expect(
-      manager.assertStoreLockOwnership(
+      manager.attemptRunner.assertStoreLockOwnership(
         createLockState({
           lost: true,
           lossError: new Error("known-loss"),
@@ -136,11 +132,11 @@ describe("durable: ExecutionManager coverage", () => {
     ).rejects.toThrow("known-loss");
 
     await expect(
-      manager.assertStoreLockOwnership(createLockState()),
+      manager.attemptRunner.assertStoreLockOwnership(createLockState()),
     ).resolves.toBeUndefined();
 
     await expect(
-      manager.assertStoreLockOwnership(
+      manager.attemptRunner.assertStoreLockOwnership(
         createLockState({
           lockId: "no-lock",
           lockResource: "execution:no-lock",
@@ -160,7 +156,7 @@ describe("durable: ExecutionManager coverage", () => {
       tasks: [],
     });
     await expect(
-      getManager(noRenewService).assertStoreLockOwnership(
+      getManager(noRenewService).attemptRunner.assertStoreLockOwnership(
         createLockState({
           lockId: "lock-no-renew",
           lockResource: "execution:no-renew",
@@ -178,7 +174,7 @@ describe("durable: ExecutionManager coverage", () => {
       tasks: [],
     });
     await expect(
-      getManager(renewSuccessService).assertStoreLockOwnership(
+      getManager(renewSuccessService).attemptRunner.assertStoreLockOwnership(
         createLockState({
           lockId: "lock-success",
           lockResource: "execution:success",
@@ -204,7 +200,9 @@ describe("durable: ExecutionManager coverage", () => {
       lockTtlMs: 1_000,
     });
     await expect(
-      getManager(renewFailureService).assertStoreLockOwnership(failingState),
+      getManager(renewFailureService).attemptRunner.assertStoreLockOwnership(
+        failingState,
+      ),
     ).rejects.toThrow("Execution lock lost for 'execution:failed'");
     expect(failingState.lost).toBe(true);
     expect(failingState.lossError).toBeInstanceOf(Error);
@@ -324,8 +322,8 @@ describe("durable: ExecutionManager coverage", () => {
     expect(() => manager.resolveTaskReference("missing", "start")).toThrow(
       'DurableService.start() could not resolve task id "missing"',
     );
-    expect(manager.isExecutionTerminal(ExecutionStatus.Completed)).toBe(true);
-    expect(manager.isExecutionTerminal(ExecutionStatus.Pending)).toBe(false);
+    expect(isExecutionTerminal(ExecutionStatus.Completed)).toBe(true);
+    expect(isExecutionTerminal(ExecutionStatus.Pending)).toBe(false);
     expect(isCompensationFailure(new Error("Compensation failed: x"))).toBe(
       true,
     );
@@ -339,26 +337,27 @@ describe("durable: ExecutionManager coverage", () => {
       ...pendingExecution({ id: "e-helper-running", workflowKey: task.id }),
       status: ExecutionStatus.Running,
     };
-    expect(await manager.transitionExecutionToRunning(alreadyRunning)).toBe(
-      alreadyRunning,
-    );
+    expect(
+      await manager.attemptRunner.transitionExecutionToRunning(alreadyRunning),
+    ).toBe(alreadyRunning);
 
     const pending = pendingExecution({
       id: "e-helper-pending",
       workflowKey: task.id,
     });
     await store.saveExecution(pending);
-    const running = await manager.transitionExecutionToRunning(pending);
+    const running =
+      await manager.attemptRunner.transitionExecutionToRunning(pending);
     expect(running?.status).toBe(ExecutionStatus.Running);
 
-    const context = manager.createExecutionContext(
+    const context = manager.attemptRunner.createExecutionContext(
       running!,
       task,
       () => undefined,
     );
 
     await expect(
-      manager.runTaskAttempt({
+      manager.attemptRunner.runTaskAttempt({
         task,
         input: { paidAt: 1 },
         context,
@@ -379,10 +378,10 @@ describe("durable: ExecutionManager coverage", () => {
     };
     await store.saveExecution(timeoutRunning);
     await expect(
-      manager.runTaskAttempt({
+      manager.attemptRunner.runTaskAttempt({
         task,
         input: { paidAt: 2 },
-        context: manager.createExecutionContext(
+        context: manager.attemptRunner.createExecutionContext(
           timeoutRunning,
           task,
           () => undefined,
@@ -404,10 +403,10 @@ describe("durable: ExecutionManager coverage", () => {
     };
     await store.saveExecution(expiredRunning);
     await expect(
-      manager.runTaskAttempt({
+      manager.attemptRunner.runTaskAttempt({
         task,
         input: { paidAt: 3 },
-        context: manager.createExecutionContext(
+        context: manager.attemptRunner.createExecutionContext(
           expiredRunning,
           task,
           () => undefined,
@@ -430,10 +429,10 @@ describe("durable: ExecutionManager coverage", () => {
     await store.saveExecution(expiredBlockedByRecheck);
     const timedOutRecheck = jest.fn(async () => false);
     await expect(
-      manager.runTaskAttempt({
+      manager.attemptRunner.runTaskAttempt({
         task,
         input: { paidAt: 4 },
-        context: manager.createExecutionContext(
+        context: manager.attemptRunner.createExecutionContext(
           expiredBlockedByRecheck,
           task,
           () => undefined,
@@ -472,7 +471,7 @@ describe("durable: ExecutionManager coverage", () => {
       status: ExecutionStatus.Running,
     };
     await store.saveExecution(running);
-    await manager.completeExecutionAttempt(running, "done");
+    await manager.attemptRunner.completeExecutionAttempt(running, "done");
     expect((await store.getExecution(running.id))?.status).toBe(
       ExecutionStatus.Completed,
     );
@@ -485,7 +484,10 @@ describe("durable: ExecutionManager coverage", () => {
       }),
       status: ExecutionStatus.Running,
     };
-    await manager.completeExecutionAttempt(staleRunning, "ignored");
+    await manager.attemptRunner.completeExecutionAttempt(
+      staleRunning,
+      "ignored",
+    );
     expect(await store.getExecution(staleRunning.id)).toBeNull();
 
     const sleeping = {
@@ -493,7 +495,10 @@ describe("durable: ExecutionManager coverage", () => {
       status: ExecutionStatus.Running,
     };
     await store.saveExecution(sleeping);
-    await manager.suspendExecutionAttempt(sleeping, "wait_for_signal");
+    await manager.attemptRunner.suspendExecutionAttempt(
+      sleeping,
+      "wait_for_signal",
+    );
     expect((await store.getExecution(sleeping.id))?.status).toBe(
       ExecutionStatus.Sleeping,
     );
@@ -507,7 +512,7 @@ describe("durable: ExecutionManager coverage", () => {
     };
     await store.saveExecution(suspendedWithFailedRecheck);
     const suspendRecheck = jest.fn(async () => false);
-    await manager.suspendExecutionAttempt(
+    await manager.attemptRunner.suspendExecutionAttempt(
       suspendedWithFailedRecheck,
       "wait_for_signal",
       suspendRecheck,
@@ -524,7 +529,7 @@ describe("durable: ExecutionManager coverage", () => {
       maxAttempts: 4,
     };
     await store.saveExecution(retrying);
-    await manager.scheduleExecutionRetry({
+    await manager.attemptRunner.scheduleExecutionRetry({
       runningExecution: retrying,
       error: { message: "boom" },
     });
@@ -543,7 +548,7 @@ describe("durable: ExecutionManager coverage", () => {
     };
     await store.saveExecution(retryBlockedByRecheck);
     const retryRecheck = jest.fn(async () => false);
-    await manager.scheduleExecutionRetry({
+    await manager.attemptRunner.scheduleExecutionRetry({
       runningExecution: retryBlockedByRecheck,
       error: { message: "boom" },
       canPersistOutcome: retryRecheck,
@@ -571,7 +576,7 @@ describe("durable: ExecutionManager coverage", () => {
     };
     await store.saveExecution(completedWithFailedRecheck);
     const completeRecheck = jest.fn(async () => false);
-    await manager.completeExecutionAttempt(
+    await manager.attemptRunner.completeExecutionAttempt(
       completedWithFailedRecheck,
       "done",
       completeRecheck,
@@ -590,7 +595,7 @@ describe("durable: ExecutionManager coverage", () => {
       attempt: 1,
       maxAttempts: 3,
     };
-    await manager.scheduleExecutionRetry({
+    await manager.attemptRunner.scheduleExecutionRetry({
       runningExecution: retryCleanup,
       error: { message: "boom" },
     });
@@ -631,7 +636,7 @@ describe("durable: ExecutionManager coverage", () => {
       completedAt: new Date(),
     });
     await expect(
-      getManager(cancelledService).runExecutionAttempt(
+      getManager(cancelledService).attemptRunner.runExecutionAttempt(
         {
           ...pendingExecution({ id: "e-cancelled", workflowKey: task.id }),
           status: ExecutionStatus.Cancelled,
@@ -656,7 +661,7 @@ describe("durable: ExecutionManager coverage", () => {
       status: ExecutionStatus.Running,
     };
     await suspendedStore.saveExecution(suspendedExecution);
-    await getManager(suspendedService).runExecutionAttempt(
+    await getManager(suspendedService).attemptRunner.runExecutionAttempt(
       suspendedExecution,
       task,
       createLockState(),
@@ -679,7 +684,7 @@ describe("durable: ExecutionManager coverage", () => {
     jest.spyOn(store, "saveExecutionIfStatus").mockResolvedValue(false);
 
     await expect(
-      manager.transitionExecutionToFailed({
+      manager.attemptRunner.transitionExecutionToFailed({
         execution,
         from: ExecutionStatus.Pending,
         reason: "failed",

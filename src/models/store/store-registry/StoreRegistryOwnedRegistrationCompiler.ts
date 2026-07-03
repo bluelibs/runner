@@ -44,18 +44,13 @@ export class StoreRegistryOwnedRegistrationCompiler {
       this.compileOwnedItem(ownerScope, item),
     );
 
+    // Registration is fail-fast: a throw here aborts the whole build and the
+    // partially-populated registry is discarded, so there is nothing to roll
+    // back. Keeping it simple avoids a half-correct (visibility-only) rollback.
     for (const { originalItem, compiledItem } of scopedItems) {
       this.visibilityTracker.recordOwnership(element.id, compiledItem);
-      const itemId = this.resolveRegisterableId(compiledItem);
-      try {
-        storeGenericItem(compiledItem);
-        this.registerCompiledItemAliases(originalItem, compiledItem);
-      } catch (error) {
-        if (itemId) {
-          this.visibilityTracker.rollbackOwnershipTree(itemId);
-        }
-        throw error;
-      }
+      storeGenericItem(compiledItem);
+      this.registerCompiledItemAliases(originalItem, compiledItem);
     }
   }
 

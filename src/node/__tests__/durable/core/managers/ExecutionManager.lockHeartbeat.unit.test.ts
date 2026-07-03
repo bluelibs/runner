@@ -1,7 +1,13 @@
 import { DurableService } from "../../../../durable/core/DurableService";
 import type { Execution } from "../../../../durable/core/types";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
-import { markExecutionLockLost } from "../../../../durable/core/managers/ExecutionManager.locking";
+import {
+  type ExecutionLockState,
+  createExecutionLockState,
+  markExecutionLockLost,
+  startLockHeartbeat as startLockHeartbeatFn,
+} from "../../../../durable/core/managers/ExecutionManager.locking";
+import type { IDurableStore } from "../../../../durable/core/interfaces/store";
 import {
   advanceTimers,
   captureScheduledTimeout,
@@ -12,37 +18,30 @@ import {
 } from "../../helpers/DurableService.unit.helpers";
 
 type TestExecutionManager = {
-  startLockHeartbeat: (params: {
-    lockResource: string;
-    lockId: string | "no-lock";
-    lockTtlMs: number;
-    lockState: { lost: boolean };
-  }) => () => void;
-  createExecutionLockState: () => {
-    lost: boolean;
-    lossError: Error | null;
-    lockId: string | "no-lock" | undefined;
-    lockResource: string | undefined;
-    lockTtlMs: number | undefined;
-    triggerLoss: (error: Error) => void;
-    waitForLoss: Promise<never>;
+  attemptRunner: {
+    runExecutionAttempt: (
+      execution: Execution,
+      taskDef: ReturnType<typeof okTask>,
+      lockState: {
+        lost: boolean;
+        lossError: Error | null;
+        triggerLoss: (error: Error) => void;
+        waitForLoss: Promise<never>;
+      },
+    ) => Promise<void>;
   };
-  runExecutionAttempt: (
-    execution: Execution,
-    taskDef: ReturnType<typeof okTask>,
-    lockState: {
-      lost: boolean;
-      lossError: Error | null;
-      triggerLoss: (error: Error) => void;
-      waitForLoss: Promise<never>;
-    },
-  ) => Promise<void>;
 };
 
 function getTestExecutionManager(
   service: DurableService,
 ): TestExecutionManager {
   return service._executionManager as unknown as TestExecutionManager;
+}
+
+function getServiceStore(service: DurableService): IDurableStore {
+  return (
+    service._executionManager as unknown as { config: { store: IDurableStore } }
+  ).config.store;
 }
 
 function startLockHeartbeat(
@@ -54,11 +53,14 @@ function startLockHeartbeat(
     lockState?: { lost: boolean };
   },
 ): () => void {
-  return getTestExecutionManager(service).startLockHeartbeat({
+  return startLockHeartbeatFn({
+    store: getServiceStore(service),
     lockResource: params.lockResource,
     lockId: params.lockId,
     lockTtlMs: params.lockTtlMs ?? 3_000,
-    lockState: params.lockState ?? { lost: false },
+    lockState: (params.lockState ?? {
+      lost: false,
+    }) as unknown as ExecutionLockState,
   });
 }
 
@@ -328,10 +330,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
   });
 
   it("ignores duplicate lock-loss notifications", async () => {
-    const store = new MemoryStore();
-    const service = new DurableService({ store, tasks: [] });
-    const lockState =
-      getTestExecutionManager(service).createExecutionLockState();
+    const lockState = createExecutionLockState();
 
     const firstError = new Error("first");
     lockState.triggerLoss(firstError);
@@ -341,10 +340,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
   });
 
   it("keeps the first lock-loss error stable across duplicate lock-loss markings", () => {
-    const store = new MemoryStore();
-    const service = new DurableService({ store, tasks: [] });
-    const manager = getTestExecutionManager(service);
-    const lockState = manager.createExecutionLockState();
+    const lockState = createExecutionLockState();
 
     const firstError = markExecutionLockLost(
       lockState,
@@ -371,7 +367,7 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
     });
 
     await expect(
-      getTestExecutionManager(service).runExecutionAttempt(
+      getTestExecutionManager(service).attemptRunner.runExecutionAttempt(
         pendingExecution({ id: "e-already-lost", workflowKey: task.id }),
         task,
         {
@@ -415,7 +411,9 @@ describe("durable: ExecutionManager lock heartbeat (unit)", () => {
       };
 
       type TestLockState = typeof lockState;
-      const processing = getTestExecutionManager(service).runExecutionAttempt(
+      const processing = getTestExecutionManager(
+        service,
+      ).attemptRunner.runExecutionAttempt(
         execution,
         task,
         lockState as TestLockState,
