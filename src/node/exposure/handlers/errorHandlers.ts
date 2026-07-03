@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 
 import type { SerializerLike } from "../../../serializer";
 import type { Logger } from "../../../models/Logger";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import type { NodeExposureHttpCorsConfig } from "../resourceTypes";
 import { applyCorsActual } from "../cors";
 import { jsonErrorResponse, respondJson } from "../httpResponse";

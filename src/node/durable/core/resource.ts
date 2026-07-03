@@ -2,6 +2,7 @@ import { r, resources } from "../../../index";
 import { disposeDurableService } from "./DurableService";
 import type { RunnerDurableRuntimeConfig } from "./createRunnerDurableRuntime";
 import { createRunnerDurableRuntime } from "./createRunnerDurableRuntime";
+import { durableRuntimeTag } from "../tags/durableRuntime.tag";
 export type DurableResourceRuntimeConfig = RunnerDurableRuntimeConfig;
 
 interface DurableResourceContext {
@@ -20,6 +21,7 @@ interface DurableResourceContext {
  */
 export const durableResource = r
   .resource<DurableResourceRuntimeConfig>("base-durable")
+  .tags([durableRuntimeTag])
   .dependencies({
     taskRunner: resources.taskRunner,
     eventManager: resources.eventManager,

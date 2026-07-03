@@ -1,6 +1,6 @@
 import { defineResource, defineTag, defineTask } from "../../../define";
 import type { TagType } from "../../../defs";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 
 // Type-only tests for contract enforcement via tags and store tagged lookups.
 

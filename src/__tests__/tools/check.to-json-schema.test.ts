@@ -16,8 +16,6 @@ const builtInPublicTokens = Object.freeze({
 const builtInJsonSchemaExpectations = Object.freeze({
   Integer: {
     type: "integer",
-    minimum: -2147483648,
-    maximum: 2147483647,
   },
   PositiveInteger: {
     type: "integer",
@@ -71,8 +69,6 @@ describe("tools/check toJSONSchema", () => {
     expect(Match.toJSONSchema(Match.Integer)).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       type: "integer",
-      minimum: -2147483648,
-      maximum: 2147483647,
     });
     expect(Match.toJSONSchema(Match.PositiveInteger)).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
@@ -277,8 +273,6 @@ describe("tools/check toJSONSchema", () => {
         id: { type: "string", minLength: 1 },
         retries: {
           type: "integer",
-          minimum: -2147483648,
-          maximum: 2147483647,
         },
         note: {
           anyOf: [{ type: "string" }, { type: "null" }],
@@ -337,8 +331,6 @@ describe("tools/check toJSONSchema", () => {
       properties: {
         retries: {
           type: "integer",
-          minimum: -2147483648,
-          maximum: 2147483647,
         },
         note: {
           anyOf: [{ type: "string" }, { type: "null" }],

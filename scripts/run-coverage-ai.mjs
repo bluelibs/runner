@@ -13,6 +13,12 @@ function parseArgs(argv) {
   return { extraJestArgs: argv.slice(idx + 1) };
 }
 
+function hasMaxWorkersArg(args) {
+  return args.some(
+    (arg) => arg === "--maxWorkers" || arg.startsWith("--maxWorkers="),
+  );
+}
+
 function readJson(filePath) {
   try {
     const content = fs.readFileSync(filePath, "utf-8");
@@ -145,6 +151,10 @@ async function main() {
     "--coverageReporters=json",
     "--silent",
   ];
+
+  if (!hasMaxWorkersArg(extraJestArgs)) {
+    jestArgs.push("--maxWorkers=50%");
+  }
 
   if (process.env.AI_COVERAGE_FULL_REPORTS === "1") {
     jestArgs.push("--coverageReporters=lcov", "--coverageReporters=html");

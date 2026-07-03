@@ -4,6 +4,7 @@ import { UserContext } from "../contexts/user.context";
 import { usersRepository } from "../resources/users-repository.resource";
 import { UserSession } from "../types";
 import { appConfig } from "../../app.config";
+import { unauthorizedError } from "../errors/auth.error";
 
 export interface AuthMiddlewareConfig {
   requiresAuth?: boolean;
@@ -32,7 +33,7 @@ export const authMiddleware = r.middleware
         : null;
 
     if (!token && requiresAuth) {
-      throw new Error("Authentication required");
+      throw unauthorizedError.new({ message: "Authentication required" });
     }
 
     if (token) {
@@ -44,7 +45,7 @@ export const authMiddleware = r.middleware
         const user = await userService.getUserById(decoded.id);
 
         if (!user) {
-          throw new Error("User not found");
+          throw unauthorizedError.new({ message: "Invalid or expired token" });
         }
 
         // Create user session
@@ -58,7 +59,7 @@ export const authMiddleware = r.middleware
         return UserContext.provide(userSession, () => next(task?.input));
       } catch (error) {
         if (requiresAuth) {
-          throw new Error("Invalid or expired token");
+          throw unauthorizedError.new({ message: "Invalid or expired token" });
         }
         // If auth is optional and token is invalid, continue without user context
       }

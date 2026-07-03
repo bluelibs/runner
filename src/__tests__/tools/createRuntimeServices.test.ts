@@ -1,6 +1,6 @@
 import { createRuntimeServices } from "../../tools/createRuntimeServices";
 import { ResourceLifecycleMode, RunnerMode } from "../../types/runner";
-import { Store } from "../../models/Store";
+import { Store } from "../../models/store/Store";
 import { EventManager } from "../../models/EventManager";
 import { Logger, PrintStrategy } from "../../models/Logger";
 import { TaskRunner } from "../../models/TaskRunner";

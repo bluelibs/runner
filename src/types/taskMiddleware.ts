@@ -5,7 +5,7 @@ import {
   ValidationSchemaInput,
 } from "./utilities";
 import type { ITask } from "./task";
-import type { ExecutionJournal } from "./executionJournal";
+import type { ExecutionJournal, JournalKeyBag } from "./executionJournal";
 import { TaskMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
@@ -62,6 +62,7 @@ export interface ITaskMiddlewareDefinition<
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
   TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
+  TJournalKeys extends JournalKeyBag = {},
 > {
   /** Stable middleware identifier. */
   id: string;
@@ -89,6 +90,8 @@ export interface ITaskMiddlewareDefinition<
   ) => Promise<any>;
   /** Optional metadata used by docs and tooling. */
   meta?: IMiddlewareMeta;
+  /** Journal keys exposed by this middleware for execution-local coordination. */
+  journal?: TJournalKeys;
   /** Tags applied to the middleware definition. */
   tags?: TTags;
   /**
@@ -107,6 +110,7 @@ export interface ITaskMiddleware<
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
   TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
+  TJournalKeys extends JournalKeyBag = {},
 >
   extends
     Omit<
@@ -115,9 +119,10 @@ export interface ITaskMiddleware<
         TEnforceInputContract,
         TEnforceOutputContract,
         TDependencies,
-        TTags
+        TTags,
+        TJournalKeys
       >,
-      "throws"
+      "throws" | "journal"
     >,
     IContractable<
       ResolvedTaskMiddlewareConfig<TConfig, TTags>,
@@ -148,12 +153,15 @@ export interface ITaskMiddleware<
     TEnforceInputContract,
     TEnforceOutputContract,
     TDependencies,
-    TTags
+    TTags,
+    TJournalKeys
   >;
   /** Extract the configured payload from a matching middleware entry. */
   extract: (
     target: ITaskMiddleware<any, any, any, any, any>,
   ) => ResolvedTaskMiddlewareConfig<TConfig, TTags> | undefined;
+  /** Typed journal keys owned by this middleware definition. */
+  readonly journalKeys: TJournalKeys;
   /** Normalized tags attached to the middleware. */
   tags: TTags;
 }
@@ -167,12 +175,14 @@ export interface ITaskMiddlewareConfigured<
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
   TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
+  TJournalKeys extends JournalKeyBag = {},
 > extends ITaskMiddleware<
   TConfig,
   TEnforceInputContract,
   TEnforceOutputContract,
   TDependencies,
-  TTags
+  TTags,
+  TJournalKeys
 > {
   [symbolMiddlewareConfigured]: true;
   config: ResolvedTaskMiddlewareConfig<TConfig, TTags>;

@@ -77,7 +77,6 @@ describe("tools/check", () => {
     expect(() => checkRuntime("name", Match.NonEmptyString)).not.toThrow();
 
     expectMatchFailure(() => checkRuntime(1.2, Match.Integer));
-    expectMatchFailure(() => checkRuntime(2147483648, Match.Integer));
     expectMatchFailure(() => checkRuntime("", Match.NonEmptyString));
   });
 
@@ -86,7 +85,7 @@ describe("tools/check", () => {
       {
         pattern: Match.Integer,
         value: 1.2,
-        expected: "32-bit integer",
+        expected: "integer",
       },
       {
         pattern: Match.NonEmptyString,

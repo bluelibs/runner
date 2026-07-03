@@ -1,4 +1,4 @@
-import type { StoreRegistry } from "../../../models/StoreRegistry";
+import type { StoreRegistry } from "../../../models/store/StoreRegistry";
 import { ValidatorContext } from "../../../models/validators/ValidatorContext";
 
 type RegistryCollectionName =

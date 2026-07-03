@@ -153,7 +153,7 @@ describe("Express OpenAPI SQLite Integration", () => {
     it("should not get profile without token", async () => {
       const response = await request(server)
         .get("/api/auth/profile")
-        .expect(200);
+        .expect(401);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error).toMatch(
@@ -165,7 +165,7 @@ describe("Express OpenAPI SQLite Integration", () => {
       const response = await request(server)
         .get("/api/auth/profile")
         .set("Authorization", "Bearer invalid-token")
-        .expect(200);
+        .expect(401);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error).toMatch(/Invalid|expired|token/);
@@ -195,7 +195,7 @@ describe("Express OpenAPI SQLite Integration", () => {
           password: "123", // too short
           name: "A", // too short
         })
-        .expect(200);
+        .expect(400);
 
       expect(response.body.success).toBe(false);
     });
@@ -207,7 +207,7 @@ describe("Express OpenAPI SQLite Integration", () => {
           email: "invalid-email",
           password: "",
         })
-        .expect(200);
+        .expect(400);
 
       expect(response.body.success).toBe(false);
     });

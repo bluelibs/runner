@@ -13,6 +13,10 @@ import {
 } from "../utils";
 import { withExecutionWaitLock } from "../executionWaiters";
 import {
+  createExecutionWaitCompletionState,
+  isExecutionWaitTerminal,
+} from "../executionWaitState";
+import {
   deleteSignalWaiter,
   getSignalIdFromStepId,
   withSignalLock,
@@ -237,6 +241,23 @@ export async function handleExecutionWaitTimeoutTimer(params: {
         return false;
       }
 
+      // The timeout timer can fire after the target already reached a terminal
+      // state but before its waiter notification landed — e.g. a worker crash
+      // in the window between persisting the target's terminal status and
+      // resolving its waiters leaves this parent parked until the timer fires.
+      // Resolving against the actual terminal target instead of timing out
+      // avoids a spurious timeout for a child that genuinely completed. We hold
+      // the same execution-wait lock the normal completion path takes, so this
+      // read and the resolution are race-safe against resolveExecutionWaiters.
+      const target = await params.store.getExecution(state.targetExecutionId);
+      const result =
+        target && isExecutionWaitTerminal(target)
+          ? createExecutionWaitCompletionState(target)
+          : {
+              state: "timed_out" as const,
+              targetExecutionId: state.targetExecutionId,
+            };
+
       await params.store.deleteExecutionWaiter(
         state.targetExecutionId,
         params.timer.executionId!,
@@ -246,10 +267,7 @@ export async function handleExecutionWaitTimeoutTimer(params: {
       await params.store.saveStepResult({
         executionId: params.timer.executionId!,
         stepId: params.timer.stepId!,
-        result: {
-          state: "timed_out" as const,
-          targetExecutionId: state.targetExecutionId,
-        },
+        result,
         completedAt: new Date(),
       });
       await clearExecutionCurrentIfSuspendedOnStep(

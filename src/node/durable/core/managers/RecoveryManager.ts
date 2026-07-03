@@ -234,6 +234,15 @@ export class RecoveryManager {
     const pendingTimerTypes =
       pendingTimerTypesByExecutionId.get(execution.id) ?? new Set<TimerType>();
 
+    if (execution.status === ExecutionStatus.Cancelling) {
+      // "Recover" here means "reconcile an orphaned incomplete execution",
+      // not "resume running user code". Once cancellation has been requested,
+      // recovery should drive the normal finalization path to terminal
+      // `cancelled` and notify waiters, even if stale timers still exist after
+      // a worker crash.
+      return { kind: "recover" };
+    }
+
     if (
       execution.status === ExecutionStatus.Pending ||
       execution.status === ExecutionStatus.Running
@@ -250,8 +259,13 @@ export class RecoveryManager {
     }
 
     if (execution.status === ExecutionStatus.Sleeping) {
+      // A sleeping execution is correctly parked when any of its wait timers is
+      // still pending: `Sleep` for sleep(), `SignalTimeout` for waitForSignal()
+      // and `Timeout` for waitForExecution(..., { timeoutMs }). Recovering it
+      // anyway would replay a parent that is legitimately waiting on a child.
       return pendingTimerTypes.has(TimerType.Sleep) ||
-        pendingTimerTypes.has(TimerType.SignalTimeout)
+        pendingTimerTypes.has(TimerType.SignalTimeout) ||
+        pendingTimerTypes.has(TimerType.Timeout)
         ? { kind: "skip", reason: "pending_timer" }
         : { kind: "recover" };
     }

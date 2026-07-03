@@ -4,6 +4,7 @@ import type {
   DependencyMapType,
   TaskMiddlewareTagType,
 } from "../types/taskMiddleware";
+import type { JournalKeyBag } from "../types/executionJournal";
 import type {
   InferValidationSchemaInput,
   ValidationSchemaInput,
@@ -12,7 +13,6 @@ import { symbolTaskMiddleware } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 import {
   defineMiddlewareCore,
-  type MiddlewareDefWithInferredSchema,
   type MiddlewareVariant,
 } from "./defineMiddleware.core";
 
@@ -23,35 +23,78 @@ const taskVariant: MiddlewareVariant = {
   tagTarget: "taskMiddlewares",
 };
 
+type TaskMiddlewareDefinitionWithSchema<
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TDependencies extends DependencyMapType,
+  TTags extends TaskMiddlewareTagType[],
+  TJournalKeys extends JournalKeyBag,
+  TSchema extends ValidationSchemaInput<any>,
+> = Omit<
+  ITaskMiddlewareDefinition<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies,
+    TTags,
+    TJournalKeys
+  >,
+  "configSchema"
+> & {
+  configSchema: TSchema;
+};
+
+type TaskMiddlewareDefinitionWithoutJournal<
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TDependencies extends DependencyMapType,
+  TTags extends TaskMiddlewareTagType[],
+> = Omit<
+  ITaskMiddlewareDefinition<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies,
+    TTags,
+    {}
+  >,
+  "journal"
+> & {
+  journal?: never;
+};
+
 /**
  * Defines task middleware directly from a configuration object.
  */
 export function defineTaskMiddleware<
   TSchema extends ValidationSchemaInput<any>,
+  const TJournalKeys extends JournalKeyBag = {},
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
   TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 >(
-  middlewareDef: MiddlewareDefWithInferredSchema<TSchema, TDependencies> &
-    Pick<
-      ITaskMiddlewareDefinition<
-        InferValidationSchemaInput<TSchema>,
-        TEnforceInputContract,
-        TEnforceOutputContract,
-        TDependencies,
-        TTags
-      >,
-      "run"
-    >,
+  middlewareDef: TaskMiddlewareDefinitionWithSchema<
+    InferValidationSchemaInput<TSchema>,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies,
+    TTags,
+    TJournalKeys,
+    TSchema
+  >,
 ): ITaskMiddleware<
   InferValidationSchemaInput<TSchema>,
   TEnforceInputContract,
   TEnforceOutputContract,
   TDependencies,
-  TTags
+  TTags,
+  TJournalKeys
 >;
 export function defineTaskMiddleware<
+  const TJournalKeys extends JournalKeyBag = {},
   TConfig = any,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
@@ -63,14 +106,16 @@ export function defineTaskMiddleware<
     TEnforceInputContract,
     TEnforceOutputContract,
     TDependencies,
-    TTags
+    TTags,
+    TJournalKeys
   >,
 ): ITaskMiddleware<
   TConfig,
   TEnforceInputContract,
   TEnforceOutputContract,
   TDependencies,
-  TTags
+  TTags,
+  TJournalKeys
 >;
 export function defineTaskMiddleware<
   TConfig = any,
@@ -79,7 +124,7 @@ export function defineTaskMiddleware<
   TDependencies extends DependencyMapType = any,
   TTags extends TaskMiddlewareTagType[] = TaskMiddlewareTagType[],
 >(
-  middlewareDef: ITaskMiddlewareDefinition<
+  middlewareDef: TaskMiddlewareDefinitionWithoutJournal<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
@@ -91,9 +136,34 @@ export function defineTaskMiddleware<
   TEnforceInputContract,
   TEnforceOutputContract,
   TDependencies,
-  TTags
+  TTags,
+  {}
+>;
+export function defineTaskMiddleware<
+  TConfig = any,
+  TEnforceInputContract = void,
+  TEnforceOutputContract = void,
+  TDependencies extends DependencyMapType = any,
+  TTags extends TaskMiddlewareTagType[] = [],
+  TJournalKeys extends JournalKeyBag = {},
+>(
+  middlewareDef: ITaskMiddlewareDefinition<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies,
+    TTags,
+    TJournalKeys
+  >,
+): ITaskMiddleware<
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TDependencies,
+  TTags,
+  TJournalKeys
 > {
-  return defineMiddlewareCore<TConfig, TDependencies>(
+  return defineMiddlewareCore<TConfig, TDependencies, TJournalKeys>(
     taskVariant,
     getCallerFile(),
     middlewareDef,
@@ -102,6 +172,7 @@ export function defineTaskMiddleware<
     TEnforceInputContract,
     TEnforceOutputContract,
     TDependencies,
-    TTags
+    TTags,
+    TJournalKeys
   >;
 }

@@ -3,7 +3,7 @@ import {
   DependencyMapType,
   ResourceDependencyValuesType,
 } from "../../defs";
-import { Store } from "../Store";
+import { Store } from "../store/Store";
 import { InterceptorRegistry } from "./InterceptorRegistry";
 import { MiddlewareResolver } from "./MiddlewareResolver";
 import { ValidationHelper } from "./ValidationHelper";
@@ -17,7 +17,7 @@ import {
   extractRequestedId,
   resolveCanonicalIdFromStore,
   toCanonicalDefinitionFromStore,
-} from "../StoreLookup";
+} from "../store/StoreLookup";
 
 /**
  * Composes resource initialization chains with validation, interceptors, and middlewares.

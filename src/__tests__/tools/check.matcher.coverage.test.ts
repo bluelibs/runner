@@ -45,8 +45,6 @@ describe("tools/check matcher coverage", () => {
       properties: {
         retries: {
           type: "integer",
-          minimum: -2147483648,
-          maximum: 2147483647,
         },
         note: {
           anyOf: [{ type: "string" }, { type: "null" }],

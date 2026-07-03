@@ -3,7 +3,7 @@ import { Logger } from "../../../models/Logger";
 import { Serializer } from "../../../serializer/Serializer";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { EventManager } from "../../../models/EventManager";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import { r } from "../../../public";
 import { EventLanesDiagnostics } from "../../event-lanes/EventLanesDiagnostics";
 import { LocalSimulatedEventLaneTransport } from "../../event-lanes/LocalSimulatedEventLaneTransport";

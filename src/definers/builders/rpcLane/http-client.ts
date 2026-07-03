@@ -1,5 +1,5 @@
 import { createHttpClient } from "../../../http-client";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import type { IRpcLaneCommunicator } from "../../../defs";
 import {
   rpcLaneCommunicatorContractError,

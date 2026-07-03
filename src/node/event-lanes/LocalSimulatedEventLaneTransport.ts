@@ -4,7 +4,7 @@ import { runtimeSource } from "../../types/runtimeSource";
 import type { RemoteLaneBindingAuth } from "../../defs";
 import type { EventManager } from "../../models/EventManager";
 import type { Logger } from "../../models/Logger";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import type { Serializer } from "../../serializer";
 import type { EventLaneMessage } from "./types";
 import type { EventLanesDiagnostics } from "./EventLanesDiagnostics";

@@ -14,15 +14,15 @@ PORT=31337 npm run dev
 PORT=31337 npm run test # (integration tests)
 ```
 
-A complete Express.js application demonstrating the full power of BlueLibs Runner with:
+A complete Express.js application demonstrating current Runner composition patterns with:
 
-- **Custom Tags (httpTag)** for route decoration
-- **Event-driven Architecture** using `afterInit` for automatic route registration
-- **Authentication** with Passport and JWT
-- **SQLite Database** with user management
-- **Context System** for request-scoped data using `createContext()`
-- **OpenAPI/Swagger** documentation
-- **Comprehensive Integration Tests**
+- **Custom tags (`httpTag`)** for route metadata and discovery
+- **Hook-driven route registration** using `r.hook(...).on(events.ready)`
+- **Authentication** with task middleware and JWT
+- **SQLite database** with user management
+- **Async context** for request-scoped data using `r.asyncContext()`
+- **OpenAPI/Swagger** generation from task metadata
+- **Comprehensive integration tests**
 
 ## Features Demonstrated
 
@@ -31,59 +31,67 @@ The full power and simplicity of Runner.
 ### 1. Custom Tags System
 
 ```typescript
-// HTTP tag for marking tasks as endpoints
-const registerUserTask = task({
-  id: "app.tasks.auth.register",
-  tags: [
+const registerUserTask = r
+  .task("register")
+  .dependencies({ appConfig, createUserTask })
+  .tags([
     httpRoute.post("/api/auth/register", {
       summary: "Register a new user",
       requiresAuth: false,
       requestBodySchema: registerSchema,
+      responseSchema: registerResponseSchema,
     }),
-  ],
-  run: async (userData) => {
-    // Enforces API response because of the presence of the tag
-    /* ... */
-  },
-});
+  ])
+  .inputSchema(registerSchema)
+  .run(async (userData, { appConfig, createUserTask }) => {
+    const user = await createUserTask(userData);
+    // Generate token and return typed API response
+    return { success: true, data: { user } };
+  })
+  .build();
 ```
 
-### 2. Event-Driven Route Registration
+### 2. Hook-Driven Route Registration
 
 ```typescript
-// Listens to afterInit event to scan and register routes
-export const routeRegistrationTask = hook({
-  id: "app.tasks.routeRegistration",
-  on: r.system.events.ready,
-  run: async () => {
-    // Automatically discovers tasks with HTTP tags
-    // and registers them as Express routes
-  },
-});
+export const routeRegistrationHook = r
+  .hook("routeRegistration")
+  .on(events.ready)
+  .dependencies({
+    httpTag: httpTag.startup(),
+    taskRunner: resources.taskRunner,
+    expressServer: expressServerResource,
+  })
+  .run(async (_, { httpTag, taskRunner, expressServer }) => {
+    // Discover tagged tasks at startup and register Express handlers
+  })
+  .build();
 ```
 
-### 3. Context System
+### 3. Async Context
 
 ```typescript
-// User context for request-scoped data
-export const UserContext = createContext<UserSession>("user.session");
+export const RequestContext = r
+  .asyncContext<RequestData>("request")
+  .build();
 
-// Used in middleware and tasks
-const userSession = UserContext.use();
+// Used to provide request-scoped data before running a task
+await RequestContext.provide(requestData, () =>
+  taskRunner.run(task, taskInput),
+);
 ```
 
 ### 4. Middleware Integration
 
 ```typescript
-export const authMiddleware = defineMiddleware<AuthConfig>({
-  id: "app.middleware.auth",
-  run: async ({ task, next }, deps, config) => {
-    // JWT verification and user context setup
-    if (task) {
-      return UserContext.provide(userSession, () => next(task.input));
-    }
-  },
-});
+export const authMiddleware = r.middleware
+  .task<AuthMiddlewareConfig>("auth")
+  .dependencies({ userService: usersRepository, appConfig })
+  .run(async ({ task, next }, { userService, appConfig }, config) => {
+    // JWT verification and user async-context setup
+    return UserContext.provide(userSession, () => next(task?.input));
+  })
+  .build();
 ```
 
 ## Quick Start
@@ -140,10 +148,10 @@ export const authMiddleware = defineMiddleware<AuthConfig>({
 
 ### Resources
 
-- **Database Resource**: SQLite database with user table
-- **User Service Resource**: User CRUD operations
-- **Express Server Resource**: HTTP server lifecycle management
-- **HTTP Route Bridge Resource**: Connects Express routes to Runner tasks
+- **App resource**: Registers config, database, HTTP, and users modules under one root
+- **Database resource**: SQLite database with user table
+- **Users repository resource**: User CRUD operations
+- **Express server resource**: HTTP server lifecycle management
 
 ### Tasks
 
@@ -154,20 +162,24 @@ export const authMiddleware = defineMiddleware<AuthConfig>({
 
 ### Middleware
 
-- **Auth Middleware**: JWT verification and user context setup
+- **Auth task middleware**: JWT verification and user context setup
+
+### Hooks
+
+- **Route registration hook**: Scans `httpTag` entries on `events.ready` and wires Express routes + OpenAPI docs
 
 ### Tags
 
-- **HTTP Tag**: Route decoration with method, path, OpenAPI specs
+- **HTTP tag**: Route decoration with method, path, and OpenAPI metadata
 
 ## Framework Features Showcased
 
 1. **Dependency Injection**: All components declare their dependencies clearly
 2. **Resource Lifecycle**: Proper initialization and disposal
-3. **Event System**: Automatic route registration on `afterInit`
-4. **Context Management**: Request-scoped user and request data
+3. **Hooks and events**: Automatic route registration on `events.ready`
+4. **Async context**: Request-scoped user and request data
 5. **Middleware Chains**: Authentication and validation layers
-6. **Input Validation**: Schema validation using Zod
+6. **Input Validation**: Schema validation using Match
 7. **Error Handling**: Comprehensive error responses
 8. **Testing**: Full integration test suite
 
@@ -201,11 +213,11 @@ npm test
 
 ## Architecture Benefits
 
-This example showcases how BlueLibs Runner enables:
+This example showcases how Runner enables:
 
 1. **Separation of Concerns**: Business logic in tasks, infrastructure in resources
 2. **Declarative Configuration**: Route definitions as metadata tags
-3. **Type Safety**: Full TypeScript support throughout
+3. **Type Safety**: Full TypeScript support throughout the resource graph
 4. **Testability**: Easy to mock dependencies and test components
 5. **Maintainability**: Clear component boundaries and dependencies
 6. **Scalability**: Easy to add new endpoints and middleware

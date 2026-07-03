@@ -9,9 +9,6 @@ import {
 } from "./shared";
 import { fail } from "./utils";
 
-const INT32_MIN = -2147483648;
-const INT32_MAX = 2147483647;
-
 type BuiltInValidator<TReturn> = (
   value: unknown,
   context: MatchContext,
@@ -71,16 +68,11 @@ export const builtInMatcherDefinitions = Object.freeze({
   }),
   Integer: createSimpleBuiltInMatcherDefinition<"Match.Integer", number>(
     "Match.Integer",
-    "32-bit integer",
+    "integer",
     (value): value is number =>
-      typeof value === "number" &&
-      Number.isInteger(value) &&
-      value <= INT32_MAX &&
-      value >= INT32_MIN,
+      typeof value === "number" && Number.isInteger(value),
     () => ({
       type: "integer",
-      minimum: INT32_MIN,
-      maximum: INT32_MAX,
     }),
   ),
   PositiveInteger: createSimpleBuiltInMatcherDefinition<

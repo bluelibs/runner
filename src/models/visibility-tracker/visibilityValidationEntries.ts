@@ -3,7 +3,7 @@ import {
   getSubtreeTaskMiddlewareAttachment,
 } from "../../tools/subtreeMiddleware";
 import { getStoredSubtreePolicy } from "../../definers/subtreePolicy";
-import type { StoreRegistry } from "../StoreRegistry";
+import type { StoreRegistry } from "../store/StoreRegistry";
 import type {
   DependencyValidationEntry,
   MiddlewareVisibilityEntry,

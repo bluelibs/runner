@@ -28,6 +28,18 @@ export const globalEvents = {
     },
   }),
   /**
+   * Emitted when graceful drain did not finish within budget and Runner is
+   * about to start the cooperative abort window for in-flight work.
+   */
+  aborting: defineEvent({
+    id: "aborting",
+    meta: {
+      title: "System Aborting",
+      description:
+        "Emitted after drain budget expiry and right before Runner starts aborting cooperative in-flight work.",
+    },
+  }),
+  /**
    * Emitted when runtime.dispose() has entered shutdown lockdown
    * and right before resource-level `.dispose()` hooks execute.
    */
@@ -47,5 +59,6 @@ export const globalEvents = {
 export const globalEventsArray: IEvent<any>[] = [
   globalEvents.ready,
   globalEvents.disposing,
+  globalEvents.aborting,
   globalEvents.drained,
 ];

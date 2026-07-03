@@ -1,4 +1,4 @@
-import type { StoreRegistry } from "../StoreRegistry";
+import type { StoreRegistry } from "../store/StoreRegistry";
 import type { IDependentNode } from "./findCircularDependencies";
 import { isOptional, isEvent, isTag, isTagStartup } from "../../define";
 import {

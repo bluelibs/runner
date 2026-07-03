@@ -95,6 +95,22 @@ describe("LifecycleAdmissionController", () => {
     expect(controller.canAdmitTask(resourceCall)).toBe(true);
   });
 
+  it("switches to aborting after disposing and keeps shutdown admission rules", () => {
+    const controller = new LifecycleAdmissionController();
+    const runtimeCall = runtimeSource.runtime("runtime-api");
+    const resourceCall = runtimeSource.resource("app.resource-a");
+    const hookCall = runtimeSource.hook("hook-a");
+
+    controller.beginDisposing();
+    controller.allowShutdownResourceSource("app.resource-a");
+    controller.beginAborting();
+
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Aborting);
+    expect(controller.canAdmitTask(runtimeCall)).toBe(false);
+    expect(controller.canAdmitTask(resourceCall)).toBe(true);
+    expect(controller.canAdmitTask(hookCall)).toBe(false);
+  });
+
   it("keeps beginCoolingDown idempotent once shutdown has progressed", () => {
     const controller = new LifecycleAdmissionController();
 
@@ -124,6 +140,24 @@ describe("LifecycleAdmissionController", () => {
 
     controller.markDisposed();
     controller.beginDisposing();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Disposed);
+  });
+
+  it("keeps beginAborting idempotent once shutdown has progressed", () => {
+    const controller = new LifecycleAdmissionController();
+
+    controller.beginAborting();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Aborting);
+
+    controller.beginAborting();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Aborting);
+
+    controller.beginDrained();
+    controller.beginAborting();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Drained);
+
+    controller.markDisposed();
+    controller.beginAborting();
     expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Disposed);
   });
 

@@ -25,7 +25,7 @@ Runner is a strongly typed application composition framework built around explic
     - `/src/models/event/`: The `EmissionExecutor` and `ListenerRegistry` that handles sequential/parallel routing, reporting batches, and complex transaction rollbacks _during_ runtime.
     - `/src/models/runtime/`: Contains the `LifecycleAdmissionController` (phase states: Running -> Paused -> CoolingDown -> Discarding) and `RuntimeRecoveryController` logic.
     - `/src/models/dependency-processor/`: The graph topologically resolving topological DAGs.
-    - `/src/models/store-registry/`: Tag aggregators and internal flat map access mechanisms indexing definition schemas.
+    - `/src/models/store/store-registry/`: Tag aggregators and internal flat map access mechanisms indexing definition schemas.
     - `ExecutionContextStore.ts`: Context tracing and causal chain storage.
   - `/src/types/`: Centralized contract repositories defining `IResourceDefinition`, `ITaskDefinition`, symbol identities, and complex Type-level generic restrictions.
   - `/src/globals/`: Built-in native primitives available out of the box. Separated into `middleware/` (cache, circuitBreaker, etc.), `resources/` (eventManager, logger, store, etc.), and standalone `cron/`. Exposed via unified root files `globalMiddleware.ts` and `globalResources.ts`.

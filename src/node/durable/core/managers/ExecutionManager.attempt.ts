@@ -13,6 +13,7 @@ import { isTimeoutExceededError, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 import type { ExecutionLockState } from "./ExecutionManager.locking";
 import type { ExecutionCancellationState } from "./ExecutionManager.cancellation";
+import { isDurableShutdownInterruptionError } from "../shutdownInterruption";
 
 export type ExecutionAttemptGuards = {
   assertLockOwnership: () => void;
@@ -184,6 +185,7 @@ export async function handleExecutionAttemptError(params: {
   runningExecution: Execution<unknown, unknown>;
   guards: ExecutionAttemptGuards;
   executionLockState: ExecutionLockState;
+  getShutdownInterruptionReason: () => string | null;
   transitionToCancelled: (p: {
     execution: Execution<unknown, unknown>;
     reason: string;
@@ -242,6 +244,15 @@ export async function handleExecutionAttemptError(params: {
       reason: cancellationState.reason,
       canPersistOutcome: params.guards.canPersistOutcome,
     });
+    return;
+  }
+
+  if (
+    isDurableShutdownInterruptionError(
+      params.error,
+      params.getShutdownInterruptionReason(),
+    )
+  ) {
     return;
   }
 

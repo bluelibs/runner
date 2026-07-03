@@ -22,6 +22,7 @@ function createController() {
     store: {
       beginCoolingDown: jest.fn(),
       beginDisposing: jest.fn(),
+      beginAborting: jest.fn(),
       cooldown: jest.fn(async () => undefined),
       beginDrained: jest.fn(),
       waitForDrain: jest.fn(async () => true),

@@ -330,6 +330,29 @@ describe("RedisCache", () => {
     expect(await redis.hget((cache as any).entrySizesKey, entryId)).toBeNull();
   });
 
+  it("returns a presence-aware envelope from getEntry and cleans poisoned hits", async () => {
+    const redis = new FakeRedis();
+    const cache = new RedisCache({
+      options: {},
+      prefix: "tests:redis:get-entry",
+      redis,
+      serializer,
+      taskId: "tests-redis-get-entry",
+    });
+
+    await expect(cache.getEntry("missing")).resolves.toBeUndefined();
+
+    await cache.set("key", "value");
+    await expect(cache.getEntry("key")).resolves.toEqual({ value: "value" });
+
+    // A poisoned payload is a miss and must purge the orphaned bookkeeping in
+    // the same single round-trip the hit path uses.
+    const entryId = (cache as any).createEntryId("key");
+    await redis.set((cache as any).getEntryDataKey(entryId), "not-valid-json");
+    await expect(cache.getEntry("key")).resolves.toBeUndefined();
+    expect(await redis.hget((cache as any).entrySizesKey, entryId)).toBeNull();
+  });
+
   it("cleans stale bookkeeping and orphaned entries", async () => {
     const redis = new FakeRedis();
     const cache = new RedisCache({

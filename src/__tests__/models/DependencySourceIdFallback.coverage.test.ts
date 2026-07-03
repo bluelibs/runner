@@ -5,8 +5,8 @@ describe("dependency source-id fallback coverage", () => {
 
   it("covers DependencyExtractor fallback branches when store lookup resolution misses", () => {
     jest.isolateModules(() => {
-      jest.doMock("../../models/StoreLookup", () => {
-        const actual = jest.requireActual("../../models/StoreLookup");
+      jest.doMock("../../models/store/StoreLookup", () => {
+        const actual = jest.requireActual("../../models/store/StoreLookup");
         return {
           ...actual,
           resolveCanonicalIdFromStore: () => null,
@@ -64,8 +64,8 @@ describe("dependency source-id fallback coverage", () => {
 
   it("covers ResourceScheduler fallback branches when store lookup resolution misses", () => {
     jest.isolateModules(() => {
-      jest.doMock("../../models/StoreLookup", () => {
-        const actual = jest.requireActual("../../models/StoreLookup");
+      jest.doMock("../../models/store/StoreLookup", () => {
+        const actual = jest.requireActual("../../models/store/StoreLookup");
         return {
           ...actual,
           resolveCanonicalIdFromStore: () => null,

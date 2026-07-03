@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Store } from "../../../models/Store";
+import type { Store } from "../../../models/store/Store";
 import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask, ITask } from "../../../types/task";
 import type { IDurableContext } from "./interfaces/context";
@@ -26,7 +26,7 @@ import { durableExecutionInvariantError } from "../../../errors";
 import {
   resolveRequestedIdFromStore,
   toCanonicalDefinitionFromStore,
-} from "../../../models/StoreLookup";
+} from "../../../models/store/StoreLookup";
 
 export type {
   DurableExecutionDateFilter,

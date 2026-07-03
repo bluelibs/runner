@@ -1,6 +1,7 @@
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
+  JournalKeyBag,
   ResolveValidationSchemaInput,
   ITaskMiddlewareDefinition,
   IMiddlewareMeta,
@@ -17,8 +18,19 @@ import type {
   TaskMiddlewareFluentBuilderAfterRun,
   TaskMiddlewareFluentBuilderBeforeRun,
 } from "./task.interface";
-import type { TaskMwState } from "./types";
-import { cloneTask, mergeArray, mergeDependencies } from "./utils";
+import type {
+  MergeBuilderObjects,
+  ReplaceTaskMwStateConfig,
+  ReplaceTaskMwStateDeps,
+  ReplaceTaskMwStateTags,
+  TaskMwState,
+} from "./types";
+import {
+  cloneTask,
+  cloneTaskWithJournal,
+  mergeArray,
+  mergeDependencies,
+} from "./utils";
 
 /**
  * Creates a TaskMiddlewareFluentBuilder from the given state.
@@ -29,10 +41,11 @@ export function makeTaskMiddlewareBuilder<
   Out,
   D extends DependencyMapType,
   TTags extends TaskMiddlewareTagType[],
+  TJournalKeys extends JournalKeyBag,
   THasRun extends boolean = false,
 >(
-  state: TaskMwState<C, In, Out, D, TTags>,
-): TaskMiddlewareFluentBuilder<C, In, Out, D, TTags, THasRun> {
+  state: TaskMwState<C, In, Out, D, TTags, TJournalKeys>,
+): TaskMiddlewareFluentBuilder<C, In, Out, D, TTags, TJournalKeys, THasRun> {
   const builder = {
     id: state.id,
 
@@ -48,42 +61,38 @@ export function makeTaskMiddlewareBuilder<
       );
 
       const next = cloneTask<
-        C,
-        In,
-        Out,
-        D,
-        TTags,
-        C,
-        In,
-        Out,
-        D & TNewDeps,
-        TTags
+        typeof state,
+        ReplaceTaskMwStateDeps<typeof state, D & TNewDeps>
       >(state, {
         dependencies: nextDependencies as D & TNewDeps,
       });
 
       if (override) {
         const overridden = cloneTask<
-          C,
-          In,
-          Out,
-          D & TNewDeps,
-          TTags,
+          typeof next,
+          ReplaceTaskMwStateDeps<typeof next, TNewDeps>
+        >(next, {
+          dependencies: nextDependencies as TNewDeps,
+        });
+        return makeTaskMiddlewareBuilder<
           C,
           In,
           Out,
           TNewDeps,
-          TTags
-        >(next, {
-          dependencies: nextDependencies as TNewDeps,
-        });
-        return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps, TTags, false>(
-          overridden,
-        );
+          TTags,
+          TJournalKeys,
+          false
+        >(overridden);
       }
-      return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps, TTags, false>(
-        next,
-      );
+      return makeTaskMiddlewareBuilder<
+        C,
+        In,
+        Out,
+        D & TNewDeps,
+        TTags,
+        TJournalKeys,
+        false
+      >(next);
     },
 
     configSchema<
@@ -93,16 +102,11 @@ export function makeTaskMiddlewareBuilder<
       > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
     >(schema: TSchema) {
       const next = cloneTask<
-        C,
-        In,
-        Out,
-        D,
-        TTags,
-        ResolveValidationSchemaInput<TNew, TSchema>,
-        In,
-        Out,
-        D,
-        TTags
+        typeof state,
+        ReplaceTaskMwStateConfig<
+          typeof state,
+          ResolveValidationSchemaInput<TNew, TSchema>
+        >
       >(state, {
         configSchema: schema,
       });
@@ -112,6 +116,7 @@ export function makeTaskMiddlewareBuilder<
         Out,
         D,
         TTags,
+        TJournalKeys,
         false
       >(next);
     },
@@ -125,14 +130,68 @@ export function makeTaskMiddlewareBuilder<
       return builder.configSchema(schema);
     },
 
-    run(fn: ITaskMiddlewareDefinition<C, In, Out, D, TTags>["run"]) {
+    journal<TNewJournalKeys extends JournalKeyBag>(
+      journalKeys: TNewJournalKeys,
+      options?: { override?: boolean },
+    ) {
+      const override = options?.override ?? false;
+
+      if (override) {
+        return makeTaskMiddlewareBuilder<
+          C,
+          In,
+          Out,
+          D,
+          TTags,
+          TNewJournalKeys,
+          false
+        >(cloneTaskWithJournal(state, journalKeys));
+      }
+
+      const nextJournal = {
+        ...state.journal,
+        ...journalKeys,
+      } as MergeBuilderObjects<TJournalKeys, TNewJournalKeys>;
+
+      const next = cloneTaskWithJournal(state, nextJournal);
+
+      return makeTaskMiddlewareBuilder<
+        C,
+        In,
+        Out,
+        D,
+        TTags,
+        MergeBuilderObjects<TJournalKeys, TNewJournalKeys>,
+        false
+      >(next);
+    },
+
+    run(
+      fn: ITaskMiddlewareDefinition<C, In, Out, D, TTags, TJournalKeys>["run"],
+    ) {
       const next = cloneTask(state, { run: fn as typeof state.run });
-      return makeTaskMiddlewareBuilder<C, In, Out, D, TTags, true>(next);
+      return makeTaskMiddlewareBuilder<
+        C,
+        In,
+        Out,
+        D,
+        TTags,
+        TJournalKeys,
+        true
+      >(next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
       const next = cloneTask(state, { meta: m as IMiddlewareMeta });
-      return makeTaskMiddlewareBuilder<C, In, Out, D, TTags, THasRun>(next);
+      return makeTaskMiddlewareBuilder<
+        C,
+        In,
+        Out,
+        D,
+        TTags,
+        TJournalKeys,
+        THasRun
+      >(next);
     },
 
     tags<TNewTags extends TaskMiddlewareTagType[]>(
@@ -142,13 +201,21 @@ export function makeTaskMiddlewareBuilder<
       const override = options?.override ?? false;
       if (override) {
         const nextTags = mergeArray(state.tags, t, true) as TNewTags;
-        const next = cloneTask<C, In, Out, D, TTags, C, In, Out, D, TNewTags>(
-          state,
-          {
-            tags: nextTags,
-          },
-        );
-        return makeTaskMiddlewareBuilder<C, In, Out, D, TNewTags, false>(next);
+        const next = cloneTask<
+          typeof state,
+          ReplaceTaskMwStateTags<typeof state, TNewTags>
+        >(state, {
+          tags: nextTags,
+        });
+        return makeTaskMiddlewareBuilder<
+          C,
+          In,
+          Out,
+          D,
+          TNewTags,
+          TJournalKeys,
+          false
+        >(next);
       }
 
       const nextTags = mergeArray(state.tags, t, false) as [
@@ -156,16 +223,8 @@ export function makeTaskMiddlewareBuilder<
         ...TNewTags,
       ];
       const next = cloneTask<
-        C,
-        In,
-        Out,
-        D,
-        TTags,
-        C,
-        In,
-        Out,
-        D,
-        [...TTags, ...TNewTags]
+        typeof state,
+        ReplaceTaskMwStateTags<typeof state, [...TTags, ...TNewTags]>
       >(state, {
         tags: nextTags,
       });
@@ -175,13 +234,22 @@ export function makeTaskMiddlewareBuilder<
         Out,
         D,
         [...TTags, ...TNewTags],
+        TJournalKeys,
         false
       >(next);
     },
 
     throws(list: ThrowsList) {
       const next = cloneTask(state, { throws: list });
-      return makeTaskMiddlewareBuilder<C, In, Out, D, TTags, THasRun>(next);
+      return makeTaskMiddlewareBuilder<
+        C,
+        In,
+        Out,
+        D,
+        TTags,
+        TJournalKeys,
+        THasRun
+      >(next);
     },
 
     build() {
@@ -196,7 +264,14 @@ export function makeTaskMiddlewareBuilder<
       }
 
       const middleware = defineTaskMiddleware({
-        ...(state as ITaskMiddlewareDefinition<C, In, Out, D, TTags>),
+        ...(state as ITaskMiddlewareDefinition<
+          C,
+          In,
+          Out,
+          D,
+          TTags,
+          TJournalKeys
+        >),
       });
       return deepFreeze({
         ...middleware,
@@ -205,7 +280,14 @@ export function makeTaskMiddlewareBuilder<
     },
   };
 
-  return builder as TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D, TTags> &
-    TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags> &
-    TaskMiddlewareFluentBuilder<C, In, Out, D, TTags, THasRun>;
+  return builder as unknown as TaskMiddlewareFluentBuilderBeforeRun<
+    C,
+    In,
+    Out,
+    D,
+    TTags,
+    TJournalKeys
+  > &
+    TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D, TTags, TJournalKeys> &
+    TaskMiddlewareFluentBuilder<C, In, Out, D, TTags, TJournalKeys, THasRun>;
 }

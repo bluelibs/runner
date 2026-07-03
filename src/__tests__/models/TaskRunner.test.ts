@@ -1,5 +1,5 @@
 import { TaskRunner } from "../../models/TaskRunner";
-import { Store } from "../../models/Store";
+import { Store } from "../../models/store/Store";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { runtimeSource } from "../../types/runtimeSource";
 import { cancellationError } from "../../errors";

@@ -3,7 +3,7 @@ import {
   type CacheProvider,
   cacheMiddleware,
   cacheResource,
-} from "../../../globals/middleware/cache.middleware";
+} from "../../../globals/middleware/cache/middleware";
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
 import {
   debounceTaskMiddleware,
@@ -100,8 +100,10 @@ describe("default keyed middleware behavior", () => {
           createCalls.push(taskId);
           return {
             get: async () => undefined,
+            getEntry: async () => undefined,
             set: async () => undefined,
             clear: async () => undefined,
+            invalidateKeys: async () => 1,
             invalidateRefs: async (refs) => {
               invalidationCalls.push({ refs, taskId });
               return 1;

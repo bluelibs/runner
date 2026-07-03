@@ -17,7 +17,12 @@ import type {
   ResourceMiddlewareFluentBuilderAfterRun,
   ResourceMiddlewareFluentBuilderBeforeRun,
 } from "./resource.interface";
-import type { ResMwState } from "./types";
+import type {
+  ReplaceResMwStateConfig,
+  ReplaceResMwStateDeps,
+  ReplaceResMwStateTags,
+  ResMwState,
+} from "./types";
 import { cloneRes, mergeArray, mergeDependencies } from "./utils";
 
 /**
@@ -48,32 +53,16 @@ export function makeResourceMiddlewareBuilder<
       );
 
       const next = cloneRes<
-        C,
-        In,
-        Out,
-        D,
-        TTags,
-        C,
-        In,
-        Out,
-        D & TNewDeps,
-        TTags
+        typeof state,
+        ReplaceResMwStateDeps<typeof state, D & TNewDeps>
       >(state, {
         dependencies: nextDependencies as D & TNewDeps,
       });
 
       if (override) {
         const overridden = cloneRes<
-          C,
-          In,
-          Out,
-          D & TNewDeps,
-          TTags,
-          C,
-          In,
-          Out,
-          TNewDeps,
-          TTags
+          typeof next,
+          ReplaceResMwStateDeps<typeof next, TNewDeps>
         >(next, {
           dependencies: nextDependencies as TNewDeps,
         });
@@ -103,16 +92,11 @@ export function makeResourceMiddlewareBuilder<
       > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
     >(schema: TSchema) {
       const next = cloneRes<
-        C,
-        In,
-        Out,
-        D,
-        TTags,
-        ResolveValidationSchemaInput<TNew, TSchema>,
-        In,
-        Out,
-        D,
-        TTags
+        typeof state,
+        ReplaceResMwStateConfig<
+          typeof state,
+          ResolveValidationSchemaInput<TNew, TSchema>
+        >
       >(state, {
         configSchema: schema,
       });
@@ -152,12 +136,12 @@ export function makeResourceMiddlewareBuilder<
       const override = options?.override ?? false;
       if (override) {
         const nextTags = mergeArray(state.tags, t, true) as TNewTags;
-        const next = cloneRes<C, In, Out, D, TTags, C, In, Out, D, TNewTags>(
-          state,
-          {
-            tags: nextTags,
-          },
-        );
+        const next = cloneRes<
+          typeof state,
+          ReplaceResMwStateTags<typeof state, TNewTags>
+        >(state, {
+          tags: nextTags,
+        });
         return makeResourceMiddlewareBuilder<C, In, Out, D, TNewTags, false>(
           next,
         );
@@ -168,16 +152,8 @@ export function makeResourceMiddlewareBuilder<
         ...TNewTags,
       ];
       const next = cloneRes<
-        C,
-        In,
-        Out,
-        D,
-        TTags,
-        C,
-        In,
-        Out,
-        D,
-        [...TTags, ...TNewTags]
+        typeof state,
+        ReplaceResMwStateTags<typeof state, [...TTags, ...TNewTags]>
       >(state, {
         tags: nextTags,
       });

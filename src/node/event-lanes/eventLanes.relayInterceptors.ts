@@ -1,5 +1,5 @@
 import type { EventManager } from "../../models/EventManager";
-import type { Store } from "../../models/Store";
+import type { Store } from "../../models/store/Store";
 import type { SerializerLike } from "../../serializer";
 import type { EventLanesResourceContext } from "./EventLanesInternals";
 import { isRelayEmission } from "./EventLanesInternals";

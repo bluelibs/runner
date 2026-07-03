@@ -16,7 +16,7 @@ import {
   unknownItemTypeError,
 } from "../errors";
 import { RunnerMode } from "../types/runner";
-import { StoreRegistry } from "./StoreRegistry";
+import { StoreRegistry } from "./store/StoreRegistry";
 
 type OverrideTargetType =
   | "Task"

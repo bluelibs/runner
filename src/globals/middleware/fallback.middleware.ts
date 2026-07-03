@@ -1,5 +1,5 @@
 import { isTask } from "../../define";
-import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { taskMiddlewareBuilder } from "../../definers/builders/middleware";
 import type { ITask } from "../../defs";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalResources } from "../globalResources";
@@ -33,65 +33,63 @@ const fallbackConfigPattern = Match.ObjectIncluding({
 });
 
 /**
- * Journal keys exposed by the fallback middleware.
- * Use these to access shared state from downstream middleware or tasks.
- */
-export const journalKeys = {
-  /** Whether the fallback path was taken (true) or primary succeeded (false) */
-  active: journalHelper.createKey<boolean>(
-    "runner.middleware.task.fallback.active",
-  ),
-  /** The error that triggered the fallback (only set when active is true) */
-  error: journalHelper.createKey<Error>(
-    "runner.middleware.task.fallback.error",
-  ),
-} as const;
-
-/**
  * Fallback middleware: provides a backup value or execution if the main task fails.
  */
-export const fallbackTaskMiddleware = defineTaskMiddleware({
-  id: "fallback",
-  meta: {
+export const fallbackTaskMiddleware = taskMiddlewareBuilder("fallback")
+  .journal({
+    /** Whether the fallback path was taken (true) or primary succeeded (false). */
+    active: journalHelper.createKey<boolean>("active"),
+    /** The error that triggered the fallback, when the fallback path runs. */
+    error: journalHelper.createKey<Error>("error"),
+  })
+  .meta({
     title: "Fallback",
     description:
       "Returns a fallback value, resolver result, or backup task result when the wrapped task fails.",
-  },
-  configSchema: fallbackConfigPattern,
-  dependencies: {
+  })
+  .configSchema(fallbackConfigPattern)
+  .dependencies({
     taskRunner: globalResources.taskRunner,
-  },
-  async run(
-    { task, next, journal },
-    { taskRunner },
-    config: FallbackMiddlewareConfig,
-  ) {
-    // Set default: fallback not active
-    journal.set(journalKeys.active, false, { override: true });
+  })
+  .run(
+    async (
+      { task, next, journal },
+      { taskRunner },
+      config: FallbackMiddlewareConfig,
+    ) => {
+      // Set default: fallback not active
+      journal.set(fallbackTaskMiddleware.journalKeys.active, false, {
+        override: true,
+      });
 
-    try {
-      return await next(task.input);
-    } catch (error) {
-      const { fallback } = config;
+      try {
+        return await next(task.input);
+      } catch (error) {
+        const { fallback } = config;
 
-      // Mark fallback as active and record the error
-      journal.set(journalKeys.active, true, { override: true });
-      journal.set(journalKeys.error, error as Error, { override: true });
-
-      if (isTask(fallback)) {
-        // If it's a task, run it with the same input using the taskRunner
-        return await taskRunner.run(fallback, task.input, {
-          source: runtimeSource.taskMiddleware("fallback"),
+        // Mark fallback as active and record the error
+        journal.set(fallbackTaskMiddleware.journalKeys.active, true, {
+          override: true,
         });
-      }
+        journal.set(fallbackTaskMiddleware.journalKeys.error, error as Error, {
+          override: true,
+        });
 
-      if (typeof fallback === "function") {
-        // If it's a function, call it with the error and task input
-        return await fallback(error, task.input);
-      }
+        if (isTask(fallback)) {
+          // If it's a task, run it with the same input using the taskRunner
+          return await taskRunner.run(fallback, task.input, {
+            source: runtimeSource.taskMiddleware("fallback"),
+          });
+        }
 
-      // Otherwise, return the fallback value directly
-      return fallback;
-    }
-  },
-});
+        if (typeof fallback === "function") {
+          // If it's a function, call it with the error and task input
+          return await fallback(error, task.input);
+        }
+
+        // Otherwise, return the fallback value directly
+        return fallback;
+      }
+    },
+  )
+  .build();

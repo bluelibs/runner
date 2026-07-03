@@ -7,9 +7,12 @@ import {
   healthReportEntryNotFoundError,
   runtimeElementNotFoundError,
 } from "../errors";
-import type { Store } from "./Store";
+import type { Store } from "./store/Store";
 import type { IHealthReporter } from "../types/runner";
-import { extractRequestedId, resolveCanonicalIdFromStore } from "./StoreLookup";
+import {
+  extractRequestedId,
+  resolveCanonicalIdFromStore,
+} from "./store/StoreLookup";
 
 export type HealthReporterAccessPolicy = {
   ensureAvailable?: () => void;

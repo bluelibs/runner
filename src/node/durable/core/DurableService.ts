@@ -240,6 +240,10 @@ export class DurableService implements IDurableService {
     }
   }
 
+  interruptActiveAttempts(reason?: string): void {
+    this.executionManager.interruptActiveAttempts(reason);
+  }
+
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
@@ -510,11 +514,7 @@ export class DurableService implements IDurableService {
   }
 
   private assertCanStartDurableExecution(methodName: string): void {
-    if (
-      this.lifecycleState === "running" ||
-      this.lifecycleState === "cooldown" ||
-      this.lifecycleState === "disposing"
-    ) {
+    if (this.lifecycleState === "running") {
       return;
     }
 
@@ -526,17 +526,13 @@ export class DurableService implements IDurableService {
   }
 
   private assertCanDeliverSignal(methodName: string): void {
-    if (
-      this.lifecycleState === "running" ||
-      this.lifecycleState === "cooldown" ||
-      this.lifecycleState === "disposing"
-    ) {
+    if (this.lifecycleState === "running") {
       return;
     }
 
     durableExecutionInvariantError.throw({
       message:
-        `${methodName} cannot interact with this durable runtime because shutdown is already disposing resources. ` +
+        `${methodName} cannot admit new durable signals because this durable runtime is shutting down. ` +
         "Wait for shutdown to complete or create a fresh runtime instance.",
     });
   }

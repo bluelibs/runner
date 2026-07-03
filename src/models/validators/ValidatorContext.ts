@@ -1,6 +1,6 @@
-import type { StoreRegistry } from "../StoreRegistry";
+import type { StoreRegistry } from "../store/StoreRegistry";
 import type { ITaggable } from "../../defs";
-import { StoreLookup } from "../StoreLookup";
+import { StoreLookup } from "../store/StoreLookup";
 
 type SanityCheckTaggable = ITaggable & {
   id: string;
