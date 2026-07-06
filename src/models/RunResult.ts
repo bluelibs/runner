@@ -38,6 +38,8 @@ import { globalResources } from "../globals/globalResources";
 import type { ITimers } from "../types/timers";
 import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
 
+const runtimeApiSource = runtimeSource.runtime("runtime.api");
+
 /**
  * Options for configuring lazy resource loading behavior.
  * Used to enable on-demand resource initialization to improve startup time.
@@ -363,7 +365,7 @@ export class RunResult<V> implements IRuntime<V> {
 
     return this.taskRunner.run(resolvedTask, input, {
       ...(options || {}),
-      source: runtimeSource.runtime("runtime.api"),
+      source: runtimeApiSource,
     }) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
   };
 
@@ -413,7 +415,7 @@ export class RunResult<V> implements IRuntime<V> {
     }
 
     return this.eventManager.emit(event, payload, {
-      source: runtimeSource.runtime("runtime.api"),
+      source: runtimeApiSource,
       ...(options ?? {}),
     });
   }) as {

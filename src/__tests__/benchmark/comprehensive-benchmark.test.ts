@@ -5,9 +5,9 @@ import {
   defineHook,
   defineTaskMiddleware,
 } from "../../define";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { run } from "../../run";
 import { middleware, resources } from "../../index";
 
@@ -182,9 +182,63 @@ describe("Comprehensive Performance Benchmarks", () => {
     const app = defineResource({
       id: "benchmark-middleware-app",
       register: [...middlewares, task],
+      init: async () => "ready",
+    });
+
+    const { dispose, runTask } = await run(app);
+
+    await runTask(task, 1);
+
+    const start = performance.now();
+    for (let i = 0; i < iterations; i++) {
+      await runTask(task, i);
+    }
+    const duration = performance.now() - start;
+
+    results.middlewareTaskExecution = {
+      iterations,
+      middlewareCount,
+      phase: "runtime",
+      totalTimeMs: parseFloat(duration.toFixed(2)),
+      avgTimePerTaskMs: parseFloat((duration / iterations).toFixed(4)),
+      tasksPerSecond: Math.round(iterations / (duration / 1000)),
+      middlewareOverheadMs: parseFloat(
+        (
+          duration / iterations -
+          results.basicTaskExecution.avgTimePerTaskMs.median
+        ).toFixed(4),
+      ),
+    };
+
+    console.log(
+      `Runtime task execution with ${middlewareCount} middlewares: ${results.middlewareTaskExecution.tasksPerSecond} tasks/sec`,
+    );
+
+    await dispose();
+  });
+
+  it("should benchmark init-time task execution with middleware", async () => {
+    const iterations = 1000;
+    const middlewareCount = 5;
+
+    const middlewares = Array.from({ length: middlewareCount }, (_, idx) =>
+      defineTaskMiddleware({
+        id: `benchmark-init-middleware-${idx}`,
+        run: async ({ next, task }) => next(task?.input),
+      }),
+    );
+
+    const task = defineTask({
+      id: "benchmark-init-middleware-task",
+      middleware: middlewares,
+      run: async (n: number) => n * 2,
+    });
+
+    const app = defineResource({
+      id: "benchmark-init-middleware-app",
+      register: [...middlewares, task],
       dependencies: { task },
       async init(_, { task }) {
-        // Warm-up
         await task(1);
 
         const start = performance.now();
@@ -193,28 +247,23 @@ describe("Comprehensive Performance Benchmarks", () => {
         }
         const duration = performance.now() - start;
 
-        results.middlewareTaskExecution = {
+        results.initMiddlewareTaskExecution = {
           iterations,
           middlewareCount,
+          phase: "init",
           totalTimeMs: parseFloat(duration.toFixed(2)),
           avgTimePerTaskMs: parseFloat((duration / iterations).toFixed(4)),
           tasksPerSecond: Math.round(iterations / (duration / 1000)),
-          middlewareOverheadMs: parseFloat(
-            (
-              duration / iterations -
-              results.basicTaskExecution.avgTimePerTaskMs.median
-            ).toFixed(4),
-          ),
         };
-
-        console.log(
-          `Task execution with ${middlewareCount} middlewares: ${results.middlewareTaskExecution.tasksPerSecond} tasks/sec`,
-        );
       },
     });
 
     const { dispose } = await run(app);
     await dispose();
+
+    console.log(
+      `Init-time task execution with ${middlewareCount} middlewares: ${results.initMiddlewareTaskExecution.tasksPerSecond} tasks/sec`,
+    );
   });
 
   it("should benchmark resource initialization", async () => {
@@ -284,11 +333,70 @@ describe("Comprehensive Performance Benchmarks", () => {
     const app = defineResource({
       id: "benchmark-event-app",
       register: [testEvent, eventHandler, emitterTask],
+      init: async () => "ready",
+    });
+
+    const { dispose, runTask } = await run(app);
+
+    await runTask(emitterTask, 1);
+    eventHandlerCallCount = 0;
+
+    const start = performance.now();
+    for (let i = 0; i < iterations; i++) {
+      await runTask(emitterTask, i);
+    }
+    const duration = performance.now() - start;
+
+    results.eventEmissionAndHandling = {
+      iterations,
+      phase: "runtime",
+      totalTimeMs: parseFloat(duration.toFixed(2)),
+      avgTimePerEventMs: parseFloat((duration / iterations).toFixed(4)),
+      eventsPerSecond: Math.round(iterations / (duration / 1000)),
+      eventHandlerCallCount,
+    };
+
+    await dispose();
+
+    console.log(
+      `Runtime event emission: ${results.eventEmissionAndHandling.eventsPerSecond} events/sec`,
+    );
+    expect(eventHandlerCallCount).toBe(iterations);
+  });
+
+  it("should benchmark init-time event emission and handling", async () => {
+    const iterations = 500;
+    let eventHandlerCallCount = 0;
+
+    const testEvent = defineEvent<{ value: number }>({
+      id: "benchmark-init-event",
+    });
+
+    const eventHandler = defineHook({
+      id: "benchmark-init-event-handler",
+      on: testEvent,
+      run: async ({ data }) => {
+        eventHandlerCallCount++;
+        return data.value * 2;
+      },
+    });
+
+    const emitterTask = defineTask({
+      id: "benchmark-init-event-emitter",
+      dependencies: { testEvent },
+      run: async (value: number, { testEvent }) => {
+        await testEvent({ value });
+        return value;
+      },
+    });
+
+    const app = defineResource({
+      id: "benchmark-init-event-app",
+      register: [testEvent, eventHandler, emitterTask],
       dependencies: { emitterTask },
       async init(_, { emitterTask }) {
-        // Warm-up
         await emitterTask(1);
-        eventHandlerCallCount = 0; // Reset after warm-up
+        eventHandlerCallCount = 0;
 
         const start = performance.now();
         for (let i = 0; i < iterations; i++) {
@@ -296,22 +404,23 @@ describe("Comprehensive Performance Benchmarks", () => {
         }
         const duration = performance.now() - start;
 
-        results.eventEmissionAndHandling = {
+        results.initEventEmissionAndHandling = {
           iterations,
+          phase: "init",
           totalTimeMs: parseFloat(duration.toFixed(2)),
           avgTimePerEventMs: parseFloat((duration / iterations).toFixed(4)),
           eventsPerSecond: Math.round(iterations / (duration / 1000)),
           eventHandlerCallCount,
         };
-
-        console.log(
-          `Event emission: ${results.eventEmissionAndHandling.eventsPerSecond} events/sec`,
-        );
       },
     });
 
     const { dispose } = await run(app);
     await dispose();
+
+    console.log(
+      `Init-time event emission: ${results.initEventEmissionAndHandling.eventsPerSecond} events/sec`,
+    );
     expect(eventHandlerCallCount).toBe(iterations);
   });
 
@@ -398,49 +507,48 @@ describe("Comprehensive Performance Benchmarks", () => {
     const app = defineResource({
       id: "benchmark-cache-app",
       register: [resources.cache, expensiveTask],
-      dependencies: { expensiveTask },
-      async init(_, { expensiveTask }) {
-        // Benchmark without cache (first calls)
-        const start1 = performance.now();
-        for (let i = 0; i < iterations; i++) {
-          await expensiveTask(i);
-        }
-        const withoutCacheDuration = performance.now() - start1;
-
-        // Benchmark with cache hits (repeated calls)
-        const start2 = performance.now();
-        for (let i = 0; i < cacheHitIterations; i++) {
-          await expensiveTask(i % 10); // Reuse same 10 values to ensure cache hits
-        }
-        const withCacheDuration = performance.now() - start2;
-
-        results.cacheMiddleware = {
-          iterationsWithoutCache: iterations,
-          iterationsWithCache: cacheHitIterations,
-          timeWithoutCacheMs: parseFloat(withoutCacheDuration.toFixed(2)),
-          timeWithCacheMs: parseFloat(withCacheDuration.toFixed(2)),
-          avgTimeWithoutCacheMs: parseFloat(
-            (withoutCacheDuration / iterations).toFixed(4),
-          ),
-          avgTimeWithCacheMs: parseFloat(
-            (withCacheDuration / cacheHitIterations).toFixed(4),
-          ),
-          speedupFactor: parseFloat(
-            (
-              withoutCacheDuration /
-              iterations /
-              (withCacheDuration / cacheHitIterations)
-            ).toFixed(2),
-          ),
-        };
-
-        console.log(
-          `Cache middleware speedup: ${results.cacheMiddleware.speedupFactor}x faster with cache hits`,
-        );
-      },
+      init: async () => "ready",
     });
 
-    const { dispose } = await run(app);
+    const { dispose, runTask } = await run(app);
+
+    const start1 = performance.now();
+    for (let i = 0; i < iterations; i++) {
+      await runTask(expensiveTask, i);
+    }
+    const withoutCacheDuration = performance.now() - start1;
+
+    const start2 = performance.now();
+    for (let i = 0; i < cacheHitIterations; i++) {
+      await runTask(expensiveTask, i % 10);
+    }
+    const withCacheDuration = performance.now() - start2;
+
+    results.cacheMiddleware = {
+      iterationsWithoutCache: iterations,
+      iterationsWithCache: cacheHitIterations,
+      phase: "runtime",
+      timeWithoutCacheMs: parseFloat(withoutCacheDuration.toFixed(2)),
+      timeWithCacheMs: parseFloat(withCacheDuration.toFixed(2)),
+      avgTimeWithoutCacheMs: parseFloat(
+        (withoutCacheDuration / iterations).toFixed(4),
+      ),
+      avgTimeWithCacheMs: parseFloat(
+        (withCacheDuration / cacheHitIterations).toFixed(4),
+      ),
+      speedupFactor: parseFloat(
+        (
+          withoutCacheDuration /
+          iterations /
+          (withCacheDuration / cacheHitIterations)
+        ).toFixed(2),
+      ),
+    };
+
+    console.log(
+      `Runtime cache middleware speedup: ${results.cacheMiddleware.speedupFactor}x faster with cache hits`,
+    );
+
     await dispose();
   });
 

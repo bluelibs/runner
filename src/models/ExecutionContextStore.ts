@@ -75,6 +75,21 @@ function getSharedExecutionContextStore(): IAsyncLocalStorage<ActiveExecutionCon
   return sharedStore;
 }
 
+function getExistingSharedExecutionContextStore(): IAsyncLocalStorage<ActiveExecutionContext | null> | null {
+  if (!sharedStore) {
+    return null;
+  }
+
+  const platform = getPlatform();
+  if (sharedStorePlatform !== platform) {
+    sharedStorePlatform = platform;
+    sharedStore = undefined;
+    return null;
+  }
+
+  return sharedStore;
+}
+
 function toSnapshot(
   value: ActiveExecutionContext | null | undefined,
 ): ExecutionContextSnapshot | undefined {
@@ -505,6 +520,34 @@ export class ExecutionContextStore {
   }
 
   /**
+   * Executes `fn` with a lazily-created execution frame.
+   *
+   * Frame creation can be surprisingly visible in the hot path because it usually
+   * includes timestamp allocation. Keeping it lazy lets disabled execution
+   * context stay close to a direct function call while preserving the same
+   * semantics whenever context tracking is enabled.
+   */
+  runWithFrameFactory<T>(
+    createFrame: () => ExecutionFrame,
+    fn: () => T,
+    options?: { signal?: AbortSignal },
+  ): T {
+    if (!this.isEnabled) {
+      return this.runWithoutContext(
+        fn,
+        getExistingSharedExecutionContextStore(),
+      );
+    }
+
+    const store = getSharedExecutionContextStore();
+    if (!store) {
+      return this.runWithoutContext(fn, store);
+    }
+
+    return this.runWithFrame(createFrame(), fn, options);
+  }
+
+  /**
    * Seeds the current execution tree with its first inherited signal.
    *
    * This is narrower than `runWithFrame(...)`: it only fills the ambient
@@ -512,8 +555,15 @@ export class ExecutionContextStore {
    * and no signal has been inherited yet.
    */
   runWithSignal<T>(signal: AbortSignal | undefined, fn: () => T): T {
+    if (!this.isEnabled) {
+      return this.runWithoutContext(
+        fn,
+        getExistingSharedExecutionContextStore(),
+      );
+    }
+
     const store = getSharedExecutionContextStore();
-    if (!this.isEnabled || !store) {
+    if (!store) {
       return this.runWithoutContext(fn, store);
     }
 

@@ -261,6 +261,28 @@ describe("ExecutionJournal", () => {
       signalLink.cleanup();
     });
 
+    it("composes caller and task-local abort signals for the same journal", () => {
+      const executionJournal = journalFactory.create();
+      const callerController = new AbortController();
+      const cleanupCallerSignal = setTaskCallerSignal(
+        executionJournal,
+        callerController.signal,
+      );
+      const taskController = getOrCreateTaskAbortController(executionJournal);
+
+      const signalLink = getTaskAbortSignalLink(executionJournal);
+      expect(signalLink.signal).toBeDefined();
+      expect(signalLink.signal).not.toBe(callerController.signal);
+      expect(signalLink.signal).not.toBe(taskController.signal);
+
+      callerController.abort("caller-cancelled");
+      expect(signalLink.signal?.aborted).toBe(true);
+      expect(signalLink.signal?.reason).toBe("caller-cancelled");
+
+      signalLink.cleanup();
+      cleanupCallerSignal();
+    });
+
     it("forwards journal to nested task when options passed", async () => {
       const traceKey = journalFactory.createKey<string[]>("trace-steps");
 
