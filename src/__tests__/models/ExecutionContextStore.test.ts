@@ -40,6 +40,16 @@ describe("ExecutionContextStore", () => {
       expect(result).toBe(42);
     });
 
+    it("runWithFrameFactory passes through without creating a frame when disabled", () => {
+      const ctx = new ExecutionContextStore(null);
+      const createFrame = jest.fn(() => makeFrame("task", "t1"));
+
+      const result = ctx.runWithFrameFactory(createFrame, () => 42);
+
+      expect(result).toBe(42);
+      expect(createFrame).not.toHaveBeenCalled();
+    });
+
     it("getSnapshot returns undefined when disabled", () => {
       const ctx = new ExecutionContextStore(null);
       expect(ctx.getSnapshot()).toBeUndefined();
@@ -71,6 +81,50 @@ describe("ExecutionContextStore", () => {
         expect(outerSnapshot.currentFrame.id).toBe("outer");
 
         disabled.runWithFrame(makeFrame("task", "inner"), () => {
+          expect(enabled.getSnapshot()).toBeUndefined();
+          expect(disabled.getSnapshot()).toBeUndefined();
+        });
+
+        const restoredSnapshot = enabled.getSnapshot();
+        if (!restoredSnapshot || restoredSnapshot.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
+        expect(restoredSnapshot.currentFrame.id).toBe("outer");
+      });
+    });
+
+    it("clears inherited async context for disabled lazy frame execution", () => {
+      const enabled = new ExecutionContextStore(
+        EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      );
+      const disabled = new ExecutionContextStore(null);
+      const createFrame = jest.fn(() => makeFrame("task", "inner"));
+
+      enabled.runWithFrame(makeFrame("task", "outer"), () => {
+        disabled.runWithFrameFactory(createFrame, () => {
+          expect(enabled.getSnapshot()).toBeUndefined();
+          expect(disabled.getSnapshot()).toBeUndefined();
+        });
+
+        const restoredSnapshot = enabled.getSnapshot();
+        if (!restoredSnapshot || restoredSnapshot.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
+        expect(restoredSnapshot.currentFrame.id).toBe("outer");
+      });
+
+      expect(createFrame).not.toHaveBeenCalled();
+    });
+
+    it("clears inherited async context for disabled signal seeding", () => {
+      const enabled = new ExecutionContextStore(
+        EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      );
+      const disabled = new ExecutionContextStore(null);
+      const controller = new AbortController();
+
+      enabled.runWithFrame(makeFrame("task", "outer"), () => {
+        disabled.runWithSignal(controller.signal, () => {
           expect(enabled.getSnapshot()).toBeUndefined();
           expect(disabled.getSnapshot()).toBeUndefined();
         });
@@ -114,6 +168,38 @@ describe("ExecutionContextStore", () => {
         expect(snapshot.frames[0].kind).toBe("task");
         expect(snapshot.frames[0].id).toBe("t1");
       });
+    });
+
+    it("runWithFrameFactory creates a frame when enabled", () => {
+      const ctx = new ExecutionContextStore(
+        EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      );
+      const createFrame = jest.fn(() => makeFrame("task", "factory-task"));
+
+      ctx.runWithFrameFactory(createFrame, () => {
+        const snapshot = ctx.getSnapshot();
+        if (snapshot?.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
+        expect(snapshot.currentFrame.id).toBe("factory-task");
+      });
+
+      expect(createFrame).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back when the platform loses async local storage after configuration", () => {
+      const ctx = new ExecutionContextStore(
+        EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      );
+      const createFrame = jest.fn(() => makeFrame("task", "missing-als"));
+      jest.spyOn(process, "getBuiltinModule").mockReturnValue(undefined);
+      setPlatform(new PlatformAdapter("universal"));
+
+      expect(ctx.runWithFrameFactory(createFrame, () => 42)).toBe(42);
+      expect(ctx.runWithSignal(new AbortController().signal, () => 43)).toBe(
+        43,
+      );
+      expect(createFrame).not.toHaveBeenCalled();
     });
 
     it("tracks nested frames (task -> event -> hook)", () => {

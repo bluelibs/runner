@@ -53,7 +53,7 @@ function isCI(currentMeta) {
 function getThreshold(cfg, metricPath, currentMeta) {
   // Use metric-specific threshold if available
   const metricThreshold = cfg.metricThresholds?.[metricPath];
-  if (metricThreshold) return metricThreshold;
+  if (metricThreshold !== undefined) return metricThreshold;
 
   // Use CI threshold in CI environments
   if (isCI(currentMeta) && cfg.ciThreshold) return cfg.ciThreshold;
@@ -98,6 +98,7 @@ function main() {
   const isInCI = isCI(cur.meta);
 
   const failures = [];
+  const contractFailures = [];
   const notes = [];
   const warnings = [];
 
@@ -142,8 +143,8 @@ function main() {
     const threshold = getThreshold(cfg, path, cur.meta);
 
     if (typeof baseVal !== "number" || typeof curVal !== "number") {
-      notes.push(
-        `Skip ${path}: missing numeric values (base=${baseVal}, current=${curVal})`,
+      contractFailures.push(
+        `${path}: missing numeric values (base=${baseVal}, current=${curVal})`,
       );
       continue;
     }
@@ -156,11 +157,7 @@ function main() {
     const curInfo = getStatInfo(cur.results, path);
     const isFormatMismatch = baseInfo.isStatistical !== curInfo.isStatistical;
 
-    // Use more lenient threshold during format transitions
-    let effectiveThreshold = threshold;
-    if (isFormatMismatch && hasFormatMismatch) {
-      effectiveThreshold = Math.max(threshold, 0.6); // At least 60% tolerance during transition
-    }
+    const effectiveThreshold = threshold;
 
     if (direction === "higher") {
       const allowed = baseVal * (1 - effectiveThreshold);
@@ -210,6 +207,12 @@ function main() {
     for (const w of warnings) console.log(" -", w);
   }
 
+  if (contractFailures.length) {
+    console.error("\nBenchmark contract failures:");
+    for (const f of contractFailures) console.error(" -", f);
+    process.exit(1);
+  }
+
   if (failures.length) {
     const majorFailures = failures.filter((f) => f.includes("MAJOR"));
     const minorFailures = failures.filter((f) => f.includes("minor"));
@@ -224,10 +227,7 @@ function main() {
       for (const f of minorFailures) console.log(" -", f);
     }
 
-    // Only fail on major regressions in CI
-    if (majorFailures.length > 0 || (!isInCI && failures.length > 0)) {
-      process.exit(1);
-    }
+    process.exit(1);
   }
 
   console.log("\nNo significant regressions detected.");

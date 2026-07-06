@@ -10,8 +10,9 @@ The benchmark system has been designed to be **statistically reliable** and **CI
 
 - Multiple runs with statistical analysis (median, percentiles)
 - Proper warmup phases to stabilize JIT compilation
-- Environment-aware thresholds (higher tolerance in CI)
-- Severity classification (major vs minor regressions)
+- A fixed accepted baseline commit, measured on the same CI runner as the PR
+- Environment-aware thresholds
+- Regression failures when a tracked metric exceeds its threshold
 - Trend monitoring with warnings
 
 ## Running Benchmarks
@@ -38,8 +39,9 @@ Configuration is stored in `config/benchmarks/benchmarks.config.json`:
 
 ```json
 {
-  "threshold": 0.3, // 30% tolerance for local runs
-  "ciThreshold": 0.4, // 40% tolerance for CI runs
+  "baselineRef": "a63516a57667aff5c8ca1f25ab7137961afe5ae7",
+  "threshold": 0.1, // 10% tolerance for local runs
+  "ciThreshold": 0.15, // 15% tolerance for CI runs
   "metricThresholds": {
     // Per-metric overrides
     "cacheMiddleware.speedupFactor": 0.2
@@ -57,9 +59,12 @@ node scripts/compare-benchmarks.mjs config/benchmarks/baseline.json config/bench
 The comparison script provides:
 
 - **Environment detection** (CI vs Local)
-- **Severity classification** (Major vs Minor regressions)
+- **Severity classification** (Major vs Minor regressions in output)
 - **Trend warnings** for concerning changes within thresholds
 - **Statistical context** showing actual vs expected values
+
+CI fails on any tracked metric that exceeds its threshold. Severity labels are
+diagnostic only; they do not make CI permissive.
 
 ## Updating Baselines
 
@@ -76,6 +81,11 @@ When performance characteristics legitimately change (new features, architectura
 - The current environment is representative
 - Changes have been reviewed and approved
 
+For CI, update `baselineRef` in `config/benchmarks/benchmarks.config.json` to
+the accepted commit. CI benchmarks that commit and the PR head on the same
+runner, which avoids machine-specific JSON drift while preventing PR-by-PR
+performance ratcheting.
+
 ## Statistical Approach
 
 Each benchmark runs multiple times (3-5 runs) and reports:
@@ -91,8 +101,9 @@ This approach provides much more reliable results than single-run measurements.
 
 The system automatically:
 
-- Detects CI environments and uses relaxed thresholds
-- Only fails builds on **major regressions** (>60% by default)
+- Detects CI environments and uses CI thresholds
+- Benchmarks the accepted baseline commit and PR head on the same runner
+- Fails builds when any tracked metric exceeds its threshold
 - Shows **minor regressions** as warnings
 - Provides context about environment differences
 
@@ -102,9 +113,10 @@ The system automatically:
 
 If CI frequently fails with minor performance differences:
 
-1. Increase `ciThreshold` in config (try 0.5-0.6)
-2. Check if baseline was generated in similar environment
-3. Consider updating baseline if environment has changed
+1. Re-run the benchmark locally to confirm the trend
+2. Check whether the accepted `baselineRef` is still the right comparison point
+3. If the cost is intentional, update `baselineRef` in a reviewed commit
+4. Increase a metric-specific threshold only when the benchmark is inherently noisy
 
 ### Inconsistent Results
 
