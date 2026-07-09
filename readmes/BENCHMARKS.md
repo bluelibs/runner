@@ -47,6 +47,30 @@ Configuration is stored in `config/benchmarks/benchmarks.config.json`:
 }
 ```
 
+The suite also tracks parallel runtime startup/disposal and the overhead of enabling execution
+context. These measurements protect Runner's isolation and observability contracts as the runtime
+evolves. Every execution-context sample measures both orders to avoid consistently favoring the
+second, warmer code path. Metrics listed in `ciStrictMetrics` fail CI on any regression beyond their
+configured threshold.
+
+## Distribution Artifact Budgets
+
+Built ESM artifacts have explicit byte budgets in
+[`config/benchmarks/artifact-budgets.json`](../config/benchmarks/artifact-budgets.json).
+Representative minified, tree-shaken browser-core and Node-durable consumers are budgeted
+separately in
+[`config/benchmarks/consumer-bundle-budgets.json`](../config/benchmarks/consumer-bundle-budgets.json).
+Run both checks after building:
+
+```bash
+npm run build
+npm run benchmark:artifacts
+npm run benchmark:consumers
+```
+
+The budgets are regression guards, not size targets. Raise one only when a reviewed change
+intentionally increases the public distribution.
+
 ## Comparing Results
 
 ```bash

@@ -1,5 +1,9 @@
 import { definitions, r, RunnerError } from "../..";
-import { builderIncompleteError, genericError } from "../../errors";
+import {
+  builderIncompleteError,
+  builderInvalidHttpCodeError,
+  genericError,
+} from "../../errors";
 
 describe("error builder", () => {
   it("covers builderIncompleteError task label branch", () => {
@@ -249,8 +253,17 @@ describe("error builder", () => {
   });
 
   it("fails fast when httpCode is below range", () => {
-    expect(() => r.error("tests-errors-httpCode-low").httpCode(99)).toThrow(
-      /httpCode must be an integer between 100 and 599/i,
+    let thrown: unknown;
+    try {
+      r.error("tests-errors-httpCode-low").httpCode(99);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(builderInvalidHttpCodeError.is(thrown)).toBe(true);
+    expect(thrown).toHaveProperty(
+      "message",
+      expect.stringMatching(/httpCode must be an integer between 100 and 599/i),
     );
   });
 
@@ -264,6 +277,13 @@ describe("error builder", () => {
     expect(() =>
       r.error("tests-errors-httpCode-float").httpCode(400.5),
     ).toThrow(/httpCode must be an integer between 100 and 599/i);
+  });
+
+  it("exposes the typed invalid httpCode diagnostic", () => {
+    const diagnostic = builderInvalidHttpCodeError.new({ value: 700 });
+
+    expect(diagnostic.message).toContain("Received: 700");
+    expect(diagnostic.remediation).toContain("100-599 range");
   });
 
   describe("remediation", () => {

@@ -15,7 +15,7 @@ import {
 import { EventManager } from "../EventManager";
 import { Logger } from "../Logger";
 import { StoreRegistry } from "./StoreRegistry";
-import { OverrideManager } from "../OverrideManager";
+import { OverrideManager, type OverrideInspection } from "../OverrideManager";
 import { StoreValidator } from "./StoreValidator";
 import {
   DisposeWave,
@@ -25,6 +25,10 @@ import {
   TaskStoreElementType,
 } from "../../types/storeTypes";
 import type { RuntimeCallSource } from "../../types/runtimeSource";
+import type {
+  IRuntimeInspectionLifecycle,
+  IRuntimeInspectionLifecycleWave,
+} from "../../types/runtimeInspection";
 import { TaskRunner } from "../TaskRunner";
 import { OnUnhandledError } from "../UnhandledError";
 import { MiddlewareManager } from "../MiddlewareManager";
@@ -217,6 +221,42 @@ export class Store {
       this.lookup.extractRequestedId(itemId) ??
       itemId;
     return this.registry.visibilityTracker.getOwnerResourceId(resolvedItemId);
+  }
+
+  /**
+   * Returns a detached list of source ids recorded for a canonical definition.
+   * @internal
+   */
+  public getDefinitionSourceIds(canonicalId: string): readonly string[] {
+    return this.registry.getDefinitionSourceIds(canonicalId);
+  }
+
+  /** Returns detached winner metadata when a canonical target was overridden. @internal */
+  public getOverrideInspection(
+    canonicalId: string,
+  ): OverrideInspection | undefined {
+    return this.overrideManager.getOverrideInspection(canonicalId);
+  }
+
+  /** Returns detached resource lifecycle waves retained by this runtime. @internal */
+  public getLifecycleInspection(): IRuntimeInspectionLifecycle {
+    const toInspectionWaves = (
+      waves: DisposeWave[],
+    ): IRuntimeInspectionLifecycleWave[] =>
+      waves.map((wave, order) => ({
+        order,
+        resourceIds: wave.resources.map(({ resource }) => resource.id),
+        parallel: wave.parallel,
+      }));
+
+    return {
+      readyWaves: toInspectionWaves(
+        this.lifecycleCoordinator.getResourcesInReadyWaves(),
+      ),
+      shutdownWaves: toInspectionWaves(
+        this.lifecycleCoordinator.getResourcesInDisposeWaves(),
+      ),
+    };
   }
 
   public resolveHookTargets(

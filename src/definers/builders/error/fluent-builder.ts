@@ -7,18 +7,28 @@ import type {
   ValidationSchemaInput,
 } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
-import { defineError } from "../../defineError";
+import { defineError, RunnerError } from "../../defineError";
 import type { ErrorFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone, mergeArray } from "./utils";
-import { builderInvalidHttpCodeError } from "../../../errors";
+import { getBuilderInvalidHttpCodeError } from "../../foundationErrorRegistry";
 
 const isValidHttpCode = (value: number): boolean =>
   Number.isInteger(value) && value >= 100 && value <= 599;
 
 const assertHttpCode = (value: number): void => {
   if (!isValidHttpCode(value)) {
-    builderInvalidHttpCodeError.throw({ value });
+    const registeredError = getBuilderInvalidHttpCodeError();
+    if (registeredError) {
+      registeredError.throw({ value });
+    }
+    throw new RunnerError(
+      "builder-invalidHttpCode",
+      `Error httpCode must be an integer between 100 and 599. Received: ${value}`,
+      { value },
+      undefined,
+      "Use a valid HTTP status code in the 100-599 range when configuring error helpers.",
+    );
   }
 };
 

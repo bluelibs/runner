@@ -12,12 +12,22 @@
     "eventEmissionAndHandling.avgTimePerEventMs": "lower",
     "dependencyResolution.chainsPerSecond": "higher",
     "dependencyResolution.avgTimePerChainMs": "lower",
-    "cacheMiddleware.speedupFactor": "higher"
+    "cacheMiddleware.speedupFactor": "higher",
+    "parallelRuntimeLifecycle.runtimesPerSecond": "higher",
+    "parallelRuntimeLifecycle.avgTimePerRuntimeMs": "lower",
+    "executionContextOverhead.withContextMs": "lower",
+    "executionContextOverhead.overheadFactor": "lower"
   },
   "metricThresholds": {
     "memoryUsage.initOverheadMB": 0.25,
     "memoryUsage.executionOverheadMB": 0.25,
-    "cacheMiddleware.speedupFactor": 0.2
-  }
+    "cacheMiddleware.speedupFactor": 0.2,
+    "executionContextOverhead.overheadFactor": 0.35
+  },
+  "ciStrictMetrics": [
+    "parallelRuntimeLifecycle.runtimesPerSecond",
+    "parallelRuntimeLifecycle.avgTimePerRuntimeMs",
+    "executionContextOverhead.withContextMs",
+    "executionContextOverhead.overheadFactor"
+  ]
 }
-

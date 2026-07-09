@@ -150,6 +150,8 @@ function main() {
 
     const change = (curVal - baseVal) / baseVal;
     const changeStr = formatPct(Math.abs(change));
+    const isStrictCiMetric =
+      isInCI && cfg.ciStrictMetrics?.includes(path) === true;
 
     // Check if this specific metric has a format mismatch
     const baseInfo = getStatInfo(base.results, path);
@@ -166,7 +168,9 @@ function main() {
       const allowed = baseVal * (1 - effectiveThreshold);
       if (curVal < allowed) {
         const severity =
-          Math.abs(change) > effectiveThreshold * 2 ? "MAJOR" : "minor";
+          isStrictCiMetric || Math.abs(change) > effectiveThreshold * 2
+            ? "MAJOR"
+            : "minor";
         const formatNote = isFormatMismatch ? " [format mismatch]" : "";
         failures.push(
           `${severity} regression in ${path}: ${curVal} < ${allowed.toFixed(3)} (−${changeStr} vs base ${baseVal}, threshold: ${formatPct(effectiveThreshold)})${formatNote}`,
@@ -180,7 +184,9 @@ function main() {
       const allowed = baseVal * (1 + effectiveThreshold);
       if (curVal > allowed) {
         const severity =
-          Math.abs(change) > effectiveThreshold * 2 ? "MAJOR" : "minor";
+          isStrictCiMetric || Math.abs(change) > effectiveThreshold * 2
+            ? "MAJOR"
+            : "minor";
         const formatNote = isFormatMismatch ? " [format mismatch]" : "";
         failures.push(
           `${severity} regression in ${path}: ${curVal} > ${allowed.toFixed(3)} (+${changeStr} vs base ${baseVal}, threshold: ${formatPct(effectiveThreshold)})${formatNote}`,

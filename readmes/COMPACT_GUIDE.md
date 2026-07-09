@@ -135,6 +135,15 @@ userInput.toJSONSchema();
 
 Main runtime helpers: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getHealth`, `dispose(options?)`.
 
+`runtime.inspect().snapshot()` returns an immutable view of the compiled graph.
+`runtime.inspect().explain(definitionOrCanonicalId)` reports ownership, resolved dependencies,
+effective local/inherited middleware order and origin, tags, source identity, override winner, and
+root operator access without exposing mutable Store state. Snapshots also include retained resource
+ready/shutdown waves. The first post-lock snapshot is cached: sleeping lazy resources and dry-run
+resources have no lifecycle waves at that point. Runtime interceptors are not definition middleware
+and are not listed. `IInspectableRuntime` names the additive inspection capability without making
+`inspect()` mandatory for structural `IRuntime` implementations.
+
 The returned runtime also exposes: `runOptions`, `mode` (`"dev" | "prod" | "test"`), and `state` (`"running" | "paused"`).
 
 Important run options:

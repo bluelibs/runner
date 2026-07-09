@@ -5,7 +5,10 @@ import {
   IResource,
   ITask,
 } from "../defs";
-import { IRuntime } from "../types/runner";
+import type {
+  IInspectableRuntime,
+  IRuntimeInspector,
+} from "../types/runtimeInspection";
 import type { TaskCallOptions } from "../types/utilities";
 // For RunResult convenience API, preserve the original simple messages
 import type { EventManager } from "./EventManager";
@@ -37,6 +40,7 @@ import {
 import { globalResources } from "../globals/globalResources";
 import type { ITimers } from "../types/timers";
 import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
+import { RuntimeInspector } from "./runtime-inspector/RuntimeInspector";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -78,7 +82,7 @@ type RunResultLazyOptions = {
  * const result = await runtime.runTask(myTask, { input: "data" });
  * await runtime.dispose();
  */
-export class RunResult<V> implements IRuntime<V> {
+export class RunResult<V> implements IInspectableRuntime<V> {
   /**
    * The root value returned by the root resource's init function.
    * Set via `setValue()` after the root resource initializes.
@@ -115,6 +119,7 @@ export class RunResult<V> implements IRuntime<V> {
    */
   private lazyOptions: RunResultLazyOptions = {};
   private readonly recoveryController: RuntimeRecoveryController;
+  private readonly runtimeInspector: IRuntimeInspector;
 
   /**
    * Creates a new RunResult instance.
@@ -168,6 +173,7 @@ export class RunResult<V> implements IRuntime<V> {
      */
     private readonly isForceDisposeRequested: () => boolean,
   ) {
+    this.runtimeInspector = new RuntimeInspector(this.store);
     this.recoveryController = new RuntimeRecoveryController({
       getRuntimeState: () => this.getRuntimeState(),
       getTimers: () => this.getTimersResourceValue(),
@@ -208,6 +214,11 @@ export class RunResult<V> implements IRuntime<V> {
       any,
       any
     >;
+  }
+
+  /** Returns the stable, read-only inspector for this runtime graph. */
+  public inspect(): IRuntimeInspector {
+    return this.runtimeInspector;
   }
 
   /**

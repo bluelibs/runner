@@ -1,5 +1,12 @@
 import { validationError } from "../../../errors";
-import { isReservedDefinitionLocalName } from "../../../definers/assertDefinitionId";
+import { isReservedDefinitionLocalName } from "../../../definers/definitionValidation";
+import {
+  createCanonicalId,
+  createLocalId,
+  createSourceId,
+  type CanonicalId,
+  type LocalId,
+} from "../../../tools/definitionId";
 import { RegisterableKind } from "./registerableKind";
 import type { OwnerScope } from "./OwnerScope";
 
@@ -8,23 +15,28 @@ export class CanonicalIdCompiler {
     ownerScope: OwnerScope,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
     currentId: string,
-  ): string {
+  ): CanonicalId {
     this.assertLocalName(ownerScope.resourceId, kind, currentId);
+    const sourceId = createSourceId(currentId);
 
-    if (currentId.startsWith(`${ownerScope.resourceId}.`)) {
-      return currentId;
+    if (sourceId.startsWith(`${ownerScope.resourceId}.`)) {
+      return createCanonicalId(sourceId);
     }
+
+    const localId = createLocalId(sourceId);
 
     if (ownerScope.usesFrameworkRootIds) {
-      return this.computeFrameworkRootId(kind, currentId);
+      return createCanonicalId(this.computeFrameworkRootId(kind, localId));
     }
 
-    return this.computeOwnedId(ownerScope.resourceId, kind, currentId);
+    return createCanonicalId(
+      this.computeOwnedId(ownerScope.resourceId, kind, localId),
+    );
   }
 
   private computeFrameworkRootId(
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
-    currentId: string,
+    currentId: LocalId,
   ): string {
     switch (kind) {
       case RegisterableKind.Resource:
@@ -51,9 +63,9 @@ export class CanonicalIdCompiler {
   }
 
   private computeOwnedId(
-    ownerResourceId: string,
+    ownerResourceId: CanonicalId,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
-    currentId: string,
+    currentId: LocalId,
   ): string {
     switch (kind) {
       case RegisterableKind.Resource:
@@ -80,7 +92,7 @@ export class CanonicalIdCompiler {
   }
 
   private assertLocalName(
-    ownerResourceId: string,
+    ownerResourceId: CanonicalId,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
     currentId: string,
   ): void {
