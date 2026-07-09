@@ -185,6 +185,19 @@ export const runtimeElementNotFoundError = error<
   )
   .build();
 
+export const runtimeInspectionTargetNotFoundError = error<
+  { targetId: string } & DefaultErrorType
+>("runtimeInspectionTargetNotFound")
+  .format(
+    ({ targetId }) =>
+      `Runtime inspection target "${targetId.toString()}" was not found.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Register "${targetId.toString()}" in the runtime graph before asking the inspector to explain it.`,
+  )
+  .build();
+
 export const subtreeMiddlewareConflictError = error<
   {
     middlewareId: string;

@@ -1,4 +1,5 @@
 import { frameworkError as error } from "../../definers/builders/error";
+import { registerTagTargetNotAllowedError } from "../../definers/tagTargetErrorRegistry";
 import type { DefaultErrorType } from "../../types/error";
 
 // Duplicate registration
@@ -257,3 +258,5 @@ export const tagTargetNotAllowedError = error<
       `Remove "${tagId}" from the ${attemptedTarget} definition, or expand the tag with .for([...]) to include "${attemptedTarget}".`,
   )
   .build();
+
+registerTagTargetNotAllowedError(tagTargetNotAllowedError);

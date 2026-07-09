@@ -30,6 +30,12 @@ export type ResolvedSubtreeTaskMiddlewareEntry = {
   middleware: ITaskMiddleware<any, any, any, any>;
   duplicateKey: string;
   dependencyKey: string;
+  ownerResourceId: string;
+};
+
+export type ResolvedSubtreeResourceMiddlewareEntry = {
+  middleware: IResourceMiddleware<any, any, any, any>;
+  ownerResourceId: string;
 };
 
 export function getSubtreeMiddlewareDuplicateKey(id: string): string {
@@ -263,7 +269,7 @@ function resolveApplicableSubtreeMiddlewares<
     entry: TSubtreeMiddlewareEntry,
     targetDefinition: TTargetDefinition,
   ) => TMiddleware | undefined,
-): TMiddleware[] {
+): Array<{ middleware: TMiddleware; ownerResourceId: string }> {
   const chainRootToNearest = [...chainNearestToRoot].reverse();
   const byMiddlewareId = new Map<
     string,
@@ -313,7 +319,10 @@ function resolveApplicableSubtreeMiddlewares<
 
   return Array.from(byMiddlewareId.values())
     .sort((left, right) => left.order - right.order)
-    .map((entry) => entry.middleware);
+    .map(({ middleware, ownerResourceId }) => ({
+      middleware,
+      ownerResourceId,
+    }));
 }
 
 export function resolveApplicableSubtreeTaskMiddlewareEntries(
@@ -344,6 +353,7 @@ export function resolveApplicableSubtreeTaskMiddlewareEntries(
         middleware: identityCheckerTaskMiddleware.with(identityRequirement),
         duplicateKey,
         dependencyKey: duplicateKey,
+        ownerResourceId,
       });
       identityGateOrder += 1;
     }
@@ -357,10 +367,11 @@ export function resolveApplicableSubtreeTaskMiddlewareEntries(
       task,
       (resource) => getStoredSubtreePolicy(resource)?.tasks?.middleware,
       resolveTaskSubtreeMiddlewareEntry,
-    ).map((middleware) => ({
+    ).map(({ middleware, ownerResourceId }) => ({
       middleware,
       duplicateKey: getSubtreeMiddlewareDuplicateKey(middleware.id),
       dependencyKey: `__subtree.middleware.${middleware.id}`,
+      ownerResourceId,
     })),
   ];
 }
@@ -401,6 +412,16 @@ export function resolveApplicableSubtreeResourceMiddlewares(
   lookup: SubtreeLookup,
   resource: IResource<any, any, any, any, any, any, any>,
 ): IResourceMiddleware[] {
+  return resolveApplicableSubtreeResourceMiddlewareEntries(
+    lookup,
+    resource,
+  ).map((entry) => entry.middleware);
+}
+
+export function resolveApplicableSubtreeResourceMiddlewareEntries(
+  lookup: SubtreeLookup,
+  resource: IResource<any, any, any, any, any, any, any>,
+): ResolvedSubtreeResourceMiddlewareEntry[] {
   const chain = getTargetOwnerResourceChain(lookup, {
     targetId: resource.id,
     isResourceTarget: true,

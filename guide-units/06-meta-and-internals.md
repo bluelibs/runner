@@ -7,6 +7,47 @@ This chapter covers two advanced surfaces:
 
 Most apps do not need these on day one. They become valuable when you build tooling, policy layers, discovery flows, or framework-style infrastructure on top of Runner.
 
+## Runtime Inspection
+
+Use `runtime.inspect()` when tooling needs to understand the compiled graph without receiving the
+mutable runtime store. Snapshots and explanations are deeply frozen and use canonical runtime ids.
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+const greet = r.task("greet").run(async () => "hello").build();
+const app = r.resource("app").register([greet]).build();
+const runtime = await run(app);
+
+const graph = runtime.inspect().snapshot();
+const explanation = runtime.inspect().explain(greet);
+
+console.log(graph.definitions.length);
+console.log(explanation.canonicalId);
+
+await runtime.dispose();
+```
+
+`snapshot()` lists registered definitions in canonical-id order plus the retained resource
+`readyWaves` and reverse `shutdownWaves` used by cooldown/dispose. `explain(...)` accepts a
+registered definition or canonical id and reports ownership, resolved dependencies, effective
+task/resource middleware order, tags, source identity, override winner metadata, and root operator
+access. Middleware entries distinguish `local` attachments from inherited `subtree` policy and
+name the canonical definition or policy resource that applied each layer. Unknown targets fail
+with a typed Runner error.
+
+The first snapshot taken after the Store locks is cached and remains stable through disposal.
+Lifecycle waves therefore describe resources initialized when that snapshot was created: sleeping
+lazy resources are absent, and dry-run runtimes have no lifecycle waves. Middleware interceptors
+installed through `taskRunner`, `eventManager`, or `middlewareManager` are not definition
+middleware and are not listed. Override inspection reports the preserved base identity and winning
+declaring resource; it does not attempt to diff implementation functions. `IRuntime` stays the
+minimal structural runtime contract, while `IInspectableRuntime` adds `inspect()` for code that
+needs to name this capability explicitly.
+
+The inspector is the stable read-only tooling surface. `runtime.store` remains an advanced API for
+integrations that genuinely need Store behavior.
+
 ## Meta
 
 Use `meta(...)` when you need human-friendly descriptions that stay attached to the definition itself.

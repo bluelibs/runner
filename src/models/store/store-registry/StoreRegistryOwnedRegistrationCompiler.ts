@@ -60,9 +60,10 @@ export class StoreRegistryOwnedRegistrationCompiler {
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
     currentId: string,
   ): string {
+    const ownerScope = createOwnerScope(ownerResourceId);
     return this.canonicalIdCompiler.compute(
       {
-        resourceId: ownerResourceId,
+        ...ownerScope,
         usesFrameworkRootIds: ownerUsesFrameworkRootIds,
       },
       kind,
@@ -76,9 +77,10 @@ export class StoreRegistryOwnedRegistrationCompiler {
     item: RegisterableItem,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
   ): RegisterableItem {
+    const ownerScope = createOwnerScope(ownerResourceId);
     return this.compileOwnedDefinitionWithScope(
       {
-        resourceId: ownerResourceId,
+        ...ownerScope,
         usesFrameworkRootIds: ownerUsesFrameworkRootIds,
       },
       item,

@@ -4,7 +4,7 @@ import {
 } from "../../types/runtimeSource";
 
 describe("runtimeSource", () => {
-  it("creates canonical-only runtime sources", () => {
+  it("creates runtime call sources", () => {
     expect(runtimeSource.runtime("runtime.api")).toEqual({
       kind: RuntimeCallSourceKind.Runtime,
       id: "runtime.api",
