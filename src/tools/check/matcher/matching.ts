@@ -1,4 +1,7 @@
-import { createMatchPatternError, createMaxDepthExceededError } from "../errors";
+import {
+  createMatchPatternError,
+  createMaxDepthExceededError,
+} from "../errors";
 import { isMatchDefinedPattern } from "./contracts";
 import type { MatchContext, PathSegment } from "./shared";
 import {

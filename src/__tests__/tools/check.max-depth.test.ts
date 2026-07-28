@@ -33,7 +33,9 @@ describe("check() / Match depth budget", () => {
     const error = caughtError(() => check(buildTree(20000), treePattern));
 
     expect(errors.checkMaxDepthExceededError.is(error)).toBe(true);
-    expect((error as { id: string }).id).toBe(CHECK_MAX_DEPTH_EXCEEDED_ERROR_ID);
+    expect((error as { id: string }).id).toBe(
+      CHECK_MAX_DEPTH_EXCEEDED_ERROR_ID,
+    );
     expect((error as { data: { maxDepth: number } }).data.maxDepth).toBe(1000);
     expect((error as Error).message).toContain(
       "Maximum pattern-matching depth of 1000 exceeded",

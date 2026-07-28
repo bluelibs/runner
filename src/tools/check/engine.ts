@@ -217,8 +217,8 @@ class CompiledMatchPatternSchema<
 
   test(input: unknown): input is InferMatchPattern<TPattern> {
     return (
-      collectMatchFailures(input, this.pattern, false, this.maxDepth)
-        .length === 0
+      collectMatchFailures(input, this.pattern, false, this.maxDepth).length ===
+      0
     );
   }
 
@@ -231,7 +231,8 @@ function compileMatchPattern<TPattern extends MatchPattern>(
   pattern: TPattern,
   options?: MatchCompileOptions,
 ): MatchCompiledSchema<TPattern> {
-  const maxDepth = resolveMaxDepth(options?.maxDepth) ?? DEFAULT_MATCH_MAX_DEPTH;
+  const maxDepth =
+    resolveMaxDepth(options?.maxDepth) ?? DEFAULT_MATCH_MAX_DEPTH;
   return Object.freeze(new CompiledMatchPatternSchema(pattern, maxDepth));
 }
 
@@ -308,7 +309,8 @@ function matchTest<TPattern extends MatchPattern>(
   pattern: TPattern,
   options?: MatchCompileOptions,
 ): value is InferMatchPattern<TPattern> {
-  const maxDepth = resolveMaxDepth(options?.maxDepth) ?? DEFAULT_MATCH_MAX_DEPTH;
+  const maxDepth =
+    resolveMaxDepth(options?.maxDepth) ?? DEFAULT_MATCH_MAX_DEPTH;
   return collectMatchFailures(value, pattern, false, maxDepth).length === 0;
 }
 

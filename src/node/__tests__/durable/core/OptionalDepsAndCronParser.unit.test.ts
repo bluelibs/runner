@@ -6,7 +6,8 @@ import { genericError } from "../../../../errors";
 const amqplibMockState: { module: unknown } = { module: undefined };
 
 jest.mock("node:module", () => {
-  const actual = jest.requireActual<typeof import("node:module")>("node:module");
+  const actual =
+    jest.requireActual<typeof import("node:module")>("node:module");
   return {
     ...actual,
     createRequire: () => (id: string) => {

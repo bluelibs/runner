@@ -34,8 +34,7 @@ export const checkMaxDepthExceededError = error<
 >("check-maxDepthExceeded")
   .httpCode(400)
   .format(
-    ({ maxDepth }) =>
-      `Maximum pattern-matching depth of ${maxDepth} exceeded.`,
+    ({ maxDepth }) => `Maximum pattern-matching depth of ${maxDepth} exceeded.`,
   )
   .remediation(
     "Reduce payload nesting, or raise maxDepth in check()/Match.compile() options. Use Infinity to disable the limit.",
