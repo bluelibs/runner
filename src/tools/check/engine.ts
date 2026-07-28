@@ -3,6 +3,7 @@ import {
   createMatchError,
   createMatchPatternError,
 } from "./errors";
+import { DEFAULT_MATCH_MAX_DEPTH } from "./matcher/shared";
 import {
   getClassSchemaDefinition,
   type MatchSchemaOptions,
@@ -59,6 +60,19 @@ export interface CheckOptions {
   errorPolicy?: "first" | "all";
   /** @deprecated Use errorPolicy instead. */
   throwAllErrors?: boolean;
+  /**
+   * Maximum pattern-matching recursion depth before matching aborts with
+   * `checkMaxDepthExceededError`. Defaults to 1000. Use `Infinity` to disable.
+   */
+  maxDepth?: number;
+}
+
+export interface MatchCompileOptions {
+  /**
+   * Maximum pattern-matching recursion depth before matching aborts with
+   * `checkMaxDepthExceededError`. Defaults to 1000. Use `Infinity` to disable.
+   */
+  maxDepth?: number;
 }
 
 type WherePredicate = (value: unknown) => boolean;
@@ -72,15 +86,43 @@ function assertPattern(condition: boolean, message: string): void {
 type ResolvedCheckOptions = {
   errorPolicy?: "first" | "all";
   hasExplicitPolicy: boolean;
+  maxDepth?: number;
 };
+
+function resolveMaxDepth(maxDepth: unknown): number | undefined {
+  if (maxDepth === undefined) {
+    return undefined;
+  }
+  if (maxDepth === Number.POSITIVE_INFINITY) {
+    return Number.POSITIVE_INFINITY;
+  }
+  if (
+    typeof maxDepth === "number" &&
+    Number.isFinite(maxDepth) &&
+    maxDepth >= 0
+  ) {
+    return Math.floor(maxDepth);
+  }
+  throw createCheckOptionsError(
+    'check() option "maxDepth" must be a non-negative number or Infinity when provided.',
+  );
+}
 
 function readOptions(options?: CheckOptions): ResolvedCheckOptions {
   if (options === undefined) {
-    return { errorPolicy: undefined, hasExplicitPolicy: false };
+    return {
+      errorPolicy: undefined,
+      hasExplicitPolicy: false,
+      maxDepth: undefined,
+    };
   }
   if (!isPlainObject(options)) {
     throw createCheckOptionsError("check() options must be a plain object.");
   }
+
+  const maxDepth = resolveMaxDepth(
+    (options as { maxDepth?: unknown }).maxDepth,
+  );
 
   const errorPolicy = (options as { errorPolicy?: unknown }).errorPolicy;
   if (
@@ -102,17 +144,18 @@ function readOptions(options?: CheckOptions): ResolvedCheckOptions {
   }
 
   if (errorPolicy !== undefined) {
-    return { errorPolicy, hasExplicitPolicy: true };
+    return { errorPolicy, hasExplicitPolicy: true, maxDepth };
   }
 
   if (throwAllErrors !== undefined) {
     return {
       errorPolicy: throwAllErrors ? "all" : "first",
       hasExplicitPolicy: true,
+      maxDepth,
     };
   }
 
-  return { errorPolicy: undefined, hasExplicitPolicy: false };
+  return { errorPolicy: undefined, hasExplicitPolicy: false, maxDepth };
 }
 
 function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
@@ -150,7 +193,10 @@ function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
 class CompiledMatchPatternSchema<
   TPattern extends MatchPattern,
 > implements MatchCompiledSchema<TPattern> {
-  constructor(public readonly pattern: TPattern) {}
+  constructor(
+    public readonly pattern: TPattern,
+    private readonly maxDepth: number,
+  ) {}
 
   parse(input: unknown): InferMatchPattern<TPattern> {
     const collectAll = resolveDefaultCollectAll(this.pattern);
@@ -158,6 +204,7 @@ class CompiledMatchPatternSchema<
       input,
       this.pattern,
       collectAll,
+      this.maxDepth,
     );
     if (failures.length === 0) {
       return hydrateMatchedValue(
@@ -169,7 +216,10 @@ class CompiledMatchPatternSchema<
   }
 
   test(input: unknown): input is InferMatchPattern<TPattern> {
-    return collectMatchFailures(input, this.pattern, false).length === 0;
+    return (
+      collectMatchFailures(input, this.pattern, false, this.maxDepth)
+        .length === 0
+    );
   }
 
   toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
@@ -179,8 +229,10 @@ class CompiledMatchPatternSchema<
 
 function compileMatchPattern<TPattern extends MatchPattern>(
   pattern: TPattern,
+  options?: MatchCompileOptions,
 ): MatchCompiledSchema<TPattern> {
-  return Object.freeze(new CompiledMatchPatternSchema(pattern));
+  const maxDepth = resolveMaxDepth(options?.maxDepth) ?? DEFAULT_MATCH_MAX_DEPTH;
+  return Object.freeze(new CompiledMatchPatternSchema(pattern, maxDepth));
 }
 
 function resolvePatternDefaultErrorPolicy(
@@ -231,7 +283,7 @@ export function check(
   pattern: unknown,
   options?: CheckOptions,
 ): unknown {
-  const { errorPolicy, hasExplicitPolicy } = readOptions(options);
+  const { errorPolicy, hasExplicitPolicy, maxDepth } = readOptions(options);
 
   if (isCheckSchemaLike(pattern)) {
     return pattern.parse(value);
@@ -245,6 +297,7 @@ export function check(
     value,
     pattern,
     collectAll,
+    maxDepth,
   );
   if (failures.length === 0) return value;
   throw createMatchError(failures, messageOverride);
@@ -253,8 +306,10 @@ export function check(
 function matchTest<TPattern extends MatchPattern>(
   value: unknown,
   pattern: TPattern,
+  options?: MatchCompileOptions,
 ): value is InferMatchPattern<TPattern> {
-  return collectMatchFailures(value, pattern, false).length === 0;
+  const maxDepth = resolveMaxDepth(options?.maxDepth) ?? DEFAULT_MATCH_MAX_DEPTH;
+  return collectMatchFailures(value, pattern, false, maxDepth).length === 0;
 }
 
 function where<TGuarded>(
@@ -533,11 +588,13 @@ export const Match = Object.freeze({
   ObjectStrict: objectStrict,
   compile: <TPattern extends MatchPattern>(
     pattern: TPattern,
-  ): MatchCompiledSchema<TPattern> => compileMatchPattern(pattern),
+    options?: MatchCompileOptions,
+  ): MatchCompiledSchema<TPattern> => compileMatchPattern(pattern, options),
   test: <TPattern extends MatchPattern>(
     value: unknown,
     pattern: TPattern,
-  ): value is InferMatchPattern<TPattern> => matchTest(value, pattern),
+    options?: MatchCompileOptions,
+  ): value is InferMatchPattern<TPattern> => matchTest(value, pattern, options),
   toJSONSchema: <TPattern extends MatchPattern>(
     pattern: TPattern,
     options?: MatchToJsonSchemaOptions,

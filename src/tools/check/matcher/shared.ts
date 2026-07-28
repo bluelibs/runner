@@ -3,6 +3,12 @@ import type { InferMatchPattern } from "../types";
 
 export type PathSegment = string | number;
 
+/**
+ * Default nesting budget for pattern matching. Matches the serializer's
+ * default depth cap so boundary validation has uniform blast-radius limits.
+ */
+export const DEFAULT_MATCH_MAX_DEPTH = 1000;
+
 export type NonEmptyArrayElement<TPattern> = [TPattern] extends [undefined]
   ? unknown
   : InferMatchPattern<TPattern>;
@@ -12,6 +18,10 @@ export type MatchContext = {
   collectAll: boolean;
   activeComparisons: WeakMap<object, WeakSet<object>>;
   messageOverride?: MatchMessageOverride;
+  /** Current recursion depth of `matchesPattern`; guarded by maxDepth. */
+  depth: number;
+  /** Maximum allowed recursion depth before matching aborts. */
+  maxDepth: number;
 };
 
 export type WhereCondition<TGuarded = unknown> =

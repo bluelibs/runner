@@ -3,6 +3,7 @@ import {
   checkInvalidOptionsError,
   checkInvalidPatternError,
   checkJsonSchemaUnsupportedPatternError,
+  checkMaxDepthExceededError,
   matchError,
 } from "../../errors/foundation/match.errors";
 import {
@@ -16,6 +17,7 @@ import { symbolDefinitionIdentity } from "../../types/symbols";
 export const MATCH_ERROR_ID = matchError.id;
 export const CHECK_INVALID_PATTERN_ERROR_ID = checkInvalidPatternError.id;
 export const CHECK_INVALID_OPTIONS_ERROR_ID = checkInvalidOptionsError.id;
+export const CHECK_MAX_DEPTH_EXCEEDED_ERROR_ID = checkMaxDepthExceededError.id;
 export const CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID =
   checkJsonSchemaUnsupportedPatternError.id;
 
@@ -104,6 +106,10 @@ export function createCheckOptionsError(
   message: string,
 ): CheckOptionsRuntimeError {
   return checkInvalidOptionsError.new({ message });
+}
+
+export function createMaxDepthExceededError(maxDepth: number) {
+  return checkMaxDepthExceededError.new({ maxDepth });
 }
 
 export function createCheckJsonSchemaPatternError(

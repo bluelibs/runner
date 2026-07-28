@@ -3,6 +3,24 @@ import type * as IoredisMod from "../../../durable/optionalDeps/ioredis";
 import type * as AmqplibMod from "../../../durable/optionalDeps/amqplib";
 import { genericError } from "../../../../errors";
 
+const amqplibMockState: { module: unknown } = { module: undefined };
+
+jest.mock("node:module", () => {
+  const actual = jest.requireActual<typeof import("node:module")>("node:module");
+  return {
+    ...actual,
+    createRequire: () => (id: string) => {
+      if (id === "amqplib") {
+        if (typeof amqplibMockState.module === "function") {
+          return (amqplibMockState.module as () => unknown)();
+        }
+        return amqplibMockState.module;
+      }
+      return actual.createRequire(process.cwd() + "/__runner_require__.js")(id);
+    },
+  };
+});
+
 describe("durable: optional deps helpers", () => {
   it("createIORedisClient() throws when ioredis is missing", () => {
     jest.resetModules();
@@ -116,13 +134,9 @@ describe("durable: optional deps helpers", () => {
 
   it("connectAmqplib() throws when amqplib is missing", async () => {
     jest.resetModules();
-    jest.doMock(
-      "amqplib",
-      () => {
-        throw genericError.new({ message: "Cannot find module 'amqplib'" });
-      },
-      { virtual: true },
-    );
+    amqplibMockState.module = () => {
+      throw genericError.new({ message: "Cannot find module 'amqplib'" });
+    };
 
     let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
@@ -136,13 +150,9 @@ describe("durable: optional deps helpers", () => {
 
   it("connectAmqplib() handles non-Error throws", async () => {
     jest.resetModules();
-    jest.doMock(
-      "amqplib",
-      () => {
-        throw "boom";
-      },
-      { virtual: true },
-    );
+    amqplibMockState.module = () => {
+      throw "boom";
+    };
 
     let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
@@ -157,7 +167,7 @@ describe("durable: optional deps helpers", () => {
   it("connectAmqplib() delegates to amqplib.connect", async () => {
     jest.resetModules();
     const connect = jest.fn().mockResolvedValue({ ok: true });
-    jest.doMock("amqplib", () => ({ connect }), { virtual: true });
+    amqplibMockState.module = { connect };
 
     let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
@@ -176,7 +186,7 @@ describe("durable: optional deps helpers", () => {
 
   it("connectAmqplib() rejects invalid amqplib exports", async () => {
     jest.resetModules();
-    jest.doMock("amqplib", () => 123, { virtual: true });
+    amqplibMockState.module = 123;
 
     let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
@@ -190,7 +200,7 @@ describe("durable: optional deps helpers", () => {
 
   it("connectAmqplib() rejects non-function connect exports", async () => {
     jest.resetModules();
-    jest.doMock("amqplib", () => ({ connect: 123 }), { virtual: true });
+    amqplibMockState.module = { connect: 123 };
 
     let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {

@@ -480,6 +480,7 @@ Core primitives:
 Important rules:
 
 - Hydration happens on `parse(...)`, not on `check(...)`. Class-schema hydration uses prototype assignment (no constructor call).
+- Matching is depth-capped (default 1000 nested levels, then `errors.checkMaxDepthExceededError`). Tune via `check(value, pattern, { maxDepth })` or `Match.compile(pattern, { maxDepth })`; `Infinity` disables it.
 - Plain objects are strict by default. Use `Match.ObjectStrict(...)` for explicit strictness, `Match.ObjectIncluding(...)` when extra keys are allowed.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
 - Compiled schemas do not expose `.extend()`. Compose `compiled.pattern` into a new pattern and recompile.

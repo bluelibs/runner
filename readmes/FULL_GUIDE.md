@@ -5279,6 +5279,7 @@ Rule of thumb:
 - `check(value, pattern, { errorPolicy: "all" })` aggregates all validation issues instead of fail-fast at first mismatch.
 - `Match.WithErrorPolicy(pattern, "all")` stores the same aggregate behavior as the default for that Match-native pattern.
 - `throwAllErrors` still works as a deprecated alias for `errorPolicy`.
+- Pattern matching is depth-capped: past 1000 nesting levels it aborts with `errors.checkMaxDepthExceededError` instead of overflowing the call stack. Tune it with `check(value, pattern, { maxDepth })`, `Match.compile(pattern, { maxDepth })`, or `Match.test(value, pattern, { maxDepth })`; `Infinity` disables the cap.
 - Recursive and forward patterns are supported via `Match.Lazy(...)`.
 - Class-backed recursive graphs are supported with `Match.Schema()` + `Match.fromSchema(...)`.
   Use `Match.fromSchema(() => User)` inside decorated fields when a class needs to reference itself or a class declared later.

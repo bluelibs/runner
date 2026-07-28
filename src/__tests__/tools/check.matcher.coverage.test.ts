@@ -59,6 +59,8 @@ describe("tools/check matcher coverage", () => {
       failures: [],
       collectAll: false,
       activeComparisons: new WeakMap<object, WeakSet<object>>(),
+      depth: 0,
+      maxDepth: 1000,
     });
 
     const invalidOneOf = Match.OneOf(String);
