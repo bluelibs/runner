@@ -28,10 +28,15 @@ Prefer the built-in flat globals exported by Runner:
 ## Quick Start
 
 ```ts
-import { resources, r, run } from "@bluelibs/runner";
+import { Match, resources, r, run } from "@bluelibs/runner";
 
 const userCreated = r
   .event<{ id: string; email: string }>("userCreated")
+  .build();
+
+const userAlreadyExists = r
+  .error<{ email: string }>("userAlreadyExists")
+  .httpCode(409)
   .build();
 
 const userStore = r
@@ -41,12 +46,20 @@ const userStore = r
 
 const createUser = r
   .task<{ email: string }>("createUser")
+  .inputSchema({ email: Match.Email })
   .dependencies({
     userCreated,
     userStore,
     logger: resources.logger,
   })
+  .throws([userAlreadyExists])
   .run(async (input, deps) => {
+    for (const existing of deps.userStore.values()) {
+      if (existing.email === input.email) {
+        userAlreadyExists.throw({ email: input.email });
+      }
+    }
+
     const user = { id: "user-1", email: input.email };
 
     deps.userStore.set(user.id, user);
@@ -67,7 +80,7 @@ const sendWelcomeEmail = r
 
 const app = r
   .resource("app")
-  .register([userStore, createUser, sendWelcomeEmail])
+  .register([userCreated, userStore, createUser, sendWelcomeEmail])
   .build();
 
 const runtime = await run(app);
@@ -135,14 +148,19 @@ userInput.toJSONSchema();
 
 Main runtime helpers: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getHealth`, `dispose(options?)`.
 
-`runtime.inspect().snapshot()` returns an immutable view of the compiled graph.
-`runtime.inspect().explain(definitionOrCanonicalId)` reports ownership, resolved dependencies,
-effective local/inherited middleware order and origin, tags, source identity, override winner, and
-root operator access without exposing mutable Store state. Snapshots also include retained resource
-ready/shutdown waves. The first post-lock snapshot is cached: sleeping lazy resources and dry-run
-resources have no lifecycle waves at that point. Runtime interceptors are not definition middleware
-and are not listed. `IInspectableRuntime` names the additive inspection capability without making
-`inspect()` mandatory for structural `IRuntime` implementations.
+`runtime.inspect().snapshot()` returns an immutable view of the compiled graph: every definition
+ordered by canonical id, plus the retained ready/shutdown lifecycle waves. After the runtime locks,
+the snapshot is computed once and cached. Runtime interceptors such as `taskRunner.intercept(...)`
+are not definition middleware, so they never appear here.
+
+`runtime.inspect().explain(definitionOrCanonicalId)` explains one definition given a reference or a
+canonical id string, and fails fast with `runtimeInspectionTargetNotFoundError` on unknown targets.
+Each explanation reports:
+
+- `canonicalId`, `sourceId`, and `ownerId`
+- resolved dependencies, with `dependenciesResolved: false` for dependency callbacks
+- effective middleware order and origin (local vs subtree-inherited)
+- `tagIds`, the override winner, and root operator access
 
 The returned runtime also exposes: `runOptions`, `mode` (`"dev" | "prod" | "test"`), and `state` (`"running" | "paused"`).
 
@@ -212,15 +230,6 @@ const app = r
   })
   .build();
 ```
-
-## Serverless / AWS Lambda
-
-- Treat the Lambda handler as a thin ingress adapter: parse the API Gateway event, provide request async context, then call `runtime.runTask(...)`.
-- Cache the `run(app, { shutdownHooks: false })` promise across warm invocations so cold-start bootstrap happens once per container.
-- Prefer task input schemas for business validation. Keep the handler focused on HTTP adaptation and error mapping.
-- Require request-local business state with `r.asyncContext(...).require()` so missing context fails fast.
-- Use an explicit `disposeRunner()` helper only in tests, local scripts, or environments where you truly control teardown.
-- If an external host owns shutdown, prefer `run(app, { signal, shutdownHooks: false })` over forwarding that signal into business execution.
 
 ## Resources
 
@@ -445,7 +454,7 @@ Operational notes:
 - `cache`, `debounce`, `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast on non-serializable input. `rateLimit` defaults to `canonicalTaskId` (shared quota per task). The `canonicalTaskId` is the full runtime id, so sibling resources with the same local id don't share state by accident.
 - See [Security](#security) for `identityScope` and identity-aware partitioning.
 - `invalidateKeys(...)` is raw by default. Pass `invalidateKeys(key, { identityScope })` when you want Runner to scope the provided base key through the active identity namespace before invalidation.
-- Cache refs stay raw. For tenant-aware invalidation, build refs through an app helper (e.g., `CacheRefs.getTenantId()`) so `keyBuilder` and `invalidateRefs(...)` share the same format.
+- Cache refs stay raw; build tenant-aware refs through an app helper. See [Security](#security).
 - Refs from `keyBuilder(...)` and refs added through the journal collector accumulate.
 - Middleware tags can enforce config contracts flowing into dependency callbacks, `run(...)`, `.with(...)`, `.config`, and `.extract(...)`.
 - `tags.identityScoped`: middleware supports optional `identityScope`; subtree policy may fill or require it. See [Security](#security).
@@ -787,6 +796,15 @@ Task identity gates (separate from middleware partitioning):
 - Runner treats `roles` literally; expand inherited hierarchies before `identity.provide(...)` and gate on the lowest role needed.
 
 Explicit identity-sensitive config fails fast at boot without `AsyncLocalStorage`. `asyncContexts.identity` degrades gently: `tryUse()` returns `undefined`, `has()` returns `false`, `provide()` still executes. `run(..., { identity: custom })` fails fast without `AsyncLocalStorage`.
+
+## Serverless / AWS Lambda
+
+- Treat the Lambda handler as a thin ingress adapter: parse the API Gateway event, provide request async context, then call `runtime.runTask(...)`.
+- Cache the `run(app, { shutdownHooks: false })` promise across warm invocations so cold-start bootstrap happens once per container.
+- Prefer task input schemas for business validation. Keep the handler focused on HTTP adaptation and error mapping.
+- Require request-local business state with `r.asyncContext(...).require()` so missing context fails fast.
+- Use an explicit `disposeRunner()` helper only in tests, local scripts, or environments where you truly control teardown.
+- If an external host owns shutdown, prefer `run(app, { signal, shutdownHooks: false })` over forwarding that signal into business execution.
 
 ## Queue
 
