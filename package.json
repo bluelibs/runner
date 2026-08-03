@@ -190,7 +190,7 @@
   "optionalDependencies": {
     "amqplib": "^2.0.1",
     "busboy": "^1.6.0",
-    "ioredis": "^5.7.0"
+    "ioredis": "^6.0.0"
   },
   "overrides": {
     "test-exclude": "^7.0.1"
