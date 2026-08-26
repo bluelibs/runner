@@ -53,6 +53,7 @@ type TestAttemptRunner = {
     execution: Execution;
     raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
     canPersistOutcome: () => Promise<boolean>;
+    abortAttempt: (reason: string) => void;
   }) => Promise<
     { kind: "completed"; result: unknown } | { kind: "already-finalized" }
   >;
@@ -364,6 +365,7 @@ describe("durable: ExecutionManager coverage", () => {
         execution: running!,
         raceWithLockLoss: async (promise) => await promise,
         canPersistOutcome: async () => true,
+        abortAttempt: () => undefined,
       }),
     ).resolves.toEqual({
       kind: "completed",
@@ -389,6 +391,7 @@ describe("durable: ExecutionManager coverage", () => {
         execution: timeoutRunning,
         raceWithLockLoss: async (promise) => await promise,
         canPersistOutcome: async () => true,
+        abortAttempt: () => undefined,
       }),
     ).resolves.toEqual({
       kind: "completed",
@@ -402,6 +405,7 @@ describe("durable: ExecutionManager coverage", () => {
       createdAt: new Date(Date.now() - 1_000),
     };
     await store.saveExecution(expiredRunning);
+    const expiredAbort = jest.fn();
     await expect(
       manager.attemptRunner.runTaskAttempt({
         task,
@@ -414,8 +418,10 @@ describe("durable: ExecutionManager coverage", () => {
         execution: expiredRunning,
         raceWithLockLoss: async (promise) => await promise,
         canPersistOutcome: async () => true,
+        abortAttempt: expiredAbort,
       }),
     ).resolves.toEqual({ kind: "already-finalized" });
+    expect(expiredAbort).toHaveBeenCalledTimes(1);
     expect((await store.getExecution("e-helper-expired"))?.status).toBe(
       ExecutionStatus.Failed,
     );
@@ -440,6 +446,7 @@ describe("durable: ExecutionManager coverage", () => {
         execution: expiredBlockedByRecheck,
         raceWithLockLoss: async (promise) => await promise,
         canPersistOutcome: timedOutRecheck,
+        abortAttempt: () => undefined,
       }),
     ).resolves.toEqual({ kind: "already-finalized" });
     expect(timedOutRecheck).toHaveBeenCalledTimes(1);

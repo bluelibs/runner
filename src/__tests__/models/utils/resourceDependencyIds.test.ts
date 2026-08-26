@@ -29,4 +29,22 @@ describe("getResourceDependencyIds", () => {
 
     expect(result).toEqual([dbResource.id, cacheResource.id]);
   });
+
+  it("collects configured resources and arrays of resources", () => {
+    const dbResource = defineResource({
+      id: "deps-resources-configured-db",
+      configSchema: { parse: (value: unknown) => value as { url: string } },
+    });
+    const queueResource = defineResource({
+      id: "deps-resources-configured-queue",
+      configSchema: { parse: (value: unknown) => value as { name: string } },
+    });
+
+    const result = getResourceDependencyIds({
+      db: dbResource.with({ url: "postgres://..." }),
+      array: [queueResource, dbResource.with({ url: "postgres://readonly" })],
+    });
+
+    expect(result).toEqual([dbResource.id, queueResource.id, dbResource.id]);
+  });
 });

@@ -1,4 +1,4 @@
-import { isOptional, isResource } from "../../define";
+import { isOptional, isResource, isResourceWithConfig } from "../../define";
 
 export function getResourceDependencyIds(rawDependencies: unknown): string[] {
   if (!rawDependencies || typeof rawDependencies !== "object") {
@@ -12,8 +12,13 @@ export function getResourceDependencyIds(rawDependencies: unknown): string[] {
       return;
     }
 
-    if (isResource(value)) {
+    if (isResource(value) || isResourceWithConfig(value)) {
       resourceIds.push(value.id);
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(collect);
     }
   };
 

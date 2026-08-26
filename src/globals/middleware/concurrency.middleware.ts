@@ -5,6 +5,7 @@ import {
   middlewareConcurrencyConflictError,
   validationError,
 } from "../../errors";
+import { IDENTITY_SCOPE_SEPARATOR } from "../../async-contexts/identity.constants";
 import { Match } from "../../tools/check";
 import type { ValidationSchemaInput } from "../../types/utilities";
 import {
@@ -70,6 +71,17 @@ function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
       subject: "Middleware config",
       id: "concurrency",
       originalError: 'Concurrency middleware config "key" requires "limit".',
+    });
+  }
+
+  if (
+    config.key !== undefined &&
+    config.key.includes(IDENTITY_SCOPE_SEPARATOR)
+  ) {
+    validationError.throw({
+      subject: "Middleware config",
+      id: "concurrency",
+      originalError: `Concurrency middleware config "key" cannot contain "${IDENTITY_SCOPE_SEPARATOR}" because it is used as the separator in shared identity-scoped keys.`,
     });
   }
 
@@ -139,7 +151,7 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
 
     if (!semaphore && config.limit !== undefined) {
       if (config.key !== undefined) {
-        const scopedKey = `${identityNamespace}:${config.key}`;
+        const scopedKey = `${identityNamespace}${IDENTITY_SCOPE_SEPARATOR}${config.key}`;
         const existing = state.semaphoresByKey.get(scopedKey);
         if (existing) {
           if (existing.limit !== config.limit) {

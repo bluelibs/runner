@@ -67,7 +67,10 @@ describe("httpFetchRemoteLane & createExposureFetch - additional coverage", () =
       timeoutMs: 1,
       serializer,
     });
-    await expect(client.task("t1", {})).rejects.toThrow(/aborted/);
+    await expect(client.task("t1", {})).rejects.toMatchObject({
+      code: "TIMEOUT",
+      name: "RemoteLaneTransportError",
+    });
   });
 
   it("forwards caller-provided signals to fetch", async () => {

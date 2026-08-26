@@ -89,7 +89,7 @@ export function makeHookBuilder<
       const next = clone<TDeps, TOn, TMeta, TDeps, TOn, TNewMeta>(
         state as BuilderState<TDeps, TOn, TMeta>,
         {
-          meta: m as TNewMeta,
+          meta: { ...m } as TNewMeta,
         },
       );
       return makeHookBuilder<TDeps, TOn, TNewMeta, THasRun>(next);

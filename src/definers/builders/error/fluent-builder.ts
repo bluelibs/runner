@@ -104,7 +104,7 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
     },
 
     meta<TNewMeta extends IErrorMeta>(m: TNewMeta) {
-      const next = clone(state, { meta: m });
+      const next = clone(state, { meta: { ...m } });
       return makeErrorBuilder(next);
     },
 

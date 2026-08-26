@@ -2,6 +2,7 @@ import {
   hashRemoteLanePayload,
   issueRemoteLaneToken,
 } from "../../remote-lanes/laneAuth";
+import { RUNNER_ASYNC_CONTEXT_HEADER } from "../../../remote-lanes/http/constants";
 import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
 import {
   authorizeRpcLaneRequest,
@@ -202,6 +203,59 @@ describe("rpcLanes auth helpers", () => {
     ).toBeNull();
   });
 
+  it("binds the serialized async context header into the token hash", () => {
+    const lane = { id: "lane-rpc-context-bind" } as any;
+    const bindingAuth = { secret: "context-secret" };
+    const bodyText = JSON.stringify({ input: { value: 1 } });
+    const contextBlob = JSON.stringify({ tenant: "acme" });
+
+    const token = issueRemoteLaneToken({
+      laneId: lane.id,
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "rpc-task",
+        targetId: "task.context-bind",
+        payloadHash: hashRemoteLanePayload(bodyText + contextBlob),
+      },
+    })!;
+
+    const reqWithContext = {
+      headers: {
+        authorization: `Bearer ${token}`,
+        [RUNNER_ASYNC_CONTEXT_HEADER]: contextBlob,
+      },
+    } as any;
+
+    // Matching context header verifies...
+    expect(
+      authorizeRpcLaneRequest(
+        reqWithContext,
+        lane,
+        bindingAuth,
+        { kind: "rpc-task", targetId: "task.context-bind" },
+        { bodyText },
+      ),
+    ).toBeNull();
+
+    // ...but a rewritten context header must invalidate the token.
+    const reqWithTamperedContext = {
+      headers: {
+        authorization: `Bearer ${token}`,
+        [RUNNER_ASYNC_CONTEXT_HEADER]: JSON.stringify({ tenant: "evil" }),
+      },
+    } as any;
+    expect(
+      authorizeRpcLaneRequest(
+        reqWithTamperedContext,
+        lane,
+        bindingAuth,
+        { kind: "rpc-task", targetId: "task.context-bind" },
+        { bodyText },
+      ),
+    ).toMatchObject({ status: 401 });
+  });
+
   it("requires verifier material for local-simulated lanes", () => {
     const lane = { id: "lane-rpc-auth-simulated" } as any;
     const config = {
@@ -231,5 +285,73 @@ describe("rpcLanes auth helpers", () => {
       () => enforceRpcLaneAuthReadiness(config, resolved),
       "remoteLanes-auth-verifierMissing",
     );
+  });
+
+  it("hashes an empty bodyText over the context header only (streaming endpoints)", () => {
+    const lane = { id: "lane-rpc-empty-body" } as any;
+    const bindingAuth = { secret: "empty-body-secret" };
+    const contextBlob = JSON.stringify({ tenant: "acme" });
+
+    // A client streaming a body cannot hash it byte-for-byte, so it signs the
+    // async context header only (empty bodyText).
+    const streamingToken = issueRemoteLaneToken({
+      laneId: lane.id,
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "rpc-task",
+        targetId: "task.streaming",
+        payloadHash: hashRemoteLanePayload("" + contextBlob),
+      },
+    })!;
+
+    const streamingReq = {
+      headers: {
+        authorization: `Bearer ${streamingToken}`,
+        [RUNNER_ASYNC_CONTEXT_HEADER]: contextBlob,
+      },
+    } as any;
+
+    expect(
+      authorizeRpcLaneRequest(
+        streamingReq,
+        lane,
+        bindingAuth,
+        { kind: "rpc-task", targetId: "task.streaming" },
+        { bodyText: "" },
+      ),
+    ).toBeNull();
+
+    // A JSON-body token (hash over real body bytes) must NOT verify against an
+    // empty-bodyText request — replaying a JSON token at a streaming endpoint
+    // fails closed.
+    const bodyText = JSON.stringify({ input: { value: 1 } });
+    const jsonToken = issueRemoteLaneToken({
+      laneId: lane.id,
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "rpc-task",
+        targetId: "task.streaming",
+        payloadHash: hashRemoteLanePayload(bodyText + contextBlob),
+      },
+    })!;
+
+    const jsonReplayReq = {
+      headers: {
+        authorization: `Bearer ${jsonToken}`,
+        [RUNNER_ASYNC_CONTEXT_HEADER]: contextBlob,
+      },
+    } as any;
+
+    expect(
+      authorizeRpcLaneRequest(
+        jsonReplayReq,
+        lane,
+        bindingAuth,
+        { kind: "rpc-task", targetId: "task.streaming" },
+        { bodyText: "" },
+      ),
+    ).toMatchObject({ status: 401 });
   });
 });

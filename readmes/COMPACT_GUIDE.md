@@ -345,6 +345,7 @@ Key rules:
 - `isOneOf()` is a runtime guard for Runner emissions that retain definition identity; arbitrary `{ id }`-shaped objects are not exact matches.
 - `.parallel(true)` allows concurrent same-priority listeners.
 - `.transactional(true)` makes listeners reversible. Each executed hook must return an async undo closure.
+- `.throws([...])` documents errors hooks on this event might throw. Declarative metadata only; events themselves do not throw.
 
 Transactional constraints fail fast:
 
@@ -479,8 +480,8 @@ Core primitives:
 
 Important rules:
 
-- Hydration happens on `parse(...)`, not on `check(...)`. Class-schema hydration uses prototype assignment (no constructor call).
-- Matching is depth-capped (default 1000 nested levels, then `errors.checkMaxDepthExceededError`). Tune via `check(value, pattern, { maxDepth })` or `Match.compile(pattern, { maxDepth })`; `Infinity` disables it.
+- Hydration happens on `parse(...)`, not on `check(...)`. Class-schema hydration uses prototype assignment (no constructor call). `check()` result types therefore expose data fields only, not class prototype methods.
+- Matching is depth-capped (default 1000 nested levels, then `errors.checkMaxDepthExceededError`). Tune via `check(value, pattern, { maxDepth })` or `Match.compile(pattern, { maxDepth })`; `Infinity` disables it. `Match.toJSONSchema(...)` uses a 512-level cap and throws a typed error instead of overflowing the stack.
 - Plain objects are strict by default. Use `Match.ObjectStrict(...)` for explicit strictness, `Match.ObjectIncluding(...)` when extra keys are allowed.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
 - Compiled schemas do not expose `.extend()`. Compose `compiled.pattern` into a new pattern and recompile.
@@ -536,7 +537,7 @@ Important rules:
 
 - `IRunnerError` exposes `.id`, `.data`, `.message`, `.httpCode`, and `.remediation`.
 - `.dataSchema(...)` validates error data at throw time.
-- `.throws([...])` on tasks, resources, hooks, and middleware accepts Runner error helpers only and remains declarative metadata.
+- `.throws([...])` on tasks, resources, hooks, events, and middleware accepts Runner error helpers only and remains declarative metadata.
 - `.new()` / `.throw()` / `.is()` work even when the helper is used outside the Runner graph.
 - Register the error when you want DI, discovery, or app definitions to depend on it.
 - `errors.genericError` is the built-in fallback for ad-hoc message-only errors. Prefer domain-specific helpers when the contract is stable.
@@ -544,6 +545,7 @@ Important rules:
 ### Serialization
 
 - The built-in serializer round-trips common non-JSON shapes (`Date`, `RegExp`). Register custom types through `resources.serializer`.
+- `symbolPolicy` defaults to `well-known-only`. Global `Symbol.for` keys require `allow-all`; unique symbols are always rejected.
 - For boundary-specific behavior, register a custom resource returning `new Serializer({...})` or fork `resources.serializer`.
 - `allowedTypes: [...]` restricts deserialization. `new Serializer({ types: [...] })` pre-registers explicit `addType({ ... })` definitions.
 - `serializer.addSchema(DtoClass)` / `new Serializer({ schemas: [...] })` registers `@Match.Schema()` DTOs so parse/deserialize restores them without an explicit `{ schema }`.

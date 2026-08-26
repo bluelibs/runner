@@ -132,6 +132,8 @@ export async function runTaskAttempt(params: {
   contextProvider: DurableServiceConfig["contextProvider"];
   raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
   canPersistOutcome: () => Promise<boolean>;
+  /** Aborts the attempt's live AbortSignal so cooperative tasks stop running. */
+  abortAttempt: (reason: string) => void;
   transitionToFailed: (p: {
     execution: Execution<unknown, unknown>;
     from: ExecutionStatus;
@@ -160,6 +162,8 @@ export async function runTaskAttempt(params: {
   const remainingTimeout = Math.max(0, params.execution.timeout - elapsed);
 
   if (remainingTimeout === 0 && params.execution.timeout > 0) {
+    // The task is already running above; make sure it observes the deadline.
+    params.abortAttempt(timeoutMessage);
     if (!(await params.canPersistOutcome())) {
       return { kind: "already-finalized" };
     }
@@ -172,12 +176,22 @@ export async function runTaskAttempt(params: {
     return { kind: "already-finalized" };
   }
 
-  return {
-    kind: "completed",
-    result: await params.raceWithLockLoss(
-      withTimeout(taskPromise, remainingTimeout, timeoutMessage),
-    ),
-  };
+  try {
+    return {
+      kind: "completed",
+      result: await params.raceWithLockLoss(
+        withTimeout(taskPromise, remainingTimeout, timeoutMessage),
+      ),
+    };
+  } catch (error) {
+    if (isTimeoutExceededError(error)) {
+      // The racing timer fired: the task keeps running in the background unless
+      // we abort it here, holding connections and side effects for a run whose
+      // outcome is already terminal.
+      params.abortAttempt(timeoutMessage);
+    }
+    throw error;
+  }
 }
 
 export async function handleExecutionAttemptError(params: {

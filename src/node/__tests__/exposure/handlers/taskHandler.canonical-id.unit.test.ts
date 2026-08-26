@@ -23,6 +23,7 @@ describe("taskHandler canonical id boundaries", () => {
     jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
       ok: true,
       value: { input: { ok: true } },
+      rawText: "",
     });
 
     const handler = createTaskHandler({
@@ -88,6 +89,7 @@ describe("taskHandler canonical id boundaries", () => {
     jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
       ok: true,
       value: { input: 1 },
+      rawText: "",
     });
 
     const handler = createTaskHandler({
@@ -138,6 +140,7 @@ describe("taskHandler canonical id boundaries", () => {
     jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
       ok: true,
       value: { input: { ok: true } },
+      rawText: "",
     });
 
     const handler = createTaskHandler({

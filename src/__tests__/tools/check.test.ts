@@ -183,6 +183,17 @@ describe("tools/check", () => {
     ).not.toThrow();
   });
 
+  it("rejects value keys that collide with Object.prototype members under strict matching", () => {
+    // "constructor" and "toString" are inherited by every plain-object pattern,
+    // so they must not be treated as known pattern keys.
+    expectMatchFailure(() =>
+      checkRuntime({ id: "1", constructor: { evil: true } }, { id: String }),
+    );
+    expectMatchFailure(() =>
+      checkRuntime({ toString: "not-a-function", id: "1" }, { id: String }),
+    );
+  });
+
   it("supports Match.ObjectStrict as explicit strict object shorthand", () => {
     expect(() =>
       checkRuntime(

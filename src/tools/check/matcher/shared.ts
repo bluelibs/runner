@@ -9,6 +9,14 @@ export type PathSegment = string | number;
  */
 export const DEFAULT_MATCH_MAX_DEPTH = 1000;
 
+/**
+ * Nesting budget for JSON Schema conversion (toJsonSchema.ts). Lower than
+ * `DEFAULT_MATCH_MAX_DEPTH` because each compiler level walks several frames
+ * (`compilePattern` → `compileObjectPattern` → property loop), so reusing the
+ * matcher's 1000 budget would overflow the stack before the guard fires.
+ */
+export const MAX_JSON_SCHEMA_DEPTH = 512;
+
 export type NonEmptyArrayElement<TPattern> = [TPattern] extends [undefined]
   ? unknown
   : InferMatchPattern<TPattern>;

@@ -151,17 +151,27 @@ describe("durable: DurableWorker", () => {
     expect(queue.handler).not.toBeNull();
   });
 
-  it("treats repeated successful start() calls as idempotent", async () => {
+  it("treats repeated start() calls as idempotent while consuming", async () => {
     const queue = new TestQueue();
-    const consumeSpy = jest.spyOn(queue, "consume");
+    let releaseConsume!: () => void;
+    const consumeSpy = jest.spyOn(queue, "consume").mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseConsume = resolve;
+        }),
+    );
     const { service } = createService();
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
 
-    await worker.start();
-    await worker.start();
+    const first = worker.start();
+    const second = worker.start();
 
     expect(consumeSpy).toHaveBeenCalledTimes(1);
+
+    releaseConsume();
+    await first;
+    await second;
   });
 
   it("nacks on handler errors", async () => {
@@ -526,5 +536,20 @@ describe("durable: DurableWorker", () => {
       .mockRejectedValue(waitError);
 
     await expect(worker.stop()).rejects.toThrow("wait failed");
+  });
+
+  it("allows start() to resume consumption after the consumer ends", async () => {
+    const queue = new TestQueue();
+    const consumeSpy = jest
+      .spyOn(queue, "consume")
+      .mockImplementation(async () => undefined);
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+
+    await worker.start();
+    await worker.start();
+
+    expect(consumeSpy).toHaveBeenCalledTimes(2);
   });
 });

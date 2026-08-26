@@ -415,6 +415,27 @@ describe("task/event/hook/middleware builders", () => {
     ).toThrow(/Invalid throws entry/);
   });
 
+  it("event builder supports throws contracts", () => {
+    const errA = r.error("tests-builder-event-throws-errA").build();
+    const errB = r.error("tests-builder-event-throws-errB").build();
+
+    const ev = r
+      .event("tests-builder-event-throws")
+      .throws([errA, errB, errA])
+      .build();
+
+    expect(ev.throws).toEqual([errA.id, errB.id]);
+  });
+
+  it("event builder throws on invalid throws entries", () => {
+    expect(() =>
+      r
+        .event("tests-builder-event-throws-invalid")
+        .throws([{} as AnyError])
+        .build(),
+    ).toThrow(/Invalid throws entry/);
+  });
+
   it("task middleware builder supports throws contracts", () => {
     const errA = r.error("tests-builder-tmw-throws-errA").build();
     const errB = r.error("tests-builder-tmw-throws-errB").build();

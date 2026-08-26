@@ -3363,7 +3363,7 @@ try {
 Use `.throws()` to declare the error ids a definition may produce.
 This is declarative metadata for documentation and tooling, not runtime enforcement.
 
-`.throws()` is available on task, resource, hook, and middleware builders.
+`.throws()` is available on task, resource, hook, event, and middleware builders.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -3380,6 +3380,9 @@ const getUser = r
 
 console.log(getUser.throws);
 ```
+
+On events, `.throws()` documents errors hooks attached to that event might throw.
+Events themselves do not throw; the list is metadata for docs and tooling.
 
 The `throws` list accepts Runner error helpers only, and is normalized and deduplicated at definition time.
 
@@ -4785,7 +4788,7 @@ const users = serializer.deserialize(payload, { schema: payloadSchema });
 | `Map`, `Set`  | Lost                         | Preserved                                                                                      |
 | `Uint8Array`  | Lost                         | Preserved                                                                                      |
 | `bigint`      | Lost/unsafe numeric coercion | Preserved as `__type: "BigInt"` (decimal string payload)                                       |
-| `symbol`      | Lost                         | Supports `Symbol.for(key)` and well-known symbols (unique `Symbol("...")` values are rejected) |
+| `symbol`      | Lost                         | Well-known symbols by default; `Symbol.for` requires `symbolPolicy: "allow-all"`; unique `Symbol("...")` values are rejected |
 | Circular refs | Error                        | Preserved                                                                                      |
 | Self refs     | Error                        | Preserved                                                                                      |
 
@@ -4825,13 +4828,13 @@ const viaParse = serializer.parse(payload, {
 
 ### Safety for Untrusted Payloads
 
-When deserializing untrusted data, tighten defaults:
+The default `symbolPolicy` is `well-known-only`. When deserializing untrusted
+data, also restrict which types can be reconstructed:
 
 ```typescript
 import { Serializer } from "@bluelibs/runner";
 
 const serializer = new Serializer({
-  symbolPolicy: "well-known-only",
   allowedTypes: ["Date", "RegExp", "Map", "Set", "Uint8Array", "BigInt"],
   maxDepth: 64,
   maxRegExpPatternLength: 2000,

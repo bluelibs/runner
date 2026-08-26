@@ -705,4 +705,36 @@ describe("resource builder", () => {
     expect(rr2.value).toBe(30);
     await rr2.dispose();
   });
+
+  it("does not alias or freeze the caller's dependencies/meta objects", () => {
+    const a = defineResource({
+      id: "tests-builder-aliasing-a",
+      init: async () => 1,
+    });
+    const deps = { a };
+    const meta = { title: "Aliasing Guard", description: "stays writable" };
+
+    const res = r
+      .resource("tests-builder-aliasing")
+      .dependencies(deps)
+      .meta(meta)
+      .build();
+
+    // The built definition owns a snapshot, not the caller's objects.
+    expect(res.dependencies).not.toBe(deps);
+    expect(res.meta).not.toBe(meta);
+
+    // The snapshot is frozen (build() deepFreezes definitions)...
+    expect(Object.isFrozen(res.dependencies)).toBe(true);
+    expect(Object.isFrozen(res.meta)).toBe(true);
+
+    // ...but the caller's objects are neither frozen nor mutated.
+    expect(Object.isFrozen(deps)).toBe(false);
+    expect(Object.isFrozen(meta)).toBe(false);
+    expect(deps).toEqual({ a });
+    expect(meta).toEqual({
+      title: "Aliasing Guard",
+      description: "stays writable",
+    });
+  });
 });

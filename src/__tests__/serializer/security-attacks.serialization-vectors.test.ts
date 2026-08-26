@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "@jest/globals";
-import { Serializer } from "../../serializer/index";
+import { Serializer, SymbolPolicyErrorMessage } from "../../serializer/index";
 
 describe("Serializer Security Attacks", () => {
   let serializer: Serializer;
@@ -36,12 +36,13 @@ describe("Serializer Security Attacks", () => {
       expect(roundTripped.big).toBe(BigInt(9007199254740991));
     });
 
-    it("serializes global symbols (Symbol.for)", () => {
+    it("rejects global symbols (Symbol.for) under the default policy", () => {
       const sym = Symbol.for("sec.sym.global");
       const payload = serializer.serialize({ sym });
-      const roundTripped = serializer.deserialize<{ sym: symbol }>(payload);
 
-      expect(roundTripped.sym).toBe(sym);
+      expect(() => serializer.deserialize<{ sym: symbol }>(payload)).toThrow(
+        SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed,
+      );
     });
 
     it("serializes well-known symbols (ex: Symbol.iterator)", () => {

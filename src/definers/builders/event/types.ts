@@ -9,7 +9,10 @@ export type BuilderState<
   TTransactional extends boolean | undefined = undefined,
 > = Readonly<
   Required<Pick<IEventDefinition<TPayload>, "id" | "meta" | "tags">> &
-    Pick<IEventDefinition<TPayload>, "parallel" | "payloadSchema"> & {
+    Pick<
+      IEventDefinition<TPayload>,
+      "parallel" | "payloadSchema" | "throws"
+    > & {
       transactional: TTransactional;
       filePath: string;
     }

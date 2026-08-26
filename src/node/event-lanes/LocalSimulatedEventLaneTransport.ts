@@ -10,11 +10,11 @@ import type { EventLaneMessage } from "./types";
 import type { EventLanesDiagnostics } from "./EventLanesDiagnostics";
 import type { EventLanesResourceContext } from "./EventLanesInternals";
 import { isRelayEmission } from "./EventLanesInternals";
+import { issueRemoteLaneToken } from "../remote-lanes/laneAuth";
 import {
-  hashRemoteLanePayload,
-  issueRemoteLaneToken,
-  verifyRemoteLaneToken,
-} from "../remote-lanes/laneAuth";
+  hashEventLaneAuthPayload,
+  verifyEventLaneMessageToken,
+} from "./eventLanes.auth";
 import {
   buildSerializedEventLaneAsyncContexts,
   withEventLaneAsyncContexts,
@@ -58,6 +58,11 @@ export class LocalSimulatedEventLaneTransport {
       emission.stopPropagation();
       const bindingAuth = this.resolveBindingAuth(eventRoute.lane.id);
       const payload = this.dependencies.serializer.stringify(emission.data);
+      const serializedAsyncContexts = buildSerializedEventLaneAsyncContexts({
+        lane: eventRoute.lane,
+        store: this.dependencies.store,
+        serializer: this.dependencies.serializer,
+      });
       const authToken = issueRemoteLaneToken({
         laneId: eventRoute.lane.id,
         bindingAuth,
@@ -65,7 +70,10 @@ export class LocalSimulatedEventLaneTransport {
         target: {
           kind: "event-lane",
           targetId: eventId,
-          payloadHash: hashRemoteLanePayload(payload),
+          payloadHash: hashEventLaneAuthPayload(
+            payload,
+            serializedAsyncContexts,
+          ),
         },
       });
       const message: EventLaneMessage = {
@@ -73,11 +81,7 @@ export class LocalSimulatedEventLaneTransport {
         laneId: eventRoute.lane.id,
         eventId,
         payload,
-        serializedAsyncContexts: buildSerializedEventLaneAsyncContexts({
-          lane: eventRoute.lane,
-          store: this.dependencies.store,
-          serializer: this.dependencies.serializer,
-        }),
+        serializedAsyncContexts,
         source: emission.source,
         authToken,
         createdAt: new Date(),
@@ -119,16 +123,10 @@ export class LocalSimulatedEventLaneTransport {
         eventLaneEventNotRegisteredError.throw({ eventId: message.eventId });
       }
 
-      verifyRemoteLaneToken({
+      verifyEventLaneMessageToken({
+        message,
         laneId: message.laneId,
         bindingAuth: this.resolveBindingAuth(message.laneId),
-        token: message.authToken ?? "",
-        requiredCapability: "produce",
-        expectedTarget: {
-          kind: "event-lane",
-          targetId: message.eventId,
-          payloadHash: hashRemoteLanePayload(message.payload),
-        },
       });
 
       const payload = this.dependencies.serializer.parse(message.payload);

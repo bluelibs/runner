@@ -39,7 +39,7 @@ const users = serializer.deserialize(payload, { schema: payloadSchema });
 | `Map`, `Set`  | Lost                         | Preserved                                                                                      |
 | `Uint8Array`  | Lost                         | Preserved                                                                                      |
 | `bigint`      | Lost/unsafe numeric coercion | Preserved as `__type: "BigInt"` (decimal string payload)                                       |
-| `symbol`      | Lost                         | Supports `Symbol.for(key)` and well-known symbols (unique `Symbol("...")` values are rejected) |
+| `symbol`      | Lost                         | Well-known symbols by default; `Symbol.for` requires `symbolPolicy: "allow-all"`; unique `Symbol("...")` values are rejected |
 | Circular refs | Error                        | Preserved                                                                                      |
 | Self refs     | Error                        | Preserved                                                                                      |
 
@@ -79,13 +79,13 @@ const viaParse = serializer.parse(payload, {
 
 ### Safety for Untrusted Payloads
 
-When deserializing untrusted data, tighten defaults:
+The default `symbolPolicy` is `well-known-only`. When deserializing untrusted
+data, also restrict which types can be reconstructed:
 
 ```typescript
 import { Serializer } from "@bluelibs/runner";
 
 const serializer = new Serializer({
-  symbolPolicy: "well-known-only",
   allowedTypes: ["Date", "RegExp", "Map", "Set", "Uint8Array", "BigInt"],
   maxDepth: 64,
   maxRegExpPatternLength: 2000,

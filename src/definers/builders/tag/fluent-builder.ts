@@ -26,7 +26,7 @@ export function makeTagBuilder<
     id: state.id,
 
     meta(m: ITagMeta) {
-      const next = clone(state, { meta: m });
+      const next = clone(state, { meta: { ...m } });
       return makeTagBuilder(next);
     },
 

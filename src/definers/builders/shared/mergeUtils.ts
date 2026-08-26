@@ -35,7 +35,11 @@ export function mergeDepsNoConfig<
   type Result = (TExisting & TNew) | (() => TExisting & TNew);
 
   if (override || !existing) {
-    return addition as Result;
+    // Snapshot plain-object additions so the caller's map isn't aliased (and
+    // later frozen) by build(). Factory functions aren't mutable maps.
+    return (
+      typeof addition === "function" ? addition : { ...addition }
+    ) as Result;
   }
 
   if (isFnExisting && isFnAddition) {
@@ -82,7 +86,11 @@ export function mergeDepsWithConfig<
     | ((config: C, mode: RunnerMode) => TExisting & TNew);
 
   if (override || !existing) {
-    return addition as Result;
+    // Snapshot plain-object additions so the caller's map isn't aliased (and
+    // later frozen) by build(). Factory functions aren't mutable maps.
+    return (
+      typeof addition === "function" ? addition : { ...addition }
+    ) as Result;
   }
 
   if (isFnExisting && isFnAddition) {

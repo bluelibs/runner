@@ -44,9 +44,11 @@ export class DurableWorker {
         this.trackInFlightMessage(handling);
         await handling;
       });
-    } catch (error) {
+    } finally {
+      // consume() resolving means the consumer ended (or errored). Either way the
+      // worker is no longer consuming, so a later start() must be able to resume
+      // instead of early-returning on the stale flag forever.
       this.started = false;
-      throw error;
     }
   }
 

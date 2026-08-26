@@ -728,10 +728,12 @@ export class RunResult<V> implements IInspectableRuntime<V> {
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())
-      .then(() => {
-        this.#disposed = true;
-      })
       .finally(() => {
+        // Latch disposed regardless of outcome so a later dispose() is a clean
+        // no-op. On failure the store has already cleared resource state and
+        // the event registry before throwing, so a "retry" would only re-fire
+        // lifecycle hooks without re-running the failed disposer.
+        this.#disposed = true;
         this.#disposing = false;
         this.#disposePromise = undefined;
       });

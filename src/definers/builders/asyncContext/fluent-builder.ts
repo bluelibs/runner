@@ -63,7 +63,7 @@ export function makeAsyncContextBuilder<T>(
     },
 
     meta<TNewMeta extends IAsyncContextMeta>(m: TNewMeta) {
-      const next = clone(state, { meta: m });
+      const next = clone(state, { meta: { ...m } });
       return makeAsyncContextBuilder(next);
     },
 

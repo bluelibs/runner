@@ -60,6 +60,12 @@ describe("definers builders utils", () => {
 
     const overridden = mergeDepsNoConfig(eObj, aObj, true);
     expect(overridden).toEqual({ b });
+    expect(overridden).not.toBe(aObj);
+
+    const firstFactory = mergeDepsNoConfig(undefined, aFn, false);
+    expect(firstFactory).toBe(aFn);
+    const overriddenFactory = mergeDepsNoConfig(eObj, aFn, true);
+    expect(overriddenFactory).toBe(aFn);
   });
 
   it("mergeDepsWithConfig merges objects and/or config-aware functions", () => {
@@ -100,6 +106,11 @@ describe("definers builders utils", () => {
     expect(mergedObjFn({ prefix: "ab" })).toEqual({ a, b });
 
     expect(mergeDepsWithConfig(eObj, aObj, true)).toEqual({ b });
+
+    const firstFactory = mergeDepsWithConfig(undefined, aFn, false);
+    expect(firstFactory).toBe(aFn);
+    const overriddenFactory = mergeDepsWithConfig(eObj, aFn, true);
+    expect(overriddenFactory).toBe(aFn);
   });
 });
 

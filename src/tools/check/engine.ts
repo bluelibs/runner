@@ -42,6 +42,7 @@ import { matchToJsonSchema } from "./toJsonSchema";
 import type {
   CheckSchemaLike,
   CheckedValue,
+  DataOnly,
   EnsurePatternOverlap,
   InferCheckSchema,
   InferMatchPattern,
@@ -238,17 +239,23 @@ function compileMatchPattern<TPattern extends MatchPattern>(
 
 function resolvePatternDefaultErrorPolicy(
   pattern: unknown,
+  depth: number = DEFAULT_MATCH_MAX_DEPTH,
 ): "first" | "all" | undefined {
   if (pattern instanceof WithErrorPolicyPattern) {
     return pattern.errorPolicy;
   }
 
   if (pattern instanceof WithMessagePattern) {
-    return resolvePatternDefaultErrorPolicy(pattern.pattern);
+    // Depth budget: a chain of fresh WithMessage/Lazy wrappers can recurse
+    // without triggering LazyPattern's same-instance cycle guard, so bound the
+    // unwrap below the stack ceiling. Exhausted → treat as "first" and bail.
+    if (depth <= 0) return undefined;
+    return resolvePatternDefaultErrorPolicy(pattern.pattern, depth - 1);
   }
 
   if (pattern instanceof LazyPattern) {
-    return resolvePatternDefaultErrorPolicy(pattern.resolve());
+    if (depth <= 0) return undefined;
+    return resolvePatternDefaultErrorPolicy(pattern.resolve(), depth - 1);
   }
 
   if (pattern instanceof ClassPattern) {
@@ -272,7 +279,9 @@ export function check<TSchema extends CheckSchemaLike<unknown>>(
   value: unknown,
   schema: TSchema,
   options?: CheckOptions,
-): InferCheckSchema<TSchema>;
+): TSchema extends ClassPattern<any>
+  ? DataOnly<InferCheckSchema<TSchema>>
+  : InferCheckSchema<TSchema>;
 export function check<TPattern extends MatchPattern, TValue>(
   value: TValue &
     EnsurePatternOverlap<TValue, InferMatchPattern<NoInfer<TPattern>>>,

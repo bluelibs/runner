@@ -134,4 +134,33 @@ describe("check() / Match depth budget", () => {
     );
     expect(errors.checkMaxDepthExceededError.is(error)).toBe(true);
   });
+
+  it("bounds default error-policy resolution over a recursive Lazy→WithMessage chain", () => {
+    // Fresh Lazy/WithMessage wrappers each call, so LazyPattern's same-instance
+    // cycle guard never fires. resolveDefaultCollectAll must still terminate
+    // instead of overflowing the stack.
+    const getRecursiveMessageChain = (): MatchPattern =>
+      Match.Lazy(() =>
+        Match.WithMessage(getRecursiveMessageChain(), "guarded"),
+      );
+
+    const error = caughtError(() =>
+      check({ any: "value" }, getRecursiveMessageChain()),
+    );
+    expect(errors.checkMaxDepthExceededError.is(error)).toBe(true);
+  });
+
+  it("bounds default error-policy resolution over a recursive WithMessage→Lazy chain", () => {
+    // Starts at WithMessage so the depth-0 guard in that unwrap path fires.
+    const getRecursiveMessageChain = (): MatchPattern =>
+      Match.WithMessage(
+        Match.Lazy(() => getRecursiveMessageChain()),
+        "guarded",
+      );
+
+    const error = caughtError(() =>
+      check({ any: "value" }, getRecursiveMessageChain()),
+    );
+    expect(errors.checkMaxDepthExceededError.is(error)).toBe(true);
+  });
 });
