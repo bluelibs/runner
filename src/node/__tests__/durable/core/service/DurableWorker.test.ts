@@ -172,6 +172,9 @@ describe("durable: DurableWorker", () => {
     releaseConsume();
     await first;
     await second;
+
+    await worker.start();
+    expect(consumeSpy).toHaveBeenCalledTimes(1);
   });
 
   it("nacks on handler errors", async () => {
@@ -538,11 +541,9 @@ describe("durable: DurableWorker", () => {
     await expect(worker.stop()).rejects.toThrow("wait failed");
   });
 
-  it("allows start() to resume consumption after the consumer ends", async () => {
+  it("treats start() as idempotent after consume() has registered the handler", async () => {
     const queue = new TestQueue();
-    const consumeSpy = jest
-      .spyOn(queue, "consume")
-      .mockImplementation(async () => undefined);
+    const consumeSpy = jest.spyOn(queue, "consume");
     const { service } = createService();
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
@@ -550,6 +551,22 @@ describe("durable: DurableWorker", () => {
     await worker.start();
     await worker.start();
 
+    expect(consumeSpy).toHaveBeenCalledTimes(1);
+    expect(queue.handler).not.toBeNull();
+  });
+
+  it("allows start() to register again after cooldown", async () => {
+    const queue = new TestQueue();
+    const consumeSpy = jest.spyOn(queue, "consume");
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+
+    await worker.start();
+    await worker.cooldown();
+    await worker.start();
+
     expect(consumeSpy).toHaveBeenCalledTimes(2);
+    expect(queue.handler).not.toBeNull();
   });
 });

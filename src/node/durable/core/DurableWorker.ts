@@ -39,16 +39,17 @@ export class DurableWorker {
     if (this.started) return;
     this.started = true;
     try {
+      // Built-in queues resolve consume() after registering the handler, not
+      // when consumption ends. Keep the latch set so a later start() cannot
+      // attach a second consumer that stop() would not cancel.
       await this.queue.consume(async (message) => {
         const handling = this.processMessage(message);
         this.trackInFlightMessage(handling);
         await handling;
       });
-    } finally {
-      // consume() resolving means the consumer ended (or errored). Either way the
-      // worker is no longer consuming, so a later start() must be able to resume
-      // instead of early-returning on the stale flag forever.
+    } catch (error) {
       this.started = false;
+      throw error;
     }
   }
 

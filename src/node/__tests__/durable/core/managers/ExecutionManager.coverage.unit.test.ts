@@ -308,13 +308,15 @@ describe("durable: ExecutionManager coverage", () => {
 
   it("covers extracted attempt helpers and task execution paths", async () => {
     const task = okTask("t-helper-coverage");
+    const taskExecutor = createTaskExecutor({
+      [task.id]: async (input) => ({ input }),
+    });
+    const runSpy = jest.spyOn(taskExecutor, "run");
     const store = new MemoryStore();
     const service = new DurableService({
       store,
       tasks: [task],
-      taskExecutor: createTaskExecutor({
-        [task.id]: async (input) => ({ input }),
-      }),
+      taskExecutor,
     });
     const manager = getManager(service);
 
@@ -453,6 +455,7 @@ describe("durable: ExecutionManager coverage", () => {
     expect((await store.getExecution(expiredBlockedByRecheck.id))?.status).toBe(
       ExecutionStatus.Running,
     );
+    expect(runSpy).toHaveBeenCalledTimes(2);
   });
 
   it("covers extracted outcome helpers for completion, suspension, and retry", async () => {
