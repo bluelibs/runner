@@ -2,6 +2,7 @@ import { cancellationError } from "../../errors";
 import {
   createCancellationErrorFromSignal,
   linkAbortSignals,
+  noopAbortSignalCleanup,
   raceWithAbortSignal,
 } from "../../tools/abortSignals";
 
@@ -76,6 +77,31 @@ describe("abortSignals", () => {
     const link = linkAbortSignals([]);
 
     expect(link.signal).toBeUndefined();
+  });
+
+  it("returns an aborted source directly without installing cleanup work", () => {
+    const controller = new AbortController();
+    controller.abort("already linked");
+
+    const link = linkAbortSignals([controller.signal]);
+
+    expect(link.signal).toBe(controller.signal);
+    expect(link.cleanup).toBe(noopAbortSignalCleanup);
+  });
+
+  it("returns a single active source directly without installing cleanup work", () => {
+    const controller = new AbortController();
+
+    const link = linkAbortSignals([controller.signal]);
+
+    expect(link.signal).toBe(controller.signal);
+    expect(link.cleanup).toBe(noopAbortSignalCleanup);
+  });
+
+  it("returns the original promise when there is no race signal", async () => {
+    const promise = Promise.resolve("ok");
+
+    await expect(raceWithAbortSignal(promise, undefined)).resolves.toBe("ok");
   });
 
   it("rejects immediately when raceWithAbortSignal receives an already-aborted signal", async () => {

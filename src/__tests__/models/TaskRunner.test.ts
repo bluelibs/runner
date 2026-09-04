@@ -4,6 +4,11 @@ import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { runtimeSource } from "../../types/runtimeSource";
 import { cancellationError } from "../../errors";
 import { getOrCreateTaskAbortController } from "../../models/runtime/taskCancellation";
+import {
+  ExecutionContextStore,
+  provideExecutionContext,
+} from "../../models/ExecutionContextStore";
+import { EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS } from "../../types/executionContext";
 
 import { createTestFixture } from "../test-utils";
 
@@ -240,6 +245,36 @@ describe("TaskRunner", () => {
     });
 
     expect(result).toBe(controller.signal);
+  });
+
+  it("inherits ambient execution signal when task options are omitted", async () => {
+    const fixture = createTestFixture();
+    const controller = new AbortController();
+    const executionContextStore = new ExecutionContextStore(
+      EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+    );
+    const runner = new TaskRunner(
+      fixture.store,
+      fixture.eventManager,
+      fixture.logger,
+      executionContextStore,
+    );
+    const task = defineTask({
+      id: "testTask-ambient-signal-context",
+      run: async (_input: void, _deps, context) => context?.signal,
+    });
+
+    fixture.store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    await provideExecutionContext({ signal: controller.signal }, async () => {
+      await expect(runner.run(task, undefined)).resolves.toBe(
+        controller.signal,
+      );
+    });
   });
 
   it("rejects the task call when the caller signal aborts", async () => {

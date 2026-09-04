@@ -27,7 +27,6 @@ import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import { runWithRuntimeCallSource } from "./RuntimeCallSourceStore";
-import { type ExecutionFrame } from "../types/executionContext";
 import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 import {
   createAggregateError,
@@ -241,19 +240,18 @@ export class EventManager {
 
     const hookSource: RuntimeCallSource = runtimeSource.hook(hook.id);
 
-    const hookFrame: ExecutionFrame = {
-      kind: "hook",
-      id: hookSource.id,
-      source: hookSource,
-      timestamp: Date.now(),
-    };
-
     return this.lifecycleAdmissionController.trackHookExecution(
       hookSource,
       () =>
         runWithRuntimeCallSource(hookSource, () =>
-          this.executionContextStore.runWithFrame(hookFrame, () =>
-            execute(hook, event),
+          this.executionContextStore.runWithFrameFactory(
+            () => ({
+              kind: "hook",
+              id: hookSource.id,
+              source: hookSource,
+              timestamp: Date.now(),
+            }),
+            () => execute(hook, event),
           ),
         ),
     );
@@ -390,18 +388,16 @@ export class EventManager {
       };
     };
 
-    const traceFrame: ExecutionFrame = {
-      kind: "event",
-      id: metadata.id,
-      source,
-      timestamp: Date.now(),
-    };
-
     return this.lifecycleAdmissionController.trackEventEmission(
       source,
       async () => {
-        const result = await this.executionContextStore.runWithFrame(
-          traceFrame,
+        const result = await this.executionContextStore.runWithFrameFactory(
+          () => ({
+            kind: "event",
+            id: metadata.id,
+            source,
+            timestamp: Date.now(),
+          }),
           processEmission,
           { signal },
         );

@@ -11,34 +11,43 @@ jobs:
   bench:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout HEAD (PR)
+      - name: Checkout HEAD
         uses: actions/checkout@v4
         with:
           path: head
 
-      - name: Checkout BASE (main)
+      - name: Read benchmark config
+        id: benchmark-config
+        working-directory: head
+        run: |
+          set -euo pipefail
+          baseline_ref="$(node -e 'const config = require("./config/benchmarks/benchmarks.config.json"); if (!config.baselineRef) process.exit(1); process.stdout.write(config.baselineRef);')"
+          echo "baseline_ref=$baseline_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout accepted benchmark baseline
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: base
+          ref: ${{ steps.benchmark-config.outputs.baseline_ref }}
+          path: baseline
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: "npm"
-          # Ensure caching works with multi-checkout (head/base)
-          cache-dependency-path: "**/package-lock.json"
+          cache-dependency-path: |
+            baseline/package-lock.json
+            head/package-lock.json
 
-      - name: Install deps (base)
-        working-directory: base
+      - name: Install deps (baseline)
+        working-directory: baseline
         run: npm ci
 
-      - name: Run benchmarks (base)
-        working-directory: base
+      - name: Run benchmarks (baseline)
+        working-directory: baseline
         env:
           NODE_OPTIONS: --expose-gc
-          BENCHMARK_OUTPUT: ${{ github.workspace }}/base/config/benchmarks/baseline-ci.json
+          BENCHMARK_OUTPUT: ${{ github.workspace }}/baseline/config/benchmarks/baseline-ci.json
           CI: true
           GITHUB_ACTIONS: true
         run: npm run benchmark
@@ -64,35 +73,17 @@ jobs:
 
           expected_baseline="$GITHUB_WORKSPACE/benchmarks/baseline.json"
           expected_head="$GITHUB_WORKSPACE/benchmarks/benchmark-results.json"
-          primary_baseline="$GITHUB_WORKSPACE/base/config/benchmarks/baseline-ci.json"
+          primary_baseline="$GITHUB_WORKSPACE/baseline/config/benchmarks/baseline-ci.json"
           primary_head="$GITHUB_WORKSPACE/head/config/benchmarks/benchmark-results-ci.json"
 
           if [ -f "$primary_baseline" ]; then
             cp "$primary_baseline" "$expected_baseline"
-            echo "Using baseline from config path: $primary_baseline"
+            echo "Using accepted baseline benchmark output: $primary_baseline"
           fi
 
           if [ ! -f "$expected_baseline" ]; then
-            recovered_baseline=""
-            for candidate in \
-              "$GITHUB_WORKSPACE/base/config/benchmarks/baseline.json" \
-              "$GITHUB_WORKSPACE/base/baseline.json"
-            do
-              if [ -f "$candidate" ]; then
-                cp "$candidate" "$expected_baseline"
-                recovered_baseline="$candidate"
-                break
-              fi
-            done
-
-            if [ -n "$recovered_baseline" ]; then
-              echo "Recovered baseline from backup path: $recovered_baseline"
-            fi
-          fi
-
-          if [ ! -f "$expected_baseline" ]; then
-            echo "No baseline.json found; creating stub baseline (no base benchmarks)."
-            printf '{"meta":{"note":"stub baseline - no benchmarks in base","isCI":true},"results":{}}' > "$expected_baseline"
+            echo "No benchmark output found for accepted baseline at $primary_baseline."
+            exit 1
           fi
 
           if [ -f "$primary_head" ]; then
@@ -101,41 +92,15 @@ jobs:
           fi
 
           if [ ! -f "$expected_head" ]; then
-            echo "benchmark-results.json missing from config path; checking backup locations..."
-            recovered_from=""
-
-            for candidate in \
-              "$GITHUB_WORKSPACE/benchmarks/benchmark-results.json" \
-              "$GITHUB_WORKSPACE/head/config/benchmarks/benchmark-results.json" \
-              "$GITHUB_WORKSPACE/head/benchmark-results.json"
-            do
-              if [ -f "$candidate" ]; then
-                cp "$candidate" "$expected_head"
-                recovered_from="$candidate"
-                break
-              fi
-            done
-
-            if [ -z "$recovered_from" ]; then
-              discovered="$(find "$GITHUB_WORKSPACE/head" -maxdepth 6 -type f -name "benchmark-results.json" | head -n 1 || true)"
-              if [ -n "$discovered" ]; then
-                cp "$discovered" "$expected_head"
-                recovered_from="$discovered"
-              fi
-            fi
-
-            if [ -n "$recovered_from" ]; then
-              echo "Recovered head benchmark output from: $recovered_from"
-            else
-              echo "No head benchmark output found; creating stub current results to keep benchmark comparison non-blocking."
-              printf '{"meta":{"note":"stub current - head benchmark output missing","isCI":true},"results":{}}' > "$expected_head"
-            fi
+            echo "No benchmark output found at $primary_head."
+            exit 1
           fi
 
       - name: Compare results
         working-directory: head
         run: |
           echo "Comparing benchmark results..."
+          echo "Accepted baseline ref: ${{ steps.benchmark-config.outputs.baseline_ref }}"
           echo "Baseline: ${{ github.workspace }}/benchmarks/baseline.json"
           echo "Current: ${{ github.workspace }}/benchmarks/benchmark-results.json"
           echo "Config: ${{ github.workspace }}/head/config/benchmarks/benchmarks.config.json"

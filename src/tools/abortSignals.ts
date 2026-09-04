@@ -13,6 +13,19 @@ export interface AbortSignalLink {
 }
 
 /**
+ * Shared cleanup for paths where no temporary abort listener was installed.
+ */
+export function noopAbortSignalCleanup(): void {}
+
+/**
+ * Shared link for callers that have no abort signal to compose.
+ */
+export const emptyAbortSignalLink: AbortSignalLink = {
+  signal: undefined,
+  cleanup: noopAbortSignalCleanup,
+};
+
+/**
  * Normalizes the platform-specific abort reason shape into a human-readable
  * message that can be surfaced through Runner's typed cancellation errors.
  */
@@ -71,24 +84,21 @@ export function linkAbortSignals(
   );
 
   if (activeSignals.length === 0) {
-    return {
-      signal: undefined,
-      cleanup() {},
-    };
+    return emptyAbortSignalLink;
   }
 
   const abortedSignal = activeSignals.find((signal) => signal.aborted);
   if (abortedSignal) {
     return {
       signal: abortedSignal,
-      cleanup() {},
+      cleanup: noopAbortSignalCleanup,
     };
   }
 
   if (activeSignals.length === 1) {
     return {
       signal: activeSignals[0],
-      cleanup() {},
+      cleanup: noopAbortSignalCleanup,
     };
   }
 

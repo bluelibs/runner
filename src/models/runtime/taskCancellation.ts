@@ -1,7 +1,9 @@
 import { journal } from "../ExecutionJournal";
 import type { ExecutionJournal } from "../../types/executionJournal";
 import {
+  emptyAbortSignalLink,
   linkAbortSignals,
+  noopAbortSignalCleanup,
   type AbortSignalLink,
 } from "../../tools/abortSignals";
 
@@ -56,10 +58,7 @@ function getOrCreateCallerSignalState(
 
   const state: TaskCallerSignalState = {
     activeSignals: [],
-    currentLink: {
-      signal: undefined,
-      cleanup() {},
-    },
+    currentLink: emptyAbortSignalLink,
   };
   executionJournal.set(taskCancellationJournalKeys.callerSignal, state);
   return state;
@@ -90,7 +89,7 @@ export function setTaskCallerSignal(
   signal: AbortSignal | undefined,
 ): () => void {
   if (!signal) {
-    return () => {};
+    return noopAbortSignalCleanup;
   }
 
   const state = getOrCreateCallerSignalState(executionJournal);
@@ -250,8 +249,22 @@ export function getTaskAbortSignalLink(
   const callerSignalState = executionJournal.get(
     taskCancellationJournalKeys.callerSignal,
   );
-  return linkAbortSignals([
-    callerSignalState?.currentLink.signal,
-    executionJournal.get(taskCancellationJournalKeys.abortController)?.signal,
-  ]);
+  const callerSignal = callerSignalState?.currentLink.signal;
+  const taskAbortSignal = executionJournal.get(
+    taskCancellationJournalKeys.abortController,
+  )?.signal;
+
+  if (!callerSignal && !taskAbortSignal) {
+    return emptyAbortSignalLink;
+  }
+
+  if (!callerSignal) {
+    return { signal: taskAbortSignal, cleanup: noopAbortSignalCleanup };
+  }
+
+  if (!taskAbortSignal) {
+    return { signal: callerSignal, cleanup: noopAbortSignalCleanup };
+  }
+
+  return linkAbortSignals([callerSignal, taskAbortSignal]);
 }
