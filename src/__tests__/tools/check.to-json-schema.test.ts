@@ -789,4 +789,15 @@ describe("tools/check toJSONSchema", () => {
     );
     expect(classCtorError.reason).toContain("class constructor");
   });
+
+  it("aborts a deep acyclic pattern with a typed error instead of a stack overflow", () => {
+    let deepPattern: Record<string, unknown> = { leaf: String };
+    for (let level = 0; level < 20000; level += 1) {
+      deepPattern = { child: deepPattern };
+    }
+
+    const error = expectSchemaError(() => Match.toJSONSchema(deepPattern));
+    expect(error.reason).toContain("maximum supported depth of 512");
+    expect(error.path).toBeDefined();
+  });
 });

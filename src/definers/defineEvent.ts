@@ -16,6 +16,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
+import { normalizeThrows } from "../tools/throws";
 
 /**
  * Defines an event.
@@ -83,6 +84,10 @@ export function defineEvent<TPayload = void>(
     payloadSchema,
     parallel: eventConfig.parallel,
     transactional: eventConfig.transactional,
+    throws: normalizeThrows(
+      { kind: "event", id: eventConfig.id },
+      eventConfig.throws,
+    ),
     optional() {
       const wrapper = {
         inner: this,

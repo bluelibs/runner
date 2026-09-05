@@ -13,6 +13,7 @@ import {
 } from "./utilities";
 import { RuntimeCallSource } from "./runtimeSource";
 import { isSameDefinition } from "../tools/isSameDefinition";
+import type { NormalizedThrowsList, ThrowsDeclaration } from "./error";
 
 export type EventHandlerType<T = any> = (
   event: IEventEmission<T>,
@@ -133,6 +134,11 @@ export interface IEventDefinition<TPayload = void> {
    * If true, listeners run in transactional mode and must return an undo closure.
    */
   transactional?: boolean;
+  /**
+   * Errors hooks attached to this event might throw. Documentation only — events
+   * themselves do not throw.
+   */
+  throws?: ThrowsDeclaration;
 }
 
 /**
@@ -140,7 +146,10 @@ export interface IEventDefinition<TPayload = void> {
  *
  * This describes the event itself, not a concrete emission instance.
  */
-export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
+export interface IEvent<TPayload = any> extends Omit<
+  IEventDefinition<TPayload>,
+  "throws"
+> {
   id: string;
   path?: string;
   /**
@@ -150,6 +159,8 @@ export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   [symbolFilePath]: string;
   /** Normalized payload validation schema. */
   payloadSchema?: IValidationSchema<TPayload>;
+  /** Normalized list of error ids declared via `throws`. */
+  throws?: NormalizedThrowsList;
   /** Return an optional dependency wrapper for this event. */
   optional: () => IOptionalDependency<IEvent<TPayload>>;
   /** Normalized tags attached to the event. */

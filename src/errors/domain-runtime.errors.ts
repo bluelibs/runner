@@ -1,4 +1,5 @@
 import { frameworkError as error } from "../definers/builders/error";
+import { registerBuilderInvalidHttpCodeError } from "../definers/foundationErrorRegistry";
 import type { DefaultErrorType } from "../types/error";
 import { RunnerErrorId } from "./domain-error-ids";
 
@@ -398,6 +399,8 @@ export const builderInvalidHttpCodeError = error<
     "Use a valid HTTP status code in the 100-599 range when configuring error helpers.",
   )
   .build();
+
+registerBuilderInvalidHttpCodeError(builderInvalidHttpCodeError);
 
 export const overrideUnsupportedBaseError = error<
   { message: string } & DefaultErrorType

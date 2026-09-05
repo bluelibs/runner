@@ -37,6 +37,17 @@ type OverrideCandidate = {
   override: SupportedOverride;
 };
 
+export type OverrideInspection = {
+  /** Canonical id whose registered behavior was replaced. */
+  baseCanonicalId: string;
+  /** Source id carried by the base definition before canonical compilation. */
+  baseSourceId: string;
+  /** Source id carried by the winning identity-preserving override. */
+  winnerSourceId: string;
+  /** Canonical resource id whose override declaration won. */
+  declaredByResourceId: string;
+};
+
 export class OverrideManager {
   public overrides: Map<string, SupportedOverride> = new Map();
 
@@ -49,8 +60,28 @@ export class OverrideManager {
     string,
     OverrideCandidate[]
   >();
+  private readonly overrideWinnerSources = new Map<string, string>();
 
   constructor(private readonly registry: StoreRegistry) {}
+
+  /** Returns detached winner metadata for runtime tooling. @internal */
+  public getOverrideInspection(
+    targetId: string,
+  ): OverrideInspection | undefined {
+    const winner = this.overrides.get(targetId);
+    const declaredByResourceId = this.overrideWinnerSources.get(targetId);
+    if (!winner || !declaredByResourceId) {
+      return undefined;
+    }
+    const baseReference = this.getOverrideTargetReference(winner);
+
+    return {
+      baseCanonicalId: targetId,
+      baseSourceId: baseReference.id,
+      winnerSourceId: winner.id,
+      declaredByResourceId,
+    };
+  }
 
   private toSupportedOverride(override: RegisterableItem): SupportedOverride {
     if (
@@ -80,12 +111,14 @@ export class OverrideManager {
     return "Hook";
   }
 
-  private getOverrideTargetReference(override: SupportedOverride): unknown {
+  private getOverrideTargetReference(
+    override: SupportedOverride,
+  ): SupportedOverride {
     const maybeTarget = (override as unknown as Record<symbol, unknown>)[
       symbolOverrideTargetDefinition
     ];
 
-    return maybeTarget ?? override;
+    return (maybeTarget ?? override) as SupportedOverride;
   }
 
   private getOverrideTargetId(
@@ -232,6 +265,7 @@ export class OverrideManager {
 
     if (candidates.length === 1) {
       this.overrides.set(targetId, candidate.override);
+      this.overrideWinnerSources.set(targetId, candidate.source);
       return;
     }
 
@@ -244,6 +278,7 @@ export class OverrideManager {
 
     const winner = this.resolveWinningOverride(targetId, candidates);
     this.overrides.set(targetId, winner.override);
+    this.overrideWinnerSources.set(targetId, winner.source);
   }
 
   storeOverridesDeeply<C>(

@@ -61,6 +61,8 @@ describe("tools/check toJsonSchema helpers", () => {
       classDefinitionIds: new WeakMap<Function, string>(),
       compilingDefinitionIds: new Set<string>(),
       definitionCounter: 0,
+      depth: 0,
+      maxDepth: 1000,
     };
     const pattern = {};
     const value = withCycleGuard(pattern, context, "$", () => "ok");

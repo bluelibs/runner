@@ -26,6 +26,10 @@ export const oneOfPatternDefinition = defineMatchPatternDefinition<{
         failures: [],
         collectAll: true,
         activeComparisons: new WeakMap<object, WeakSet<object>>(),
+        // Carry the parent budget over; a fresh zero would let OneOf chains
+        // reset the recursion allowance.
+        depth: context.depth,
+        maxDepth: context.maxDepth,
       };
       if (
         matchesPattern(value, candidatePattern, candidateContext, path, parent)

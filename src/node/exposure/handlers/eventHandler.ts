@@ -21,8 +21,6 @@ import { getRequestId } from "../requestIdentity";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { resolveRequestedIdFromStore } from "../../../models/store/StoreLookup";
-import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
-
 interface EventHandlerDeps {
   store: NodeExposureDeps["store"];
   eventManager: NodeExposureDeps["eventManager"];
@@ -148,12 +146,11 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
         return;
       }
       const returnPayload = Boolean(body.value?.returnPayload);
+      // Hash the exact received bytes (see taskHandler for the rationale).
       const bodyAuthError = await authorizeEventBody(
         req,
         policyEventId,
-        serializer.stringify(
-          buildEventRequestBody(body.value?.payload, { returnPayload }),
-        ),
+        body.rawText,
       );
       if (bodyAuthError) {
         applyCorsActual(req, res, cors);

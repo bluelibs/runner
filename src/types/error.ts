@@ -17,6 +17,11 @@ export type AnyError = IErrorHelper<any>;
  */
 export type ThrowsList = ReadonlyArray<AnyError>;
 /**
+ * A throws declaration: either error helpers, or already-normalized error ids.
+ * Accepting ids lets definitions declare the same metadata the runtime stores.
+ */
+export type ThrowsDeclaration = ThrowsList | NormalizedThrowsList;
+/**
  * Normalized list of error ids emitted by built Runner definitions.
  */
 export type NormalizedThrowsList = readonly string[];

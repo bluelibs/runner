@@ -279,7 +279,7 @@ export function makeTaskBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(state, { meta: m });
+      >(state, { meta: { ...m } });
       return makeTaskBuilder<
         TInput,
         TOutput,

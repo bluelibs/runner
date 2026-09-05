@@ -39,7 +39,20 @@ export async function cancelExecution(
     const execution = await deps.store.getExecution(executionId);
     if (!execution) return;
     if (isExecutionTerminal(execution.status)) return;
-    if (execution.status === ExecutionStatus.Cancelling) return;
+    if (execution.status === ExecutionStatus.Cancelling) {
+      // A prior cancel already moved this execution to Cancelling, but its
+      // live cancellation event may have been published before any worker was
+      // listening (or been lost). Re-abort and re-publish so the active
+      // attempt still observes the cancellation instead of running to
+      // completion unnoticed.
+      const cancellationReason = resolveCancellationReason(execution, reason);
+      deps.abortActiveAttempt(executionId, cancellationReason);
+      await deps.publishLiveCancellationRequested(
+        executionId,
+        cancellationReason,
+      );
+      return;
+    }
 
     const now = new Date();
     const cancellationReason = resolveCancellationReason(execution, reason);

@@ -11,6 +11,10 @@ export type CompileContext = {
   classDefinitionIds: WeakMap<Function, string>;
   compilingDefinitionIds: Set<string>;
   definitionCounter: number;
+  /** Current recursion depth of `compilePattern`; guarded by maxDepth. */
+  depth: number;
+  /** Maximum allowed recursion depth before conversion aborts. */
+  maxDepth: number;
 };
 
 export type CompileMode = "default" | "object-property";

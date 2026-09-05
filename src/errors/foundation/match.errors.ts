@@ -29,6 +29,18 @@ export const checkInvalidOptionsError = error<
   .remediation("Pass a plain object with supported check() options.")
   .build();
 
+export const checkMaxDepthExceededError = error<
+  { maxDepth: number } & DefaultErrorType
+>("check-maxDepthExceeded")
+  .httpCode(400)
+  .format(
+    ({ maxDepth }) => `Maximum pattern-matching depth of ${maxDepth} exceeded.`,
+  )
+  .remediation(
+    "Reduce payload nesting, or raise maxDepth in check()/Match.compile() options. Use Infinity to disable the limit.",
+  )
+  .build();
+
 export const checkJsonSchemaUnsupportedPatternError = error<
   {
     path: string;

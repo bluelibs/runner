@@ -156,6 +156,7 @@ describe("eventHandler allowAsyncContext option", () => {
     jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
       ok: true,
       value: { payload: { a: 1 }, returnPayload: true },
+      rawText: "",
     });
     const handler = createEventHandler({
       store: {
@@ -210,6 +211,7 @@ describe("eventHandler allowAsyncContext option", () => {
     jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
       ok: true,
       value: { payload: { ok: true } },
+      rawText: "",
     });
 
     const handler = createEventHandler({
@@ -275,6 +277,7 @@ describe("eventHandler allowAsyncContext option", () => {
     jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
       ok: true,
       value: { payload: { ok: true } },
+      rawText: "",
     });
 
     const handler = createEventHandler({

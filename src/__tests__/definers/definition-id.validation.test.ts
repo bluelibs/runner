@@ -12,6 +12,7 @@ import {
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
 import { assertDefinitionId } from "../../definers/assertDefinitionId";
 import { defineError } from "../../definers/defineError";
+import { validationError } from "../../errors";
 
 type DefinitionFactory = {
   label: string;
@@ -104,6 +105,17 @@ const definitionFactories: DefinitionFactory[] = [
 ];
 
 describe("definition id validation", () => {
+  it("preserves the typed validation error identity for direct errors", () => {
+    let thrown: unknown;
+    try {
+      defineError({ id: "" });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(validationError.is(thrown)).toBe(true);
+  });
+
   it("rejects empty and non-string ids with fail-fast diagnostics", () => {
     expect(() =>
       defineTask({

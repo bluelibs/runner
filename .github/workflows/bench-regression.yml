@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
           # Ensure caching works with multi-checkout (head/base)
           cache-dependency-path: "**/package-lock.json"
@@ -55,6 +55,14 @@ jobs:
           CI: true
           GITHUB_ACTIONS: true
         run: npm run benchmark
+
+      - name: Check distribution artifact budgets
+        working-directory: head
+        run: >-
+          npm run build &&
+          npm run check:entrypoints &&
+          npm run benchmark:artifacts &&
+          npm run benchmark:consumers
 
       - name: Prepare comparison inputs
         run: |

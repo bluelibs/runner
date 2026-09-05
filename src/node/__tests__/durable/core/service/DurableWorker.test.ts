@@ -151,16 +151,29 @@ describe("durable: DurableWorker", () => {
     expect(queue.handler).not.toBeNull();
   });
 
-  it("treats repeated successful start() calls as idempotent", async () => {
+  it("treats repeated start() calls as idempotent while consuming", async () => {
     const queue = new TestQueue();
-    const consumeSpy = jest.spyOn(queue, "consume");
+    let releaseConsume!: () => void;
+    const consumeSpy = jest.spyOn(queue, "consume").mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseConsume = resolve;
+        }),
+    );
     const { service } = createService();
 
     const worker = new DurableWorker(service, queue, createSilentLogger());
 
-    await worker.start();
-    await worker.start();
+    const first = worker.start();
+    const second = worker.start();
 
+    expect(consumeSpy).toHaveBeenCalledTimes(1);
+
+    releaseConsume();
+    await first;
+    await second;
+
+    await worker.start();
     expect(consumeSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -526,5 +539,34 @@ describe("durable: DurableWorker", () => {
       .mockRejectedValue(waitError);
 
     await expect(worker.stop()).rejects.toThrow("wait failed");
+  });
+
+  it("treats start() as idempotent after consume() has registered the handler", async () => {
+    const queue = new TestQueue();
+    const consumeSpy = jest.spyOn(queue, "consume");
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+
+    await worker.start();
+    await worker.start();
+
+    expect(consumeSpy).toHaveBeenCalledTimes(1);
+    expect(queue.handler).not.toBeNull();
+  });
+
+  it("allows start() to register again after cooldown", async () => {
+    const queue = new TestQueue();
+    const consumeSpy = jest.spyOn(queue, "consume");
+    const { service } = createService();
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+
+    await worker.start();
+    await worker.cooldown();
+    await worker.start();
+
+    expect(consumeSpy).toHaveBeenCalledTimes(2);
+    expect(queue.handler).not.toBeNull();
   });
 });

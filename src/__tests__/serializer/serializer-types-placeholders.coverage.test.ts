@@ -32,9 +32,12 @@ describe("Serializer types/placeholders coverage", () => {
     });
 
     it("serializes global and well-known symbols, rejects unique symbols", () => {
+      // Global Symbol.for round-tripping requires opting into the permissive
+      // policy; the default only allows well-known symbols.
+      const allowAllSerializer = new Serializer({ symbolPolicy: "allow-all" });
       const globalSymbol = Symbol.for("coverage.sym");
-      const globalPayload = serializer.serialize(globalSymbol);
-      expect(serializer.deserialize(globalPayload)).toBe(globalSymbol);
+      const globalPayload = allowAllSerializer.serialize(globalSymbol);
+      expect(allowAllSerializer.deserialize(globalPayload)).toBe(globalSymbol);
 
       const wellKnownPayload = serializer.serialize(Symbol.iterator);
       expect(serializer.deserialize(wellKnownPayload)).toBe(Symbol.iterator);

@@ -74,7 +74,7 @@ describe("RunResult disposal guards", () => {
     expect(disposeCalls).toBe(1);
   });
 
-  it("allows disposal retry when cleanup initially fails", async () => {
+  it("stays idempotent when cleanup fails", async () => {
     const app = defineResource({
       id: "runresult-dispose-retry-app",
       async init() {
@@ -93,8 +93,11 @@ describe("RunResult disposal guards", () => {
       });
 
     await expect(runtime.dispose()).rejects.toThrow("first dispose failure");
+    // A failed dispose is still a dispose: the store already cleared resource
+    // state and the event registry before throwing, so a second call must be a
+    // clean no-op and must not re-enter the shutdown lifecycle.
     await expect(runtime.dispose()).resolves.toBeUndefined();
-    expect(disposeSpy).toHaveBeenCalledTimes(2);
+    expect(disposeSpy).toHaveBeenCalledTimes(1);
 
     const dummyTask = defineTask({ id: "dummy", run: async () => {} });
     expect(() => runtime.runTask(dummyTask)).toThrow(/disposed/i);

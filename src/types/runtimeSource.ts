@@ -22,9 +22,7 @@ export type RuntimeCallSourceKind =
 export type RuntimeCallSource = {
   /** Category of the admitting caller. */
   kind: RuntimeCallSourceKind;
-  /**
-   * Canonical runtime identifier of the admitting caller.
-   */
+  /** Canonical definition id or stable runtime-origin id of the admitting caller. */
   id: string;
 };
 
@@ -35,7 +33,7 @@ export const runtimeSource = {
   /**
    * Creates a runtime-origin source record.
    *
-   * @param id Canonical runtime id of the source.
+   * @param id Stable runtime-origin id of the source.
    */
   runtime(id: string): RuntimeCallSource {
     return {
@@ -46,7 +44,7 @@ export const runtimeSource = {
   /**
    * Creates a resource-origin source record.
    *
-   * @param id Canonical runtime id of the source.
+   * @param id Canonical resource id of the source.
    */
   resource(id: string): RuntimeCallSource {
     return {
@@ -57,7 +55,7 @@ export const runtimeSource = {
   /**
    * Creates a task-origin source record.
    *
-   * @param id Canonical runtime id of the source.
+   * @param id Canonical task id of the source.
    */
   task(id: string): RuntimeCallSource {
     return {
@@ -68,7 +66,7 @@ export const runtimeSource = {
   /**
    * Creates a hook-origin source record.
    *
-   * @param id Canonical runtime id of the source.
+   * @param id Canonical hook id of the source.
    */
   hook(id: string): RuntimeCallSource {
     return {
@@ -85,7 +83,7 @@ export const runtimeSource = {
   /**
    * Creates a resource-middleware-origin source record.
    *
-   * @param id Canonical runtime id of the source.
+   * @param id Canonical resource middleware id of the source.
    */
   resourceMiddleware(id: string): RuntimeCallSource {
     return {

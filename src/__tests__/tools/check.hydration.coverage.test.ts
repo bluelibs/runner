@@ -203,4 +203,20 @@ describe("tools/check hydration coverage", () => {
     const proxyValue = { user: { id: "u-proxy" } };
     expect(hydrateMatchedValue(proxyValue, proxyPattern)).toBe(proxyValue);
   });
+
+  it("preserves extra value keys named after Object.prototype members through ObjectIncluding hydration", () => {
+    const source = { constructor: "preserved", id: "u-including" };
+    const hydrated = hydrateMatchedValue(
+      source,
+      Match.ObjectIncluding({ id: String }),
+    ) as Record<string, unknown>;
+
+    // The extra "constructor" key must be copied through as an own property,
+    // not dropped because "constructor" is inherited by the pattern.
+    expect(hydrated.id).toBe("u-including");
+    expect(Object.prototype.hasOwnProperty.call(hydrated, "constructor")).toBe(
+      true,
+    );
+    expect(hydrated.constructor).toBe("preserved");
+  });
 });

@@ -1,4 +1,7 @@
-import { createMatchPatternError } from "../errors";
+import {
+  createMatchPatternError,
+  createMaxDepthExceededError,
+} from "../errors";
 import { isMatchDefinedPattern } from "./contracts";
 import type { MatchContext, PathSegment } from "./shared";
 import {
@@ -16,12 +19,22 @@ export function matchesPattern(
   path: readonly PathSegment[],
   parent?: unknown,
 ): boolean {
+  // Depth guard: recursion follows attacker-controlled value nesting through
+  // container/recursive patterns, so abort before the JS stack does.
+  if (context.depth >= context.maxDepth) {
+    throw createMaxDepthExceededError(context.maxDepth);
+  }
+  context.depth += 1;
+
   const releaseActiveComparison = trackActiveComparison(
     context,
     value,
     pattern,
   );
-  if (releaseActiveComparison === "active") return true;
+  if (releaseActiveComparison === "active") {
+    context.depth -= 1;
+    return true;
+  }
 
   try {
     if (isMatchDefinedPattern(pattern)) {
@@ -127,6 +140,7 @@ export function matchesPattern(
       `Bad pattern: unsupported pattern type "${describeType(pattern)}".`,
     );
   } finally {
+    context.depth -= 1;
     releaseActiveComparison();
   }
 }

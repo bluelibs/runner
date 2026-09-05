@@ -2,6 +2,7 @@ import type { IncomingMessage } from "http";
 import type { IRpcLaneDefinition, RemoteLaneBindingAuth } from "../../defs";
 import { jsonErrorResponse } from "../exposure/httpResponse";
 import type { JsonResponse } from "../exposure/types";
+import { readContextHeader } from "../exposure/handlers/contextWrapper";
 import type { RpcLanesResourceConfig } from "./types";
 import {
   assertRemoteLaneSignerConfigured,
@@ -128,9 +129,17 @@ export function authorizeRpcLaneRequest(
       requiredCapability: "produce",
       expectedTarget: {
         ...target,
-        payloadHash: options?.bodyText
-          ? hashRemoteLanePayload(options.bodyText)
-          : undefined,
+        // An empty bodyText means the request body was streamed and cannot be
+        // hashed byte-for-byte: the hash then covers only the async context
+        // header, which still rejects JSON-body tokens replayed against
+        // streaming endpoints. Recompute over the exact received bytes: a
+        // rewritten context header must fail the hash.
+        payloadHash:
+          options?.bodyText !== undefined
+            ? hashRemoteLanePayload(
+                options.bodyText + (readContextHeader(req) ?? ""),
+              )
+            : undefined,
       },
     });
     return null;

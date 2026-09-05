@@ -1,6 +1,6 @@
 import { normalizeThrows } from "../../tools/throws";
 import { definitions } from "../..";
-import { ThrowsList, IErrorHelper } from "../../types/error";
+import { ThrowsDeclaration, IErrorHelper } from "../../types/error";
 
 describe("normalizeThrows()", () => {
   const owner = { kind: "task" as const, id: "spec-task" };
@@ -25,10 +25,16 @@ describe("normalizeThrows()", () => {
     ]);
   });
 
-  it("throws on string ids", () => {
-    expect(() =>
-      normalizeThrows(owner, ["spec-errors-string"] as unknown as ThrowsList),
-    ).toThrow(/Invalid throws entry/);
+  it("accepts pre-normalized string ids and deduplicates", () => {
+    expect(
+      normalizeThrows(owner, ["spec-errors-string", "spec-errors-string"]),
+    ).toEqual(["spec-errors-string"]);
+  });
+
+  it("throws on empty string ids", () => {
+    expect(() => normalizeThrows(owner, ["   "] as ThrowsDeclaration)).toThrow(
+      /Invalid throws entry/,
+    );
   });
 
   it("throws on invalid error helpers (empty id)", () => {
@@ -41,13 +47,13 @@ describe("normalizeThrows()", () => {
 
   it("throws with useful got types", () => {
     expect(() =>
-      normalizeThrows(owner, [null] as unknown as ThrowsList),
+      normalizeThrows(owner, [null] as unknown as ThrowsDeclaration),
     ).toThrow(/got null/);
-    expect(() => normalizeThrows(owner, [[]] as unknown as ThrowsList)).toThrow(
-      /got array/,
-    );
     expect(() =>
-      normalizeThrows(owner, [123] as unknown as ThrowsList),
+      normalizeThrows(owner, [[]] as unknown as ThrowsDeclaration),
+    ).toThrow(/got array/);
+    expect(() =>
+      normalizeThrows(owner, [123] as unknown as ThrowsDeclaration),
     ).toThrow(/got number/);
   });
 
@@ -67,7 +73,7 @@ describe("normalizeThrows()", () => {
       "err.id",
     ]);
     expect(() =>
-      normalizeThrows(mwOwner, ["   "] as unknown as ThrowsList),
+      normalizeThrows(mwOwner, ["   "] as ThrowsDeclaration),
     ).toThrow(/Invalid throws entry for task-middleware/);
   });
 
@@ -80,7 +86,17 @@ describe("normalizeThrows()", () => {
       "err.id",
     ]);
     expect(() =>
-      normalizeThrows(mwOwner, ["   "] as unknown as ThrowsList),
+      normalizeThrows(mwOwner, ["   "] as ThrowsDeclaration),
     ).toThrow(/Invalid throws entry for resource-middleware/);
+  });
+
+  it("works with event ThrowOwner kind", () => {
+    const eventOwner = { kind: "event" as const, id: "spec-event" };
+    expect(normalizeThrows(eventOwner, [createErrorHelper("err.id")])).toEqual([
+      "err.id",
+    ]);
+    expect(() =>
+      normalizeThrows(eventOwner, ["   "] as ThrowsDeclaration),
+    ).toThrow(/Invalid throws entry for event/);
   });
 });

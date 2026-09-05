@@ -1,4 +1,5 @@
 import { frameworkError as error } from "../../definers/builders/error";
+import { registerValidationError } from "../../definers/foundationErrorRegistry";
 import type { DefaultErrorType } from "../../types/error";
 
 // Validation error (input, result, config)
@@ -28,6 +29,8 @@ export const validationError = error<
     return `Check the ${subject} passed to "${id.toString()}". Ensure it matches the schema defined via .${schemaHint}().`;
   })
   .build();
+
+registerValidationError(validationError);
 
 /** Canonical error for input validation failures */
 export const inputSchemaValidationError = validationError;
