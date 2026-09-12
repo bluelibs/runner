@@ -15,8 +15,12 @@ import {
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
-import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
-import { assertDefinitionId } from "./assertDefinitionId";
+import {
+  getDefinitionIdViolation,
+  getTagTargetViolation,
+} from "./definitionValidation";
+import { getValidationError } from "./foundationErrorRegistry";
+import { getTagTargetNotAllowedError } from "./tagTargetErrorRegistry";
 import {
   isClassConstructor,
   hasParseFunction,
@@ -243,7 +247,18 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   filePath?: string,
 ) {
   const resolvedFilePath = filePath ?? getCallerFile();
-  assertDefinitionId("Error", definition.id);
+  const idViolation = getDefinitionIdViolation("Error", definition.id);
+  if (idViolation) {
+    const registeredError = getValidationError();
+    if (registeredError) {
+      registeredError.throw(idViolation);
+    }
+    throw new RunnerError(
+      "validation",
+      `${idViolation.subject} validation failed for ${idViolation.id}: ${idViolation.originalError}`,
+      idViolation,
+    );
+  }
 
   if (definition.httpCode !== undefined) {
     assertHttpCode(definition.httpCode);
@@ -253,12 +268,23 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
     definition.format = (data) => `${JSON.stringify(data)}`;
   }
 
-  assertTagTargetsApplicableTo(
-    "errors",
+  const tagViolation = getTagTargetViolation(
     "Error",
     definition.id,
+    "errors",
     definition.tags,
   );
+  if (tagViolation) {
+    const registeredError = getTagTargetNotAllowedError();
+    if (registeredError) {
+      registeredError.throw(tagViolation);
+    }
+    throw new RunnerError(
+      "tagTargetNotAllowed",
+      `${tagViolation.definitionType} "${tagViolation.definitionId}" cannot use tag "${tagViolation.tagId}" on "${tagViolation.attemptedTarget}". Allowed targets: ${tagViolation.allowedTargets.join(", ")}.`,
+      tagViolation,
+    );
+  }
 
   const finalDefinition: IErrorDefinitionFinal<TData> = {
     ...definition,

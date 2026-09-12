@@ -3,6 +3,20 @@ import type { InferMatchPattern } from "../types";
 
 export type PathSegment = string | number;
 
+/**
+ * Default nesting budget for pattern matching. Matches the serializer's
+ * default depth cap so boundary validation has uniform blast-radius limits.
+ */
+export const DEFAULT_MATCH_MAX_DEPTH = 1000;
+
+/**
+ * Nesting budget for JSON Schema conversion (toJsonSchema.ts). Lower than
+ * `DEFAULT_MATCH_MAX_DEPTH` because each compiler level walks several frames
+ * (`compilePattern` → `compileObjectPattern` → property loop), so reusing the
+ * matcher's 1000 budget would overflow the stack before the guard fires.
+ */
+export const MAX_JSON_SCHEMA_DEPTH = 512;
+
 export type NonEmptyArrayElement<TPattern> = [TPattern] extends [undefined]
   ? unknown
   : InferMatchPattern<TPattern>;
@@ -12,6 +26,10 @@ export type MatchContext = {
   collectAll: boolean;
   activeComparisons: WeakMap<object, WeakSet<object>>;
   messageOverride?: MatchMessageOverride;
+  /** Current recursion depth of `matchesPattern`; guarded by maxDepth. */
+  depth: number;
+  /** Maximum allowed recursion depth before matching aborts. */
+  maxDepth: number;
 };
 
 export type WhereCondition<TGuarded = unknown> =

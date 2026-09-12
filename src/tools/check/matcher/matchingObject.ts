@@ -25,7 +25,10 @@ export function matchesObjectPattern(
 
   const startFailures = context.failures.length;
   for (const key of Object.keys(value)) {
-    if (key in pattern || allowUnknownKeys) continue;
+    // Own keys only: a value key named after an Object.prototype member
+    // (e.g. "constructor") must not be treated as a known pattern key.
+    if (Object.prototype.hasOwnProperty.call(pattern, key) || allowUnknownKeys)
+      continue;
     fail(
       context,
       appendPath(path, key),

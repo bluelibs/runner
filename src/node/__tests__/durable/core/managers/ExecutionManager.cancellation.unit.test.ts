@@ -252,6 +252,43 @@ describe("durable: ExecutionManager cancellation", () => {
     );
   });
 
+  it("re-publishes live cancellation and re-aborts when already cancelling", async () => {
+    const bus = new TestEventBus();
+    const store = createStore({ listIncompleteExecutions: async () => [] });
+    await store.saveExecution(
+      createExecution({
+        id: "e-cancelling",
+        status: ExecutionStatus.Cancelling,
+        cancelRequestedAt: new Date(),
+        error: { message: "first-cancel-reason" },
+      }),
+    );
+    const manager = createManager({ store, eventBus: bus });
+
+    const controller = new AbortController();
+    (manager as any).cancellation.activeAttemptControllers.set(
+      "e-cancelling",
+      controller,
+    );
+
+    await manager.cancelExecution("e-cancelling", "second-cancel-reason");
+
+    // The re-abort/re-publish resolves to the already-recorded reason, not the
+    // new caller-supplied one, so a lost live event is re-delivered faithfully.
+    expect(controller.signal.aborted).toBe(true);
+    expect(controller.signal.reason).toBe("first-cancel-reason");
+    expect(bus.publish).toHaveBeenCalledWith(
+      DURABLE_EXECUTION_CONTROL_CHANNEL,
+      expect.objectContaining({
+        type: DurableExecutionControlEventType.CancellationRequested,
+        payload: {
+          executionId: "e-cancelling",
+          reason: "first-cancel-reason",
+        },
+      }),
+    );
+  });
+
   it("logs and continues when publishing live cancellation fails", async () => {
     const bus = new TestEventBus();
     bus.publish.mockRejectedValueOnce(

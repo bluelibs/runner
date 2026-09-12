@@ -61,7 +61,9 @@ export function makeRpcLaneBuilder<TMeta extends IRpcLaneMeta>(
     },
 
     meta<TNewMeta extends IRpcLaneMeta>(meta: TNewMeta) {
-      const next = clone(state as BuilderState<TNewMeta>, { meta });
+      const next = clone(state as BuilderState<TNewMeta>, {
+        meta: { ...meta },
+      });
       return makeRpcLaneBuilder(next);
     },
 

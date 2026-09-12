@@ -41,6 +41,14 @@ import {
   resolveHookTargets,
   type HookTargetResolutionEntry,
 } from "../hook/resolveHookTargets";
+import {
+  createCanonicalId,
+  createSourceId,
+  createStorageId,
+  type CanonicalId,
+  type SourceId,
+  type StorageId,
+} from "../../tools/definitionId";
 
 /**
  * Any object reference used as a definition identity key.
@@ -66,14 +74,14 @@ function isObjectReference(value: unknown): value is DefinitionReference {
 
 function getReferenceSourceId(
   reference: DefinitionReference,
-): string | undefined {
+): SourceId | undefined {
   if (!("id" in reference)) {
     return undefined;
   }
 
   const sourceId = (reference as DefinitionReferenceWithOptionalId).id;
   return typeof sourceId === "string" && sourceId.length > 0
-    ? sourceId
+    ? createSourceId(sourceId)
     : undefined;
 }
 
@@ -112,14 +120,17 @@ export class StoreRegistry {
   public readonly visibilityTracker = new VisibilityTracker();
   private readonly definitionAliases = new WeakMap<
     DefinitionReference,
-    string
+    CanonicalId
   >();
   private readonly definitionIdentityAliases = new WeakMap<
     DefinitionReference,
-    string
+    CanonicalId
   >();
-  private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
-  private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
+  private readonly definitionAliasesBySourceId = new Map<
+    SourceId,
+    Set<CanonicalId>
+  >();
+  private readonly sourceIdsByCanonicalId = new Map<StorageId, Set<SourceId>>();
   private readonly hookTargetResolutionCache = new Map<
     string,
     ReadonlyArray<HookTargetResolutionEntry>
@@ -201,19 +212,21 @@ export class StoreRegistry {
       return;
     }
 
+    const resolvedCanonicalId = createCanonicalId(canonicalId);
+
     const existing = this.definitionAliases.get(reference);
-    if (existing && existing !== canonicalId) {
+    if (existing && existing !== resolvedCanonicalId) {
       validationError.throw({
         subject: "Definition alias",
-        id: canonicalId,
-        originalError: `Definition reference is already mapped to "${existing}" and cannot be remapped to "${canonicalId}". Use .fork() for distinct registrations.`,
+        id: resolvedCanonicalId,
+        originalError: `Definition reference is already mapped to "${existing}" and cannot be remapped to "${resolvedCanonicalId}". Use .fork() for distinct registrations.`,
       });
     }
 
-    this.definitionAliases.set(reference, canonicalId);
-    this.recordDefinitionIdentityAlias(reference, canonicalId);
-    this.recordSourceIdAlias(reference, canonicalId);
-    this.recordCanonicalSourceId(reference, canonicalId);
+    this.definitionAliases.set(reference, resolvedCanonicalId);
+    this.recordDefinitionIdentityAlias(reference, resolvedCanonicalId);
+    this.recordSourceIdAlias(reference, resolvedCanonicalId);
+    this.recordCanonicalSourceId(reference, resolvedCanonicalId);
   }
 
   /**
@@ -281,9 +294,19 @@ export class StoreRegistry {
     return undefined;
   }
 
+  /**
+   * Returns source ids recorded while a definition was compiled and aliased.
+   * The returned array is detached from the mutable registry state.
+   * @internal
+   */
+  getDefinitionSourceIds(canonicalId: string): readonly string[] {
+    const storageId = createStorageId(createCanonicalId(canonicalId));
+    return [...(this.sourceIdsByCanonicalId.get(storageId) ?? [])];
+  }
+
   private recordDefinitionIdentityAlias(
     reference: DefinitionReference,
-    canonicalId: string,
+    canonicalId: CanonicalId,
   ): void {
     const identity = getDefinitionIdentity(reference);
     if (!identity) {
@@ -304,7 +327,7 @@ export class StoreRegistry {
 
   private recordSourceIdAlias(
     reference: DefinitionReference,
-    canonicalId: string,
+    canonicalId: CanonicalId,
   ): void {
     const sourceId = getReferenceSourceId(reference);
     if (!sourceId) {
@@ -322,29 +345,38 @@ export class StoreRegistry {
 
   private recordCanonicalSourceId(
     reference: DefinitionReference,
-    canonicalId: string,
+    canonicalId: CanonicalId,
   ): void {
     const sourceId = getReferenceSourceId(reference);
     if (!sourceId) {
       return;
     }
 
-    const existing = this.sourceIdsByCanonicalId.get(canonicalId);
+    const storageId = createStorageId(canonicalId);
+    const existing = this.sourceIdsByCanonicalId.get(storageId);
     if (existing) {
       existing.add(sourceId);
       return;
     }
 
-    this.sourceIdsByCanonicalId.set(canonicalId, new Set([sourceId]));
+    this.sourceIdsByCanonicalId.set(storageId, new Set([sourceId]));
   }
 
-  private resolveUniqueSourceIdAlias(sourceId: string): string | undefined {
-    const candidates = this.definitionAliasesBySourceId.get(sourceId);
+  private resolveUniqueSourceIdAlias(
+    sourceId: string,
+  ): CanonicalId | undefined {
+    if (sourceId.trim().length === 0) {
+      return undefined;
+    }
+
+    const candidates = this.definitionAliasesBySourceId.get(
+      createSourceId(sourceId),
+    );
     if (!candidates || candidates.size !== 1) {
       return undefined;
     }
 
-    return candidates.values().next().value as string;
+    return candidates.values().next().value;
   }
 
   findDefinitionById(canonicalId: string): RegisterableItem | undefined {

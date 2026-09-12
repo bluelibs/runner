@@ -249,7 +249,7 @@ export class Serializer {
         maxPatternLength: this.maxRegExpPatternLength,
         allowUnsafe: this.allowUnsafeRegExp,
       },
-      symbolPolicy: options.symbolPolicy ?? SymbolPolicy.AllowAll,
+      symbolPolicy: options.symbolPolicy ?? SymbolPolicy.WellKnownOnly,
     });
 
     this.runtimeOptions = {

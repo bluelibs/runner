@@ -8,6 +8,7 @@ import {
   withCycleGuard,
 } from "./toJsonSchema.helpers";
 import type { MatchJsonSchema, MatchToJsonSchemaOptions } from "./types";
+import { MAX_JSON_SCHEMA_DEPTH } from "./matcher/shared";
 import {
   isMatchDefinedPattern,
   isOptionalObjectPropertyPattern,
@@ -51,6 +52,30 @@ function compileObjectPattern(
 }
 
 function compilePattern(
+  pattern: unknown,
+  context: CompileContext,
+  path: string,
+  mode: CompileMode,
+): MatchJsonSchema {
+  // Depth guard: recursion follows pattern nesting through container patterns,
+  // so abort with a typed error before the JS stack does. Mirrors the matcher's
+  // budget in matchesPattern (matcher/matching.ts).
+  if (context.depth >= context.maxDepth) {
+    throwUnsupported(
+      path,
+      `Pattern nesting exceeds the maximum supported depth of ${context.maxDepth}.`,
+      pattern,
+    );
+  }
+  context.depth += 1;
+  try {
+    return compilePatternInner(pattern, context, path, mode);
+  } finally {
+    context.depth -= 1;
+  }
+}
+
+function compilePatternInner(
   pattern: unknown,
   context: CompileContext,
   path: string,
@@ -163,6 +188,8 @@ export function matchToJsonSchema(
     classDefinitionIds: new WeakMap<Function, string>(),
     compilingDefinitionIds: new Set<string>(),
     definitionCounter: 0,
+    depth: 0,
+    maxDepth: MAX_JSON_SCHEMA_DEPTH,
   };
   const compiled = compilePattern(pattern, context, "$", "default");
   const rootSchema: MatchJsonSchema = {

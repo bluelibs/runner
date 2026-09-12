@@ -5,6 +5,7 @@ import {
 import {
   collectBindingAuthByLaneId,
   enforceEventLaneAuthReadiness,
+  hashEventLaneAuthPayload,
   resolveEventLaneBindingAuth,
   verifyEventLaneMessageToken,
 } from "../../event-lanes/eventLanes.auth";
@@ -194,5 +195,69 @@ describe("eventLanes auth helpers", () => {
         bindingAuth,
       }),
     ).not.toThrow();
+  });
+
+  it("binds serialized async contexts into the token hash", () => {
+    const laneId = "lane.context-bind";
+    const bindingAuth = { secret: "context-secret" };
+    const payload = JSON.stringify({ value: 1 });
+    const serializedAsyncContexts = JSON.stringify({ tenant: "acme" });
+
+    const token = issueRemoteLaneToken({
+      laneId,
+      bindingAuth,
+      capability: "produce",
+      target: {
+        kind: "event-lane",
+        targetId: "event.context-bind",
+        payloadHash: hashEventLaneAuthPayload(payload, serializedAsyncContexts),
+      },
+    })!;
+
+    const contextMessage = {
+      id: "msg.context-bind",
+      laneId,
+      eventId: "event.context-bind",
+      payload,
+      serializedAsyncContexts,
+      source: { kind: "runtime", id: "test" } as const,
+      authToken: token,
+      createdAt: new Date(0),
+      attempts: 0,
+    };
+
+    // Matching context blob verifies...
+    expect(() =>
+      verifyEventLaneMessageToken({
+        message: contextMessage,
+        laneId,
+        bindingAuth,
+      }),
+    ).not.toThrow();
+
+    // ...but a rewritten context blob must invalidate the token.
+    const tamperedMessage = {
+      ...contextMessage,
+      serializedAsyncContexts: JSON.stringify({ tenant: "evil" }),
+    };
+    expectRunnerErrorId(
+      () =>
+        verifyEventLaneMessageToken({
+          message: tamperedMessage,
+          laneId,
+          bindingAuth,
+        }),
+      "remoteLanes-auth-unauthorized",
+    );
+  });
+
+  it("keeps the auth hash byte-identical to payload-only when contexts are absent", () => {
+    const payload = JSON.stringify({ value: 1 });
+    expect(hashEventLaneAuthPayload(payload)).toBe(
+      hashRemoteLanePayload(payload),
+    );
+    expect(hashEventLaneAuthPayload(payload, undefined)).toBe(
+      hashRemoteLanePayload(payload),
+    );
   });
 });

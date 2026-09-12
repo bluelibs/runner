@@ -73,13 +73,16 @@ export function makeEventBuilder<
       return makeEventBuilder<TPayload, TTransactional>(next);
     },
 
-    throws(_list: ThrowsList) {
-      // Throws is only for documentation on and Event, because events themselves don't throw.
-      return builder;
+    throws(list: ThrowsList) {
+      // Throws documents errors hooks assigned to this event might throw; the
+      // event itself never throws. The list is stored on the definition for
+      // docs and tooling.
+      const next = clone(state, { throws: list });
+      return makeEventBuilder<TPayload, TTransactional>(next);
     },
 
     meta<TNewMeta extends IEventMeta>(m: TNewMeta) {
-      const next = clone(state, { meta: m as IEventMeta });
+      const next = clone(state, { meta: { ...m } as IEventMeta });
       return makeEventBuilder<TPayload, TTransactional>(next);
     },
 

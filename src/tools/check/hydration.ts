@@ -64,7 +64,9 @@ function hydrateObjectShape(
   }
 
   for (const key of Object.keys(value)) {
-    if (key in pattern) {
+    // Own keys only: an extra value key named after an Object.prototype member
+    // (e.g. "constructor") must be copied through, not treated as a pattern key.
+    if (Object.prototype.hasOwnProperty.call(pattern, key)) {
       continue;
     }
 

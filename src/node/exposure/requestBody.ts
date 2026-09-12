@@ -103,7 +103,8 @@ export async function readJsonBody<T>(
   serializer: SerializerLike,
   maxSize?: number,
 ): Promise<
-  { ok: true; value: T | undefined } | { ok: false; response: JsonResponse }
+  | { ok: true; value: T | undefined; rawText: string }
+  | { ok: false; response: JsonResponse }
 > {
   let body: Buffer;
   try {
@@ -123,12 +124,14 @@ export async function readJsonBody<T>(
   }
 
   if (body.length === 0) {
-    return { ok: true, value: undefined };
+    return { ok: true, value: undefined, rawText: "" };
   }
   try {
+    const rawText = body.toString("utf8");
     return {
       ok: true,
-      value: serializer.parse<T>(body.toString("utf8")),
+      value: serializer.parse<T>(rawText),
+      rawText,
     };
   } catch {
     return {

@@ -152,7 +152,7 @@ describe("taskHandler", () => {
     const serializer = new Serializer();
     jest
       .spyOn(requestBodyModule, "readJsonBody")
-      .mockResolvedValue({ ok: true, value: { input: 1 } });
+      .mockResolvedValue({ ok: true, value: { input: 1 }, rawText: "" });
 
     const res = createRes();
     const taskRunner = {
@@ -270,7 +270,7 @@ describe("taskHandler", () => {
     );
     jest
       .spyOn(requestBodyModule, "readJsonBody")
-      .mockResolvedValue({ ok: true, value: { input: 1 } });
+      .mockResolvedValue({ ok: true, value: { input: 1 }, rawText: "" });
 
     const handler = createTaskHandler({
       store: {
@@ -389,7 +389,7 @@ describe("taskHandler", () => {
     const runTask = jest.fn(async () => ({ ok: true }));
     jest
       .spyOn(requestBodyModule, "readJsonBody")
-      .mockResolvedValue({ ok: true, value: { input: 1 } });
+      .mockResolvedValue({ ok: true, value: { input: 1 }, rawText: "" });
 
     const handler = createTaskHandler({
       store: {
@@ -504,9 +504,11 @@ describe("taskHandler", () => {
     const serializer = new Serializer();
     const authorizeTaskBody = jest.fn(async () => null);
     const runTask = jest.fn(async () => ({ ok: true }));
-    jest
-      .spyOn(requestBodyModule, "readJsonBody")
-      .mockResolvedValue({ ok: true, value: { input: { value: 1 } } });
+    jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
+      ok: true,
+      value: { input: { value: 1 } },
+      rawText: serializer.stringify({ input: { value: 1 } }),
+    });
 
     const handler = createTaskHandler({
       store: createStore(TaskId.T) as any,
@@ -543,9 +545,11 @@ describe("taskHandler", () => {
     const serializer = new Serializer();
     const authorizeTaskBody = jest.fn(async () => null);
     const runTask = jest.fn(async () => ({ ok: true }));
-    jest
-      .spyOn(requestBodyModule, "readJsonBody")
-      .mockResolvedValue({ ok: true, value: { foo: 1 } });
+    jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
+      ok: true,
+      value: { foo: 1 },
+      rawText: serializer.stringify({ input: { foo: 1 } }),
+    });
 
     const handler = createTaskHandler({
       store: createStore(TaskId.T) as any,
@@ -586,7 +590,7 @@ describe("taskHandler", () => {
     );
     jest
       .spyOn(requestBodyModule, "readJsonBody")
-      .mockResolvedValue({ ok: true, value: { input: 1 } });
+      .mockResolvedValue({ ok: true, value: { input: 1 }, rawText: "" });
 
     const handler = createTaskHandler({
       store: {

@@ -49,7 +49,9 @@ export function makeEventLaneBuilder<TMeta extends IEventLaneMeta>(
     },
 
     meta<TNewMeta extends IEventLaneMeta>(meta: TNewMeta) {
-      const next = clone(state as BuilderState<TNewMeta>, { meta });
+      const next = clone(state as BuilderState<TNewMeta>, {
+        meta: { ...meta },
+      });
       return makeEventLaneBuilder(next);
     },
 

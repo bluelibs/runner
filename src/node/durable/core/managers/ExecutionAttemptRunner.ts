@@ -189,6 +189,11 @@ export class ExecutionAttemptRunner {
         execution: runningExecution,
         raceWithLockLoss: guards.raceWithLockLoss,
         canPersistOutcome: guards.canPersistOutcome,
+        abortAttempt: (reason) =>
+          this.deps.cancellation.abortActiveAttempt(
+            runningExecution.id,
+            reason,
+          ),
       });
       if (outcome.kind === "already-finalized") return;
 
@@ -251,6 +256,7 @@ export class ExecutionAttemptRunner {
     execution: Execution<unknown, unknown>;
     raceWithLockLoss: <T>(promise: Promise<T>) => Promise<T>;
     canPersistOutcome: () => Promise<boolean>;
+    abortAttempt: (reason: string) => void;
   }): Promise<TaskAttemptOutcome> {
     this.deps.assertTaskExecutorConfigured();
     return runTaskAttemptFn({

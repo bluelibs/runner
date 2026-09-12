@@ -1,10 +1,10 @@
-import {
-  hashRemoteLanePayload,
-  issueRemoteLaneToken,
-} from "../remote-lanes/laneAuth";
+import { issueRemoteLaneToken } from "../remote-lanes/laneAuth";
 import { buildSerializedEventLaneAsyncContexts } from "./eventLanes.asyncContext";
 import { getLaneBindingOrThrow, isRelayEmission } from "./EventLanesInternals";
-import { resolveEventLaneBindingAuth } from "./eventLanes.auth";
+import {
+  hashEventLaneAuthPayload,
+  resolveEventLaneBindingAuth,
+} from "./eventLanes.auth";
 import type { EventLanesDiagnostics } from "./EventLanesDiagnostics";
 import type { EventLanesResourceConfig } from "./types";
 import type { EventLanesResourceContext } from "./EventLanesInternals";
@@ -52,6 +52,11 @@ export function registerEventLaneProducerInterceptor(options: {
       config,
     });
     const payload = dependencies.serializer.stringify(emission.data);
+    const serializedAsyncContexts = buildSerializedEventLaneAsyncContexts({
+      lane: eventRoute.lane,
+      store: dependencies.store,
+      serializer: dependencies.serializer,
+    });
     const authToken = issueRemoteLaneToken({
       laneId: eventRoute.lane.id,
       bindingAuth,
@@ -59,7 +64,9 @@ export function registerEventLaneProducerInterceptor(options: {
       target: {
         kind: "event-lane",
         targetId: resolvedEmissionId,
-        payloadHash: hashRemoteLanePayload(payload),
+        // Bind the serialized async contexts into the token hash so an
+        // intermediary cannot rewrite them without invalidating the signature.
+        payloadHash: hashEventLaneAuthPayload(payload, serializedAsyncContexts),
       },
     });
 
@@ -67,11 +74,7 @@ export function registerEventLaneProducerInterceptor(options: {
       laneId: eventRoute.lane.id,
       eventId: resolvedEmissionId,
       payload,
-      serializedAsyncContexts: buildSerializedEventLaneAsyncContexts({
-        lane: eventRoute.lane,
-        store: dependencies.store,
-        serializer: dependencies.serializer,
-      }),
+      serializedAsyncContexts,
       source: emission.source,
       authToken,
     });

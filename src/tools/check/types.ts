@@ -340,10 +340,35 @@ export type EnsurePatternOverlap<TValue, TExpected> =
             : unknown
           : unknown;
 
+/**
+ * Strips function-valued members from a class instance type. `check()` returns
+ * the original value untouched — it validates declared field shapes but never
+ * runs the constructor — so prototype methods are absent at runtime and must
+ * not be claimed by the return type. `.parse()`/`Match.compile` still use the
+ * full `InstanceType`, because they hydrate.
+ *
+ * Only applied to `ClassPattern` results (see `CheckedValue` and the `check`
+ * schema overload): plain-object schemas, arrays, functions, and primitives
+ * are left intact, since their function-valued members are real at runtime.
+ */
+export type DataOnly<T> = T extends readonly unknown[]
+  ? T
+  : T extends (...args: never[]) => unknown
+    ? T
+    : T extends object
+      ? {
+          [K in keyof T as T[K] extends (...args: never[]) => unknown
+            ? never
+            : K]: T[K];
+        }
+      : T;
+
 export type CheckedValue<TValue, TPattern extends MatchPattern> =
   IsAny<TValue> extends true
     ? InferMatchPattern<TPattern>
-    : TValue & InferMatchPattern<TPattern>;
+    : TPattern extends ClassPattern<any>
+      ? TValue & DataOnly<InferMatchPattern<TPattern>>
+      : TValue & InferMatchPattern<TPattern>;
 
 export type InferCheckSchema<TSchema> =
   TSchema extends CheckSchemaLike<infer TParsed> ? TParsed : never;

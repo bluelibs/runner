@@ -1,0 +1,6 @@
+{
+  "dist/universal/index.mjs": 1010000,
+  "dist/browser/index.mjs": 1010000,
+  "dist/edge/index.mjs": 1010000,
+  "dist/node/node.mjs": 1625000
+}

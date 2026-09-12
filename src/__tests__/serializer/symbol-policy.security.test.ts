@@ -14,6 +14,18 @@ describe("Serializer Symbol Policy", () => {
     );
   });
 
+  it("rejects global symbols by default (well-known-only)", () => {
+    const serializer = new Serializer();
+    const payload = JSON.stringify({
+      __type: SpecialTypeId.Symbol,
+      value: { kind: SymbolPayloadKind.For, key: "deny" },
+    });
+
+    expect(() => serializer.deserialize(payload)).toThrow(
+      SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed,
+    );
+  });
+
   it("rejects global symbols when policy is well-known-only", () => {
     const serializer = new Serializer({
       symbolPolicy: "well-known-only",

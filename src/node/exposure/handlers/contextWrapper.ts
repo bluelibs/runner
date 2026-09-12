@@ -17,7 +17,7 @@ interface AsyncContextHydrationOptions {
   allowedAsyncContextIds?: readonly string[];
 }
 
-function readContextHeader(req: IncomingMessage): string | undefined {
+export function readContextHeader(req: IncomingMessage): string | undefined {
   const rawHeader = req.headers[RUNNER_ASYNC_CONTEXT_HEADER];
   if (Array.isArray(rawHeader)) return rawHeader[0];
   if (typeof rawHeader === "string") return rawHeader;

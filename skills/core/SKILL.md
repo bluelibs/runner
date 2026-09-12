@@ -37,6 +37,8 @@ The first mental flip:
 - Runtime lifecycle is intentional: `init → ready → running → cooldown → disposing`.
 - `cooldown()` stops accepting new external work; `dispose()` is final teardown.
 
+The lifecycle line above is a compressed orientation. Use `./references/guide-units/03-runtime-lifecycle.md` for the exact shutdown phases and disposal budgets.
+
 ## Composition Is Real, Not Cosmetic
 
 `isolate` and subtree policies make boundaries enforceable.

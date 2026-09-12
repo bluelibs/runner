@@ -10,6 +10,10 @@ import os from "os";
 import path from "path";
 import { run } from "../../run";
 import { middleware, resources } from "../../index";
+import {
+  benchmarkBalancedExecutionContextOverhead,
+  benchmarkParallelRuntimeLifecycle,
+} from "./runtime-lifecycle.benchmark";
 
 describe("Comprehensive Performance Benchmarks", () => {
   const results: Record<string, any> = {};
@@ -550,5 +554,47 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const { dispose } = await run(app);
     await dispose();
+  });
+
+  it("should benchmark parallel runtime lifecycle", async () => {
+    const runtimeCount = 50;
+    const measurements = await runMultipleTimes(
+      () => benchmarkParallelRuntimeLifecycle(runtimeCount),
+      BENCHMARK_CONFIG.runs,
+    );
+
+    results.parallelRuntimeLifecycle = {
+      runtimeCount,
+      totalTimeMs: calculateStats(
+        measurements.map((measurement) => measurement.totalTimeMs),
+      ),
+      avgTimePerRuntimeMs: calculateStats(
+        measurements.map((measurement) => measurement.avgTimePerRuntimeMs),
+      ),
+      runtimesPerSecond: calculateStats(
+        measurements.map((measurement) => measurement.runtimesPerSecond),
+      ),
+    };
+  });
+
+  it("should benchmark execution context overhead", async () => {
+    const iterations = 5000;
+    const measurements = await runMultipleTimes(
+      () => benchmarkBalancedExecutionContextOverhead(iterations),
+      BENCHMARK_CONFIG.runs,
+    );
+
+    results.executionContextOverhead = {
+      iterations,
+      withoutContextMs: calculateStats(
+        measurements.map((measurement) => measurement.withoutContextMs),
+      ),
+      withContextMs: calculateStats(
+        measurements.map((measurement) => measurement.withContextMs),
+      ),
+      overheadFactor: calculateStats(
+        measurements.map((measurement) => measurement.overheadFactor),
+      ),
+    };
   });
 });
