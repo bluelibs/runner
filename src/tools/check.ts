@@ -8,7 +8,7 @@ registerCheckRuntime({
 });
 
 export { check, Match } from "./check/engine";
-export type { CheckOptions } from "./check/engine";
+export type { CheckOptions, MatchCompileOptions } from "./check/engine";
 export type {
   CheckSchemaLike,
   CheckedValue,
@@ -32,6 +32,7 @@ export type {
 } from "./check/types";
 export {
   CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID,
+  CHECK_MAX_DEPTH_EXCEEDED_ERROR_ID,
   type MatchFailure,
   MATCH_ERROR_ID,
   CHECK_INVALID_OPTIONS_ERROR_ID,

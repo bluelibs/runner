@@ -245,6 +245,23 @@ export class DependencyProcessor {
           await this.store.readyResource(resourceId);
         }
       } catch (error: unknown) {
+        // If init itself failed, isInitialized was never committed and there is
+        // nothing to dispose. But when the failure happens after init (a lazy
+        // wakeup rejected at shutdown admission, or a throwing ready()), the value
+        // is live: dispose it here, because resetting isInitialized below would
+        // make the regular dispose path skip it and leak whatever it owns.
+        if (resource.isInitialized && resource.resource.dispose) {
+          try {
+            await resource.resource.dispose(
+              resource.value,
+              resource.config,
+              resource.computedDependencies!,
+              resource.context,
+            );
+          } catch {
+            // Best-effort cleanup; preserve the original init/ready error.
+          }
+        }
         this.resetResourceInitializationState(resource);
         this.rethrowResourceInitError(resourceId, error);
       }

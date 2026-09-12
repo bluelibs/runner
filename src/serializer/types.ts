@@ -125,7 +125,10 @@ export interface SerializerOptions {
   maxDepth?: number;
   /** Restrict deserialization to this list of type IDs */
   allowedTypes?: readonly string[];
-  /** Controls which Symbol payloads may be deserialized */
+  /**
+   * Controls which Symbol payloads may be deserialized.
+   * Defaults to `well-known-only` (global `Symbol.for` keys require `allow-all`).
+   */
   symbolPolicy?: SymbolPolicy;
   /** Maximum accepted RegExp pattern length during deserialization */
   maxRegExpPatternLength?: number;

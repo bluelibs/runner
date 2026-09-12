@@ -111,7 +111,7 @@ try {
 Use `.throws()` to declare the error ids a definition may produce.
 This is declarative metadata for documentation and tooling, not runtime enforcement.
 
-`.throws()` is available on task, resource, hook, and middleware builders.
+`.throws()` is available on task, resource, hook, event, and middleware builders.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -128,6 +128,9 @@ const getUser = r
 
 console.log(getUser.throws);
 ```
+
+On events, `.throws()` documents errors hooks attached to that event might throw.
+Events themselves do not throw; the list is metadata for docs and tooling.
 
 The `throws` list accepts Runner error helpers only, and is normalized and deduplicated at definition time.
 

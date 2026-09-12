@@ -6,6 +6,7 @@ import {
 import { buildEventRequestBody } from "../../remote-lanes/http/protocol";
 import { buildAsyncContextHeader } from "../remote-lanes/asyncContextAllowlist";
 import { hashRemoteLanePayload } from "../remote-lanes/laneAuth";
+import { hasNodeFile, isReadable } from "../http/nodeFileDetection";
 import { buildRpcLaneAuthHeaders } from "./rpcLanes.auth";
 import {
   assertTaskOwnership,
@@ -52,12 +53,14 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           },
         ) => Promise<unknown>;
         const remoteTaskId = store.findIdByDefinition(taskEntry.task);
+        const bodyIsReencoded = isReadable(input) || hasNodeFile(input);
         const headers = buildRpcLaneRequestHeaders(lane.id, {
           kind: "rpc-task",
           targetId: remoteTaskId,
-          payloadHash: hashRemoteLanePayload(
-            dependencies.serializer.stringify({ input }),
-          ),
+          body: bodyIsReencoded
+            ? ""
+            : dependencies.serializer.stringify({ input }),
+          bodyReencoded: bodyIsReencoded,
         });
         return headers
           ? executeRemoteTask(remoteTaskId, input, {
@@ -88,13 +91,15 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     }
 
     if (typeof binding.communicator.eventWithResult === "function") {
+      // Events always travel as JSON (mixed/smart clients use the fetch JSON
+      // path for events). Sign the serialized body so the exposure server,
+      // which hashes the received JSON bytes, accepts the token. Task calls
+      // are the only shape with multipart/octet-stream re-encoding.
       const headers = buildRpcLaneRequestHeaders(lane.id, {
         kind: "rpc-event",
         targetId: eventId,
-        payloadHash: hashRemoteLanePayload(
-          dependencies.serializer.stringify(
-            buildEventRequestBody(emission.data, { returnPayload: true }),
-          ),
+        body: dependencies.serializer.stringify(
+          buildEventRequestBody(emission.data, { returnPayload: true }),
         ),
       });
       const result = await binding.communicator.eventWithResult(
@@ -111,13 +116,12 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     }
 
     if (typeof binding.communicator.event === "function") {
+      // Events always travel as JSON, see above. Sign the serialized body.
       const headers = buildRpcLaneRequestHeaders(lane.id, {
         kind: "rpc-event",
         targetId: eventId,
-        payloadHash: hashRemoteLanePayload(
-          dependencies.serializer.stringify(
-            buildEventRequestBody(emission.data),
-          ),
+        body: dependencies.serializer.stringify(
+          buildEventRequestBody(emission.data),
         ),
       });
       if (headers) {
@@ -148,22 +152,37 @@ function createRpcLaneRequestHeadersBuilder(context: RpcLanesRuntimeContext) {
     target: {
       kind: "rpc-task" | "rpc-event";
       targetId: string;
-      payloadHash?: string;
+      body: string;
+      /** True when the communicator will re-encode the body (multipart /
+       * octet-stream), so the JSON form never appears on the wire. */
+      bodyReencoded?: boolean;
     },
   ): Record<string, string> | undefined => {
     const binding = resolved.bindingsByLaneId.get(laneId)!;
-    const headers = {
-      ...(buildRpcLaneAuthHeaders({
-        lane: binding.lane,
-        bindingAuth: binding.auth,
-        target,
-      }) ?? {}),
-    };
     const contextHeader = buildAsyncContextHeader({
       allowList: binding.asyncContextAllowList,
       registry: store.asyncContexts,
       serializer: dependencies.serializer,
     });
+    const payloadHash = hashRemoteLanePayload(
+      // Bind the serialized async contexts into the token hash so an
+      // intermediary cannot rewrite them without invalidating the signature.
+      // No contexts ⇒ byte-identical to the historical hash(body). Re-encoded
+      // bodies hash the context header only, mirroring the server's
+      // empty-bodyText verification for streaming request shapes.
+      (target.bodyReencoded ? "" : target.body) + (contextHeader ?? ""),
+    );
+    const headers = {
+      ...(buildRpcLaneAuthHeaders({
+        lane: binding.lane,
+        bindingAuth: binding.auth,
+        target: {
+          kind: target.kind,
+          targetId: target.targetId,
+          payloadHash,
+        },
+      }) ?? {}),
+    };
     if (contextHeader) {
       headers[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeader;
     }

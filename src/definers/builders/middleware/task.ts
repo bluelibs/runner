@@ -182,7 +182,7 @@ export function makeTaskMiddlewareBuilder<
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
-      const next = cloneTask(state, { meta: m as IMiddlewareMeta });
+      const next = cloneTask(state, { meta: { ...m } as IMiddlewareMeta });
       return makeTaskMiddlewareBuilder<
         C,
         In,

@@ -50,10 +50,16 @@ async function postSerialized<T = any>(options: {
   const controller =
     timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
   let timeout: ReturnType<typeof setTimeout> | undefined;
+  // Distinguishes the client's own timeout from a caller-supplied signal abort:
+  // both surface as an AbortError from fetch, but only our timer sets this flag.
+  let timedOut = false;
   const signalLink = linkAbortSignals([signal, controller?.signal]);
   try {
     if (controller) {
-      timeout = setTimeout(() => controller.abort(), timeoutMs);
+      timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, timeoutMs);
     }
     const reqHeaders = {
       "content-type": "application/json; charset=utf-8",
@@ -130,6 +136,15 @@ async function postSerialized<T = any>(options: {
       }
       throw error;
     }
+  } catch (error) {
+    if (timedOut) {
+      throw new RemoteLaneTransportError(
+        "TIMEOUT",
+        `Remote lane request timed out after ${timeoutMs}ms`,
+        { timeoutMs },
+      );
+    }
+    throw error;
   } finally {
     if (timeout) clearTimeout(timeout);
     signalLink.cleanup();

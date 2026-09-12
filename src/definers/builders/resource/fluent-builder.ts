@@ -484,7 +484,7 @@ export function makeResourceBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(state, { meta: m });
+      >(state, { meta: { ...m } });
       return makeResourceBuilder<
         TConfig,
         TValue,

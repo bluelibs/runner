@@ -93,6 +93,17 @@ function collectAuthRelevantEventLanes(
   return laneById;
 }
 
+/**
+ * Auth hash over the event-lane message bytes that travel together: payload
+ * plus serialized async contexts. No contexts ⇒ byte-identical to hash(payload).
+ */
+export function hashEventLaneAuthPayload(
+  payload: string,
+  serializedAsyncContexts?: string,
+): string {
+  return hashRemoteLanePayload(payload + (serializedAsyncContexts ?? ""));
+}
+
 export function verifyEventLaneMessageToken(options: {
   message: EventLaneMessage;
   laneId: string;
@@ -118,7 +129,12 @@ export function verifyEventLaneMessageToken(options: {
     expectedTarget: {
       kind: "event-lane",
       targetId: message.eventId,
-      payloadHash: hashRemoteLanePayload(message.payload),
+      // Recompute over the exact received bytes: serialized async contexts ride
+      // alongside the payload, so a rewritten context blob must fail the hash.
+      payloadHash: hashEventLaneAuthPayload(
+        message.payload,
+        message.serializedAsyncContexts,
+      ),
     },
   });
 }

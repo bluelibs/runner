@@ -220,6 +220,27 @@ describe("Concurrency Middleware", () => {
     );
   });
 
+  it("fails fast when key contains the identity scope separator", async () => {
+    const task = defineTask({
+      id: "concurrency-key-separator",
+      middleware: [
+        concurrencyTaskMiddleware.with({ limit: 1, key: "tenant:locked" }),
+      ],
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await task();
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(/cannot contain ":"/i);
+  });
+
   it("fails fast when key is provided without limit", async () => {
     const task = defineTask({
       id: "concurrency-key-no-limit",

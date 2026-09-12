@@ -469,6 +469,30 @@ import { Match } from "../../../decorators/legacy";
 }
 
 {
+  class Greeter {
+    public greeting!: string;
+
+    greet(): string {
+      return `Hello, ${this.greeting}`;
+    }
+  }
+
+  Match.Schema()(Greeter);
+  Match.Field(Match.NonEmptyString)(Greeter.prototype, "greeting");
+
+  const checkedGreeter = check({ greeting: "Ada" }, Match.fromSchema(Greeter));
+
+  // check() validates declared field shapes but returns the original object,
+  // so validated data fields stay accessible...
+  const greetingText: string = checkedGreeter.greeting;
+  void greetingText;
+
+  // ...while class prototype methods must NOT be claimed by the result type.
+  // @ts-expect-error checked value must not expose class prototype methods
+  checkedGreeter.greet();
+}
+
+{
   const positiveInteger = Match.Where(
     (value: unknown): value is number =>
       typeof value === "number" && Number.isInteger(value) && value > 0,

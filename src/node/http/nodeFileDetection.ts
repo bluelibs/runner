@@ -30,14 +30,18 @@ export function hasNodeFile(value: unknown): boolean {
     return Boolean(n.stream || n.buffer);
   };
 
-  const visit = (v: unknown): boolean => {
+  const visit = (v: unknown, seen: WeakSet<object>): boolean => {
     if (isNodeFileSentinel(v)) return true;
     if (!v || typeof v !== "object") return false;
-    if (Array.isArray(v)) return v.some(visit);
+    // Circular graphs are valid serializer inputs. Guard against revisiting
+    // the same object so cycle detection stays total instead of overflowing.
+    if (seen.has(v)) return false;
+    seen.add(v);
+    if (Array.isArray(v)) return v.some((item) => visit(item, seen));
     for (const k of Object.keys(v as Record<string, unknown>)) {
-      if (visit((v as Record<string, unknown>)[k])) return true;
+      if (visit((v as Record<string, unknown>)[k], seen)) return true;
     }
     return false;
   };
-  return visit(value);
+  return visit(value, new WeakSet());
 }

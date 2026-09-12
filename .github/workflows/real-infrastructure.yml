@@ -1,0 +1,77 @@
+name: Real infrastructure integration and fault tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/real-infrastructure.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "config/jest/**"
+      - "scripts/run-jest-watchdog.mjs"
+      - "src/node/durable/optionalDeps/**"
+      - "src/node/durable/store/**"
+      - "src/node/event-lanes/**"
+      - "src/node/queue/rabbitmq/**"
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-infrastructure-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  redis-rabbitmq-faults:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7.4-alpine
+        options: >-
+          --health-cmd "redis-cli ping || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+        ports:
+          - 6379:6379
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+        ports:
+          - 5672:5672
+          - 15672:15672
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run real infrastructure fault tests
+        env:
+          REAL_INFRASTRUCTURE_FAULT_INTEGRATION: "1"
+          EVENT_LANES_INTEGRATION: "1"
+          REAL_INFRASTRUCTURE_REDIS_URL: redis://127.0.0.1:6379
+          EVENT_LANES_TEST_RABBIT_URL: amqp://127.0.0.1:5672
+          RABBITMQ_MANAGEMENT_URL: http://127.0.0.1:15672
+          RABBITMQ_MANAGEMENT_USER: guest
+          RABBITMQ_MANAGEMENT_PASSWORD: guest
+        run: >-
+          npm run test:serial --
+          --runTestsByPath
+          src/node/__tests__/durable/store/RedisStore.real.integration.test.ts
+          src/node/__tests__/event-lanes/RabbitMQEventLaneQueue.real.integration.test.ts

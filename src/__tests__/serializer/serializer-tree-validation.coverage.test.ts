@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
-import { Serializer } from "../../serializer/index";
+import { Serializer, SymbolPolicyErrorMessage } from "../../serializer/index";
 import { serializeTreeValue } from "../../serializer/tree-serializer";
 import { TypeRegistry } from "../../serializer/type-registry";
 import { DEFAULT_UNSAFE_KEYS } from "../../serializer/validation";
@@ -83,11 +83,14 @@ describe("Serializer tree validation coverage", () => {
     it("stringify rejects unsupported JS primitives in tree mode", () => {
       expect(serializer.parse(serializer.stringify(BigInt(1)))).toBe(BigInt(1));
 
-      expect(serializer.parse(serializer.stringify(Symbol.for("x")))).toBe(
-        Symbol.for("x"),
-      );
+      // Well-known symbols still round-trip under the default well-known-only
+      // policy; global Symbol.for payloads now require opt-in and fail at parse.
       expect(serializer.parse(serializer.stringify(Symbol.iterator))).toBe(
         Symbol.iterator,
+      );
+      const symbolForPayload = serializer.stringify(Symbol.for("x"));
+      expect(() => serializer.parse(symbolForPayload)).toThrow(
+        SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed,
       );
       expect(() => serializer.stringify(Symbol("x"))).toThrow(
         /unique symbols/i,

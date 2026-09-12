@@ -218,7 +218,10 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
           );
           return;
         }
-        const bodyAuthError = await authorizeTaskBody(req, policyTaskId);
+        // The multipart body is re-encoded and cannot be hashed byte-for-byte;
+        // an empty bodyText still binds the async context header into the hash
+        // and rejects JSON-body tokens replayed against streaming endpoints.
+        const bodyAuthError = await authorizeTaskBody(req, policyTaskId, "");
         if (bodyAuthError) {
           applyCorsActual(req, res, cors);
           respondJson(res, bodyAuthError, serializer);
@@ -259,7 +262,9 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       // Raw-body streaming mode: when content-type is application/octet-stream
       // we do not pre-consume the request body and allow task to read from context.req
       if (/^application\/octet-stream(?:;|$)/i.test(contentType)) {
-        const bodyAuthError = await authorizeTaskBody(req, policyTaskId);
+        // Streamed raw body: no readable bytes to hash. Empty bodyText keeps
+        // the async context header bound and blocks JSON-token replay.
+        const bodyAuthError = await authorizeTaskBody(req, policyTaskId, "");
         if (bodyAuthError) {
           applyCorsActual(req, res, cors);
           respondJson(res, bodyAuthError, serializer);
@@ -287,10 +292,12 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         return;
       }
       const payload = resolveJsonTaskPayload(body.value);
+      // Hash the exact received bytes: re-serializing the parsed payload breaks
+      // round-trip fidelity (large integers, escape styles, non-JS clients).
       const bodyAuthError = await authorizeTaskBody(
         req,
         policyTaskId,
-        serializer.stringify({ input: payload }),
+        body.rawText,
       );
       if (bodyAuthError) {
         applyCorsActual(req, res, cors);
