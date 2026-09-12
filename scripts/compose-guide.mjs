@@ -99,6 +99,9 @@ function adjustPathsForReadmesDir(content, includedChapters) {
   // Adjust examples paths: [text](./examples/X) -> [text](../examples/X)
   content = content.replace(/\]\(\.\/examples\//g, "](../examples/");
 
+  // Adjust skills paths: [text](./skills/X) -> [text](../skills/X)
+  content = content.replace(/\]\(\.\/skills\//g, "](../skills/");
+
   return content;
 }
 

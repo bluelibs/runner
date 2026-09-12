@@ -92,7 +92,8 @@ This example is intentionally runnable with only `@bluelibs/runner`, `typescript
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
 | [Public API Governance](./readmes/PUBLIC_API.md)                                                                    | Docs    | Runtime export stability contract   |
-| [Compact Guide](./readmes/COMPACT_GUIDE.md)                                                                         | Docs    | Compact summary (<10,000 tokens)    |
+| [Compact Guide](./readmes/COMPACT_GUIDE.md)                                                                         | Docs    | Token-efficient field guide          |
+| [Starter Snippets](./skills/core/references/snippets)                                                              | Examples | Canonical authoring shapes          |
 | [Full Guide](./readmes/FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
 | [Support & Release Policy](./readmes/ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |

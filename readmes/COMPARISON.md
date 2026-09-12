@@ -68,7 +68,7 @@ import { r, resources } from "@bluelibs/runner";
 import { z } from "zod";
 
 const createUser = r
-  .task("users.create")
+  .task("createUser")
   .dependencies({
     db,
     mailer,
