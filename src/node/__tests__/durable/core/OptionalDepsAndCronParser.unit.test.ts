@@ -3,6 +3,8 @@ import type * as IoredisMod from "../../../durable/optionalDeps/ioredis";
 import type * as AmqplibMod from "../../../durable/optionalDeps/amqplib";
 import { genericError } from "../../../../errors";
 
+const ioredisMockState: { load: () => unknown } = { load: () => undefined };
+
 const amqplibMockState: { module: unknown } = { module: undefined };
 
 jest.mock("node:module", () => {
@@ -11,6 +13,9 @@ jest.mock("node:module", () => {
   return {
     ...actual,
     createRequire: () => (id: string) => {
+      if (id === "ioredis") {
+        return ioredisMockState.load();
+      }
       if (id === "amqplib") {
         if (typeof amqplibMockState.module === "function") {
           return (amqplibMockState.module as () => unknown)();
@@ -26,13 +31,9 @@ describe("durable: optional deps helpers", () => {
   it("createIORedisClient() throws when ioredis is missing", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "ioredis",
-        () => {
-          throw genericError.new({ message: "Cannot find module 'ioredis'" });
-        },
-        { virtual: true },
-      );
+      ioredisMockState.load = () => {
+        throw genericError.new({ message: "Cannot find module 'ioredis'" });
+      };
 
       const {
         createIORedisClient,
@@ -46,13 +47,9 @@ describe("durable: optional deps helpers", () => {
   it("createIORedisClient() handles non-Error throws", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "ioredis",
-        () => {
-          throw "boom";
-        },
-        { virtual: true },
-      );
+      ioredisMockState.load = () => {
+        throw "boom";
+      };
 
       const {
         createIORedisClient,
@@ -73,14 +70,7 @@ describe("durable: optional deps helpers", () => {
         this.url = url ?? null;
       });
 
-      jest.doMock(
-        "ioredis",
-        () => ({
-          __esModule: true,
-          default: ctor,
-        }),
-        { virtual: true },
-      );
+      ioredisMockState.load = () => ({ default: ctor });
 
       const {
         createIORedisClient,
@@ -104,7 +94,7 @@ describe("durable: optional deps helpers", () => {
       ) {
         this.url = url ?? "default";
       });
-      jest.doMock("ioredis", () => ctor, { virtual: true });
+      ioredisMockState.load = () => ctor;
 
       const {
         createIORedisClient,
@@ -120,9 +110,7 @@ describe("durable: optional deps helpers", () => {
   it("createIORedisClient() rejects invalid ioredis exports", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock("ioredis", () => ({ __esModule: true, default: {} }), {
-        virtual: true,
-      });
+      ioredisMockState.load = () => ({ default: {} });
 
       const {
         createIORedisClient,

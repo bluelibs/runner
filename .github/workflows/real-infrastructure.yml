@@ -13,6 +13,8 @@ on:
       - "src/node/durable/store/**"
       - "src/node/event-lanes/**"
       - "src/node/queue/rabbitmq/**"
+      - "src/node/__tests__/durable/store/**"
+      - "src/node/__tests__/event-lanes/**"
   schedule:
     - cron: "17 4 * * 1"
 
@@ -55,7 +57,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
 
       - name: Install dependencies

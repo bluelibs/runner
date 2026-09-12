@@ -1,3 +1,4 @@
+import { snapshotMetadata } from "../shared/snapshotMetadata";
 import type {
   EnsureTagsForTarget,
   IEvent,
@@ -82,7 +83,7 @@ export function makeEventBuilder<
     },
 
     meta<TNewMeta extends IEventMeta>(m: TNewMeta) {
-      const next = clone(state, { meta: { ...m } as IEventMeta });
+      const next = clone(state, { meta: snapshotMetadata(m) as IEventMeta });
       return makeEventBuilder<TPayload, TTransactional>(next);
     },
 

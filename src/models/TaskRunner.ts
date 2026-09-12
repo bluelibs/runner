@@ -1,3 +1,4 @@
+import { TaskHealthPolicyChecker } from "./task-runner/TaskHealthPolicyChecker";
 import { DependencyMapType, ITask } from "../defs";
 import { EventManager } from "./EventManager";
 import { Store } from "./store/Store";
@@ -8,27 +9,16 @@ import {
   runtimeAdmissionsPausedError,
   shutdownLockdownError,
 } from "../errors";
-import {
-  taskBlockedByResourceHealthError,
-  taskHealthResourceNotReportableError,
-} from "../errors";
 import type {
   TaskRunnerInterceptOptions,
   TaskRunnerInterceptor,
 } from "../types/taskRunner";
 import type { TaskCallOptions } from "../types/utilities";
-import type { IResource } from "../defs";
-import {
-  RuntimeCallSource,
-  RuntimeCallSourceKind,
-  runtimeSource,
-} from "../types/runtimeSource";
+import { RuntimeCallSource, runtimeSource } from "../types/runtimeSource";
 import type { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
 import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import { runWithRuntimeCallSource } from "./RuntimeCallSourceStore";
-import type { ExecutionFrame } from "../types/executionContext";
-import { globalTags } from "../globals/globalTags";
 import { raceWithAbortSignal } from "../tools/abortSignals";
 
 type CachedTaskRunner = (
@@ -36,10 +26,11 @@ type CachedTaskRunner = (
   options?: TaskCallOptions,
 ) => Promise<unknown>;
 
-const defaultTaskSource: RuntimeCallSource = {
-  kind: RuntimeCallSourceKind.Runtime,
-  id: "runtime-internal-taskRunner",
-};
+const defaultTaskSource = runtimeSource.runtime("runtime-internal-taskRunner");
+
+const defaultTaskCallOptions: TaskCallOptions = Object.freeze({
+  source: defaultTaskSource,
+});
 
 /**
  * Coordinates task execution for the runtime.
@@ -56,6 +47,7 @@ export class TaskRunner {
   // Memoization store for composed middleware runners — only populated after
   // store.lock() when the middleware stack is frozen and composition is stable.
   protected readonly runnerStore = new Map<string | symbol, CachedTaskRunner>();
+  private readonly healthPolicyChecker: TaskHealthPolicyChecker;
 
   /**
    * Creates a task runner bound to the shared runtime state.
@@ -78,6 +70,7 @@ export class TaskRunner {
     // Use the same MiddlewareManager instance from the Store so that
     // any interceptors registered via resources (like debug) affect task runs.
     this.middlewareManager = this.store.getMiddlewareManager();
+    this.healthPolicyChecker = new TaskHealthPolicyChecker(store);
     this.lifecycleAdmissionController =
       this.store.getLifecycleAdmissionController();
   }
@@ -139,35 +132,33 @@ export class TaskRunner {
     }
 
     const executeTask = async () => {
-      const healthPolicyCheck = this.assertTaskHealthPolicy(task);
+      const healthPolicyCheck = this.healthPolicyChecker.assertHealthy(
+        task,
+        taskId,
+      );
       if (healthPolicyCheck) {
         await healthPolicyCheck;
       }
-      return raceWithAbortSignal(
-        runner(input as TInput, {
-          ...(options ?? {}),
-          signal,
-          source,
-        }),
-        signal,
-      );
+      const runnerOptions = this.createRunnerOptions(options, signal, source);
+      const taskPromise = runner(input as TInput, runnerOptions);
+      return signal ? raceWithAbortSignal(taskPromise, signal) : taskPromise;
     };
     const executionSource = runtimeSource.task(taskId);
-
-    const traceFrame: ExecutionFrame = {
-      kind: "task",
-      id: taskId as string,
-      source: executionSource,
-      timestamp: Date.now(),
-    };
 
     return this.lifecycleAdmissionController.trackTaskExecution(
       executionSource,
       () =>
         runWithRuntimeCallSource(executionSource, () =>
-          this.executionContextStore.runWithFrame(traceFrame, executeTask, {
-            signal,
-          }),
+          this.executionContextStore.runWithFrameFactory(
+            () => ({
+              kind: "task",
+              id: taskId as string,
+              source: executionSource,
+              timestamp: Date.now(),
+            }),
+            executeTask,
+            { signal },
+          ),
         ),
     );
   }
@@ -225,70 +216,26 @@ export class TaskRunner {
     return this.middlewareManager.composeTaskRunner(task);
   }
 
-  /**
-   * Enforces the task-level fail-when-unhealthy policy once runtime execution
-   * has started.
-   *
-   * @param task The task about to execute.
-   * @returns A promise when an asynchronous health check is required.
-   */
-  private assertTaskHealthPolicy(
-    task: ITask<any, any, any>,
-  ): Promise<void> | void {
-    if (!this.store.isLocked) {
-      return;
+  private createRunnerOptions(
+    options: TaskCallOptions | undefined,
+    signal: AbortSignal | undefined,
+    source: RuntimeCallSource,
+  ): TaskCallOptions {
+    if (options) {
+      return {
+        ...options,
+        signal,
+        source,
+      };
     }
 
-    const monitoredResources = globalTags.failWhenUnhealthy.extract(task);
-    if (!monitoredResources || monitoredResources.length === 0) {
-      return;
+    if (signal) {
+      return {
+        signal,
+        source,
+      };
     }
 
-    return this.assertMonitoredResourcesHealthy(task, monitoredResources);
-  }
-
-  /**
-   * Ensures that all resources monitored by the task's health policy are both
-   * reportable and currently healthy.
-   *
-   * @param task The task whose monitored resources are being validated.
-   * @param monitoredResources The resources declared in the task's
-   * `failWhenUnhealthy` tag.
-   */
-  private async assertMonitoredResourcesHealthy(
-    task: ITask<any, any, any>,
-    monitoredResources: ReadonlyArray<
-      string | IResource<any, any, any, any, any>
-    >,
-  ): Promise<void> {
-    const resourceIds = monitoredResources.map((resource) =>
-      this.store.findIdByDefinition(resource),
-    );
-    const nonReportableResourceIds = resourceIds.filter((resourceId) => {
-      const resourceEntry = this.store.resources.get(resourceId);
-      return !resourceEntry?.resource.health;
-    });
-
-    if (nonReportableResourceIds.length > 0) {
-      taskHealthResourceNotReportableError.throw({
-        taskId: this.store.findIdByDefinition(task),
-        resourceIds: nonReportableResourceIds,
-      });
-    }
-
-    const report = await this.store.getHealthReporter().getHealth(resourceIds, {
-      isSleepingResource: (resourceId) =>
-        this.store.resources.get(resourceId)!.isInitialized !== true,
-    });
-    const unhealthyResourceIds = report.report
-      .filter((entry) => entry.status === "unhealthy")
-      .map((entry) => entry.id);
-
-    if (unhealthyResourceIds.length > 0) {
-      taskBlockedByResourceHealthError.throw({
-        taskId: this.store.findIdByDefinition(task),
-        resourceIds: unhealthyResourceIds,
-      });
-    }
+    return defaultTaskCallOptions;
   }
 }

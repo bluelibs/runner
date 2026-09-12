@@ -25,6 +25,10 @@ import {
   toCanonicalDefinitionFromStore,
 } from "../store/StoreLookup";
 
+const internalTaskRunnerSource: RuntimeCallSource = runtimeSource.runtime(
+  "runtime-internal-taskRunner",
+);
+
 /**
  * Composes task execution chains with validation, interceptors, and middlewares.
  * Builds the onion-style wrapping of task runners.
@@ -72,9 +76,10 @@ export class TaskMiddlewareComposer {
     // Determine the effective task definition for this execution.
     // When RPC-routed, the Store task definition carries runtime routing overrides.
     const runnerTask = this.resolveTaskDefinition(task, storeTaskDefinition);
+    const runnerTaskId = this.resolveDefinitionId(runnerTask);
 
     // 1. Base runner with validation (receives input + journal)
-    let runner = this.createBaseRunner(runnerTask, storeTask);
+    let runner = this.createBaseRunner(runnerTask, runnerTaskId, storeTask);
 
     // 2. Apply local task interceptors
     runner = this.applyLocalInterceptors(runner, storeTask);
@@ -95,8 +100,7 @@ export class TaskMiddlewareComposer {
         (controller) => this.store.trackTaskAbortController(controller),
       );
       const cleanupCallerSignal = setTaskCallerSignal(journal, options?.signal);
-      const executionSource =
-        options?.source ?? runtimeSource.runtime("runtime-internal-taskRunner");
+      const executionSource = options?.source ?? internalTaskRunnerSource;
       return journaledRunner(input, journal, executionSource).finally(() => {
         cleanupCallerSignal();
         cleanupTrackedTaskAbortController();
@@ -116,6 +120,7 @@ export class TaskMiddlewareComposer {
     TDeps extends DependencyMapType,
   >(
     task: ITask<TInput, TOutput, TDeps>,
+    taskDefinitionId: string,
     storeTask: TaskStoreElementType,
   ): (
     input: TInput,
@@ -138,7 +143,7 @@ export class TaskMiddlewareComposer {
       const validatedInput = ValidationHelper.validateInput(
         input,
         task.inputSchema,
-        this.resolveDefinitionId(task),
+        taskDefinitionId,
         "Task",
       );
 
@@ -156,7 +161,7 @@ export class TaskMiddlewareComposer {
         return ValidationHelper.validateResult(
           rawResult,
           task.resultSchema,
-          this.resolveDefinitionId(task),
+          taskDefinitionId,
           "Task",
         );
       } finally {

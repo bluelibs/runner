@@ -1,6 +1,8 @@
 name: Benchmark Regression
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -10,25 +12,32 @@ permissions:
 jobs:
   bench:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout HEAD (PR)
+      - name: Checkout current revision
         uses: actions/checkout@v4
         with:
           path: head
 
-      - name: Checkout BASE (main)
+      - name: Checkout base revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.event.before }}
           path: base
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "24"
           cache: "npm"
           # Ensure caching works with multi-checkout (head/base)
           cache-dependency-path: "**/package-lock.json"
+
+      - name: Use the same benchmark workload for both revisions
+        run: |
+          # Compare both runtimes with identical workloads, including new metrics.
+          cp -R head/src/__tests__/benchmark/. base/src/__tests__/benchmark/
+          cp head/config/jest/jest.bench.config.js base/config/jest/jest.bench.config.js
 
       - name: Install deps (base)
         working-directory: base
@@ -64,95 +73,12 @@ jobs:
           npm run benchmark:artifacts &&
           npm run benchmark:consumers
 
-      - name: Prepare comparison inputs
-        run: |
-          set -euo pipefail
-          echo "Workspace: $GITHUB_WORKSPACE"
-          mkdir -p "$GITHUB_WORKSPACE/benchmarks"
-
-          expected_baseline="$GITHUB_WORKSPACE/benchmarks/baseline.json"
-          expected_head="$GITHUB_WORKSPACE/benchmarks/benchmark-results.json"
-          primary_baseline="$GITHUB_WORKSPACE/base/config/benchmarks/baseline-ci.json"
-          primary_head="$GITHUB_WORKSPACE/head/config/benchmarks/benchmark-results-ci.json"
-
-          if [ -f "$primary_baseline" ]; then
-            cp "$primary_baseline" "$expected_baseline"
-            echo "Using baseline from config path: $primary_baseline"
-          fi
-
-          if [ ! -f "$expected_baseline" ]; then
-            recovered_baseline=""
-            for candidate in \
-              "$GITHUB_WORKSPACE/base/config/benchmarks/baseline.json" \
-              "$GITHUB_WORKSPACE/base/baseline.json"
-            do
-              if [ -f "$candidate" ]; then
-                cp "$candidate" "$expected_baseline"
-                recovered_baseline="$candidate"
-                break
-              fi
-            done
-
-            if [ -n "$recovered_baseline" ]; then
-              echo "Recovered baseline from backup path: $recovered_baseline"
-            fi
-          fi
-
-          if [ ! -f "$expected_baseline" ]; then
-            echo "No baseline.json found; creating stub baseline (no base benchmarks)."
-            printf '{"meta":{"note":"stub baseline - no benchmarks in base","isCI":true},"results":{}}' > "$expected_baseline"
-          fi
-
-          if [ -f "$primary_head" ]; then
-            cp "$primary_head" "$expected_head"
-            echo "Using head benchmark output from config path: $primary_head"
-          fi
-
-          if [ ! -f "$expected_head" ]; then
-            echo "benchmark-results.json missing from config path; checking backup locations..."
-            recovered_from=""
-
-            for candidate in \
-              "$GITHUB_WORKSPACE/benchmarks/benchmark-results.json" \
-              "$GITHUB_WORKSPACE/head/config/benchmarks/benchmark-results.json" \
-              "$GITHUB_WORKSPACE/head/benchmark-results.json"
-            do
-              if [ -f "$candidate" ]; then
-                cp "$candidate" "$expected_head"
-                recovered_from="$candidate"
-                break
-              fi
-            done
-
-            if [ -z "$recovered_from" ]; then
-              discovered="$(find "$GITHUB_WORKSPACE/head" -maxdepth 6 -type f -name "benchmark-results.json" | head -n 1 || true)"
-              if [ -n "$discovered" ]; then
-                cp "$discovered" "$expected_head"
-                recovered_from="$discovered"
-              fi
-            fi
-
-            if [ -n "$recovered_from" ]; then
-              echo "Recovered head benchmark output from: $recovered_from"
-            else
-              echo "No head benchmark output found; creating stub current results to keep benchmark comparison non-blocking."
-              printf '{"meta":{"note":"stub current - head benchmark output missing","isCI":true},"results":{}}' > "$expected_head"
-            fi
-          fi
-
-      - name: Compare results
-        working-directory: head
-        run: |
-          echo "Comparing benchmark results..."
-          echo "Baseline: ${{ github.workspace }}/benchmarks/baseline.json"
-          echo "Current: ${{ github.workspace }}/benchmarks/benchmark-results.json"
-          echo "Config: ${{ github.workspace }}/head/config/benchmarks/benchmarks.config.json"
-
-          # Show file sizes for debugging
-          ls -la ${{ github.workspace }}/benchmarks/baseline.json ${{ github.workspace }}/benchmarks/benchmark-results.json
-
-          # Run comparison
-          node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/benchmarks/baseline.json ${{ github.workspace }}/benchmarks/benchmark-results.json ${{ github.workspace }}/head/config/benchmarks/benchmarks.config.json
+      - name: Compare fresh results against protected base thresholds
+        run: >-
+          node head/scripts/compare-benchmarks.mjs
+          base/config/benchmarks/baseline-ci.json
+          head/config/benchmarks/benchmark-results-ci.json
+          base/config/benchmarks/benchmarks.config.json
 
       - name: Upload artifacts
         if: always()
@@ -160,5 +86,5 @@ jobs:
         with:
           name: benchmark-outputs
           path: |
-            ${{ github.workspace }}/benchmarks/baseline.json
-            ${{ github.workspace }}/benchmarks/benchmark-results.json
+            base/config/benchmarks/baseline-ci.json
+            head/config/benchmarks/benchmark-results-ci.json

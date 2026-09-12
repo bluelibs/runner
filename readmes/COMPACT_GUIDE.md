@@ -91,6 +91,8 @@ await runtime.dispose();
 
 ## Core Rules
 
+- Development and CI default to Node 24 LTS; the package supports Node >=22.
+
 - Fluent builders chain methods and end with `.build()`.
 - Configurable built definitions expose `.with(config)`.
 - `r.task<Input>(id)` and `r.resource<Config>(id)` can seed typing before explicit schemas.
@@ -100,7 +102,7 @@ await runtime.dispose();
 - Ids cannot start or end with `.`, and cannot contain `..`.
 - Builder order is enforced. After terminal methods such as `.run()` or `.init()`, mutation surfaces intentionally narrow.
 - List builders append by default. Pass `{ override: true }` to replace.
-- `.meta({ ... })` is available across builders for docs and tooling.
+- `.meta({ ... })` snapshots plain objects and arrays (including nested containers) before freezing the built metadata. Functions and opaque instances retain their identity.
 - Prefer local ids such as `task("createUser")`. Runner composes canonical ids from the owner subtree at runtime.
 - Runtime and store internals always expose canonical ids.
 
@@ -676,6 +678,7 @@ Runner has two different async-context surfaces:
 
 - `executionContext`: Runner-managed metadata such as `correlationId`, cancellation `signal`, and optional frame tracing
 - `r.asyncContext(...)`: user-owned business state such as tenant, auth, locale, or request metadata
+- `runtimeSource.*(...)` returns frozen caller records; `kind` and `id` are readonly.
 
 Do not treat them as the same feature just because they use the same async-local machinery under the hood.
 

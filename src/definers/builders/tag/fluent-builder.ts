@@ -1,3 +1,4 @@
+import { snapshotMetadata } from "../shared/snapshotMetadata";
 import type {
   ResolveValidationSchemaInput,
   ITagMeta,
@@ -26,7 +27,7 @@ export function makeTagBuilder<
     id: state.id,
 
     meta(m: ITagMeta) {
-      const next = clone(state, { meta: { ...m } });
+      const next = clone(state, { meta: snapshotMetadata(m) });
       return makeTagBuilder(next);
     },
 

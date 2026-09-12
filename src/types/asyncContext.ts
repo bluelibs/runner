@@ -42,6 +42,8 @@ export interface IAsyncContextDefinition<T> {
  * required by middleware when a task must run inside an active context.
  */
 export interface IAsyncContext<T> {
+  /** Metadata retained from the async-context definition for docs and tooling. */
+  readonly meta?: IAsyncContextMeta;
   /** Stable public context id. */
   readonly id: string;
   /** Brand marker used by Runner for registration and runtime checks. */

@@ -1,3 +1,4 @@
+import { snapshotMetadata } from "../shared/snapshotMetadata";
 import type {
   DependencyMapType,
   DependencyValuesType,
@@ -13,6 +14,7 @@ import type {
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
+import type { TaskRunContext } from "../../../types/task";
 import { builderIncompleteError } from "../../../errors";
 import { defineTask } from "../../defineTask";
 import type {
@@ -234,10 +236,15 @@ export function makeTaskBuilder<
         >["run"]
       >,
     ) {
-      const wrapped = (input: unknown, deps: unknown) =>
+      const wrapped = (
+        input: unknown,
+        deps: unknown,
+        context?: TaskRunContext,
+      ) =>
         fn(
           input as ResolveInput<TInput, TNewInput>,
           deps as DependencyValuesType<TDeps>, // Dependencies are injected at runtime
+          context,
         );
 
       const next = clone<
@@ -279,7 +286,7 @@ export function makeTaskBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(state, { meta: { ...m } });
+      >(state, { meta: snapshotMetadata(m) });
       return makeTaskBuilder<
         TInput,
         TOutput,

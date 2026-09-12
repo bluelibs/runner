@@ -1,3 +1,4 @@
+import { snapshotMetadata } from "../shared/snapshotMetadata";
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
@@ -125,7 +126,9 @@ export function makeResourceMiddlewareBuilder<
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
-      const next = cloneRes(state, { meta: { ...m } as IMiddlewareMeta });
+      const next = cloneRes(state, {
+        meta: snapshotMetadata(m) as IMiddlewareMeta,
+      });
       return makeResourceMiddlewareBuilder<C, In, Out, D, TTags, THasRun>(next);
     },
 

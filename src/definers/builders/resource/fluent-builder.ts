@@ -1,3 +1,4 @@
+import { snapshotMetadata } from "../shared/snapshotMetadata";
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
@@ -484,7 +485,7 @@ export function makeResourceBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(state, { meta: { ...m } });
+      >(state, { meta: snapshotMetadata(m) });
       return makeResourceBuilder<
         TConfig,
         TValue,

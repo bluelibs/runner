@@ -33,7 +33,7 @@ export class HealthReporter implements IHealthReporter {
   }
 
   public getHealth = async (
-    resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
+    resourceDefs?: ReadonlyArray<string | IResource<any, any, any, any, any>>,
     accessPolicy: HealthReporterAccessPolicy = {},
   ): Promise<IResourceHealthReport> => {
     accessPolicy.ensureAvailable?.();
@@ -93,7 +93,7 @@ export class HealthReporter implements IHealthReporter {
 
   private resolveHealthResourceIds(
     resourceDefs:
-      | Array<string | IResource<any, any, any, any, any>>
+      | ReadonlyArray<string | IResource<any, any, any, any, any>>
       | undefined,
     accessPolicy: HealthReporterAccessPolicy,
   ): string[] {

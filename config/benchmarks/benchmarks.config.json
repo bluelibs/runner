@@ -1,15 +1,19 @@
 {
-  "threshold": 0.3,
-  "ciThreshold": 0.4,
+  "threshold": 0.1,
+  "ciThreshold": 0.15,
   "metrics": {
     "basicTaskExecution.tasksPerSecond": "higher",
     "basicTaskExecution.avgTimePerTaskMs": "lower",
     "middlewareTaskExecution.tasksPerSecond": "higher",
     "middlewareTaskExecution.avgTimePerTaskMs": "lower",
+    "initMiddlewareTaskExecution.tasksPerSecond": "higher",
+    "initMiddlewareTaskExecution.avgTimePerTaskMs": "lower",
     "resourceInitialization.resourcesPerSecond": "higher",
     "resourceInitialization.avgTimePerResourceMs": "lower",
     "eventEmissionAndHandling.eventsPerSecond": "higher",
     "eventEmissionAndHandling.avgTimePerEventMs": "lower",
+    "initEventEmissionAndHandling.eventsPerSecond": "higher",
+    "initEventEmissionAndHandling.avgTimePerEventMs": "lower",
     "dependencyResolution.chainsPerSecond": "higher",
     "dependencyResolution.avgTimePerChainMs": "lower",
     "cacheMiddleware.speedupFactor": "higher",
@@ -23,11 +27,5 @@
     "memoryUsage.executionOverheadMB": 0.25,
     "cacheMiddleware.speedupFactor": 0.2,
     "executionContextOverhead.overheadFactor": 0.35
-  },
-  "ciStrictMetrics": [
-    "parallelRuntimeLifecycle.runtimesPerSecond",
-    "parallelRuntimeLifecycle.avgTimePerRuntimeMs",
-    "executionContextOverhead.withContextMs",
-    "executionContextOverhead.overheadFactor"
-  ]
+  }
 }

@@ -49,7 +49,7 @@ export function mergeDepsNoConfig<
   }
   if (isFnExisting && !isFnAddition) {
     const e = existing as () => TExisting;
-    const a = addition as TNew;
+    const a = { ...addition } as TNew;
     return (() => ({ ...e(), ...a })) as Result;
   }
   if (!isFnExisting && isFnAddition) {
@@ -103,7 +103,7 @@ export function mergeDepsWithConfig<
   }
   if (isFnExisting && !isFnAddition) {
     const e = existing as (config: C, mode: RunnerMode) => TExisting;
-    const a = addition as TNew;
+    const a = { ...addition } as TNew;
     return ((config: C, mode: RunnerMode) => ({
       ...e(config, mode),
       ...a,

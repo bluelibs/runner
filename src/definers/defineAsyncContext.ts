@@ -126,6 +126,7 @@ export function defineAsyncContext<T>(
 
   const api = {
     id: ctxId,
+    meta: def.meta,
     [symbolAsyncContext]: true as const,
     [symbolFilePath]: resolvedFilePath,
     configSchema,

@@ -1,3 +1,4 @@
+import { snapshotMetadata } from "../shared/snapshotMetadata";
 import type { IEventLaneMeta } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -50,7 +51,7 @@ export function makeEventLaneBuilder<TMeta extends IEventLaneMeta>(
 
     meta<TNewMeta extends IEventLaneMeta>(meta: TNewMeta) {
       const next = clone(state as BuilderState<TNewMeta>, {
-        meta: { ...meta },
+        meta: snapshotMetadata(meta),
       });
       return makeEventLaneBuilder(next);
     },

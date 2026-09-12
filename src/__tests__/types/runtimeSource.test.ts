@@ -4,6 +4,18 @@ import {
 } from "../../types/runtimeSource";
 
 describe("runtimeSource", () => {
+  it("freezes source factories, kinds, and records shared with user code", () => {
+    expect(Object.isFrozen(runtimeSource)).toBe(true);
+    expect(Object.isFrozen(RuntimeCallSourceKind)).toBe(true);
+    for (const createSource of Object.values(runtimeSource)) {
+      const source = createSource("stable-origin");
+      expect(Object.isFrozen(source)).toBe(true);
+      expect(Reflect.set(source, "id", "corrupted")).toBe(false);
+      expect(Reflect.set(source, "kind", "task")).toBe(false);
+      expect(source.id).toBe("stable-origin");
+    }
+  });
+
   it("creates runtime call sources", () => {
     expect(runtimeSource.runtime("runtime.api")).toEqual({
       kind: RuntimeCallSourceKind.Runtime,

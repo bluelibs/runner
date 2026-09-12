@@ -51,18 +51,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: "20" # Specify the Node.js version you want to use
+          node-version: "24"
           cache: "npm" # Caches npm dependencies
 
       # Install dependencies
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Typecheck
         run: npm run typecheck
 
       - name: Lint
         run: npm run lint
+
+      - name: Check benchmark comparison contracts
+        run: npm run test:benchmark-compare
 
       # Run tests with enforced 100% coverage
       - name: Run tests with coverage enforcement

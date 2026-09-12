@@ -11,7 +11,7 @@ The benchmark system has been designed to be **statistically reliable** and **CI
 - Multiple runs with statistical analysis (median, percentiles)
 - Proper warmup phases to stabilize JIT compilation
 - Environment-aware thresholds (higher tolerance in CI)
-- Severity classification (major vs minor regressions)
+- Every configured threshold is enforced
 - Trend monitoring with warnings
 
 ## Running Benchmarks
@@ -38,8 +38,8 @@ Configuration is stored in `config/benchmarks/benchmarks.config.json`:
 
 ```json
 {
-  "threshold": 0.3, // 30% tolerance for local runs
-  "ciThreshold": 0.4, // 40% tolerance for CI runs
+  "threshold": 0.1, // 10% tolerance for local runs
+  "ciThreshold": 0.15, // 15% tolerance for CI runs
   "metricThresholds": {
     // Per-metric overrides
     "cacheMiddleware.speedupFactor": 0.2
@@ -50,8 +50,8 @@ Configuration is stored in `config/benchmarks/benchmarks.config.json`:
 The suite also tracks parallel runtime startup/disposal and the overhead of enabling execution
 context. These measurements protect Runner's isolation and observability contracts as the runtime
 evolves. Every execution-context sample measures both orders to avoid consistently favoring the
-second, warmer code path. Metrics listed in `ciStrictMetrics` fail CI on any regression beyond their
-configured threshold.
+second, warmer code path. Every tracked metric fails CI on a regression beyond its configured
+threshold. Missing, non-numeric, or non-finite measurements fail the comparison.
 
 ## Distribution Artifact Budgets
 
@@ -81,7 +81,7 @@ node scripts/compare-benchmarks.mjs config/benchmarks/baseline.json config/bench
 The comparison script provides:
 
 - **Environment detection** (CI vs Local)
-- **Severity classification** (Major vs Minor regressions)
+- **Strict thresholds**, including explicit zero-tolerance overrides
 - **Trend warnings** for concerning changes within thresholds
 - **Statistical context** showing actual vs expected values
 
@@ -116,9 +116,14 @@ This approach provides much more reliable results than single-run measurements.
 The system automatically:
 
 - Detects CI environments and uses relaxed thresholds
-- Only fails builds on **major regressions** (>60% by default)
-- Shows **minor regressions** as warnings
+- Fails when any tracked metric exceeds its configured threshold
+- Rejects missing results instead of falling back to stale files or stub measurements
+- Runs the current benchmark workload against both revisions on the same runner
+- Reads the threshold policy from the protected base revision
 - Provides context about environment differences
+
+Pull requests compare against their base revision. Pushes to `main` compare against the previous
+`main` revision, so published changes receive the same regression checks.
 
 ## Troubleshooting
 
@@ -126,9 +131,9 @@ The system automatically:
 
 If CI frequently fails with minor performance differences:
 
-1. Increase `ciThreshold` in config (try 0.5-0.6)
-2. Check if baseline was generated in similar environment
-3. Consider updating baseline if environment has changed
+1. Check for contention and repeat with identical workloads and environments
+2. Inspect the raw sample distribution and warmup behavior
+3. Change a threshold only after reviewing evidence that its tolerance is too narrow
 
 ### Inconsistent Results
 
@@ -153,3 +158,6 @@ If you see legitimate major regressions:
 3. **Review benchmark changes** like any other code
 4. **Monitor trends** - small consistent changes may indicate gradual regression
 5. **Don't over-optimize** - focus on real-world performance impact
+
+Runtime task middleware and event metrics execute after runtime lock. Separate `initMiddlewareTaskExecution`
+and `initEventEmissionAndHandling` metrics cover startup calls, where middleware composition remains mutable.

@@ -1,3 +1,4 @@
+import { snapshotMetadata } from "../shared/snapshotMetadata";
 import type { IRpcLaneMeta, IRpcLanePolicy } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -62,7 +63,7 @@ export function makeRpcLaneBuilder<TMeta extends IRpcLaneMeta>(
 
     meta<TNewMeta extends IRpcLaneMeta>(meta: TNewMeta) {
       const next = clone(state as BuilderState<TNewMeta>, {
-        meta: { ...meta },
+        meta: snapshotMetadata(meta),
       });
       return makeRpcLaneBuilder(next);
     },
