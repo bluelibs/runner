@@ -1,4 +1,5 @@
 import { Readable } from "stream";
+import { buildEventRequestBody } from "../../../remote-lanes/http/protocol";
 import { Serializer } from "../../../serializer";
 import { runtimeSource } from "../../../types/runtimeSource";
 import * as laneAuth from "../../remote-lanes/laneAuth";
@@ -70,13 +71,14 @@ describe("rpc-lanes network re-encoded bodies", () => {
     expect(communicator.task).toHaveBeenCalledTimes(1);
   });
 
-  it("hashes an empty body for Readable eventWithResult payloads", async () => {
+  it("signs the serialized JSON body for eventWithResult payloads", async () => {
     const intercept = jest.fn();
     const communicator = {
       eventWithResult: jest.fn(async () => undefined),
     };
     const lane = { id: "rpc-lanes-network-readable-event-result" };
     const issueSpy = jest.spyOn(laneAuth, "issueRemoteLaneToken");
+    const serializer = new Serializer();
     const context = {
       resolved: {
         taskLaneByTaskId: new Map(),
@@ -100,16 +102,21 @@ describe("rpc-lanes network re-encoded bodies", () => {
           asyncContexts: new Map(),
         },
         eventManager: { intercept },
-        serializer: new Serializer(),
+        serializer,
       },
       resourceId: RPC_LANES_RESOURCE_ID,
     };
 
     applyNetworkModeRouting(context as never);
     const interceptor = intercept.mock.calls[0][0];
+    // Events always travel as JSON (no multipart re-encoding), so even
+    // stream-like payloads must sign what the server hashes: the JSON bytes.
+    // Use a JSON-serializable payload; unserializable stream payloads fail
+    // fast in serialization before reaching the communicator.
+    const data = { hello: "world" };
     await interceptor(jest.fn(), {
       id: "raw-event",
-      data: pipeableBody(),
+      data,
       signal: new AbortController().signal,
       source: runtimeSource.task("rpc-lanes-network-readable-event.source"),
     });
@@ -117,20 +124,25 @@ describe("rpc-lanes network re-encoded bodies", () => {
     expect(issueSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         target: expect.objectContaining({
-          payloadHash: laneAuth.hashRemoteLanePayload(""),
+          payloadHash: laneAuth.hashRemoteLanePayload(
+            serializer.stringify(
+              buildEventRequestBody(data, { returnPayload: true }),
+            ),
+          ),
         }),
       }),
     );
     expect(communicator.eventWithResult).toHaveBeenCalledTimes(1);
   });
 
-  it("hashes an empty body for Readable fire-and-forget event payloads", async () => {
+  it("signs the serialized JSON body for fire-and-forget event payloads", async () => {
     const intercept = jest.fn();
     const communicator = {
       event: jest.fn(async () => undefined),
     };
     const lane = { id: "rpc-lanes-network-readable-event" };
     const issueSpy = jest.spyOn(laneAuth, "issueRemoteLaneToken");
+    const serializer = new Serializer();
     const context = {
       resolved: {
         taskLaneByTaskId: new Map(),
@@ -154,16 +166,18 @@ describe("rpc-lanes network re-encoded bodies", () => {
           asyncContexts: new Map(),
         },
         eventManager: { intercept },
-        serializer: new Serializer(),
+        serializer,
       },
       resourceId: RPC_LANES_RESOURCE_ID,
     };
 
     applyNetworkModeRouting(context as never);
     const interceptor = intercept.mock.calls[0][0];
+    // Same JSON-only rule as eventWithResult: sign the serialized body.
+    const data = { hello: "world" };
     await interceptor(jest.fn(), {
       id: "raw-event",
-      data: pipeableBody(),
+      data,
       signal: new AbortController().signal,
       source: runtimeSource.task(
         "rpc-lanes-network-readable-event-fire.source",
@@ -173,7 +187,9 @@ describe("rpc-lanes network re-encoded bodies", () => {
     expect(issueSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         target: expect.objectContaining({
-          payloadHash: laneAuth.hashRemoteLanePayload(""),
+          payloadHash: laneAuth.hashRemoteLanePayload(
+            serializer.stringify(buildEventRequestBody(data)),
+          ),
         }),
       }),
     );

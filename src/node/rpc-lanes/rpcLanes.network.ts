@@ -91,17 +91,16 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     }
 
     if (typeof binding.communicator.eventWithResult === "function") {
-      const bodyIsReencoded =
-        isReadable(emission.data) || hasNodeFile(emission.data);
+      // Events always travel as JSON (mixed/smart clients use the fetch JSON
+      // path for events). Sign the serialized body so the exposure server,
+      // which hashes the received JSON bytes, accepts the token. Task calls
+      // are the only shape with multipart/octet-stream re-encoding.
       const headers = buildRpcLaneRequestHeaders(lane.id, {
         kind: "rpc-event",
         targetId: eventId,
-        body: bodyIsReencoded
-          ? ""
-          : dependencies.serializer.stringify(
-              buildEventRequestBody(emission.data, { returnPayload: true }),
-            ),
-        bodyReencoded: bodyIsReencoded,
+        body: dependencies.serializer.stringify(
+          buildEventRequestBody(emission.data, { returnPayload: true }),
+        ),
       });
       const result = await binding.communicator.eventWithResult(
         eventId,
@@ -117,17 +116,13 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     }
 
     if (typeof binding.communicator.event === "function") {
-      const bodyIsReencoded =
-        isReadable(emission.data) || hasNodeFile(emission.data);
+      // Events always travel as JSON, see above. Sign the serialized body.
       const headers = buildRpcLaneRequestHeaders(lane.id, {
         kind: "rpc-event",
         targetId: eventId,
-        body: bodyIsReencoded
-          ? ""
-          : dependencies.serializer.stringify(
-              buildEventRequestBody(emission.data),
-            ),
-        bodyReencoded: bodyIsReencoded,
+        body: dependencies.serializer.stringify(
+          buildEventRequestBody(emission.data),
+        ),
       });
       if (headers) {
         await binding.communicator.event(eventId, emission.data, {
