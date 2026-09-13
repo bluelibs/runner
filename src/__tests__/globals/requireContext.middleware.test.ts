@@ -7,16 +7,8 @@ import { genericError } from "../../errors";
  */
 function createFakeContext<T>(useImplementation: () => T) {
   return {
-    /** unique id is irrelevant for tests */
-    id: Symbol("fake-context"),
-    // `use` is what we care about – we wire whatever behaviour the test needs
     use: jest.fn(useImplementation),
-    // The following members are not used by the middleware but are required
-    // to satisfy the `Context` interface.
-    provide: jest.fn(),
-
-    require: jest.fn() as any,
-  } as any;
+  };
 }
 
 describe("requireContextMiddleware", () => {
@@ -45,11 +37,9 @@ describe("requireContextMiddleware", () => {
 
     // Act & Assert
     await expect(
-      requireContextTaskMiddleware.run(
-        { next } as any,
-        {} as any,
-        { context: fakeContext } as any,
-      ),
+      requireContextTaskMiddleware.run({ next } as any, {} as any, {
+        context: fakeContext,
+      }),
     ).rejects.toThrow();
   });
 
@@ -62,7 +52,7 @@ describe("requireContextMiddleware", () => {
     const result = await requireContextTaskMiddleware.run(
       { task, next } as any,
       {} as any,
-      { context: fakeContext } as any,
+      { context: fakeContext },
     );
 
     expect(next).toHaveBeenCalledTimes(1);
