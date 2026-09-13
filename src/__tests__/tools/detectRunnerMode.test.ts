@@ -17,6 +17,15 @@ describe("detectRunnerMode Utility", () => {
     expect(result).toBe(RunnerMode.PROD);
   });
 
+  it("detects pre-prod from NODE_ENV without treating it as dev or test", () => {
+    const adapter = new PlatformAdapter();
+    jest.spyOn(adapter, "getEnv").mockReturnValue("pre-prod");
+    setPlatform(adapter);
+
+    expect(detectRunnerMode()).toBe(RunnerMode.PRE_PROD);
+    expect(detectRunnerMode("prod")).toBe(RunnerMode.PROD);
+  });
+
   it("should auto-detect mode from environment when not provided", () => {
     const mockAdapter = new PlatformAdapter();
 

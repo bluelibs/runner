@@ -99,6 +99,11 @@ Ownership rule:
 
 > **Note:** You do not need to pass `mode: "test"` explicitly when your test runner already sets `NODE_ENV=test`. Runner auto-detects `test` mode from the environment unless you override `mode` yourself.
 
+For acceptance testing in a deployed environment, use `mode: "pre-prod"`.
+Runner also detects this mode from `NODE_ENV=pre-prod`. It keeps normal override
+restrictions; only `test` mode permits duplicate override targets. Passing an
+explicit Runner mode does not rewrite `NODE_ENV`.
+
 When multiple overrides target the same definition in resolved `test` mode, the outermost declaring resource wins.
 
 ### Full Integration Testing (Full Pipeline)

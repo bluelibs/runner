@@ -14,6 +14,7 @@ Runner is a strongly typed application composition framework built around explic
 - **Isolation Boundaries**: Nested resources create strict ownership boundaries (e.g., `billing.tasks.charge`). Tests run in highly isolated environments to prevent state bleeding.
 - **Fluent Builders**: Builders snapshot metadata containers before freezing definitions on `.build()`, and forward task context (journal, source, signal) to task implementations.
 - **Runtime Admission Controller**: Features native `pause()`, `resume()`, and `recoverWhen()` to halt ingress dynamically while allowing active executions to drain.
+- **Runtime Mode**: `run()` accepts mode string literals or existing enum members; resolved runtime modes retain the `RunnerMode` type.
 
 ## Repository & Folder Structure
 

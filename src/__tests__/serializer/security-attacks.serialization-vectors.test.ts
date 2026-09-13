@@ -36,13 +36,16 @@ describe("Serializer Security Attacks", () => {
       expect(roundTripped.big).toBe(BigInt(9007199254740991));
     });
 
-    it("rejects global symbols (Symbol.for) under the default policy", () => {
+    it("rejects global symbols (Symbol.for) with the well-known-only policy", () => {
+      const restrictedSerializer = new Serializer({
+        symbolPolicy: "well-known-only",
+      });
       const sym = Symbol.for("sec.sym.global");
       const payload = serializer.serialize({ sym });
 
-      expect(() => serializer.deserialize<{ sym: symbol }>(payload)).toThrow(
-        SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed,
-      );
+      expect(() =>
+        restrictedSerializer.deserialize<{ sym: symbol }>(payload),
+      ).toThrow(SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed);
     });
 
     it("serializes well-known symbols (ex: Symbol.iterator)", () => {

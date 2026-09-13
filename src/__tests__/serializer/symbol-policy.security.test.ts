@@ -14,16 +14,14 @@ describe("Serializer Symbol Policy", () => {
     );
   });
 
-  it("rejects global symbols by default (well-known-only)", () => {
+  it("accepts existing global-symbol payloads by default (allow-all)", () => {
     const serializer = new Serializer();
     const payload = JSON.stringify({
       __type: SpecialTypeId.Symbol,
-      value: { kind: SymbolPayloadKind.For, key: "deny" },
+      value: { kind: SymbolPayloadKind.For, key: "existing-key" },
     });
 
-    expect(() => serializer.deserialize(payload)).toThrow(
-      SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed,
-    );
+    expect(serializer.deserialize(payload)).toBe(Symbol.for("existing-key"));
   });
 
   it("rejects global symbols when policy is well-known-only", () => {
@@ -38,6 +36,17 @@ describe("Serializer Symbol Policy", () => {
     expect(() => serializer.deserialize(payload)).toThrow(
       SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed,
     );
+  });
+
+  it("round-trips global symbols through graph serialization by default", () => {
+    const serializer = new Serializer();
+    const globalSymbol = Symbol.for("existing-graph-key");
+    const input = {
+      symbol: globalSymbol,
+      values: [globalSymbol, Symbol.iterator],
+    };
+
+    expect(serializer.deserialize(serializer.serialize(input))).toEqual(input);
   });
 
   it("allows well-known symbols when policy is well-known-only", () => {

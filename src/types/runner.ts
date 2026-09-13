@@ -252,10 +252,10 @@ export type RunOptions = {
    */
   lifecycleMode?: ResourceLifecycleMode | "sequential" | "parallel";
   /**
-   * Specify in which mode to run "dev", "prod" or "test".
+   * Specify "dev", "pre-prod", "prod", or "test", or the equivalent RunnerMode enum member.
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.
    */
-  mode?: RunnerMode;
+  mode?: RunnerMode | `${RunnerMode}`;
   /**
    * Enables built-in execution tracing and cycle detection for this runtime.
    */
@@ -322,8 +322,13 @@ export type ResolvedRunOptions = {
  * Runtime mode used for environment-sensitive behavior.
  */
 export enum RunnerMode {
+  /** Automated tests; enables test-only override precedence. */
   TEST = "test",
+  /** Local development. */
   DEV = "dev",
+  /** Pre-production deployments and acceptance testing. */
+  PRE_PROD = "pre-prod",
+  /** Production deployments. */
   PROD = "prod",
 }
 

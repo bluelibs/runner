@@ -164,7 +164,7 @@ Each explanation reports:
 - effective middleware order and origin (local vs subtree-inherited)
 - `tagIds`, the override winner, and root operator access
 
-The returned runtime also exposes: `runOptions`, `mode` (`"dev" | "prod" | "test"`), and `state` (`"running" | "paused"`).
+The returned runtime also exposes: `runOptions`, `mode` (`"dev" | "pre-prod" | "prod" | "test"`), and `state` (`"running" | "paused"`).
 
 Important run options:
 
@@ -177,7 +177,8 @@ Important run options:
 - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`
 - `executionContext: true | { ... }`: enable correlation ids and inherited execution signals, with optional frame tracking and cycle detection
 - `identity: myIdentityContext`: override which registered async context Runner reads for identity-aware framework behavior
-- `mode: "dev" | "prod" | "test"`: override environment-based mode detection
+- `mode: "dev" | "pre-prod" | "prod" | "test"`: override environment-based mode detection; existing `RunnerMode` enum members are also accepted
+- `pre-prod` is also detected from `NODE_ENV=pre-prod`; it keeps normal override restrictions. Explicit `mode` does not change `NODE_ENV`.
 
 Observability options (`debug`, `logs`) do not change lifecycle semantics.
 
@@ -547,7 +548,7 @@ Important rules:
 ### Serialization
 
 - The built-in serializer round-trips common non-JSON shapes (`Date`, `RegExp`). Register custom types through `resources.serializer`.
-- `symbolPolicy` defaults to `well-known-only`. Global `Symbol.for` keys require `allow-all`; unique symbols are always rejected.
+- `symbolPolicy` defaults to `allow-all`, preserving well-known and global `Symbol.for` symbols. Opt into `well-known-only` or `disabled` for stricter deserialization; unique symbols are always rejected.
 - For boundary-specific behavior, register a custom resource returning `new Serializer({...})` or fork `resources.serializer`.
 - `allowedTypes: [...]` restricts deserialization. `new Serializer({ types: [...] })` pre-registers explicit `addType({ ... })` definitions.
 - `serializer.addSchema(DtoClass)` / `new Serializer({ schemas: [...] })` registers `@Match.Schema()` DTOs so parse/deserialize restores them without an explicit `{ schema }`.

@@ -127,7 +127,8 @@ export interface SerializerOptions {
   allowedTypes?: readonly string[];
   /**
    * Controls which Symbol payloads may be deserialized.
-   * Defaults to `well-known-only` (global `Symbol.for` keys require `allow-all`).
+   * Defaults to `allow-all`, accepting well-known symbols and global `Symbol.for` keys.
+   * Use `well-known-only` or `disabled` to restrict symbol deserialization explicitly.
    */
   symbolPolicy?: SymbolPolicy;
   /** Maximum accepted RegExp pattern length during deserialization */

@@ -186,7 +186,7 @@ export class RunResult<V> implements IInspectableRuntime<V> {
   }
 
   /**
-   * Returns the runtime mode (e.g., "test", "dev", "prod") as specified in run options.
+   * Returns the resolved runtime mode: "test", "dev", "pre-prod", or "prod".
    */
   public get mode() {
     return this.runOptions.mode;

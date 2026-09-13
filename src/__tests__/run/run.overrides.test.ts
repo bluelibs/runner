@@ -605,35 +605,38 @@ describe("run-overrides", () => {
     await result.dispose();
   });
 
-  it("still rejects duplicate targets outside test mode", async () => {
-    const baseTask = defineTask({
-      id: "task-same-non-test",
-      run: async () => "Original",
-    });
+  it.each([RunnerMode.DEV, RunnerMode.PROD, RunnerMode.PRE_PROD])(
+    "still rejects duplicate targets in %s mode",
+    async (mode) => {
+      const baseTask = defineTask({
+        id: "task-same-non-test",
+        run: async () => "Original",
+      });
 
-    const middleOverride = r.override(baseTask, async () => "Middle");
-    const rootOverride = r.override(baseTask, async () => "Root");
+      const middleOverride = r.override(baseTask, async () => "Middle");
+      const rootOverride = r.override(baseTask, async () => "Root");
 
-    const middle = defineResource({
-      id: "middle-non-test",
-      register: [baseTask],
-      overrides: [middleOverride],
-    });
+      const middle = defineResource({
+        id: "middle-non-test",
+        register: [baseTask],
+        overrides: [middleOverride],
+      });
 
-    const app = defineResource({
-      id: "app-non-test",
-      register: [middle],
-      dependencies: { t: baseTask },
-      overrides: [rootOverride],
-      async init(_, deps) {
-        return await deps.t();
-      },
-    });
+      const app = defineResource({
+        id: "app-non-test",
+        register: [middle],
+        dependencies: { t: baseTask },
+        overrides: [rootOverride],
+        async init(_, deps) {
+          return await deps.t();
+        },
+      });
 
-    await expect(run(app, { mode: RunnerMode.DEV })).rejects.toThrow(
-      'Override target "task-same-non-test" is declared more than once.',
-    );
-  });
+      await expect(run(app, { mode })).rejects.toThrow(
+        'Override target "task-same-non-test" is declared more than once.',
+      );
+    },
+  );
 
   it("blocks overrides that try to replace a parent's registration in test mode", async () => {
     const baseTask = defineTask({
