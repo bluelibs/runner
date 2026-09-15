@@ -14,6 +14,7 @@ import type { TaskRegistry } from "./TaskRegistry";
 import type { AuditLogger } from "./AuditLogger";
 import type { WaitManager } from "./WaitManager";
 import { Logger } from "../../../../models/Logger";
+import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { NoopEventBus } from "../../bus/NoopEventBus";
 import { resolveExecutionWaiters } from "./ExecutionManager.waiters";
@@ -160,11 +161,20 @@ export class ExecutionManager {
     this.taskRegistry.register(task);
     this.assertCanExecute();
 
+    // Fail fast on invalid input before anything is persisted: invalid input
+    // must never mint an execution id, history, timers, or audit entries.
+    const validatedInput = ValidationHelper.validateInput(
+      input,
+      task.inputSchema,
+      task.id,
+      "Task",
+    );
+
     if (options?.idempotencyKey) {
       return await startWithIdempotencyKey(
         this.persistenceDeps,
         task,
-        input,
+        validatedInput,
         options.idempotencyKey,
         options,
       );
@@ -173,7 +183,7 @@ export class ExecutionManager {
     const executionId = await persistNewExecution(
       this.persistenceDeps,
       task,
-      input,
+      validatedInput,
       options,
     );
     await kickoffWithFailsafe(this.persistenceDeps, executionId);

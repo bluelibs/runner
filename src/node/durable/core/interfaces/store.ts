@@ -17,6 +17,16 @@ export interface ListExecutionsOptions {
   workflowKey?: string;
   limit?: number;
   offset?: number;
+  /**
+   * Opaque keyset cursor for stable large-scale pagination.
+   *
+   * Rows are ordered by `createdAt` descending with `id` ascending as the
+   * tiebreak. When present, only rows strictly after the cursor are
+   * returned and `offset` is ignored, so later pages stay stable while new
+   * executions are created concurrently. Prefer this over `offset` for
+   * dashboards that page beyond the first few screens.
+   */
+  cursor?: string;
 }
 
 /**

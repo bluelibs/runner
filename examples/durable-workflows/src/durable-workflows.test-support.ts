@@ -3,6 +3,7 @@ import {
   durableResource,
   MemoryStore,
   MemoryEventBus,
+  resources,
 } from "@bluelibs/runner/node";
 
 import type { OrderResult } from "./orderProcessing.js";
@@ -37,7 +38,7 @@ export const EmailVerified = r
 
 function createDurableSetup() {
   const store = new MemoryStore();
-  const durable = durableResource.fork("durable");
+  const durable = durableResource.fork("testWorkflows");
   const durableRegistration = durable.with({
     store,
     eventBus: new MemoryEventBus(),
@@ -81,6 +82,10 @@ export function buildOrderApp(ns: string) {
           stepId: "awaitPaymentConfirmation",
         });
 
+        if (confirmation.kind !== "signal") {
+          throw new Error("Payment confirmation timed out");
+        }
+
         const shipment = await durableContext.step("shipOrder", async () => ({
           orderId: validated.orderId,
           transactionId: confirmation.payload.transactionId,
@@ -98,7 +103,12 @@ export function buildOrderApp(ns: string) {
 
   const app = r
     .resource(ns)
-    .register([durableRegistration, processOrder, PaymentConfirmed])
+    .register([
+      resources.durable,
+      durableRegistration,
+      processOrder,
+      PaymentConfirmed,
+    ])
     .build();
 
   return { app, durable, store, processOrder };
@@ -176,7 +186,12 @@ export function buildOnboardingApp(ns: string, signalTimeoutMs: number) {
 
   const app = r
     .resource(ns)
-    .register([durableRegistration, userOnboarding, EmailVerified])
+    .register([
+      resources.durable,
+      durableRegistration,
+      userOnboarding,
+      EmailVerified,
+    ])
     .build();
 
   return { app, durable, store, userOnboarding };

@@ -486,6 +486,39 @@ await durable.operator.editStepResult(executionId, "step-id", newResult);
 await durable.operator.retryRollback(executionId);
 ```
 
+### Dashboard Reads (Execution State)
+
+Status pages should use the dashboard-safe state, not the raw detail path.
+`getExecutionState` carries status, attempt counters, timings, and the live
+position (`current`) — but never `input`, `result`, or `error` payloads.
+Reserve `getExecutionDetail` for break-glass recovery.
+
+```ts
+const state = await durable.operator.getExecutionState(executionId);
+state?.status; // "pending" | "running" | "sleeping" | ...
+state?.current; // Live position ({ kind: "waitForSignal", stepId, ... })
+```
+
+Page large listings with cursors, not offsets. Rows come newest-first and
+stay stable while new executions are created concurrently:
+
+```ts
+let cursor: string | undefined;
+do {
+  const page = await durable.operator.listExecutionStates({
+    status: ["running", "sleeping"],
+    limit: 100,
+    cursor,
+  });
+  render(page.states);
+  cursor = page.nextCursor ?? undefined;
+} while (cursor);
+```
+
+> **Note:** the operator performs no authentication or authorization. It is an
+> internal API for trusted processes: enforce tenancy and access control at
+> your lane/edge before calling it.
+
 ### Recovery
 
 ```ts

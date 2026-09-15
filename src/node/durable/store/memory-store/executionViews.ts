@@ -1,6 +1,11 @@
 import type { DurableAuditEntry } from "../../core/audit";
 import type { ListExecutionsOptions } from "../../core/interfaces/store";
 import type { Execution, StepResult } from "../../core/types";
+import {
+  compareExecutionsForListing,
+  decodeExecutionCursor,
+  isExecutionAfterCursor,
+} from "../../core/executionCursor";
 import { cloneAuditEntry, cloneExecution, cloneStepResult } from "./shared";
 import type { MemoryStoreRuntime } from "./runtime";
 
@@ -25,7 +30,6 @@ export async function listExecutions(
   let results = Array.from(runtime.executions.values());
   const statusFilter = options?.status;
   const workflowKey = options?.workflowKey;
-  const offset = options?.offset ?? 0;
   const limit = options?.limit ?? 100;
 
   if (statusFilter && statusFilter.length > 0) {
@@ -40,11 +44,17 @@ export async function listExecutions(
     );
   }
 
-  results.sort(
-    (left, right) =>
-      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-  );
+  results.sort(compareExecutionsForListing);
 
+  if (options?.cursor !== undefined) {
+    const cursor = decodeExecutionCursor(options.cursor);
+    results = results.filter((execution) =>
+      isExecutionAfterCursor(execution, cursor),
+    );
+    return results.slice(0, limit).map(cloneExecution);
+  }
+
+  const offset = options?.offset ?? 0;
   return results.slice(offset, offset + limit).map(cloneExecution);
 }
 

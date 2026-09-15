@@ -16,6 +16,7 @@ import { createExecutionId, sleepMs } from "../utils";
 import { withStoreLock } from "../locking";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ITask } from "../../../../types/task";
+import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
 import {
   durableExecutionInvariantError,
   durableScheduleConfigError,
@@ -47,6 +48,14 @@ export class ScheduleManager {
 
     const task = this.resolveTaskReference(taskRef, "ensureSchedule");
     this.taskRegistry.register(task);
+
+    // Fail fast on invalid input before anything is persisted.
+    const validatedInput = ValidationHelper.validateInput(
+      input,
+      task.inputSchema,
+      task.id,
+      "Task",
+    );
 
     const scheduleId = options.id;
 
@@ -81,7 +90,7 @@ export class ScheduleManager {
             type,
             pattern,
             timezone,
-            input,
+            input: validatedInput,
             status: ScheduleStatus.Active,
             updatedAt: new Date(),
           });
@@ -92,7 +101,7 @@ export class ScheduleManager {
         const schedule: Schedule = {
           id: scheduleId,
           workflowKey,
-          input,
+          input: validatedInput,
           pattern,
           timezone,
           type,
@@ -115,6 +124,14 @@ export class ScheduleManager {
     const task = this.resolveTaskReference(taskRef, "schedule");
     this.taskRegistry.register(task);
 
+    // Fail fast on invalid input before anything is persisted.
+    const validatedInput = ValidationHelper.validateInput(
+      input,
+      task.inputSchema,
+      task.id,
+      "Task",
+    );
+
     const id = options.id ?? createExecutionId();
 
     if (options.cron || options.interval !== undefined) {
@@ -122,7 +139,7 @@ export class ScheduleManager {
       const schedule: Schedule = {
         id,
         workflowKey,
-        input,
+        input: validatedInput,
         pattern: options.cron ?? String(options.interval),
         timezone: options.cron ? options.timezone : undefined,
         type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
@@ -141,7 +158,7 @@ export class ScheduleManager {
     await this.store.createTimer({
       id: `once:${id}`,
       workflowKey: this.taskRegistry.getWorkflowKey(task),
-      input,
+      input: validatedInput,
       type: TimerType.Scheduled,
       fireAt,
       status: TimerStatus.Pending,

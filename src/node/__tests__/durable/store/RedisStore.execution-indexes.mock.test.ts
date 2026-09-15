@@ -1,4 +1,5 @@
 import { ExecutionStatus } from "../../../durable/core/types";
+import { encodeExecutionCursor } from "../../../durable/core/executionCursor";
 import {
   serializer,
   setupRedisStoreMock,
@@ -161,5 +162,56 @@ describe("durable: RedisStore execution indexes (mock)", () => {
     redisMock.sscan.mockResolvedValueOnce(["0", ["1"]]);
     redisMock.pipeline.mockReturnValueOnce(badPipeline as any);
     await expect(store.listStuckExecutions()).resolves.toEqual([]);
+  });
+
+  it("pages executions with keyset cursors", async () => {
+    const { redisMock, store } = harness;
+    redisMock.sscan.mockResolvedValue(["0", ["1", "2", "3"]]);
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        [
+          null,
+          serializer.stringify({
+            id: "1",
+            workflowKey: "t",
+            status: "completed",
+            createdAt: new Date("2024-01-03T00:00:00.000Z"),
+          }),
+        ],
+        [
+          null,
+          serializer.stringify({
+            id: "2",
+            workflowKey: "t",
+            status: "completed",
+            createdAt: new Date("2024-01-02T00:00:00.000Z"),
+          }),
+        ],
+        [
+          null,
+          serializer.stringify({
+            id: "3",
+            workflowKey: "t",
+            status: "completed",
+            createdAt: new Date("2024-01-01T00:00:00.000Z"),
+          }),
+        ],
+      ]),
+    });
+    await expect(
+      store.listExecutions({ limit: 2 }).then((rows) => rows.map((r) => r.id)),
+    ).resolves.toEqual(["1", "2"]);
+
+    const cursor = encodeExecutionCursor({
+      createdAt: new Date("2024-01-02T00:00:00.000Z").toISOString(),
+      id: "2",
+    });
+    await expect(
+      store
+        .listExecutions({ limit: 2, cursor })
+        .then((rows) => rows.map((r) => r.id)),
+    ).resolves.toEqual(["3"]);
   });
 });

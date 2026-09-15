@@ -5,6 +5,11 @@ import {
   type DurableAuditEntry,
 } from "../core/audit";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
+import {
+  compareExecutionsForListing,
+  decodeExecutionCursor,
+  isExecutionAfterCursor,
+} from "../core/executionCursor";
 
 async function loadExecutionsFromSet(
   runtime: RedisStoreRuntime,
@@ -42,11 +47,16 @@ export async function listExecutions(
       (execution) => execution.workflowKey === options.workflowKey,
     );
   }
-  executions.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-  const offset = options.offset ?? 0;
+  executions.sort(compareExecutionsForListing);
   const limit = options.limit ?? 100;
+  if (options.cursor !== undefined) {
+    const cursor = decodeExecutionCursor(options.cursor);
+    executions = executions.filter((execution) =>
+      isExecutionAfterCursor(execution, cursor),
+    );
+    return executions.slice(0, limit);
+  }
+  const offset = options.offset ?? 0;
   return executions.slice(offset, offset + limit);
 }
 
