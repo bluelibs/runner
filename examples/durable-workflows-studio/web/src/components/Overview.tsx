@@ -13,6 +13,7 @@ import {
 import { timeAgo, truncateId } from "../format.js";
 import { ActivityChart, StatusMixChart } from "./DashboardCharts.js";
 import { StatusPill } from "./StatusPill.js";
+import { WorkflowSelect } from "./WorkflowSelect.js";
 
 const FILTERS: Array<{ id: DashboardStatusFilter; label: string }> = [
   { id: "all", label: "All" },
@@ -37,6 +38,10 @@ export function Overview({
   now,
   totalExecutionCount,
   hasMoreExecutions = false,
+  queryValue,
+  onQueryChange,
+  statusValue,
+  onStatusChange,
 }: {
   executions: StudioExecutionSummary[];
   schedules: StudioSchedule[];
@@ -51,17 +56,25 @@ export function Overview({
   now: number;
   totalExecutionCount?: number;
   hasMoreExecutions?: boolean;
+  queryValue?: string;
+  onQueryChange?: (query: string) => void;
+  statusValue?: DashboardStatusFilter;
+  onStatusChange?: (status: DashboardStatusFilter) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<DashboardStatusFilter>("all");
+  const [localQuery, setLocalQuery] = useState("");
+  const [localStatus, setLocalStatus] = useState<DashboardStatusFilter>("all");
+  const query = queryValue ?? localQuery;
+  const status = statusValue ?? localStatus;
+  const setQuery = onQueryChange ?? setLocalQuery;
+  const setStatus = onStatusChange ?? setLocalStatus;
   const filtered = useMemo(
     () =>
-      filterDashboardExecutions(executions, {
+      onQueryChange ? executions : filterDashboardExecutions(executions, {
         query,
         status,
         workflowKey: workflowFilter,
       }),
-    [executions, query, status, workflowFilter],
+    [executions, query, status, workflowFilter, onQueryChange],
   );
   const filteredIds = useMemo(
     () => new Set(filtered.map((execution) => execution.id)),
@@ -113,22 +126,13 @@ export function Overview({
             ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search ID, workflow, status or current step…"
+            placeholder="Find execution by exact ID…"
             aria-label="Search dashboard"
           />
           <kbd>/</kbd>
         </label>
-        <select
-          className="overview-select"
-          value={workflowFilter ?? ""}
-          onChange={(event) => onWorkflowFilter(event.target.value || null)}
-          aria-label="Filter by workflow"
-        >
-          <option value="">All workflows</option>
-          {workflows.map((workflow) => (
-            <option key={workflow.key} value={workflow.key}>{workflow.title}</option>
-          ))}
-        </select>
+        <WorkflowSelect compact workflows={workflows} value={workflowFilter ?? ""}
+          onChange={onWorkflowFilter} onClear={() => onWorkflowFilter(null)} />
         <div className="overview-filter-row" role="tablist" aria-label="Status filter">
           {FILTERS.map((filter) => (
             <button

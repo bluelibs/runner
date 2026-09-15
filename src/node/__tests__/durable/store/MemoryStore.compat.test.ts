@@ -39,7 +39,8 @@ describe("durable: MemoryStore compatibility", () => {
     store.schedules = schedules;
     store.locks = locks;
 
-    expect(store.executions).toBe(executions);
+    // Restoring the backing map rebuilds its write-through query indexes.
+    expect([...store.executions]).toEqual([...executions]);
     expect(store.executionIdByIdempotencyKey).toBe(executionIdByIdempotencyKey);
     expect(store.stepResults).toBe(stepResults);
     expect(store.signalStates).toBe(signalStates);

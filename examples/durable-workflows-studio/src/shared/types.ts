@@ -185,9 +185,13 @@ export interface StudioExecutionDetail {
 /** Query filters for the executions list endpoint. */
 export interface StudioExecutionFilters {
   workflowKey?: string;
-  status?: StudioExecutionStatus;
+  status?: StudioExecutionStatus | "live";
   limit?: number;
   offset?: number;
+  /** Stable continuation token; preferred over legacy offsets. */
+  cursor?: string;
+  /** Exact execution ID lookup, across the entire history. */
+  executionId?: string;
 }
 
 /** One bounded execution page for progressively loaded operator views. */
@@ -196,6 +200,8 @@ export interface StudioExecutionPage {
   hasMore: boolean;
   /** Offset for the next page, or `null` when the result set is exhausted. */
   nextOffset: number | null;
+  /** Stable continuation token for the indexed operator path. */
+  nextCursor?: string | null;
   /** Exact filtered total when the backing store can provide it cheaply. */
   total?: number;
 }

@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useWorkflowFeed } from "../workflowFeed.js";
 import type { StudioWorkflow } from "../../../src/shared/types.js";
 import { WorkflowNavigation } from "./WorkflowNavigation.js";
 import {
-  filterWorkflows,
   WORKFLOW_SEARCH_THRESHOLD,
 } from "../workflowCatalog.js";
 
@@ -40,11 +40,9 @@ export function Sidebar({
   onLogout?: () => void;
 }) {
   const [workflowQuery, setWorkflowQuery] = useState("");
-  const visibleWorkflows = useMemo(
-    () => filterWorkflows(workflows, workflowQuery),
-    [workflowQuery, workflows],
-  );
-  const searchable = workflows.length > WORKFLOW_SEARCH_THRESHOLD;
+  const feed = useWorkflowFeed(workflows, workflowQuery);
+  const visibleWorkflows = feed.workflows;
+  const searchable = feed.total > WORKFLOW_SEARCH_THRESHOLD;
   const displayedExecutionCount = totalExecutionCount ?? counts.total;
   const executionCountIsLowerBound =
     totalExecutionCount === undefined && hasMoreExecutions;
@@ -107,19 +105,19 @@ export function Sidebar({
       <div className="side-stats">
         <div className="stat">
           <span className="stat-num">{counts.live}</span>
-          <span className="stat-label">live</span>
+          <span className="stat-label">live loaded</span>
         </div>
         <div className="stat">
           <span className={`stat-num${counts.failed > 0 ? " bad" : ""}`}>
             {counts.failed}
           </span>
-          <span className="stat-label">failed</span>
+          <span className="stat-label">failed loaded</span>
         </div>
         <div className="stat">
           <span className={`stat-num${stuckCount > 0 ? " warn" : ""}`}>
             {stuckCount}
           </span>
-          <span className="stat-label">stuck</span>
+          <span className="stat-label">stuck loaded</span>
         </div>
       </div>
 
@@ -128,9 +126,9 @@ export function Sidebar({
           <p className="side-heading">Workflows</p>
           {searchable ? (
             <span
-              aria-label={`Showing ${visibleWorkflows.length} of ${workflows.length} workflows`}
+              aria-label={`Showing ${visibleWorkflows.length} of ${feed.total} workflows`}
             >
-              {visibleWorkflows.length}/{workflows.length}
+              {visibleWorkflows.length}/{feed.total}
             </span>
           ) : null}
         </div>
@@ -168,7 +166,13 @@ export function Sidebar({
           selectedKey={workflowFilter}
           onSelect={onWorkflowFilter}
           query={workflowQuery}
+          hasMore={feed.nextCursor !== null && !feed.error}
+          loading={feed.loading}
+          onLoadMore={feed.loadMore}
+          offset={feed.offset}
+          onLoadPrevious={feed.loadPrevious}
         />
+        {feed.error ? <button className="load-more-btn" onClick={feed.retry}>{feed.error} Retry</button> : null}
       </div>
 
       <div className="side-foot">

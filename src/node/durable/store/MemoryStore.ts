@@ -7,6 +7,7 @@ import type {
 } from "../core/interfaces/store";
 import type {
   DurableExecutionWaiter,
+  DurableExecutionState,
   DurableQueuedSignalRecord,
   DurableSignalRecord,
   DurableSignalState,
@@ -27,12 +28,33 @@ import * as signalWaiterOps from "./memory-store/signalWaiters";
 import * as snapshotOps from "./memory-store/snapshot";
 import * as timerOps from "./memory-store/timers";
 import type { MemoryStoreSnapshot } from "./memory-store/types";
+import { toDurableExecutionState } from "../core/executionIndex";
 
 export type { MemoryStoreSnapshot } from "./memory-store/types";
 
 export class MemoryStore implements IDurableStore {
+  /** Reads only metadata for an exact execution storage identity. */
+  async getExecutionState(id: string): Promise<DurableExecutionState | null> {
+    const execution = this.runtime.executions.get(id);
+    return execution
+      ? structuredClone(toDurableExecutionState(execution))
+      : null;
+  }
+
+  /** Reads only the requested page from write-through metadata indexes. */
+  async listExecutionStates(
+    options: ListExecutionsOptions = {},
+  ): Promise<DurableExecutionState[]> {
+    return this.runtime.executions.listStates(options);
+  }
+
   private readonly runtime = new MemoryStoreRuntime({
-    captureSnapshot: () => this.captureDurableMutationSnapshot(),
+    // Plain memory stores have no persistence consumer; cloning the whole database
+    // on every write makes otherwise indexed workloads quadratic.
+    captureSnapshot: () =>
+      this.afterDurableMutation === MemoryStore.prototype.afterDurableMutation
+        ? null
+        : this.captureDurableMutationSnapshot(),
     afterDurableMutation: async (snapshot) =>
       await this.afterDurableMutation(snapshot),
   });

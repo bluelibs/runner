@@ -55,7 +55,7 @@ describe("studio rendering", () => {
         now={Date.now()}
       />,
     );
-    expect(html).toContain("Search ID, workflow, status or current step");
+    expect(html).toContain("Find execution by exact ID");
     expect(html).toContain("Execution activity");
     expect(html).toContain("Status mix");
     expect(html).toContain("Latest activity");

@@ -5,10 +5,13 @@ import type { DurableExecutionState, ExecutionStatus } from "./types";
 import type { StepResult } from "./types";
 import type { ListExecutionsOptions } from "./interfaces/store";
 import { encodeExecutionCursor, type ExecutionCursor } from "./executionCursor";
+import { toDurableExecutionState } from "./executionIndex";
 import {
   durableExecutionInvariantError,
   durableOperatorUnsupportedStoreCapabilityError,
 } from "../../../errors";
+
+export { toDurableExecutionState } from "./executionIndex";
 
 /**
  * Filters for dashboard-safe execution listing. Cursor pagination is
@@ -19,7 +22,9 @@ export interface ListExecutionStatesOptions {
   status?: ExecutionStatus[];
   /** Restricts results to one registered workflow key. */
   workflowKey?: string;
-  /** Positive number of rows to return; defaults to 100. */
+  /** Exact execution storage identity; avoids an unindexed full-text scan. */
+  executionId?: string;
+  /** Positive number of rows to return, at most 1000; defaults to 100. */
   limit?: number;
   /**
    * Opaque cursor returned as `nextCursor` by a previous page. When present,
@@ -30,34 +35,13 @@ export interface ListExecutionStatesOptions {
 
 /** One page of dashboard-safe execution states. */
 export interface ListExecutionStatesPage {
+  /** Payload-free execution summaries in canonical listing order. */
   states: DurableExecutionState[];
   /**
    * Cursor for the next page, or `null` when this page is not full (nothing
    * follows). A full final page may still yield one trailing empty page.
    */
   nextCursor: string | null;
-}
-
-/**
- * Maps a full execution record to its dashboard-safe summary. `input`,
- * `result`, and `error` are deliberately dropped: they may contain sensitive
- * payloads and dashboards must not depend on them.
- */
-export function toDurableExecutionState(
-  execution: Execution,
-): DurableExecutionState {
-  return {
-    id: execution.id,
-    workflowKey: execution.workflowKey,
-    parentExecutionId: execution.parentExecutionId,
-    status: execution.status,
-    attempt: execution.attempt,
-    maxAttempts: execution.maxAttempts,
-    current: execution.current,
-    createdAt: execution.createdAt,
-    updatedAt: execution.updatedAt,
-    completedAt: execution.completedAt,
-  };
 }
 
 /**
@@ -77,6 +61,18 @@ export function toDurableExecutionState(
  */
 export class DurableOperator {
   constructor(private readonly store: IDurableStore) {}
+
+  /** Backfills one legacy index batch without blocking the store for a full scan. */
+  async rebuildExecutionIndex(
+    options: { cursor?: string; limit?: number } = {},
+  ): Promise<{ nextCursor: string | null }> {
+    if (!this.store.rebuildExecutionIndex) {
+      return durableOperatorUnsupportedStoreCapabilityError.throw({
+        operation: "rebuildExecutionIndex",
+      });
+    }
+    return this.store.rebuildExecutionIndex(options);
+  }
 
   async listExecutions(options?: ListExecutionsOptions): Promise<Execution[]> {
     return await this.store.listExecutions(options);
@@ -133,6 +129,8 @@ export class DurableOperator {
   async getExecutionState(
     executionId: string,
   ): Promise<DurableExecutionState | null> {
+    if (this.store.getExecutionState)
+      return this.store.getExecutionState(executionId);
     const execution = await this.store.getExecution(executionId);
     return execution ? toDurableExecutionState(execution) : null;
   }
@@ -147,18 +145,34 @@ export class DurableOperator {
     options?: ListExecutionStatesOptions,
   ): Promise<ListExecutionStatesPage> {
     const limit = options?.limit ?? 100;
-    if (!Number.isInteger(limit) || limit <= 0) {
+    if (!Number.isInteger(limit) || limit <= 0 || limit > 1000) {
       durableExecutionInvariantError.throw({
-        message: `Durable operator limit must be a positive integer. Received: ${limit}.`,
+        message: `Durable operator limit must be a positive integer no greater than 1000. Received: ${limit}.`,
       });
     }
-    const executions = await this.store.listExecutions({
+    if (options?.executionId !== undefined) {
+      if (options.cursor !== undefined) {
+        durableExecutionInvariantError.throw({
+          message:
+            "Exact execution ID lookup cannot be combined with a cursor.",
+        });
+      }
+      const state = await this.getExecutionState(options.executionId);
+      const matches =
+        state &&
+        (!options.workflowKey || state.workflowKey === options.workflowKey) &&
+        (!options.status?.length || options.status.includes(state.status));
+      return { states: matches ? [state] : [], nextCursor: null };
+    }
+    const query = {
       status: options?.status,
       workflowKey: options?.workflowKey,
       limit,
       cursor: options?.cursor,
-    });
-    const states = executions.map(toDurableExecutionState);
+    };
+    const states = this.store.listExecutionStates
+      ? await this.store.listExecutionStates(query)
+      : (await this.store.listExecutions(query)).map(toDurableExecutionState);
     if (states.length < limit) {
       return { states, nextCursor: null };
     }

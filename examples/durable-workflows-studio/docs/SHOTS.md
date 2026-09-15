@@ -32,6 +32,8 @@ Git.
 | `13-signal-history.png` | incident + Signals click | Delivered, consumed, and queued signal records with payload inspection |
 | `14-edit-state.png` | portfolio + Operate → Edit state | Guarded state-repair flow with step selection, JSON editor, and required audit reason |
 | `15-schedule-edit.png` | schedules + Edit click | In-place schedule cadence and input editing |
+| `19-live-100k-history.png` | live HTTP API, scale fixtures | 100,000 stored executions, paged history, bounded cache and virtualized rows |
+| `20-live-100k-oldest.png` | live HTTP API, exact-ID search | Finds the oldest execution without downloading the intervening history |
 
 Drop `demo=1` from any link for the equivalent view against the live runtime
 (`npm start` → http://localhost:4317).

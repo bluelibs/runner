@@ -523,6 +523,21 @@ do {
 } while (cursor);
 ```
 
+The built-in memory and Redis stores use write-through metadata indexes for
+these reads, including combined workflow/status filters. `limit` defaults to
+100 and is capped at 1000. An exact `executionId` filter avoids an unindexed
+text scan. Custom stores without `listExecutionStates`/`getExecutionState`
+retain the legacy fallback; those stores must provide indexed capabilities
+for equivalent large-history performance. The raw `listExecutions` API is
+not the indexed dashboard path.
+
+Redis data written before metadata indexing needs a resumable one-time
+backfill. Call `durable.operator.rebuildExecutionIndex({ cursor, limit: 500 })`
+until `nextCursor` is `null`, retaining the returned cursor between batches.
+Indexed lists fail explicitly while backfill is incomplete. Concurrent writes
+are preserved by compare-and-set. `SSCAN COUNT` is a batch-size hint, not a
+strict work bound. See the [Studio pagination contract](../examples/durable-workflows-studio/docs/PAGINATION.md).
+
 > **Note:** the operator performs no authentication or authorization. It is an
 > internal API for trusted processes: enforce tenancy and access control at
 > your lane/edge before calling it.

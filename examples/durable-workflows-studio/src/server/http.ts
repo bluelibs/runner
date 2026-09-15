@@ -153,7 +153,11 @@ export async function dispatchApiRequest(
     return { kind: "json", status: 200, body: { ok: true } };
   }
   if (method === "GET" && pathname === "/api/workflows") {
-    const result = listWorkflows();
+    const result = listWorkflows({
+      query: url.searchParams.get("query") ?? undefined,
+      cursor: url.searchParams.get("cursor") ?? undefined,
+      limit: Number(url.searchParams.get("limit") ?? 20),
+    });
     return { kind: "json", status: result.status, body: result.body };
   }
   const workflowMatch = pathname.match(/^\/api\/workflows\/([^/]+)$/);
@@ -173,7 +177,9 @@ export async function dispatchApiRequest(
       workflowKey: url.searchParams.get("workflowKey") ?? undefined,
       status: status ?? undefined,
       limit: Number(url.searchParams.get("limit") ?? 100),
-      offset: Number(url.searchParams.get("offset") ?? 0),
+      offset: url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : undefined,
+      cursor: url.searchParams.get("cursor") ?? undefined,
+      executionId: url.searchParams.get("executionId") ?? undefined,
     });
     return { kind: "json", status: result.status, body: result.body };
   }

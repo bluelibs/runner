@@ -168,10 +168,10 @@ describe("durable: DurableOperator execution state", () => {
   it("listExecutionStates() rejects invalid limits before reading the store", async () => {
     const operator = new DurableOperator(new MemoryStore());
     await expect(operator.listExecutionStates({ limit: 0 })).rejects.toThrow(
-      "Durable operator limit must be a positive integer. Received: 0.",
+      "Durable operator limit must be a positive integer no greater than 1000. Received: 0.",
     );
     await expect(operator.listExecutionStates({ limit: 1.5 })).rejects.toThrow(
-      "Durable operator limit must be a positive integer. Received: 1.5.",
+      "Durable operator limit must be a positive integer no greater than 1000. Received: 1.5.",
     );
   });
 

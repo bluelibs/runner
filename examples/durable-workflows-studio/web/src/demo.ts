@@ -18,6 +18,8 @@ import type {
 import { ApiError, type ExecutionFilters, type StudioApi } from "./api.js";
 import { DEMO_WORKFLOWS } from "./demoWorkflows.js";
 import { buildScaleExecutionDetails } from "./scaleDemo.js";
+import { isLiveStatus } from "../../src/shared/statuses.js";
+import { workflowPage } from "../../src/shared/workflowPage.js";
 
 let sequence = 100;
 
@@ -844,13 +846,19 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
       );
     }
     if (filters.status) {
-      details = details.filter((detail) => detail.status === filters.status);
+      details = details.filter((detail) => filters.status === "live" ? isLiveStatus(detail.status) : detail.status === filters.status);
     }
+    if (filters.executionId) details = details.filter((detail) => detail.id === filters.executionId);
     details.sort(
       (left, right) =>
         right.createdAt.localeCompare(left.createdAt) ||
-        right.id.localeCompare(left.id),
+        left.id.localeCompare(right.id),
     );
+    const total = details.length;
+    if (filters.cursor) {
+      const after: { createdAt: string; id: string } = JSON.parse(atob(filters.cursor.replaceAll("-", "+").replaceAll("_", "/")));
+      details = details.filter((detail) => detail.createdAt < after.createdAt || (detail.createdAt === after.createdAt && detail.id > after.id));
+    }
     const offset = filters.offset ?? 0;
     const limit = filters.limit ?? 100;
     const page = details.slice(offset, offset + limit);
@@ -859,11 +867,19 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
       executions: page.map(summaryOf),
       hasMore,
       nextOffset: hasMore ? offset + page.length : null,
-      total: details.length,
+      nextCursor: hasMore ? btoa(JSON.stringify({ createdAt: page[page.length - 1].createdAt, id: page[page.length - 1].id })).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "") : null,
+      total,
     };
   }
 
   return {
+    listWorkflowPage: async (query) => { requireUnlocked(); return workflowPage(DEMO_WORKFLOWS, query); },
+    getWorkflow: async (key) => {
+      requireUnlocked();
+      const workflow = DEMO_WORKFLOWS.find((item) => item.key === key);
+      if (!workflow) throw new ApiError(404, "Workflow not found.");
+      return workflow;
+    },
     listWorkflows: async () => {
       requireUnlocked();
       return DEMO_WORKFLOWS;

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { WorkflowApiContext } from "../workflowFeed.js";
 import type {
   StudioSchedule,
   StudioWorkflow,
@@ -27,7 +28,16 @@ export function ScheduleModal({
   const [workflowKey, setWorkflowKey] = useState(
     schedule?.workflowKey ?? workflows[0]?.key ?? "",
   );
-  const workflow = workflows.find((item) => item.key === workflowKey);
+  const [workflow, setWorkflow] = useState(workflows.find((item) => item.key === workflowKey));
+  const api = useContext(WorkflowApiContext);
+  const [workflowError, setWorkflowError] = useState("");
+  useEffect(() => {
+    if (workflow || !api) return;
+    let active = true;
+    void api.getWorkflow(workflowKey).then((next) => { if (active) setWorkflow(next); })
+      .catch((error: unknown) => { if (active) setWorkflowError(error instanceof Error ? error.message : "Could not load workflow."); });
+    return () => { active = false; };
+  }, [api, workflowKey, workflow]);
   const [cadence, setCadence] = useState<Cadence>(
     schedule?.type === "cron" ? "cron" : "interval",
   );
@@ -69,11 +79,11 @@ export function ScheduleModal({
     return () => window.clearTimeout(timer);
   }, [cadence, cadenceValue, cadenceValid, onPreview, timezone]);
 
-  if (!workflow) return null;
+  if (!workflow) return <Modal title="Schedule" subtitle="Loading workflow" onClose={onClose}><p role="status">{workflowError || "Loading workflow…"}</p></Modal>;
 
-  function chooseWorkflow(nextKey: string) {
+  function chooseWorkflow(nextKey: string, next: StudioWorkflow) {
     setWorkflowKey(nextKey);
-    const next = workflows.find((item) => item.key === nextKey);
+    setWorkflow(next);
     const nextInput = next?.presets[0]?.payload ?? {};
     setText(JSON.stringify(nextInput, null, 2));
     setParsed(nextInput);

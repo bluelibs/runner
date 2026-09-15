@@ -28,6 +28,8 @@ import type {
   StudioWorkflow,
 } from "../shared/types.js";
 import { getWorkflow, WORKFLOWS } from "../workflows/catalog.js";
+import { workflowPage, type WorkflowQuery } from "../shared/workflowPage.js";
+import { toExecutionSummary } from "./executionSummary.js";
 import {
   incidentInputSchema,
   incidentResponse,
@@ -242,8 +244,9 @@ const VALID_STATUSES: StudioExecutionStatus[] = [
   "cancelled",
 ];
 
-export function listWorkflows(): ApiResponse {
-  return ok({ workflows: WORKFLOWS });
+export function listWorkflows(query?: WorkflowQuery): ApiResponse {
+  try { return ok(workflowPage(WORKFLOWS, query)); }
+  catch (error) { return badRequest(error instanceof Error ? error.message : "Invalid workflow query."); }
 }
 
 export function getWorkflowByKey(key: string): ApiResponse {
@@ -343,7 +346,7 @@ export async function listExecutions(
 ): Promise<ApiResponse> {
   if (
     filters.status !== undefined &&
-    !VALID_STATUSES.includes(filters.status)
+    filters.status !== "live" && !VALID_STATUSES.includes(filters.status)
   ) {
     return badRequest(
       `Unknown status '${filters.status}'. Known: ${VALID_STATUSES.join(", ")}.`,
@@ -365,8 +368,31 @@ export async function listExecutions(
   if (!Number.isInteger(offset) || offset < 0) {
     return badRequest("'offset' must be a non-negative integer.");
   }
+  const statuses = filters.status === "live"
+    ? VALID_STATUSES.filter((status) => !isTerminalStatus(status))
+    : filters.status ? [filters.status] : undefined;
+  if (filters.offset === undefined || filters.cursor !== undefined || filters.executionId !== undefined) {
+    try {
+    const page = await handles.operator.listExecutionStates({
+      status: statuses,
+      workflowKey: filters.workflowKey,
+      executionId: filters.executionId,
+      limit,
+      cursor: filters.cursor,
+    });
+    return ok({
+      executions: page.states.map(toExecutionSummary),
+      hasMore: page.nextCursor !== null,
+      nextCursor: page.nextCursor,
+      nextOffset: null,
+    });
+    } catch (error) {
+      if (errors.durableExecutionInvariantError.is(error)) return badRequest(error.message);
+      throw error;
+    }
+  }
   const executions = await handles.store.listExecutions({
-    status: filters.status ? [filters.status] : undefined,
+    status: statuses,
     workflowKey: filters.workflowKey,
     limit: limit + 1,
     offset,
@@ -1028,12 +1054,8 @@ export async function removeSchedule(
 export async function listStuck(
   handles: StudioHandles,
 ): Promise<ApiResponse> {
-  const executions = await handles.operator.listStuckExecutions();
-  const summaries: StudioExecutionSummary[] = [];
-  for (const execution of executions) {
-    summaries.push(await toSummary(handles, execution));
-  }
-  return ok({ executions: summaries });
+  const page = await handles.operator.listExecutionStates({ status: ["compensation_failed"], limit: 40 });
+  return ok({ executions: page.states.map(toExecutionSummary), hasMore: page.nextCursor !== null });
 }
 
 export async function recoverOrphans(

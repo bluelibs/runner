@@ -13,7 +13,7 @@
     "dev:web": "npm --prefix web run dev",
     "test": "npm run build && node --test dist/shared.test.js dist/workflows.test.js dist/timeline.test.js dist/http.test.js dist/api.e2e.test.js dist/api.ops.test.js && npm run test:web",
     "test:web": "npm --prefix web run test",
-    "shots": "npm run build:web && node web/scripts/shots.mjs",
+    "shots": "npm run build:all && node web/scripts/shots.mjs",
     "check": "npm run build:all && npm test"
   },
   "devDependencies": {
