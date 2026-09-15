@@ -8,12 +8,19 @@ import type { IDurableStore } from "../interfaces/store";
 import { TimerStatus, TimerType } from "../types";
 import { createExecutionId } from "../utils";
 import type { ExecutionLockState } from "./ExecutionManager.locking";
-import { startLockHeartbeat } from "./ExecutionManager.locking";
+import {
+  assertStoreLockOwnership,
+  startLockHeartbeat,
+} from "./ExecutionManager.locking";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
 export type WorkflowAdmission =
-  | { kind: "admitted"; release: () => Promise<void> }
+  | {
+      kind: "admitted";
+      assertOwnership: () => Promise<void>;
+      release: () => Promise<void>;
+    }
   | { kind: "deferred"; retryAfterMs: number };
 
 const CONCURRENCY_SLOT_TTL_MS = 30_000;
@@ -30,7 +37,11 @@ export class WorkflowAdmissionController {
   }): Promise<WorkflowAdmission> {
     const policy = getDurableWorkflowConcurrency(params.task);
     if (policy === undefined) {
-      return { kind: "admitted", release: async () => {} };
+      return {
+        kind: "admitted",
+        assertOwnership: async () => {},
+        release: async () => {},
+      };
     }
 
     if (typeof policy === "number") {
@@ -80,6 +91,26 @@ export class WorkflowAdmissionController {
 
       return {
         kind: "admitted",
+        assertOwnership: async () => {
+          // Outcome writes must verify the admission lease as well as the execution lock.
+          const slotState = {
+            ...executionLockState,
+            lockResource: resource,
+            lockId,
+            lockTtlMs: CONCURRENCY_SLOT_TTL_MS,
+          };
+          try {
+            await assertStoreLockOwnership({
+              store: this.store,
+              lockState: slotState,
+            });
+          } finally {
+            if (slotState.lost) {
+              executionLockState.lost = true;
+              executionLockState.lossError = slotState.lossError;
+            }
+          }
+        },
         release: async () => {
           stopHeartbeat();
           try {
@@ -113,7 +144,11 @@ export class WorkflowAdmissionController {
       const lockId = await this.store.acquireLock!(resource, retryAfterMs);
       if (lockId !== null) {
         // Rate slots intentionally expire with the fixed window and are not released.
-        return { kind: "admitted", release: async () => {} };
+        return {
+          kind: "admitted",
+          assertOwnership: async () => {},
+          release: async () => {},
+        };
       }
     }
 

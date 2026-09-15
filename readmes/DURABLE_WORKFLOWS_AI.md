@@ -379,7 +379,8 @@ tags.durableWorkflow.with({
 - `{ windowMs, max }` is a global fixed-window attempt rate limit.
 - Retries and resumptions are attempts and are admitted again.
 - Deferred attempts keep their durable state and retry through a store-backed
-  timer.
+  timer. At least one worker sharing the store must have polling enabled.
+- Outcome writes verify ownership of both execution and concurrency leases.
 - Numeric limits require store locks with acquire/renew/release; fixed-window
   limits require acquire. Built-in memory and Redis stores support both.
 

@@ -588,7 +588,9 @@ Admission is scoped by the persisted workflow key and coordinated through the
 durable store, so every process sharing that store observes the same limit.
 Retries and resumptions are attempts and therefore pass through admission too.
 When capacity is unavailable, the execution keeps its current durable state and
-a store-backed timer retries it later.
+a store-backed timer retries it later. Enable polling in at least one worker
+sharing the store so deferred attempts resume. Concurrency slots are renewable
+leases; outcome writes recheck both the execution lock and the admission lease.
 
 Numeric concurrency requires store implementations with `acquireLock()`,
 `renewLock()`, and `releaseLock()`. Fixed-window rate limiting requires

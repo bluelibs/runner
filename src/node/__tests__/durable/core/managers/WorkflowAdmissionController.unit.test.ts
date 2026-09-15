@@ -37,7 +37,10 @@ describe("durable: WorkflowAdmissionController", () => {
     });
 
     expect(admission.kind).toBe("admitted");
-    if (admission.kind === "admitted") await admission.release();
+    if (admission.kind === "admitted") {
+      await admission.assertOwnership();
+      await admission.release();
+    }
     expect(acquireLock).not.toHaveBeenCalled();
   });
 
@@ -132,7 +135,10 @@ describe("durable: WorkflowAdmissionController", () => {
     });
 
     expect(blocked).toEqual({ kind: "deferred", retryAfterMs: 750 });
-    if (first.kind === "admitted") await first.release();
+    if (first.kind === "admitted") {
+      await first.assertOwnership();
+      await first.release();
+    }
     expect(releaseLock).not.toHaveBeenCalled();
 
     jest.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
