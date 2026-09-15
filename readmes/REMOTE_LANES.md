@@ -573,7 +573,7 @@ sequenceDiagram
       SR-->>CR: result
     else Routed remotely
       RL->>RL: build headers (lane JWT + allowlisted async contexts)
-      RL->>CM: communicator.task/event(...)
+      RL->>CM: communicator.task/event(...) with retries
       CM->>EX: HTTP request to /__runner/*
       EX->>EX: exposure auth + allow-list check
       EX->>EX: verify lane JWT (lane + target id + payload hash + time window)
@@ -583,6 +583,43 @@ sequenceDiagram
       CM-->>CR: result
     end
 ```
+
+### Retry Policy
+
+Remote calls fail for boring reasons: the peer is restarting, the network blips, a gateway sheds load. RPC lanes retry those transport failures by default so one blip does not fail your task.
+
+```typescript
+const topology = r.rpcLane.topology({
+  profiles: { api: { serve: [] } },
+  bindings: [
+    {
+      lane: billingLane,
+      communicator: billingCommunicator,
+      retry: {
+        maxAttempts: 3, // total attempts, including the first
+        delayMs: 250, // fixed delay, or (attempt, error) => ms
+        // retryIf: (error) => ..., // custom classifier
+      },
+    },
+  ],
+});
+```
+
+Rules:
+
+- Retries apply in `network` mode only, to lane-routed (non-served) calls.
+- The default classifier retries connection failures and client timeouts, plus HTTP 408/429/502/503/504 responses.
+- Typed domain errors, other 4xx/5xx statuses, and malformed responses are never retried by default because the server returned a definitive answer; repeating the call is a business decision. Caller aborts are a separate, non-response cancellation condition and are also never retried by default. Use task middleware (`retry`, `circuitBreaker`, `fallback`) for response failures that need business-aware retries.
+- The default delay is exponential backoff with jitter starting at 100ms.
+- Use `maxAttempts: 1` to disable retries for a binding.
+- The client `timeoutMs` is per attempt. Request time can consume up to `timeoutMs × maxAttempts`, while worst-case end-to-end duration also includes as many as `maxAttempts − 1` retry delays. Retry delays honor the caller abort signal.
+
+Lane-routed upload calls (raw readable streams and multipart Node files) make a
+single transport attempt, because an upload source may already be consumed.
+When using `createRetryingRpcLaneCommunicator` directly, use `maxAttempts: 1`
+for non-replayable inputs such as streams.
+
+Timeout caveat: a timed-out call may still have executed server-side, so retrying it can duplicate non-idempotent effects. Narrow `retryIf` for such tasks, or design the remote task to be idempotent.
 
 ## Common Patterns
 
@@ -661,7 +698,8 @@ Keep responsibilities clearly separated:
 
 **Transport-level (lane binding + broker config):**
 
-- `maxAttempts` + `retryDelayMs` at the lane binding level control retry budget before final failure
+- Event lanes: `maxAttempts` + `retryDelayMs` at the lane binding level control retry budget before final failure
+- RPC lanes: `retry` at the binding level controls sync-call retries (default 3 attempts, transport failures only). There is no DLQ for synchronous calls — the last error is thrown to the caller
 - DLQ behavior is **broker/queue-policy owned**
 - Runner settles final consumer failure with `nack(false)` — it does **not** manually publish to a DLQ queue
 - If your queue has no dead-letter configuration, a final `nack(false)` discards the message per broker behavior
@@ -1008,7 +1046,7 @@ When routing does not behave as expected, check in this order:
 | Task/event tagging | `tags.rpcLane.with({ lane })`                            |
 | Topology           | `r.rpcLane.topology({ profiles, bindings })`                     |
 | Profile serve      | `profiles[profile].serve: lane[]`                                |
-| Binding            | `{ lane, communicator, auth?, allowAsyncContext? }`              |
+| Binding            | `{ lane, communicator, auth?, allowAsyncContext?, retry? }`      |
 | Runtime resource   | `rpcLanesResource.with({ profile, topology, serializer?, mode?, exposure? })` |
 
 Node-side allow-list helper:
@@ -1021,3 +1059,5 @@ Node-side allow-list helper:
 | `task`            | `(id, input?) => Promise<unknown>`   | Yes (for task RPC) |
 | `event`           | `(id, payload?) => Promise<void>`    | Optional           |
 | `eventWithResult` | `(id, payload?) => Promise<unknown>` | Optional           |
+
+Custom communicators participate in default retries by throwing `RemoteLaneTransportError` (exported from `@bluelibs/runner`) for transport failures. Use `createRetryingRpcLaneCommunicator` to wrap any communicator with a retry policy outside lanes, and `isRetryableRemoteLaneError` to compose custom `retryIf` classifiers.

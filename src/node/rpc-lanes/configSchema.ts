@@ -23,6 +23,12 @@ const rpcLaneProfilePattern = {
   serve: Match.ArrayOf(laneReferencePattern),
 };
 
+const rpcLaneRetryPolicyPattern = Match.ObjectIncluding({
+  maxAttempts: Match.Optional(Number),
+  delayMs: Match.Optional(Match.OneOf(Number, Function)),
+  retryIf: Match.Optional(Function),
+});
+
 const rpcLanesResourceConfigPattern = Match.ObjectIncluding({
   profile: String,
   topology: Match.ObjectIncluding({
@@ -33,6 +39,7 @@ const rpcLanesResourceConfigPattern = Match.ObjectIncluding({
         communicator: communicatorResourcePattern,
         allowAsyncContext: Match.Optional(Boolean),
         auth: Match.Optional(remoteLaneBindingAuthPattern),
+        retry: Match.Optional(rpcLaneRetryPolicyPattern),
       }),
     ),
   }),

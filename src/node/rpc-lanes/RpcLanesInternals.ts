@@ -4,8 +4,18 @@ import {
   rpcLaneBindingNotFoundError,
   rpcLaneCommunicatorResourceInvalidError,
   rpcLaneProfileNotFoundError,
+  rpcLaneRetryPolicyInvalidError,
 } from "../../errors";
-import type { IRpcLaneCommunicator, IRpcLaneDefinition } from "../../defs";
+import type {
+  IRpcLaneCommunicator,
+  IRpcLaneDefinition,
+  IRpcLaneTopologyBinding,
+  ResolvedRpcLaneRetryPolicy,
+} from "../../defs";
+import {
+  getRpcLaneRetryPolicyViolation,
+  resolveRpcLaneRetryPolicy,
+} from "../../remote-lanes/retry";
 import type {
   RpcLanesResourceConfig,
   RpcLanesResourceValue,
@@ -29,6 +39,7 @@ export type RpcLaneResolvedBinding = {
   allowAsyncContext: boolean;
   asyncContextAllowList: readonly string[] | undefined;
   auth: RpcLanesTopology["bindings"][number]["auth"];
+  retry: ResolvedRpcLaneRetryPolicy;
 };
 
 export interface RpcLaneResolvedState {
@@ -262,6 +273,7 @@ function resolveBindings(
       rpcLaneDuplicateBindingError.throw({ laneId: binding.lane.id });
     }
     seenLaneIds.add(binding.lane.id);
+    validateRpcLaneRetryPolicy(binding);
 
     const dependencyKey = toCommunicatorDependencyKey(binding.communicator.id);
     const communicator = dependencies[dependencyKey];
@@ -289,8 +301,24 @@ function resolveBindings(
       allowAsyncContext: asyncContextPolicy.allowAsyncContext,
       asyncContextAllowList: asyncContextPolicy.allowList,
       auth: binding.auth,
+      retry: resolveRpcLaneRetryPolicy(binding.retry),
     });
   }
 
   return map;
+}
+
+function validateRpcLaneRetryPolicy(binding: IRpcLaneTopologyBinding): void {
+  const { retry } = binding;
+  if (retry === undefined) {
+    return;
+  }
+
+  const violation = getRpcLaneRetryPolicyViolation(retry);
+  if (violation) {
+    rpcLaneRetryPolicyInvalidError.throw({
+      laneId: binding.lane.id,
+      ...violation,
+    });
+  }
 }

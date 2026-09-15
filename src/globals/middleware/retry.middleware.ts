@@ -4,6 +4,7 @@ import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { getTaskAbortSignalLink } from "../../models/runtime/taskCancellation";
 import { Match } from "../../tools/check";
 import { createCancellationErrorFromSignal } from "../../tools/abortSignals";
+import { exponentialBackoffWithJitterMs } from "../../tools/retryDelay";
 
 /**
  * Configuration options for the retry middleware
@@ -135,9 +136,7 @@ export const retryResourceMiddleware = defineResourceMiddleware({
 });
 
 function getDefaultRetryDelayMs(attempt: number): number {
-  const baseDelayMs = 100 * Math.pow(2, attempt);
-  const jitterMs = Math.floor(Math.random() * Math.max(1, baseDelayMs / 2));
-  return baseDelayMs + jitterMs;
+  return exponentialBackoffWithJitterMs(attempt);
 }
 
 /**

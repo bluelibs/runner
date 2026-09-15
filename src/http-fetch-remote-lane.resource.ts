@@ -3,6 +3,7 @@ import {
   buildEventRequestBody,
   type ProtocolEnvelope,
   RemoteLaneTransportError,
+  toRequestRejectionError,
 } from "./remote-lanes/http/protocol";
 import type { SerializerLike } from "./serializer";
 import type {
@@ -21,6 +22,14 @@ export type {
 } from "./remote-lanes/http/types";
 
 // normalizeError is re-exported from error-utils for public API
+
+function remoteLaneTimeoutError(timeoutMs?: number): RemoteLaneTransportError {
+  return new RemoteLaneTransportError(
+    "TIMEOUT",
+    `Remote lane request timed out after ${timeoutMs}ms`,
+    { timeoutMs },
+  );
+}
 
 async function postSerialized<T = any>(options: {
   fetch: typeof fetch;
@@ -69,16 +78,37 @@ async function postSerialized<T = any>(options: {
       reqHeaders[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeaderText;
     }
     if (onRequest) await onRequest({ url, headers: reqHeaders });
-    const res = await fetchFn(url, {
-      method: "POST",
-      headers: reqHeaders,
-      body: serializer.stringify(body),
-      signal: signalLink.signal,
-      // Security: prevent automatic redirects from forwarding auth headers.
-      redirect: "error",
-    });
+    // Serialize outside the request try/catch: serialization failures are
+    // caller bugs, not network failures, and must propagate untouched.
+    const serializedBody = serializer.stringify(body);
+    let res: Response;
+    try {
+      res = await fetchFn(url, {
+        method: "POST",
+        headers: reqHeaders,
+        body: serializedBody,
+        signal: signalLink.signal,
+        // Security: prevent automatic redirects from forwarding auth headers.
+        redirect: "error",
+      });
+    } catch (error) {
+      if (timedOut) {
+        throw remoteLaneTimeoutError(timeoutMs);
+      }
+      // Pre-response failures (DNS, refused, reset) become retryable
+      // NETWORK_ERRORs; caller aborts pass through untouched.
+      throw toRequestRejectionError(error, signalLink.signal?.aborted ?? false);
+    }
 
-    const text = await res.text();
+    let text: string;
+    try {
+      text = await res.text();
+    } catch (error) {
+      if (timedOut && error instanceof Error && error.name === "AbortError") {
+        throw remoteLaneTimeoutError(timeoutMs);
+      }
+      throw error;
+    }
     const status =
       typeof (res as { status?: unknown }).status === "number"
         ? (res as { status: number }).status
@@ -136,15 +166,6 @@ async function postSerialized<T = any>(options: {
       }
       throw error;
     }
-  } catch (error) {
-    if (timedOut) {
-      throw new RemoteLaneTransportError(
-        "TIMEOUT",
-        `Remote lane request timed out after ${timeoutMs}ms`,
-        { timeoutMs },
-      );
-    }
-    throw error;
   } finally {
     if (timeout) clearTimeout(timeout);
     signalLink.cleanup();
