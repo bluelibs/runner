@@ -1,6 +1,7 @@
 import { defineEvent } from "../../../..";
 import {
   durableWorkflowTag,
+  getDurableWorkflowConcurrency,
   getDurableWorkflowKey,
   getDeclaredDurableWorkflowSignalIds,
 } from "../../../durable/tags/durableWorkflow.tag";
@@ -48,5 +49,41 @@ describe("durable: durableWorkflowTag signals", () => {
         undefined,
       ),
     ).toBe("local-orders");
+  });
+
+  it("accepts global concurrency and fixed-window rate-limit policies", () => {
+    expect(
+      getDurableWorkflowConcurrency({
+        id: "serial",
+        tags: [durableWorkflowTag.with({ concurrency: 1 })],
+      }),
+    ).toBe(1);
+
+    expect(
+      getDurableWorkflowConcurrency({
+        id: "rate-limited",
+        tags: [
+          durableWorkflowTag.with({
+            concurrency: { windowMs: 60_000, max: 100 },
+          }),
+        ],
+      }),
+    ).toEqual({ windowMs: 60_000, max: 100 });
+    expect(getDurableWorkflowConcurrency(undefined)).toBeUndefined();
+  });
+
+  it.each([
+    0,
+    -1,
+    1.5,
+    { windowMs: 0, max: 1 },
+    { windowMs: 1_000, max: 0 },
+    { windowMs: 1.5, max: 1 },
+  ])("rejects invalid workflow admission policy %p", (concurrency) => {
+    expect(() =>
+      durableWorkflowTag.with({
+        concurrency: concurrency as 1,
+      }),
+    ).toThrow();
   });
 });

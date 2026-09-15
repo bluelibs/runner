@@ -365,6 +365,24 @@ tags.durableWorkflow.with({
 });
 ```
 
+**Global workflow admission**:
+
+```ts
+tags.durableWorkflow.with({ concurrency: 1 });
+tags.durableWorkflow.with({
+  concurrency: { windowMs: 60_000, max: 100 },
+});
+```
+
+- A number caps simultaneously active attempts across every worker sharing the
+  durable store.
+- `{ windowMs, max }` is a global fixed-window attempt rate limit.
+- Retries and resumptions are attempts and are admitted again.
+- Deferred attempts keep their durable state and retry through a store-backed
+  timer.
+- Numeric limits require store locks with acquire/renew/release; fixed-window
+  limits require acquire. Built-in memory and Redis stores support both.
+
 ## Child Workflows
 
 ```ts

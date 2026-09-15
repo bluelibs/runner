@@ -46,6 +46,8 @@ export { createDurableTestSetup, waitUntil } from "./test-utils";
 export type { DurableTestSetup, DurableTestSetupOptions } from "./test-utils";
 export {
   durableWorkflowTag,
+  type DurableWorkflowConcurrency,
+  type DurableWorkflowRateLimit,
   type DurableWorkflowTagConfig,
   type DurableWorkflowSignalDefinition,
 } from "./tags/durableWorkflow.tag";
