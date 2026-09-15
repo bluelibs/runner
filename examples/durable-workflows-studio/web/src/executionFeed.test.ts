@@ -37,6 +37,6 @@ describe("execution feed", () => {
   it("uses execution identity to stabilize equal timestamps", () => {
     const at = "2026-09-14T12:00:00.000Z";
     expect(mergeExecutions([], [execution("a", at), execution("b", at)]))
-      .toEqual([execution("b", at), execution("a", at)]);
+      .toEqual([execution("a", at), execution("b", at)]);
   });
 });

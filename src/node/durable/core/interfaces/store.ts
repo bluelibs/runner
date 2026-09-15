@@ -1,5 +1,6 @@
 import type {
   Execution,
+  DurableExecutionState,
   ExecutionStatus,
   DurableSignalRecord,
   DurableQueuedSignalRecord,
@@ -77,7 +78,23 @@ export interface IDurableStore {
   >;
 
   // Enhanced querying for operator tooling
+  /** Reads one payload-free metadata projection without loading the execution payload. */
+  getExecutionState?(
+    executionId: string,
+  ): Promise<DurableExecutionState | null>;
   listExecutions(options?: ListExecutionsOptions): Promise<Execution[]>;
+  /** Indexed, payload-free query for dashboards. Must not scan execution payloads. */
+  listExecutionStates?(
+    options: Pick<
+      ListExecutionsOptions,
+      "workflowKey" | "status" | "limit" | "cursor"
+    >,
+  ): Promise<DurableExecutionState[]>;
+  /** Resumable metadata-index backfill; call until nextCursor is null. */
+  rebuildExecutionIndex?(options: {
+    cursor?: string;
+    limit?: number;
+  }): Promise<{ nextCursor: string | null }>;
   listStepResults(executionId: string): Promise<StepResult[]>;
   appendAuditEntry?(entry: DurableAuditEntry): Promise<void>;
   listAuditEntries?(

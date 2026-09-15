@@ -10,15 +10,20 @@ import type {
   StudioSchedule,
   StudioWorkflow,
 } from "../../src/shared/types.js";
+import type { WorkflowPage, WorkflowQuery } from "../../src/shared/workflowPage.js";
 
 export interface ExecutionFilters {
   workflowKey?: string;
   status?: string;
   limit?: number;
   offset?: number;
+  cursor?: string;
+  executionId?: string;
 }
 
 export interface StudioApi {
+  listWorkflowPage(query?: WorkflowQuery): Promise<WorkflowPage>;
+  getWorkflow(key: string): Promise<StudioWorkflow>;
   listWorkflows(): Promise<StudioWorkflow[]>;
   listExecutions(filters?: ExecutionFilters): Promise<StudioExecutionSummary[]>;
   listExecutionPage(filters?: ExecutionFilters): Promise<StudioExecutionPage>;
@@ -132,7 +137,9 @@ export function createLiveApi(
     if (filters?.workflowKey) params.set("workflowKey", filters.workflowKey);
     if (filters?.status) params.set("status", filters.status);
     params.set("limit", String(filters?.limit ?? 100));
-    params.set("offset", String(filters?.offset ?? 0));
+    if (filters?.offset !== undefined) params.set("offset", String(filters.offset));
+    if (filters?.cursor) params.set("cursor", filters.cursor);
+    if (filters?.executionId) params.set("executionId", filters.executionId);
     return await request<StudioExecutionPage>(
       "GET",
       `/api/executions?${params.toString()}`,
@@ -140,6 +147,14 @@ export function createLiveApi(
   }
 
   const api: StudioApi = {
+    listWorkflowPage: (query = {}) => {
+      const params = new URLSearchParams();
+      if (query.query) params.set("query", query.query);
+      if (query.cursor) params.set("cursor", query.cursor);
+      params.set("limit", String(query.limit ?? 20));
+      return request("GET", `/api/workflows?${params}`);
+    },
+    getWorkflow: async (key) => (await request<{ workflow: StudioWorkflow }>("GET", `/api/workflows/${encodeURIComponent(key)}`)).workflow,
     listWorkflows: async () =>
       (await request<{ workflows: StudioWorkflow[] }>("GET", "/api/workflows"))
         .workflows,

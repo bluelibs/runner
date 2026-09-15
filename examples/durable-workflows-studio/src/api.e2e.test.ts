@@ -202,14 +202,16 @@ test("executions list filters by workflow and status", async () => {
       executions: { id: string }[];
       hasMore: boolean;
       nextOffset: number | null;
+      nextCursor: string | null;
     }>("/api/executions?limit=1");
     assert.equal(firstPage.body.executions.length, 1);
     assert.equal(firstPage.body.hasMore, true);
-    assert.equal(firstPage.body.nextOffset, 1);
+    assert.equal(firstPage.body.nextOffset, null);
+    assert.ok(firstPage.body.nextCursor);
     const secondPage = await client.get<{
       executions: { id: string }[];
       hasMore: boolean;
-    }>("/api/executions?limit=1&offset=1");
+    }>(`/api/executions?limit=2&cursor=${encodeURIComponent(firstPage.body.nextCursor!)}`);
     assert.notEqual(
       secondPage.body.executions[0]?.id,
       firstPage.body.executions[0]?.id,
@@ -224,6 +226,24 @@ test("executions list filters by workflow and status", async () => {
     assert.equal(badWorkflow.status, 400);
     assert.equal((await client.get("/api/executions?limit=101")).status, 400);
     assert.equal((await client.get("/api/executions?offset=-1")).status, 400);
+    assert.equal((await client.get("/api/executions?cursor=bad")).status, 400);
+    assert.equal((await client.get("/api/workflows?limit=0")).status, 400);
+    assert.equal((await client.get("/api/workflows?cursor=bad")).status, 400);
+    const exact = await client.get<{ executions: { id: string }[] }>(`/api/executions?executionId=${firstPage.body.executions[0]!.id}`);
+    assert.equal(exact.body.executions.length, 1);
+    assert.equal(exact.body.executions[0]!.id, firstPage.body.executions[0]!.id);
+    assert.equal((await client.get<{ executions: unknown[] }>("/api/executions?status=live")).body.executions.length, 2);
+    const originalList = client.handles.store.listExecutions;
+    const originalSteps = client.handles.store.listStepResults;
+    client.handles.store.listExecutions = async () => { throw new Error("List must not scan full executions"); };
+    client.handles.store.listStepResults = async () => { throw new Error("List must not read steps"); };
+    try {
+      assert.equal((await client.get("/api/executions?limit=40")).status, 200);
+      assert.equal((await client.get("/api/stuck")).status, 200);
+    } finally {
+      client.handles.store.listExecutions = originalList;
+      client.handles.store.listStepResults = originalSteps;
+    }
   });
 });
 

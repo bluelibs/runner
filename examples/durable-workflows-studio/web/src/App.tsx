@@ -16,6 +16,8 @@ import {
 } from "./api.js";
 import { createDemoApi } from "./demo.js";
 import { useExecutionFeed } from "./executionFeed.js";
+import { WorkflowApiContext } from "./workflowFeed.js";
+import type { DashboardStatusFilter } from "./dashboard.js";
 import { ExecutionDetail } from "./components/ExecutionDetail.js";
 import { ExecutionList } from "./components/ExecutionList.js";
 import { LoginScreen } from "./components/Login.js";
@@ -31,7 +33,7 @@ import { SignalModal } from "./components/SignalModal.js";
 import { StartModal } from "./components/StartModal.js";
 import { Toasts, type Toast } from "./components/Toasts.js";
 
-type StatusFilter = "all" | "live" | "sleeping" | "failed" | "completed" | "cancelled";
+type StatusFilter = DashboardStatusFilter;
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -118,8 +120,20 @@ export function App() {
     api,
     paused: locked,
     onError: handleFeedError,
+    workflowKey: workflowFilter ?? undefined,
+    status: statusFilter === "all" ? undefined : statusFilter,
+    executionId: query.trim() || undefined,
   });
   const executions = executionFeed.executions;
+  useEffect(() => {
+    if (locked) return;
+    let active = true;
+    const keys = [...new Set([workflowFilter, detail?.workflowKey].filter((key): key is string => Boolean(key)))];
+    void Promise.all(keys.map((key) => api.getWorkflow(key))).then((selected) => {
+      if (active) setWorkflows((current) => [...current.slice(0, 20).filter((item) => !keys.includes(item.key)), ...selected]);
+    }).catch(handleFeedError);
+    return () => { active = false; };
+  }, [api, locked, workflowFilter, detail?.workflowKey, handleFeedError]);
 
   const refreshAuxiliaryLists = useCallback(async () => {
     const [nextSchedules, nextStuck] = await Promise.all([
@@ -148,9 +162,9 @@ export function App() {
     if (locked) return;
     let mounted = true;
     api
-      .listWorkflows()
+      .listWorkflowPage()
       .then((next) => {
-        if (mounted) setWorkflows(next);
+        if (mounted) setWorkflows(next.workflows);
       })
       .catch((error: unknown) => {
         if (!mounted) return;
@@ -208,24 +222,6 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [starting, signalling, confirming, operatorAction, locked, view]);
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return executions.filter((execution) => {
-      if (workflowFilter && execution.workflowKey !== workflowFilter) return false;
-      if (statusFilter === "live" && !isLiveStatus(execution.status)) return false;
-      if (
-        statusFilter !== "all" &&
-        statusFilter !== "live" &&
-        execution.status !== statusFilter
-      ) {
-        return false;
-      }
-      if (needle === "") return true;
-      const haystack =
-        `${execution.id} ${execution.workflowTitle} ${execution.position ?? ""}`.toLowerCase();
-      return haystack.includes(needle);
-    });
-  }, [executions, workflowFilter, statusFilter, query]);
 
   const counts = useMemo(
     () => ({
@@ -373,6 +369,7 @@ export function App() {
   }
 
   return (
+    <WorkflowApiContext.Provider value={api}>
     <div className="studio">
       <Sidebar
         workflows={workflows}
@@ -407,6 +404,10 @@ export function App() {
       {view === "overview" ? (
         <main className="overview-pane">
           <Overview
+            queryValue={query}
+            onQueryChange={setQuery}
+            statusValue={statusFilter}
+            onStatusChange={setStatusFilter}
             executions={executions}
             schedules={schedules}
             stuck={stuck}
@@ -462,7 +463,7 @@ export function App() {
               <input
                 ref={searchRef}
                 className="search-input"
-                placeholder="Search…  ( / )"
+                placeholder="Execution ID (exact)…  ( / )"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -491,7 +492,8 @@ export function App() {
               ))}
             </div>
             <ExecutionList
-              executions={filtered}
+              key={`${workflowFilter}:${statusFilter}:${query}`}
+              executions={executions}
               selectedId={selectedId}
               onSelect={setSelectedId}
               now={now}
@@ -499,6 +501,11 @@ export function App() {
               loading={executionFeed.loading}
               loadingMore={executionFeed.loadingMore}
               onLoadMore={executionFeed.loadMore}
+              startOffset={executionFeed.startOffset}
+              hasPrevious={executionFeed.hasPrevious}
+              onLoadPrevious={executionFeed.loadPrevious}
+              error={executionFeed.error}
+              onRefresh={executionFeed.refreshHead}
               loadedCount={executions.length}
               filtered={
                 query.trim() !== "" ||
@@ -647,6 +654,7 @@ export function App() {
       ) : null}
       <Toasts toasts={toasts} />
     </div>
+    </WorkflowApiContext.Provider>
   );
 }
 

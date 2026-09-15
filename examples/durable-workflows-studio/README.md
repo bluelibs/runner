@@ -51,10 +51,10 @@ seeded. Any `?demo=1` link below works from the web client or live server.
 
 ## Tour
 
-- **Overview** — live freshness, global search, workflow/status filters, KPI
+- **Overview** — live freshness, exact-ID search, workflow/status filters, KPI
   cards, operational insights, activity/status charts, latest runs and health.
-- **Executions** — filter and search loaded runs, then scroll to fetch older
-  pages without replacing the live head.
+- **Executions** — indexed workflow/status filters and exact-ID lookup across
+  history, with cursor loading, a bounded page cache, and virtualized rows.
 - **Timeline** — every node with its live state, branch taken, wait
   countdowns, and expandable results. Waiting signals get a one-click send.
 - **Tree** — navigate parents and direct children across workflow boundaries.
@@ -68,6 +68,9 @@ seeded. Any `?demo=1` link below works from the web client or live server.
   force-fail with a reason, and orphan recovery.
 
 Keyboard: `/` focuses search, `n` starts an execution, `Esc` closes dialogs.
+
+See [Progressive Pagination](docs/PAGINATION.md) for the 100k-result contract,
+Redis backfill, scale checks, and the remaining legacy surface limitations.
 
 ## Deep links
 

@@ -229,7 +229,7 @@ button {
 .stat {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 2px;
 }
 
@@ -449,7 +449,8 @@ button {
   padding: 0 8px 4px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  flex-shrink: 0;
 }
 
 .exec-list > li {
@@ -493,6 +494,7 @@ button {
   align-items: center;
   gap: 10px;
   width: 100%;
+  height: 56px;
   padding: 9px 10px;
   border: 1px solid transparent;
   border-radius: var(--radius);

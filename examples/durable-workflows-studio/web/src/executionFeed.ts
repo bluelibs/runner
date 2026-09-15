@@ -1,189 +1,78 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { StudioExecutionSummary } from "../../src/shared/types.js";
-import type { StudioApi } from "./api.js";
+import type { ExecutionFilters, StudioApi } from "./api.js";
+import { ExecutionPager, type PagerSnapshot } from "./executionPager.js";
+export { EXECUTION_PAGE_SIZE } from "./executionPager.js";
 
-export const EXECUTION_PAGE_SIZE = 40;
-
-function newestFirst(
-  left: StudioExecutionSummary,
-  right: StudioExecutionSummary,
-): number {
-  return (
-    right.createdAt.localeCompare(left.createdAt) ||
-    right.id.localeCompare(left.id)
-  );
-}
-
-/** Merges refreshed and paged rows by storage identity. */
+/** Merges summaries by exact storage identity in canonical listing order. */
 export function mergeExecutions(
   current: StudioExecutionSummary[],
   incoming: StudioExecutionSummary[],
 ): StudioExecutionSummary[] {
-  const byId = new Map(current.map((execution) => [execution.id, execution]));
-  for (const execution of incoming) byId.set(execution.id, execution);
-  return [...byId.values()].sort(newestFirst);
+  const rows = new Map(current.map((row) => [row.id, row]));
+  for (const row of incoming) rows.set(row.id, row);
+  return [...rows.values()].sort(
+    (left, right) =>
+      right.createdAt.localeCompare(left.createdAt) ||
+      left.id.localeCompare(right.id),
+  );
 }
 
-export interface ExecutionFeed {
-  executions: StudioExecutionSummary[];
-  /** Exact total when the API can provide it without an extra full-store scan. */
-  totalCount: number | null;
-  hasMore: boolean;
-  loading: boolean;
-  loadingMore: boolean;
-  loadMore: () => Promise<void>;
-  refreshHead: () => Promise<void>;
-}
-
-/**
- * Keeps a bounded live head while older pages are appended on demand.
- * New head rows advance the stored offset so polling cannot make the next
- * page skip older executions.
- */
+/** Query changes dispose the old pager, including any late in-flight responses. */
 export function useExecutionFeed({
   api,
   paused,
   onError,
+  workflowKey,
+  status,
+  executionId,
 }: {
   api: StudioApi;
   paused: boolean;
   onError: (error: unknown) => void;
-}): ExecutionFeed {
-  const [executions, setExecutions] = useState<StudioExecutionSummary[]>([]);
-  const [totalCount, setTotalCount] = useState<number | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const executionsRef = useRef<StudioExecutionSummary[]>([]);
-  const nextOffsetRef = useRef(0);
-  const headRequestInFlight = useRef(false);
-  const pageRequestInFlight = useRef(false);
-  const generationRef = useRef(0);
-
-  const replaceFromStart = useCallback(async () => {
-    if (paused || headRequestInFlight.current) return;
-    const generation = generationRef.current;
-    headRequestInFlight.current = true;
-    setLoading(true);
-    try {
-      const page = await api.listExecutionPage({
-        limit: EXECUTION_PAGE_SIZE,
-        offset: 0,
-      });
-      if (generation !== generationRef.current) return;
-      executionsRef.current = page.executions;
-      nextOffsetRef.current = page.nextOffset ?? page.executions.length;
-      setExecutions(page.executions);
-      setTotalCount(page.total ?? (page.hasMore ? null : page.executions.length));
-      setHasMore(page.hasMore);
-    } catch (error) {
-      if (generation === generationRef.current) onError(error);
-    } finally {
-      headRequestInFlight.current = false;
-      if (generation === generationRef.current) setLoading(false);
-    }
-  }, [api, onError, paused]);
-
-  const refreshHead = useCallback(async () => {
-    if (paused || headRequestInFlight.current) return;
-    const generation = generationRef.current;
-    headRequestInFlight.current = true;
-    try {
-      const page = await api.listExecutionPage({
-        limit: EXECUTION_PAGE_SIZE,
-        offset: 0,
-      });
-      if (generation !== generationRef.current) return;
-      const current = executionsRef.current;
-      if (current.length === 0) {
-        executionsRef.current = page.executions;
-        nextOffsetRef.current = page.nextOffset ?? page.executions.length;
-        setExecutions(page.executions);
-        setTotalCount(page.total ?? (page.hasMore ? null : page.executions.length));
-        setHasMore(page.hasMore);
-        return;
-      }
-
-      const currentIds = new Set(current.map((execution) => execution.id));
-      const overlaps = page.executions.some((execution) =>
-        currentIds.has(execution.id),
-      );
-      if (page.hasMore && !overlaps) {
-        // More than one head page arrived between polls. Restart from the new
-        // head rather than risk silently skipping the unseen middle.
-        executionsRef.current = page.executions;
-        nextOffsetRef.current = page.nextOffset ?? page.executions.length;
-        setExecutions(page.executions);
-        setTotalCount(page.total ?? null);
-        setHasMore(true);
-        return;
-      }
-
-      const newHeadCount = page.executions.filter(
-        (execution) => !currentIds.has(execution.id),
-      ).length;
-      const merged = mergeExecutions(current, page.executions);
-      executionsRef.current = merged;
-      nextOffsetRef.current += newHeadCount;
-      setExecutions(merged);
-      if (page.total !== undefined) setTotalCount(page.total);
-    } catch (error) {
-      if (generation === generationRef.current) onError(error);
-    } finally {
-      headRequestInFlight.current = false;
-    }
-  }, [api, onError, paused]);
-
-  const loadMore = useCallback(async () => {
-    if (paused || pageRequestInFlight.current || !hasMore) return;
-    const generation = generationRef.current;
-    pageRequestInFlight.current = true;
-    setLoadingMore(true);
-    try {
-      const page = await api.listExecutionPage({
-        limit: EXECUTION_PAGE_SIZE,
-        offset: nextOffsetRef.current,
-      });
-      if (generation !== generationRef.current) return;
-      const merged = mergeExecutions(executionsRef.current, page.executions);
-      executionsRef.current = merged;
-      nextOffsetRef.current = page.nextOffset ?? nextOffsetRef.current;
-      setExecutions(merged);
-      setTotalCount((current) =>
-        page.total ?? (page.hasMore ? current : merged.length),
-      );
-      setHasMore(page.hasMore);
-    } catch (error) {
-      if (generation === generationRef.current) onError(error);
-    } finally {
-      pageRequestInFlight.current = false;
-      if (generation === generationRef.current) setLoadingMore(false);
-    }
-  }, [api, hasMore, onError, paused]);
-
+} & ExecutionFilters) {
+  const [snapshot, setSnapshot] = useState<PagerSnapshot>({
+    executions: [],
+    startOffset: 0,
+    totalCount: null,
+    hasMore: false,
+    hasPrevious: false,
+    loading: true,
+    loadingMore: false,
+    error: null,
+  });
+  const pagerRef = useRef<ExecutionPager>();
   useEffect(() => {
-    generationRef.current += 1;
-    executionsRef.current = [];
-    nextOffsetRef.current = 0;
-    setExecutions([]);
-    setTotalCount(null);
-    setHasMore(false);
-    if (paused) return;
-    void replaceFromStart();
-    const timer = window.setInterval(() => void refreshHead(), 2_500);
+    const pager = new ExecutionPager(
+      api,
+      { workflowKey, status, executionId },
+      setSnapshot,
+      onError,
+    );
+    pagerRef.current = pager;
+    setSnapshot(pager.snapshot);
+    if (paused) return () => pager.dispose();
+    const debounce = window.setTimeout(
+      () => void pager.refreshHead(),
+      executionId ? 250 : 0,
+    );
+    const timer = window.setInterval(() => void pager.poll(), 2500);
     return () => {
-      generationRef.current += 1;
+      pager.dispose();
+      window.clearTimeout(debounce);
       window.clearInterval(timer);
     };
-  }, [paused, refreshHead, replaceFromStart]);
-
-  return {
-    executions,
-    totalCount,
-    hasMore,
-    loading,
-    loadingMore,
-    loadMore,
-    refreshHead,
-  };
+  }, [api, paused, onError, workflowKey, status, executionId]);
+  const actions = useRef({
+    loadMore: async () => {
+      await pagerRef.current?.loadMore();
+    },
+    loadPrevious: async () => {
+      await pagerRef.current?.loadPrevious();
+    },
+    refreshHead: async () => {
+      await pagerRef.current?.refreshHead();
+    },
+  });
+  return { ...snapshot, ...actions.current };
 }
