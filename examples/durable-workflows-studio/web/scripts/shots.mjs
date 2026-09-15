@@ -9,6 +9,7 @@
  * Requires Google Chrome (or set SHOTS_CHROME to a Chromium binary).
  */
 import { existsSync, mkdirSync } from "node:fs";
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
@@ -121,9 +122,33 @@ await shot("05-start-modal.png", "?demo=1&modal=start");
 await shot("06-signal-modal.png", "?demo=1&select=demo_inc_live&modal=signal");
 await shot("08-onboarding-live.png", "?demo=1&select=demo_onb_live", 4500);
 await shot("10-overview.png", "?demo=1");
+assert.equal(await page.locator(".latest-identity .pill-dot").count(), 0);
+assert.ok(await page.locator(".latest-identity .pill").count() > 0);
+const workflowRows = page.locator(".workflow-nav-list > .side-link");
+const initialWorkflowCount = await workflowRows.count();
+assert.ok(initialWorkflowCount >= 20 && initialWorkflowCount < 50);
+await page.locator(".workflow-nav-list").evaluate((element) => {
+  element.scrollTop = element.scrollHeight;
+});
+await page.waitForFunction(
+  (initial) => document.querySelectorAll(".workflow-nav-list > .side-link").length > initial,
+  initialWorkflowCount,
+);
+for (let index = 0; index < 2; index += 1) {
+  await page.locator(".workflow-nav-list").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await sleep(300);
+}
+assert.equal(await workflowRows.count(), 50);
+await page.screenshot({ path: join(shotsDir, "18-workflow-scroll.png") });
+console.log("saved 18-workflow-scroll.png; workflow scroll and dot-free labels verified");
 
 await page.goto(`${pageUrl}?demo=1`, { waitUntil: "networkidle" });
 await sleep(1800);
+await page.getByLabel("Search workflows").fill("case escalation");
+await page.getByRole("button", { name: "Case escalation risk", exact: true }).waitFor();
+assert.equal(await workflowRows.count(), 1);
 await page.getByLabel("Search workflows").fill("reconciliation");
 await sleep(400);
 await page.screenshot({ path: join(shotsDir, "16-workflow-search.png") });

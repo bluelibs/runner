@@ -340,6 +340,15 @@ button {
   overscroll-behavior: contain;
 }
 
+.workflow-load-zone {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 0;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
 .workflow-nav-list > .side-link,
 .schedule-list > .schedule-row {
   content-visibility: auto;

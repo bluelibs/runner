@@ -190,7 +190,7 @@ export function Overview({
             {filtered.slice(0, 7).map((execution) => (
               <button key={execution.id} type="button" className="latest-row" onClick={() => onOpenExecution(execution.id)}>
                 <span className="latest-identity">
-                  <StatusPill status={execution.status} />
+                  <StatusPill status={execution.status} showDot={false} />
                   <span><strong>{execution.workflowTitle}</strong><code>{truncateId(execution.id, 18)}</code></span>
                 </span>
                 <span className="latest-position">{execution.position ?? EXECUTION_STATUS_META[execution.status].label}</span>

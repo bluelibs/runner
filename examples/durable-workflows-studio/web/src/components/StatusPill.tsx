@@ -8,7 +8,13 @@ import type {
   StudioNodeState,
 } from "../../../src/shared/types.js";
 
-export function StatusPill({ status }: { status: StudioExecutionStatus }) {
+export function StatusPill({
+  status,
+  showDot = true,
+}: {
+  status: StudioExecutionStatus;
+  showDot?: boolean;
+}) {
   const meta = EXECUTION_STATUS_META[status] ?? {
     label: status,
     tone: "neutral" as StudioTone,
@@ -16,7 +22,7 @@ export function StatusPill({ status }: { status: StudioExecutionStatus }) {
   const live = status === "running" || status === "sleeping" || status === "retrying";
   return (
     <span className={`pill tone-${meta.tone}`}>
-      <span className={`pill-dot${live ? " pulse" : ""}`} />
+      {showDot ? <span aria-hidden="true" className={`pill-dot${live ? " pulse" : ""}`} /> : null}
       {meta.label}
     </span>
   );

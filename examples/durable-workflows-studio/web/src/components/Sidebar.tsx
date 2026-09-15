@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { StudioWorkflow } from "../../../src/shared/types.js";
+import { WorkflowNavigation } from "./WorkflowNavigation.js";
 import {
   filterWorkflows,
   WORKFLOW_SEARCH_THRESHOLD,
@@ -161,25 +162,13 @@ export function Sidebar({
         >
           All workflows
         </button>
-        <div className="workflow-nav-list">
-          {visibleWorkflows.map((workflow) => (
-            <button
-              key={workflow.key}
-              type="button"
-              className={`side-link small${workflowFilter === workflow.key ? " active" : ""}`}
-              onClick={() => onWorkflowFilter(workflow.key)}
-              title={workflow.description}
-            >
-              <span className="side-link-label">{workflow.title}</span>
-              <span className="side-cat">{workflow.category}</span>
-            </button>
-          ))}
-          {visibleWorkflows.length === 0 ? (
-            <div className="side-search-empty">
-              No workflows match “{workflowQuery.trim()}”.
-            </div>
-          ) : null}
-        </div>
+        <WorkflowNavigation
+          key={workflowQuery}
+          workflows={visibleWorkflows}
+          selectedKey={workflowFilter}
+          onSelect={onWorkflowFilter}
+          query={workflowQuery}
+        />
       </div>
 
       <div className="side-foot">

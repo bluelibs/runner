@@ -207,7 +207,7 @@
 .latest-row:hover { background: var(--bg-hover); }
 .latest-identity { gap: 9px; min-width: 0; }
 .latest-identity .pill { padding: 3px 7px; font-size: 9px; }
-.latest-identity > span { display: flex; flex-direction: column; min-width: 0; }
+.latest-identity > span:not(.pill) { display: flex; flex-direction: column; min-width: 0; }
 .latest-identity strong, .latest-identity code, .latest-position { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .latest-identity strong { font-size: 11.5px; }
 .latest-identity code, .latest-position, .latest-row time { color: var(--text-faint); font-size: 9.5px; }
