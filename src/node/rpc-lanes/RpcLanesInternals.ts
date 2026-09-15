@@ -12,7 +12,10 @@ import type {
   IRpcLaneTopologyBinding,
   ResolvedRpcLaneRetryPolicy,
 } from "../../defs";
-import { resolveRpcLaneRetryPolicy } from "../../remote-lanes/retry";
+import {
+  getRpcLaneRetryPolicyViolation,
+  resolveRpcLaneRetryPolicy,
+} from "../../remote-lanes/retry";
 import type {
   RpcLanesResourceConfig,
   RpcLanesResourceValue,
@@ -311,29 +314,11 @@ function validateRpcLaneRetryPolicy(binding: IRpcLaneTopologyBinding): void {
     return;
   }
 
-  const { maxAttempts, delayMs } = retry;
-  if (
-    maxAttempts !== undefined &&
-    (!Number.isInteger(maxAttempts) || maxAttempts < 1)
-  ) {
+  const violation = getRpcLaneRetryPolicyViolation(retry);
+  if (violation) {
     rpcLaneRetryPolicyInvalidError.throw({
       laneId: binding.lane.id,
-      field: "maxAttempts",
-      value: String(maxAttempts),
-    });
-  }
-
-  // Function strategies pass the config schema by shape; only numeric delays
-  // need semantic validation here.
-  const delayValid =
-    typeof delayMs === "number"
-      ? Number.isFinite(delayMs) && delayMs >= 0
-      : typeof delayMs === "function";
-  if (delayMs !== undefined && !delayValid) {
-    rpcLaneRetryPolicyInvalidError.throw({
-      laneId: binding.lane.id,
-      field: "delayMs",
-      value: String(delayMs),
+      ...violation,
     });
   }
 }

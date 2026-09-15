@@ -49,7 +49,12 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
         _deps: unknown,
         context?: { signal?: AbortSignal },
       ) => {
-        const runRemoteTask = retryingByLaneId.get(lane.id)!.task;
+        const bodyIsReencoded = isReadable(input) || hasNodeFile(input);
+        // Upload sources may already be consumed after the first transport attempt.
+        const communicator = bodyIsReencoded
+          ? resolved.bindingsByLaneId.get(lane.id)!.communicator
+          : retryingByLaneId.get(lane.id)!;
+        const runRemoteTask = communicator.task;
         if (typeof runRemoteTask !== "function") {
           rpcLaneCommunicatorContractError.throw({
             message: `rpcLane communicator for lane "${lane.id}" does not implement task(id, input).`,
@@ -64,7 +69,6 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           },
         ) => Promise<unknown>;
         const remoteTaskId = store.findIdByDefinition(taskEntry.task);
-        const bodyIsReencoded = isReadable(input) || hasNodeFile(input);
         const headers = buildRpcLaneRequestHeaders(lane.id, {
           kind: "rpc-task",
           targetId: remoteTaskId,
@@ -74,11 +78,11 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           bodyReencoded: bodyIsReencoded,
         });
         return headers
-          ? executeRemoteTask(remoteTaskId, input, {
+          ? executeRemoteTask.call(communicator, remoteTaskId, input, {
               headers,
               signal: context?.signal,
             })
-          : executeRemoteTask(remoteTaskId, input, {
+          : executeRemoteTask.call(communicator, remoteTaskId, input, {
               signal: context?.signal,
             });
       }) as typeof taskEntry.task.run,

@@ -3,6 +3,7 @@ import type {
   ResolvedRpcLaneRetryPolicy,
   RpcLaneRetryPolicy,
 } from "../defs";
+import { rpcLaneRetryPolicyInvalidInputError } from "../errors";
 import { createCancellationErrorFromSignal } from "../tools/abortSignals";
 import { exponentialBackoffWithJitterMs } from "../tools/retryDelay";
 import { RemoteLaneTransportError } from "./http/protocol";
@@ -68,6 +69,11 @@ export function isRetryableRemoteLaneError(error: unknown): boolean {
 export function resolveRpcLaneRetryPolicy(
   policy: RpcLaneRetryPolicy = {},
 ): ResolvedRpcLaneRetryPolicy {
+  const violation = getRpcLaneRetryPolicyViolation(policy);
+  if (violation) {
+    rpcLaneRetryPolicyInvalidInputError.throw(violation);
+  }
+
   return {
     maxAttempts: policy.maxAttempts ?? DEFAULT_RPC_LANE_MAX_ATTEMPTS,
     delayMs:
@@ -77,12 +83,45 @@ export function resolveRpcLaneRetryPolicy(
 }
 
 /**
+ * Returns the first semantically invalid numeric retry-policy field.
+ *
+ * Shape validation is handled by TypeScript and the topology config schema;
+ * this guard covers numeric values whose JavaScript type is valid but whose
+ * value would produce an empty or unbounded retry loop.
+ *
+ * @param policy The retry policy to validate.
+ * @returns The invalid field and value, or undefined when valid.
+ */
+export function getRpcLaneRetryPolicyViolation(
+  policy: RpcLaneRetryPolicy,
+): { field: "maxAttempts" | "delayMs"; value: string } | undefined {
+  const { maxAttempts, delayMs } = policy;
+  if (
+    maxAttempts !== undefined &&
+    (!Number.isInteger(maxAttempts) || maxAttempts < 1)
+  ) {
+    return { field: "maxAttempts", value: String(maxAttempts) };
+  }
+
+  if (
+    typeof delayMs === "number" &&
+    (!Number.isFinite(delayMs) || delayMs < 0)
+  ) {
+    return { field: "delayMs", value: String(delayMs) };
+  }
+
+  return undefined;
+}
+
+/**
  * Wraps a lane communicator with transport-level retries.
  *
  * Only the methods implemented by the inner communicator are exposed, so
  * lane routing checks (`typeof communicator.eventWithResult === "function"`)
  * keep working on the wrapped instance. Retry delays honor the caller abort
  * signal: aborting rejects immediately instead of sleeping through the delay.
+ * Inputs must be replayable; set maxAttempts to 1 for streams or other
+ * single-use inputs.
  *
  * @param communicator The transport adapter to wrap.
  * @param policy Retry policy; omit for the default (3 attempts, backoff,
@@ -99,21 +138,21 @@ export function createRetryingRpcLaneCommunicator(
   if (task) {
     wrapped.task = (id, input, options) =>
       attemptRpcLaneCall(resolved, options?.signal, () =>
-        task(id, input, options),
+        task.call(communicator, id, input, options),
       );
   }
   const event = communicator.event;
   if (event) {
     wrapped.event = (id, payload, options) =>
       attemptRpcLaneCall(resolved, options?.signal, () =>
-        event(id, payload, options),
+        event.call(communicator, id, payload, options),
       );
   }
   const eventWithResult = communicator.eventWithResult;
   if (eventWithResult) {
     wrapped.eventWithResult = (id, payload, options) =>
       attemptRpcLaneCall(resolved, options?.signal, () =>
-        eventWithResult(id, payload, options),
+        eventWithResult.call(communicator, id, payload, options),
       );
   }
   return wrapped;
@@ -142,6 +181,10 @@ async function attemptRpcLaneCall<T>(
       if (delay > 0) {
         await delayWithAbort(delay, signal);
       }
+      // A policy callback or the completed delay may have cancelled the call.
+      if (signal?.aborted) {
+        throw createCancellationErrorFromSignal(signal);
+      }
       retries += 1;
     }
   }
@@ -153,14 +196,26 @@ function delayWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
   }
   const activeSignal = signal;
   return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      activeSignal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    function onAbort() {
+    let settled = false;
+    const cleanup = () => {
       clearTimeout(timer);
-      reject(createCancellationErrorFromSignal(activeSignal));
+      activeSignal.removeEventListener("abort", onAbort);
+    };
+    const settle = (complete: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      complete();
+    };
+    function onAbort() {
+      settle(() => reject(createCancellationErrorFromSignal(activeSignal)));
     }
+    const timer = setTimeout(() => settle(resolve), ms);
     activeSignal.addEventListener("abort", onAbort, { once: true });
+    if (activeSignal.aborted) {
+      onAbort();
+    }
   });
 }

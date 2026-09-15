@@ -608,11 +608,16 @@ const topology = r.rpcLane.topology({
 Rules:
 
 - Retries apply in `network` mode only, to lane-routed (non-served) calls.
-- The default classifier retries only failures without a definitive server answer: connection failures, client timeouts, and HTTP 408/429/502/503/504.
-- Typed domain errors, other 4xx/5xx statuses, malformed responses, and caller aborts are never retried by default — the server executed and answered, so repeating the call is a business decision. Use task middleware (`retry`, `circuitBreaker`, `fallback`) for those.
+- The default classifier retries connection failures and client timeouts, plus HTTP 408/429/502/503/504 responses.
+- Typed domain errors, other 4xx/5xx statuses, and malformed responses are never retried by default because the server returned a definitive answer; repeating the call is a business decision. Caller aborts are a separate, non-response cancellation condition and are also never retried by default. Use task middleware (`retry`, `circuitBreaker`, `fallback`) for response failures that need business-aware retries.
 - The default delay is exponential backoff with jitter starting at 100ms.
 - Use `maxAttempts: 1` to disable retries for a binding.
-- The client `timeoutMs` is per attempt: budget `timeoutMs × maxAttempts` worst case. Retry delays honor the caller abort signal.
+- The client `timeoutMs` is per attempt. Request time can consume up to `timeoutMs × maxAttempts`, while worst-case end-to-end duration also includes as many as `maxAttempts − 1` retry delays. Retry delays honor the caller abort signal.
+
+Lane-routed upload calls (raw readable streams and multipart Node files) make a
+single transport attempt, because an upload source may already be consumed.
+When using `createRetryingRpcLaneCommunicator` directly, use `maxAttempts: 1`
+for non-replayable inputs such as streams.
 
 Timeout caveat: a timed-out call may still have executed server-side, so retrying it can duplicate non-idempotent effects. Narrow `retryIf` for such tasks, or design the remote task to be idempotent.
 

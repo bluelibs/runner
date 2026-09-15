@@ -121,8 +121,25 @@ describe("remote lanes http protocol", () => {
     const typed = { id: "tests-typed", data: { code: 1 } };
     expect(toRequestRejectionError(typed, false)).toBe(typed);
 
+    const typedError = Object.assign(new Error("domain failure"), {
+      id: "typed",
+      data: { code: 1 },
+    });
+    expect(toRequestRejectionError(typedError, false)).toBe(typedError);
+
     const dataOnly = { data: { code: 2 } };
     expect(toRequestRejectionError(dataOnly, false)).toBe(dataOnly);
+
+    const nullIdentity = { id: null };
+    expect(toRequestRejectionError(nullIdentity, false)).toBe(nullIdentity);
+  });
+
+  it("wraps objects whose typed identity fields are undefined", () => {
+    const identityMissing = { id: undefined, data: undefined };
+    expect(toRequestRejectionError(identityMissing, false)).toMatchObject({
+      code: "NETWORK_ERROR",
+      details: { cause: identityMissing },
+    });
   });
 
   it("wraps identity-less falsy rejections", () => {

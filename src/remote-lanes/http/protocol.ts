@@ -1,5 +1,4 @@
 import type { ITask, IEventEmission } from "../../defs";
-
 export interface ProtocolErrorShape {
   code: string;
   message: string;
@@ -155,11 +154,12 @@ export function toRequestRejectionError(
 }
 
 function carriesTypedErrorIdentity(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-  const candidate = error as { id?: unknown; data?: unknown };
-  return candidate.id !== undefined || candidate.data !== undefined;
+  if (!error || typeof error !== "object") return false;
+  // Error instances carry domain identity too; they are not plain schema objects.
+  return (
+    ("id" in error && error.id !== undefined) ||
+    ("data" in error && error.data !== undefined)
+  );
 }
 
 export function assertOkEnvelope<T>(

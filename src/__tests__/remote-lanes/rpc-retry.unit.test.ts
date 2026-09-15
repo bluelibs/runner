@@ -1,5 +1,6 @@
 import { RemoteLaneTransportError } from "../../remote-lanes/http/protocol";
 import {
+  getRpcLaneRetryPolicyViolation,
   isRetryableRemoteLaneError,
   resolveRpcLaneRetryPolicy,
 } from "../../remote-lanes/retry";
@@ -99,5 +100,18 @@ describe("resolveRpcLaneRetryPolicy", () => {
     expect(resolved.maxAttempts).toBe(1);
     expect(resolved.retryIf).toBe(isRetryableRemoteLaneError);
     expect(typeof resolved.delayMs).toBe("function");
+  });
+
+  it("reports invalid fixed delays without rejecting delay strategies", () => {
+    expect(getRpcLaneRetryPolicyViolation({ delayMs: -1 })).toEqual({
+      field: "delayMs",
+      value: "-1",
+    });
+    expect(
+      getRpcLaneRetryPolicyViolation({ delayMs: Number.POSITIVE_INFINITY }),
+    ).toEqual({ field: "delayMs", value: "Infinity" });
+    expect(
+      getRpcLaneRetryPolicyViolation({ delayMs: () => 0 }),
+    ).toBeUndefined();
   });
 });

@@ -100,7 +100,15 @@ async function postSerialized<T = any>(options: {
       throw toRequestRejectionError(error, signalLink.signal?.aborted ?? false);
     }
 
-    const text = await res.text();
+    let text: string;
+    try {
+      text = await res.text();
+    } catch (error) {
+      if (timedOut && error instanceof Error && error.name === "AbortError") {
+        throw remoteLaneTimeoutError(timeoutMs);
+      }
+      throw error;
+    }
     const status =
       typeof (res as { status?: unknown }).status === "number"
         ? (res as { status: number }).status
@@ -158,11 +166,6 @@ async function postSerialized<T = any>(options: {
       }
       throw error;
     }
-  } catch (error) {
-    if (timedOut) {
-      throw remoteLaneTimeoutError(timeoutMs);
-    }
-    throw error;
   } finally {
     if (timeout) clearTimeout(timeout);
     signalLink.cleanup();

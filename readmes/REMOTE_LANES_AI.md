@@ -127,6 +127,7 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - Lane not in `serve` -> task/event routes remotely via communicator.
   - Every assigned or served lane must have a communicator binding.
   - Remote calls retry per binding `retry` policy; default retries connection failures, timeouts, and HTTP 408/429/502/503/504 only — never typed domain errors, other statuses, or aborts.
+- Lane-routed raw stream and multipart Node-file uploads make one attempt; their sources may already be consumed. Use `maxAttempts: 1` for non-replayable inputs with the standalone retry wrapper.
 - RPC-routed task middleware behavior:
   - Caller-side task middleware is skipped by default unless lane policy explicitly allowlists it.
   - `identityChecker` is always retained because it is an authorization boundary, not optional caller-side behavior.

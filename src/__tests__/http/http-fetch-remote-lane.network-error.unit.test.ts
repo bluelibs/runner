@@ -86,4 +86,84 @@ describe("http-fetch-remote-lane.resource - network errors", () => {
       name: "RemoteLaneTransportError",
     });
   });
+
+  it("preserves a non-abort body failure after the timeout fires", async () => {
+    const bodyFailure = new Error("response stream failed");
+    const fetchImpl = (async (
+      _url: unknown,
+      init: { signal?: AbortSignal },
+    ) => ({
+      text: () =>
+        new Promise<string>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(bodyFailure));
+        }),
+    })) as unknown as typeof fetch;
+    const client = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer: new Serializer(),
+      timeoutMs: 5,
+    });
+
+    await expect(client.task("t.id", { a: 1 })).rejects.toBe(bodyFailure);
+  });
+
+  it("preserves an HTTP failure produced after the timeout fires", async () => {
+    const fetchImpl = (async (
+      _url: unknown,
+      init: { signal?: AbortSignal },
+    ) => ({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      headers: { get: () => "text/plain" },
+      text: () =>
+        new Promise<string>((resolve) => {
+          init.signal?.addEventListener("abort", () => resolve("bad request"));
+        }),
+    })) as unknown as typeof fetch;
+    const client = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer: new Serializer(),
+      timeoutMs: 5,
+    });
+
+    await expect(client.task("t.id", { a: 1 })).rejects.toMatchObject({
+      code: "HTTP_ERROR",
+      httpCode: 400,
+    });
+  });
+
+  it("preserves a deserialization failure produced after the timeout fires", async () => {
+    const deserializeFailure = new Error("cannot deserialize response");
+    const fetchImpl = (async (
+      _url: unknown,
+      init: { signal?: AbortSignal },
+    ) => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: { get: () => "application/json" },
+      text: () =>
+        new Promise<string>((resolve) => {
+          init.signal?.addEventListener("abort", () => resolve("not-json"));
+        }),
+    })) as unknown as typeof fetch;
+    const client = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer: {
+        stringify: JSON.stringify,
+        parse: () => {
+          throw deserializeFailure;
+        },
+      },
+      timeoutMs: 5,
+    });
+
+    await expect(client.task("t.id", { a: 1 })).rejects.toBe(
+      deserializeFailure,
+    );
+  });
 });

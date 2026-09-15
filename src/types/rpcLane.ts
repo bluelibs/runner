@@ -127,8 +127,11 @@ export interface RpcLaneRetryPolicy {
  * RPC-lane retry policy with defaults applied.
  */
 export interface ResolvedRpcLaneRetryPolicy {
+  /** Total attempts per call, including the initial attempt. */
   maxAttempts: number;
+  /** Fixed delay or strategy evaluated before each retry. */
   delayMs: number | RpcLaneRetryDelayStrategy;
+  /** Classifies failures that can consume another attempt. */
   retryIf: (error: unknown) => boolean;
 }
 

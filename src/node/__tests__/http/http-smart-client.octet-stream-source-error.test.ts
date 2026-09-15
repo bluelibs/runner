@@ -34,10 +34,11 @@ describe("createHttpSmartClient - octet-stream source error", () => {
       serializer: new Serializer(),
     });
     const src = new Readable({ read() {} });
+    const sourceFailure = new Error("boom");
     const p = client.task("duplex", src as any);
     // Trigger the source error which should call req.destroy(err) and reject the promise
-    setImmediate(() => src.emit("error", new Error("boom")));
-    await expect(p).rejects.toBeTruthy();
+    setImmediate(() => src.emit("error", sourceFailure));
+    await expect(p).rejects.toBe(sourceFailure);
   });
 
   it("adds x-runner-context header for octet-stream when contexts are provided", async () => {

@@ -1,3 +1,4 @@
+import { Readable } from "stream";
 import type { RpcLaneRetryPolicy } from "../../../defs";
 import { RemoteLaneTransportError } from "../../../remote-lanes/http/protocol";
 import { resolveRpcLaneRetryPolicy } from "../../../remote-lanes/retry";
@@ -135,6 +136,48 @@ describe("rpc-lanes network retry", () => {
     await expect(run({ a: 1 })).resolves.toBe("recovered");
     expect(task).toHaveBeenCalledTimes(3);
   });
+
+  it.each([
+    ["octet-stream", () => Readable.from(["upload"])],
+    [
+      "multipart stream",
+      () => ({
+        file: {
+          $runnerFile: "File",
+          id: "upload",
+          _node: { stream: Readable.from(["upload"]) },
+        },
+      }),
+    ],
+    [
+      "multipart buffer",
+      () => ({
+        file: {
+          $runnerFile: "File",
+          id: "upload",
+          _node: { buffer: Buffer.from("upload") },
+        },
+      }),
+    ],
+  ] as const)(
+    "does not replay %s uploads after transport failure",
+    async (_kind, input) => {
+      const failure = transportError("NETWORK_ERROR");
+      const communicator = {
+        task: jest.fn(async function () {
+          expect(this).toBe(communicator);
+          throw failure;
+        }),
+      };
+      const run = taskRouting({
+        communicator,
+        retry: { maxAttempts: 3, delayMs: 0 },
+      });
+
+      await expect(run(input())).rejects.toBe(failure);
+      expect(communicator.task).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("gives up task calls after maxAttempts", async () => {
     const task = jest.fn(async () => {

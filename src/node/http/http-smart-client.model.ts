@@ -469,8 +469,18 @@ async function postOctetStream(
         },
       );
 
-      const onReqError = (e: unknown) =>
-        rejectOnce(toRequestRejectionError(e, signal?.aborted ?? false));
+      let sourceFailure: { error: unknown } | undefined;
+      const onSourceError = (error: unknown) => {
+        sourceFailure = { error };
+      };
+      stream.once("error", onSourceError);
+      cleanup.push(() => stream.removeListener("error", onSourceError));
+      const onReqError = (error: unknown) =>
+        rejectOnce(
+          sourceFailure
+            ? sourceFailure.error
+            : toRequestRejectionError(error, signal?.aborted ?? false),
+        );
       req.on("error", onReqError);
       cleanup.push(() => req.removeListener("error", onReqError));
       if (signal) {
@@ -490,7 +500,7 @@ async function postOctetStream(
       // Use pipeline to safely wire errors between source and request,
       // preventing unhandled 'error' on the source stream.
       const onPipelineDone = (err?: NodeJS.ErrnoException | null) => {
-        if (err) rejectOnce(err);
+        if (err) rejectOnce(sourceFailure ? sourceFailure.error : err);
       };
       pipeline(stream, req, onPipelineDone);
     },
