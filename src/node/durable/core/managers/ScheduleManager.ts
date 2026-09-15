@@ -50,12 +50,7 @@ export class ScheduleManager {
     this.taskRegistry.register(task);
 
     // Fail fast on invalid input before anything is persisted.
-    const validatedInput = ValidationHelper.validateInput(
-      input,
-      task.inputSchema,
-      task.id,
-      "Task",
-    );
+    ValidationHelper.validateInput(input, task.inputSchema, task.id, "Task");
 
     const scheduleId = options.id;
 
@@ -90,7 +85,7 @@ export class ScheduleManager {
             type,
             pattern,
             timezone,
-            input: validatedInput,
+            input,
             status: ScheduleStatus.Active,
             updatedAt: new Date(),
           });
@@ -101,7 +96,7 @@ export class ScheduleManager {
         const schedule: Schedule = {
           id: scheduleId,
           workflowKey,
-          input: validatedInput,
+          input,
           pattern,
           timezone,
           type,
@@ -125,12 +120,7 @@ export class ScheduleManager {
     this.taskRegistry.register(task);
 
     // Fail fast on invalid input before anything is persisted.
-    const validatedInput = ValidationHelper.validateInput(
-      input,
-      task.inputSchema,
-      task.id,
-      "Task",
-    );
+    ValidationHelper.validateInput(input, task.inputSchema, task.id, "Task");
 
     const id = options.id ?? createExecutionId();
 
@@ -139,7 +129,7 @@ export class ScheduleManager {
       const schedule: Schedule = {
         id,
         workflowKey,
-        input: validatedInput,
+        input,
         pattern: options.cron ?? String(options.interval),
         timezone: options.cron ? options.timezone : undefined,
         type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
@@ -158,7 +148,7 @@ export class ScheduleManager {
     await this.store.createTimer({
       id: `once:${id}`,
       workflowKey: this.taskRegistry.getWorkflowKey(task),
-      input: validatedInput,
+      input,
       type: TimerType.Scheduled,
       fireAt,
       status: TimerStatus.Pending,

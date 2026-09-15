@@ -5,15 +5,21 @@ import type { DurableExecutionState, ExecutionStatus } from "./types";
 import type { StepResult } from "./types";
 import type { ListExecutionsOptions } from "./interfaces/store";
 import { encodeExecutionCursor, type ExecutionCursor } from "./executionCursor";
-import { durableOperatorUnsupportedStoreCapabilityError } from "../../../errors";
+import {
+  durableExecutionInvariantError,
+  durableOperatorUnsupportedStoreCapabilityError,
+} from "../../../errors";
 
 /**
  * Filters for dashboard-safe execution listing. Cursor pagination is
  * preferred over `offset` at scale: see `ListExecutionsOptions.cursor`.
  */
 export interface ListExecutionStatesOptions {
+  /** Restricts results to these execution lifecycle states. */
   status?: ExecutionStatus[];
+  /** Restricts results to one registered workflow key. */
   workflowKey?: string;
+  /** Positive number of rows to return; defaults to 100. */
   limit?: number;
   /**
    * Opaque cursor returned as `nextCursor` by a previous page. When present,
@@ -141,6 +147,11 @@ export class DurableOperator {
     options?: ListExecutionStatesOptions,
   ): Promise<ListExecutionStatesPage> {
     const limit = options?.limit ?? 100;
+    if (!Number.isInteger(limit) || limit <= 0) {
+      durableExecutionInvariantError.throw({
+        message: `Durable operator limit must be a positive integer. Received: ${limit}.`,
+      });
+    }
     const executions = await this.store.listExecutions({
       status: options?.status,
       workflowKey: options?.workflowKey,

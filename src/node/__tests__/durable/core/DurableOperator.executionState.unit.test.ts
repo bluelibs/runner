@@ -165,6 +165,16 @@ describe("durable: DurableOperator execution state", () => {
     ).rejects.toThrow("Invalid execution listing cursor.");
   });
 
+  it("listExecutionStates() rejects invalid limits before reading the store", async () => {
+    const operator = new DurableOperator(new MemoryStore());
+    await expect(operator.listExecutionStates({ limit: 0 })).rejects.toThrow(
+      "Durable operator limit must be a positive integer. Received: 0.",
+    );
+    await expect(operator.listExecutionStates({ limit: 1.5 })).rejects.toThrow(
+      "Durable operator limit must be a positive integer. Received: 1.5.",
+    );
+  });
+
   it("listExecutionStates() rejects well-formed cursors with bad shapes", async () => {
     const operator = new DurableOperator(new MemoryStore());
     await expect(

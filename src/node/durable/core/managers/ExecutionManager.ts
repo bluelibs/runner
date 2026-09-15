@@ -163,18 +163,13 @@ export class ExecutionManager {
 
     // Fail fast on invalid input before anything is persisted: invalid input
     // must never mint an execution id, history, timers, or audit entries.
-    const validatedInput = ValidationHelper.validateInput(
-      input,
-      task.inputSchema,
-      task.id,
-      "Task",
-    );
+    ValidationHelper.validateInput(input, task.inputSchema, task.id, "Task");
 
     if (options?.idempotencyKey) {
       return await startWithIdempotencyKey(
         this.persistenceDeps,
         task,
-        validatedInput,
+        input,
         options.idempotencyKey,
         options,
       );
@@ -183,7 +178,7 @@ export class ExecutionManager {
     const executionId = await persistNewExecution(
       this.persistenceDeps,
       task,
-      validatedInput,
+      input,
       options,
     );
     await kickoffWithFailsafe(this.persistenceDeps, executionId);
