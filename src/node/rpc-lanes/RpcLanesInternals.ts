@@ -4,8 +4,15 @@ import {
   rpcLaneBindingNotFoundError,
   rpcLaneCommunicatorResourceInvalidError,
   rpcLaneProfileNotFoundError,
+  rpcLaneRetryPolicyInvalidError,
 } from "../../errors";
-import type { IRpcLaneCommunicator, IRpcLaneDefinition } from "../../defs";
+import type {
+  IRpcLaneCommunicator,
+  IRpcLaneDefinition,
+  IRpcLaneTopologyBinding,
+  ResolvedRpcLaneRetryPolicy,
+} from "../../defs";
+import { resolveRpcLaneRetryPolicy } from "../../remote-lanes/retry";
 import type {
   RpcLanesResourceConfig,
   RpcLanesResourceValue,
@@ -29,6 +36,7 @@ export type RpcLaneResolvedBinding = {
   allowAsyncContext: boolean;
   asyncContextAllowList: readonly string[] | undefined;
   auth: RpcLanesTopology["bindings"][number]["auth"];
+  retry: ResolvedRpcLaneRetryPolicy;
 };
 
 export interface RpcLaneResolvedState {
@@ -262,6 +270,7 @@ function resolveBindings(
       rpcLaneDuplicateBindingError.throw({ laneId: binding.lane.id });
     }
     seenLaneIds.add(binding.lane.id);
+    validateRpcLaneRetryPolicy(binding);
 
     const dependencyKey = toCommunicatorDependencyKey(binding.communicator.id);
     const communicator = dependencies[dependencyKey];
@@ -289,8 +298,42 @@ function resolveBindings(
       allowAsyncContext: asyncContextPolicy.allowAsyncContext,
       asyncContextAllowList: asyncContextPolicy.allowList,
       auth: binding.auth,
+      retry: resolveRpcLaneRetryPolicy(binding.retry),
     });
   }
 
   return map;
+}
+
+function validateRpcLaneRetryPolicy(binding: IRpcLaneTopologyBinding): void {
+  const { retry } = binding;
+  if (retry === undefined) {
+    return;
+  }
+
+  const { maxAttempts, delayMs } = retry;
+  if (
+    maxAttempts !== undefined &&
+    (!Number.isInteger(maxAttempts) || maxAttempts < 1)
+  ) {
+    rpcLaneRetryPolicyInvalidError.throw({
+      laneId: binding.lane.id,
+      field: "maxAttempts",
+      value: String(maxAttempts),
+    });
+  }
+
+  // Function strategies pass the config schema by shape; only numeric delays
+  // need semantic validation here.
+  const delayValid =
+    typeof delayMs === "number"
+      ? Number.isFinite(delayMs) && delayMs >= 0
+      : typeof delayMs === "function";
+  if (delayMs !== undefined && !delayValid) {
+    rpcLaneRetryPolicyInvalidError.throw({
+      laneId: binding.lane.id,
+      field: "delayMs",
+      value: String(delayMs),
+    });
+  }
 }

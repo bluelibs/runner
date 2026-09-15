@@ -85,6 +85,54 @@ export type RpcLaneCommunicatorResource = IResource<
 >;
 
 /**
+ * Computes the delay before an RPC-lane retry.
+ *
+ * @param attempt Zero-based retry index (0 for the first retry delay).
+ * @param error The failure that triggered the retry.
+ * @returns Delay in milliseconds. Non-positive values skip the wait.
+ */
+export type RpcLaneRetryDelayStrategy = (
+  attempt: number,
+  error: unknown,
+) => number;
+
+/**
+ * Transport-level retry policy for one RPC-lane binding.
+ *
+ * Retries apply to lane-routed calls in `network` mode only. They cover
+ * failures without a definitive server answer (connection failures, timeouts,
+ * overload statuses). Failures where the server executed and answered — typed
+ * domain errors, most 4xx/5xx statuses — are never retried by default; use
+ * task middleware (`retry`, `circuitBreaker`, `fallback`) for those.
+ */
+export interface RpcLaneRetryPolicy {
+  /**
+   * Total attempts per call, including the first attempt.
+   * Defaults to 3. Use 1 to disable retries for this binding.
+   */
+  maxAttempts?: number;
+  /**
+   * Delay between attempts: a fixed millisecond count or a strategy.
+   * Defaults to exponential backoff with jitter starting at 100ms.
+   */
+  delayMs?: number | RpcLaneRetryDelayStrategy;
+  /**
+   * Decides whether a failure is worth another attempt.
+   * Defaults to retrying only transport failures without a server answer.
+   */
+  retryIf?: (error: unknown) => boolean;
+}
+
+/**
+ * RPC-lane retry policy with defaults applied.
+ */
+export interface ResolvedRpcLaneRetryPolicy {
+  maxAttempts: number;
+  delayMs: number | RpcLaneRetryDelayStrategy;
+  retryIf: (error: unknown) => boolean;
+}
+
+/**
  * One RPC-lane binding inside a topology declaration.
  */
 export interface IRpcLaneTopologyBinding {
@@ -92,6 +140,11 @@ export interface IRpcLaneTopologyBinding {
   communicator: RpcLaneCommunicatorResource;
   allowAsyncContext?: boolean;
   auth?: RemoteLaneBindingAuth;
+  /**
+   * Transport-level retry policy for calls routed through this binding.
+   * Omit for the default policy (3 attempts, backoff, transport failures only).
+   */
+  retry?: RpcLaneRetryPolicy;
 }
 
 /**

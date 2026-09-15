@@ -159,4 +159,51 @@ describe("rpcLanes resource config schema", () => {
       } as never),
     );
   });
+
+  it("accepts retry policies with fixed and strategy delays", () => {
+    const lane = { id: "lane-retry-policy" };
+    const retryIf = () => true;
+    const delayStrategy = () => 10;
+    const config = {
+      profile: "client",
+      topology: {
+        profiles: {
+          client: { serve: [] },
+        },
+        bindings: [
+          {
+            lane,
+            communicator: { id: "communicator-resource" },
+            retry: { maxAttempts: 3, delayMs: 250, retryIf },
+          },
+          {
+            lane,
+            communicator: { id: "communicator-resource" },
+            retry: { delayMs: delayStrategy },
+          },
+        ],
+      },
+    };
+
+    expect(rpcLanesResourceConfigSchema.parse(config)).toEqual(config);
+  });
+
+  it("rejects retry policies with invalid shapes", () => {
+    const lane = { id: "lane-invalid-retry-policy" };
+    const parseWithRetry = (retry: unknown) =>
+      rpcLanesResourceConfigSchema.parse({
+        profile: "client",
+        topology: {
+          profiles: {
+            client: { serve: [] },
+          },
+          bindings: [{ lane, communicator: { id: "c" }, retry }],
+        },
+      } as never);
+
+    expectMatchFailure(() => parseWithRetry("retry"));
+    expectMatchFailure(() => parseWithRetry({ maxAttempts: "3" }));
+    expectMatchFailure(() => parseWithRetry({ delayMs: "250" }));
+    expectMatchFailure(() => parseWithRetry({ retryIf: "yes" }));
+  });
 });

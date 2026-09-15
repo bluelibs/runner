@@ -862,4 +862,4 @@ Prefer feature-driven folders and naming by Runner item type:
 ## See Also
 
 - **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` to model durable progress while the store remains the source of truth and queue/pubsub or polling wakes work back up. See [Durable Workflows](./DURABLE_WORKFLOWS.md).
-- **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response. Only lane-assigned work is rerouted. See [Remote Lanes](./REMOTE_LANES.md).
+- **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response with transport retries by default (`retry: { maxAttempts, delayMs, retryIf }` per binding). Only lane-assigned work is rerouted. See [Remote Lanes](./REMOTE_LANES.md).

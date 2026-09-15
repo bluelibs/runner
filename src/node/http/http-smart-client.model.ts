@@ -7,6 +7,7 @@ import {
   assertOkEnvelope,
   buildEventRequestBody,
   RemoteLaneTransportError,
+  toRequestRejectionError,
 } from "../../remote-lanes/http/protocol";
 import type { IAsyncContext } from "../../types/asyncContext";
 import type { IErrorHelper } from "../../types/error";
@@ -176,11 +177,13 @@ async function postJson<T = any>(
       cleanup.forEach((fn) => fn());
       resolve(value);
     };
+    // Request/response failures are normalized before reaching here; direct
+    // rejections (parse, pipeline) propagate raw like the fetch client.
     const rejectOnce = (error: unknown) => {
       if (settled) return;
       settled = true;
       cleanup.forEach((fn) => fn());
-      reject(error instanceof Error ? error : new Error(String(error)));
+      reject(error);
     };
 
     const req = lib.request(
@@ -235,10 +238,14 @@ async function postJson<T = any>(
             rejectOnce(error);
           }
         });
-        res.on("error", rejectOnce);
+        res.on("error", (error) =>
+          rejectOnce(toRequestRejectionError(error, signal?.aborted ?? false)),
+        );
       },
     );
-    req.on("error", rejectOnce);
+    req.on("error", (error) =>
+      rejectOnce(toRequestRejectionError(error, signal?.aborted ?? false)),
+    );
     if (signal) {
       const onAbort = () =>
         req.destroy(createCancellationErrorFromSignal(signal));
@@ -355,11 +362,13 @@ async function postMultipart(
         cleanup.forEach((fn) => fn());
         resolve(value);
       };
+      // See postJson: request failures arrive normalized, direct rejections
+      // propagate raw.
       const rejectOnce = (error: unknown) => {
         if (settled) return;
         settled = true;
         cleanup.forEach((fn) => fn());
-        reject(error instanceof Error ? error : new Error(String(error)));
+        reject(error);
       };
       const req = lib.request(
         {
@@ -373,7 +382,9 @@ async function postMultipart(
         },
         (res) => resolveOnce({ stream: res as Readable, res }),
       );
-      req.on("error", rejectOnce);
+      req.on("error", (error) =>
+        rejectOnce(toRequestRejectionError(error, signal?.aborted ?? false)),
+      );
       if (signal) {
         const onAbort = () =>
           req.destroy(createCancellationErrorFromSignal(signal));
@@ -386,7 +397,13 @@ async function postMultipart(
       req.on("timeout", () => {
         req.destroy(toTimeoutError(url, cfg.timeoutMs));
       });
-      body.on("error", (e) => req.destroy(e as Error));
+      // Upload-body failures are not network failures: reject them raw instead
+      // of routing through the request normalizer, and destroy bare so no
+      // 'error' event double-reports them.
+      body.on("error", (e) => {
+        req.destroy();
+        rejectOnce(e);
+      });
       body.pipe(req);
     },
   );
@@ -424,10 +441,12 @@ async function postOctetStream(
         cleanup.forEach((fn) => fn());
         resolve(value);
       };
+      // See postJson: request failures arrive normalized, direct rejections
+      // propagate raw.
       const rejectOnce = (error: unknown) => {
         settled = true;
         cleanup.forEach((fn) => fn());
-        reject(error instanceof Error ? error : new Error(String(error)));
+        reject(error);
       };
 
       const req = lib.request(
@@ -450,7 +469,8 @@ async function postOctetStream(
         },
       );
 
-      const onReqError = (e: unknown) => rejectOnce(e);
+      const onReqError = (e: unknown) =>
+        rejectOnce(toRequestRejectionError(e, signal?.aborted ?? false));
       req.on("error", onReqError);
       cleanup.push(() => req.removeListener("error", onReqError));
       if (signal) {

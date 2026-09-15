@@ -119,6 +119,49 @@ export function toRemoteLaneTransportError(
   );
 }
 
+/**
+ * Normalizes a request-phase rejection (fetch threw, socket errored) into a
+ * transport error.
+ *
+ * Caller aborts, already-typed transport errors, and failures carrying typed
+ * error identity (`id`/`data`) pass through untouched so cancellation,
+ * timeout, and error-registry mapping shapes stay stable. Everything else —
+ * failures with no answer behind them — becomes a retryable `NETWORK_ERROR`
+ * that keeps the original message for debuggability and the original value
+ * under `details.cause`.
+ *
+ * @param error The rejection value from the request attempt.
+ * @param aborted Whether the caller signal aborted before the rejection.
+ * @returns The original error or a `RemoteLaneTransportError`.
+ */
+export function toRequestRejectionError(
+  error: unknown,
+  aborted: boolean,
+): unknown {
+  if (aborted) {
+    return error;
+  }
+  if (error instanceof RemoteLaneTransportError) {
+    return error;
+  }
+  if (carriesTypedErrorIdentity(error)) {
+    return error;
+  }
+  return new RemoteLaneTransportError(
+    "NETWORK_ERROR",
+    error instanceof Error ? error.message : String(error),
+    { cause: error },
+  );
+}
+
+function carriesTypedErrorIdentity(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const candidate = error as { id?: unknown; data?: unknown };
+  return candidate.id !== undefined || candidate.data !== undefined;
+}
+
 export function assertOkEnvelope<T>(
   envelope: ProtocolEnvelope<T> | undefined,
   opts?: { fallbackMessage?: string },
