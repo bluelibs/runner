@@ -28,6 +28,19 @@ export function isExecutionTerminal(status: ExecutionStatus): boolean {
 }
 
 /**
+ * Every execution status considered final by `isExecutionTerminal`.
+ *
+ * This is the canonical terminal set: execution listing filters and cold
+ * storage archival select from these statuses instead of re-declaring them.
+ */
+export const TERMINAL_EXECUTION_STATUSES = [
+  ExecutionStatus.Completed,
+  ExecutionStatus.Failed,
+  ExecutionStatus.CompensationFailed,
+  ExecutionStatus.Cancelled,
+] as const;
+
+/**
  * Extra metadata for active durable step tracking.
  *
  * `childWorkflowKey` uses the durable persisted workflow identity so

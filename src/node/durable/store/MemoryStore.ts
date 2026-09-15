@@ -271,6 +271,10 @@ export class MemoryStore implements IDurableStore {
     });
   }
 
+  async deleteExecutionData(executionId: string): Promise<void> {
+    await executionStateOps.deleteExecutionData(this.runtime, executionId);
+  }
+
   async getStepResult(
     executionId: string,
     stepId: string,

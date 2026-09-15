@@ -24,6 +24,7 @@ import {
   type RedisPipeline,
   type RedisStoreConfig,
 } from "./RedisStore.runtime";
+import * as archivalOps from "./RedisStore.archival";
 import * as executionStateOps from "./RedisStore.executionState";
 import * as executionViewOps from "./RedisStore.executionViews";
 import * as signalStateOps from "./RedisStore.signalState";
@@ -149,6 +150,10 @@ export class RedisStore implements IDurableStore {
       stepId,
       newResult,
     );
+  }
+
+  async deleteExecutionData(executionId: string): Promise<void> {
+    await archivalOps.deleteExecutionData(this.runtime, executionId);
   }
 
   async listExecutions(

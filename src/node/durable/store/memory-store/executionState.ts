@@ -144,3 +144,18 @@ export async function forceFail(
   });
   await runtime.persistDurableMutation();
 }
+
+export async function deleteExecutionData(
+  runtime: MemoryStoreRuntime,
+  executionId: string,
+): Promise<void> {
+  const deletedExecution = runtime.executions.delete(executionId);
+  const deletedSteps = runtime.stepResults.delete(executionId);
+  const deletedAudit = runtime.auditEntries.delete(executionId);
+  const deletedSignals = runtime.signalStates.delete(executionId);
+  if (!deletedExecution && !deletedSteps && !deletedAudit && !deletedSignals) {
+    return;
+  }
+
+  await runtime.persistDurableMutation();
+}
