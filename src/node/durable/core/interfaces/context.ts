@@ -151,7 +151,15 @@ export interface IDurableContext {
    */
   waitForSignal<TPayload>(
     signal: IEventDefinition<TPayload>,
-    options?: SignalOptions,
+    options?: SignalOptions & { timeoutMs?: never },
+  ): Promise<Extract<WaitForSignalResult<TPayload>, { kind: "signal" }>>;
+  waitForSignal<TPayload>(
+    signal: IEventDefinition<TPayload>,
+    options: SignalOptions & { timeoutMs: number },
+  ): Promise<WaitForSignalResult<TPayload>>;
+  waitForSignal<TPayload>(
+    signal: IEventDefinition<TPayload>,
+    options: SignalOptions,
   ): Promise<WaitForSignalResult<TPayload>>;
 
   /**

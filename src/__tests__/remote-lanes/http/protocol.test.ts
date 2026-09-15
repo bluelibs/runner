@@ -5,6 +5,7 @@ import {
   RemoteLaneTransportError,
   runViaRemoteLane,
   toRemoteLaneTransportError,
+  toRequestRejectionError,
 } from "../../../remote-lanes/http/protocol";
 
 describe("remote lanes http protocol", () => {
@@ -84,6 +85,69 @@ describe("remote lanes http protocol", () => {
     expect(emptyMessageWithoutFallback.message).toBe(
       "Remote lane transport error",
     );
+  });
+
+  it("passes caller aborts through request rejection normalization", () => {
+    const abort = new Error("The operation was aborted.");
+    abort.name = "AbortError";
+    expect(toRequestRejectionError(abort, true)).toBe(abort);
+  });
+
+  it("passes typed transport errors through request rejection normalization", () => {
+    const timeout = new RemoteLaneTransportError("TIMEOUT", "slow");
+    expect(toRequestRejectionError(timeout, false)).toBe(timeout);
+  });
+
+  it("wraps request failures as retryable network errors", () => {
+    const failure = new TypeError("fetch failed");
+    const normalized = toRequestRejectionError(failure, false);
+    expect(normalized).toBeInstanceOf(RemoteLaneTransportError);
+    expect(normalized).toMatchObject({
+      code: "NETWORK_ERROR",
+      message: "fetch failed",
+      details: { cause: failure },
+    });
+  });
+
+  it("wraps non-error request rejections with their string form", () => {
+    const normalized = toRequestRejectionError("boom", false);
+    expect(normalized).toMatchObject({
+      code: "NETWORK_ERROR",
+      message: "boom",
+    });
+  });
+
+  it("passes failures carrying typed error identity through untouched", () => {
+    const typed = { id: "tests-typed", data: { code: 1 } };
+    expect(toRequestRejectionError(typed, false)).toBe(typed);
+
+    const typedError = Object.assign(new Error("domain failure"), {
+      id: "typed",
+      data: { code: 1 },
+    });
+    expect(toRequestRejectionError(typedError, false)).toBe(typedError);
+
+    const dataOnly = { data: { code: 2 } };
+    expect(toRequestRejectionError(dataOnly, false)).toBe(dataOnly);
+
+    const nullIdentity = { id: null };
+    expect(toRequestRejectionError(nullIdentity, false)).toBe(nullIdentity);
+  });
+
+  it("wraps objects whose typed identity fields are undefined", () => {
+    const identityMissing = { id: undefined, data: undefined };
+    expect(toRequestRejectionError(identityMissing, false)).toMatchObject({
+      code: "NETWORK_ERROR",
+      details: { cause: identityMissing },
+    });
+  });
+
+  it("wraps identity-less falsy rejections", () => {
+    const normalized = toRequestRejectionError(null, false);
+    expect(normalized).toMatchObject({
+      code: "NETWORK_ERROR",
+      message: "null",
+    });
   });
 
   it("delegates run and emit helpers to runner callbacks", async () => {

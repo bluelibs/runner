@@ -1,5 +1,6 @@
 import type {
   Execution,
+  DurableExecutionState,
   ExecutionStatus,
   DurableSignalRecord,
   DurableQueuedSignalRecord,
@@ -13,10 +14,26 @@ import type {
 import type { DurableAuditEntry } from "../audit";
 
 export interface ListExecutionsOptions {
+  /** Lifecycle states to include. Omit to include every state. */
   status?: ExecutionStatus[];
+  /** Durable workflow key to include. */
   workflowKey?: string;
+  /** Return only executions started directly by this parent execution. */
+  parentExecutionId?: string;
+  /** Maximum rows to return. Defaults to 100. */
   limit?: number;
+  /** Number of matching rows to skip. Defaults to 0. */
   offset?: number;
+  /**
+   * Opaque keyset cursor for stable large-scale pagination.
+   *
+   * Rows are ordered by `createdAt` descending with `id` ascending as the
+   * tiebreak. When present, only rows strictly after the cursor are
+   * returned and `offset` is ignored, so later pages stay stable while new
+   * executions are created concurrently. Prefer this over `offset` for
+   * dashboards that page beyond the first few screens.
+   */
+  cursor?: string;
 }
 
 /**
@@ -61,7 +78,23 @@ export interface IDurableStore {
   >;
 
   // Enhanced querying for operator tooling
+  /** Reads one payload-free metadata projection without loading the execution payload. */
+  getExecutionState?(
+    executionId: string,
+  ): Promise<DurableExecutionState | null>;
   listExecutions(options?: ListExecutionsOptions): Promise<Execution[]>;
+  /** Indexed, payload-free query for dashboards. Must not scan execution payloads. */
+  listExecutionStates?(
+    options: Pick<
+      ListExecutionsOptions,
+      "workflowKey" | "status" | "limit" | "cursor"
+    >,
+  ): Promise<DurableExecutionState[]>;
+  /** Resumable metadata-index backfill; call until nextCursor is null. */
+  rebuildExecutionIndex?(options: {
+    cursor?: string;
+    limit?: number;
+  }): Promise<{ nextCursor: string | null }>;
   listStepResults(executionId: string): Promise<StepResult[]>;
   appendAuditEntry?(entry: DurableAuditEntry): Promise<void>;
   listAuditEntries?(
@@ -95,6 +128,8 @@ export interface IDurableStore {
     executionId: string,
     signalId: string,
   ): Promise<DurableSignalState | null>;
+  /** Lists every persisted signal journal for one execution, when supported. */
+  listSignalStates?(executionId: string): Promise<DurableSignalState[]>;
   appendSignalRecord(
     executionId: string,
     signalId: string,

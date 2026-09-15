@@ -10,14 +10,25 @@ import type {
 import type { DurableAuditEntry } from "../../core/audit";
 import { Semaphore } from "../../../../models/Semaphore";
 import type { DurableMutationResult, MemoryStoreSnapshot } from "./types";
+import { IndexedExecutions } from "./IndexedExecutions";
 
 type MemoryStoreDurableMutationHooks = {
-  captureSnapshot: () => MemoryStoreSnapshot;
+  captureSnapshot: () => MemoryStoreSnapshot | null;
   afterDurableMutation: (snapshot: MemoryStoreSnapshot) => Promise<void>;
 };
 
 export class MemoryStoreRuntime {
-  executions = new Map<string, Execution>();
+  private executionRecords = new IndexedExecutions();
+
+  get executions(): IndexedExecutions {
+    return this.executionRecords;
+  }
+
+  set executions(records: Map<string, Execution>) {
+    this.executionRecords = new IndexedExecutions();
+    for (const [id, execution] of records)
+      this.executionRecords.set(id, execution);
+  }
   executionIdByIdempotencyKey = new Map<string, string>();
   stepResults = new Map<string, Map<string, StepResult>>();
   signalStates = new Map<string, Map<string, DurableSignalState>>();
@@ -44,7 +55,8 @@ export class MemoryStoreRuntime {
   }
 
   async persistDurableMutation(): Promise<void> {
-    await this.hooks.afterDurableMutation(this.hooks.captureSnapshot());
+    const snapshot = this.hooks.captureSnapshot();
+    if (snapshot) await this.hooks.afterDurableMutation(snapshot);
   }
 
   async withSignalStateMutation<T>(

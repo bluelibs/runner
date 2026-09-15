@@ -659,6 +659,42 @@ export const eventLaneRetryPolicyInvalidError = error<
   )
   .build();
 
+export const rpcLaneRetryPolicyInvalidError = error<
+  {
+    laneId: string;
+    field: "maxAttempts" | "delayMs";
+    value: string;
+  } & DefaultErrorType
+>("rpcLane-retryPolicyInvalid")
+  .format(
+    ({ laneId, field, value }) =>
+      `RPC lane "${laneId}" binding has invalid retry policy field "${field}" with value "${value}".`,
+  )
+  .remediation(({ field }) =>
+    field === "maxAttempts"
+      ? "Use a positive integer for maxAttempts (for example: 1, 2, 3...). Use 1 to disable retries."
+      : "Use a non-negative number of milliseconds or a (attempt, error) => number strategy for delayMs.",
+  )
+  .build();
+
+/** Invalid retry policy supplied to the standalone communicator wrapper. */
+export const rpcLaneRetryPolicyInvalidInputError = error<
+  {
+    field: "maxAttempts" | "delayMs";
+    value: string;
+  } & DefaultErrorType
+>("rpcLane-retryPolicyInvalidInput")
+  .format(
+    ({ field, value }) =>
+      `RPC lane communicator has invalid retry policy field "${field}" with value "${value}".`,
+  )
+  .remediation(({ field }) =>
+    field === "maxAttempts"
+      ? "Use a positive integer for maxAttempts (for example: 1, 2, 3...). Use 1 to disable retries."
+      : "Use a non-negative number of milliseconds or a (attempt, error) => number strategy for delayMs.",
+  )
+  .build();
+
 export const eventLaneQueueReferenceInvalidError = error<
   { source: string } & DefaultErrorType
 >("eventLanes-queueReferenceInvalid")

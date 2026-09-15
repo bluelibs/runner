@@ -142,6 +142,8 @@ export interface Execution<TInput = unknown, TResult = unknown> {
   error?: {
     message: string;
     stack?: string;
+    /** Durable step or switch position active when the attempt failed. */
+    stepId?: string;
   };
   /** Optional cancellation metadata (cooperative cancellation). */
   cancelledAt?: Date;
@@ -165,6 +167,34 @@ export interface StepResult<T = unknown> {
   stepId: string;
   result: T;
   completedAt: Date;
+}
+
+/**
+ * Dashboard-safe summary of a durable execution.
+ *
+ * This is the read path dashboards and status pages should use. It carries
+ * the active position (`current`), progress counters, and timings — but
+ * deliberately excludes `input`, `result`, and `error`, which may contain
+ * sensitive payloads. Use `DurableOperator.getExecutionDetail()` only for
+ * break-glass recovery, never for routine display.
+ */
+export interface DurableExecutionState {
+  id: string;
+  workflowKey: string;
+  /** Optional parent execution when this workflow was started by another durable workflow. */
+  parentExecutionId?: string;
+  status: ExecutionStatus;
+  attempt: number;
+  maxAttempts: number;
+  /**
+   * Optional live execution position for operator tooling and status pages.
+   *
+   * Waiting states are canonical durable truth. Active states are best-effort.
+   */
+  current?: DurableExecutionCurrent;
+  createdAt: Date;
+  updatedAt: Date;
+  completedAt?: Date;
 }
 
 /**

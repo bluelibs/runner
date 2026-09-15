@@ -1,7 +1,9 @@
 import { CronExpressionParser } from "cron-parser";
 import { durableScheduleConfigError } from "../../../errors";
 
+/** Cron validation and next-run calculation for durable schedule tooling. */
 export class CronParser {
+  /** Returns the first fire strictly after `from`. */
   static getNextRun(
     expression: string,
     from: Date = new Date(),
@@ -22,6 +24,7 @@ export class CronParser {
     }
   }
 
+  /** Returns whether the expression and optional IANA timezone are valid. */
   static isValid(expression: string, timezone?: string): boolean {
     try {
       parseExpression(expression, { tz: timezone });

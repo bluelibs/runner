@@ -1,9 +1,11 @@
 import { rpcLaneCommunicatorContractError } from "../../errors";
+import type { IRpcLaneCommunicator } from "../../defs";
 import {
   symbolRpcLanePolicy,
   symbolRpcLaneRoutedBy,
 } from "../../types/symbols";
 import { buildEventRequestBody } from "../../remote-lanes/http/protocol";
+import { createRetryingRpcLaneCommunicator } from "../../remote-lanes/retry";
 import { buildAsyncContextHeader } from "../remote-lanes/asyncContextAllowlist";
 import { hashRemoteLanePayload } from "../remote-lanes/laneAuth";
 import { hasNodeFile, isReadable } from "../http/nodeFileDetection";
@@ -19,10 +21,19 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   const store = dependencies.store;
   const buildRpcLaneRequestHeaders =
     createRpcLaneRequestHeadersBuilder(context);
+  const retryingByLaneId = new Map<string, IRpcLaneCommunicator>();
+  for (const [laneId, laneBinding] of resolved.bindingsByLaneId) {
+    retryingByLaneId.set(
+      laneId,
+      createRetryingRpcLaneCommunicator(
+        laneBinding.communicator,
+        laneBinding.retry,
+      ),
+    );
+  }
 
   for (const [taskId, lane] of resolved.taskLaneByTaskId.entries()) {
     const taskEntry = store.tasks.get(taskId)!;
-    const binding = resolved.bindingsByLaneId.get(lane.id)!;
     const isServed = resolved.serveLaneIds.has(lane.id);
 
     if (isServed) {
@@ -38,7 +49,12 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
         _deps: unknown,
         context?: { signal?: AbortSignal },
       ) => {
-        const runRemoteTask = binding.communicator.task;
+        const bodyIsReencoded = isReadable(input) || hasNodeFile(input);
+        // Upload sources may already be consumed after the first transport attempt.
+        const communicator = bodyIsReencoded
+          ? resolved.bindingsByLaneId.get(lane.id)!.communicator
+          : retryingByLaneId.get(lane.id)!;
+        const runRemoteTask = communicator.task;
         if (typeof runRemoteTask !== "function") {
           rpcLaneCommunicatorContractError.throw({
             message: `rpcLane communicator for lane "${lane.id}" does not implement task(id, input).`,
@@ -53,7 +69,6 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           },
         ) => Promise<unknown>;
         const remoteTaskId = store.findIdByDefinition(taskEntry.task);
-        const bodyIsReencoded = isReadable(input) || hasNodeFile(input);
         const headers = buildRpcLaneRequestHeaders(lane.id, {
           kind: "rpc-task",
           targetId: remoteTaskId,
@@ -63,11 +78,11 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           bodyReencoded: bodyIsReencoded,
         });
         return headers
-          ? executeRemoteTask(remoteTaskId, input, {
+          ? executeRemoteTask.call(communicator, remoteTaskId, input, {
               headers,
               signal: context?.signal,
             })
-          : executeRemoteTask(remoteTaskId, input, {
+          : executeRemoteTask.call(communicator, remoteTaskId, input, {
               signal: context?.signal,
             });
       }) as typeof taskEntry.task.run,
@@ -84,13 +99,13 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
       return next(emission);
     }
 
-    const binding = resolved.bindingsByLaneId.get(lane.id)!;
+    const communicator = retryingByLaneId.get(lane.id)!;
     const isServed = resolved.serveLaneIds.has(lane.id);
     if (isServed) {
       return next(emission);
     }
 
-    if (typeof binding.communicator.eventWithResult === "function") {
+    if (typeof communicator.eventWithResult === "function") {
       // Events always travel as JSON (mixed/smart clients use the fetch JSON
       // path for events). Sign the serialized body so the exposure server,
       // which hashes the received JSON bytes, accepts the token. Task calls
@@ -102,7 +117,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           buildEventRequestBody(emission.data, { returnPayload: true }),
         ),
       });
-      const result = await binding.communicator.eventWithResult(
+      const result = await communicator.eventWithResult(
         eventId,
         emission.data,
         headers
@@ -115,7 +130,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
       return;
     }
 
-    if (typeof binding.communicator.event === "function") {
+    if (typeof communicator.event === "function") {
       // Events always travel as JSON, see above. Sign the serialized body.
       const headers = buildRpcLaneRequestHeaders(lane.id, {
         kind: "rpc-event",
@@ -125,12 +140,12 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
         ),
       });
       if (headers) {
-        await binding.communicator.event(eventId, emission.data, {
+        await communicator.event(eventId, emission.data, {
           headers,
           signal: emission.signal,
         });
       } else {
-        await binding.communicator.event(eventId, emission.data, {
+        await communicator.event(eventId, emission.data, {
           signal: emission.signal,
         });
       }

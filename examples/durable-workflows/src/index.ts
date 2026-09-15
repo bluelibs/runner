@@ -9,6 +9,7 @@
  *   npm run build && node dist/index.js
  */
 import { r, run } from "@bluelibs/runner";
+import { resources } from "@bluelibs/runner/node";
 
 import {
   durable,
@@ -19,18 +20,24 @@ import {
 } from "./ids.js";
 import { processOrder } from "./orderProcessing.js";
 import { userOnboarding } from "./userOnboarding.js";
+import { renderExecutionState, runDashboardSection } from "./dashboard.js";
+import { buildScaleTasks, runScaleFleet } from "./scale.js";
 import type { OrderResult } from "./orderProcessing.js";
 import type { OnboardingResult } from "./userOnboarding.js";
 import { waitForSignalCheckpoint } from "./signalCheckpoint.js";
 
 // ─── Root resource (wires everything) ────────────────────────────────────────
 
+const scaleTasks = buildScaleTasks();
+
 const app = r
   .resource("app")
   .register([
+    resources.durable,
     durableRegistration,
     processOrder,
     userOnboarding,
+    ...scaleTasks,
     PaymentConfirmed,
     EmailVerified,
   ])
@@ -117,6 +124,21 @@ export async function runDurableWorkflowsDemo(): Promise<{
     console.log("  Onboarding result:", onboardingResult);
 
     console.log("\n=== All workflows completed successfully! ===\n");
+
+    // ── Dashboard (payload-free states, cursor-paged) ────────────────────
+    console.log("\n=== Dashboard ===\n");
+    await renderExecutionState(service, orderExecutionId);
+    const { rendered } = await runDashboardSection(service);
+    console.log(`\n  Rendered ${rendered} execution states\n`);
+
+    // ── Scale (fleet of workflow types, cursor-paged dashboard) ──────────
+    console.log("\n=== Scale ===\n");
+    const fleetIds = await runScaleFleet(service, scaleTasks);
+    console.log(`  Completed ${fleetIds.length} scale executions`);
+    const scale = await runDashboardSection(service, { limit: 50 });
+    console.log(
+      `\n  Rendered ${scale.rendered} states across ${scale.pages} cursor pages\n`,
+    );
 
     return { orderResult, onboardingResult };
   } finally {

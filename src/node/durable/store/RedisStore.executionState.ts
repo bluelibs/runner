@@ -3,6 +3,10 @@ import type { ExpectedExecutionStatuses } from "../core/interfaces/store";
 import { durableStoreShapeError } from "../../../errors";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
 import { saveStepResult } from "./RedisStore.executionViews";
+import {
+  executionIndexArgs,
+  writeExecutionIndexScript,
+} from "./RedisStore.executionIndex";
 
 function isActiveExecutionStatus(status: ExecutionStatus): boolean {
   return (
@@ -13,21 +17,22 @@ function isActiveExecutionStatus(status: ExecutionStatus): boolean {
   );
 }
 
-function saveExecutionIndexesScript(): string {
+function saveExecutionIndexesScript(shift = 0): string {
   return `
-    redis.call("sadd", KEYS[2], ARGV[2])
+    redis.call("sadd", KEYS[${2 + shift}], ARGV[2])
 
     if ARGV[3] == "1" then
-      redis.call("sadd", KEYS[3], ARGV[2])
+      redis.call("sadd", KEYS[${3 + shift}], ARGV[2])
     else
-      redis.call("srem", KEYS[3], ARGV[2])
+      redis.call("srem", KEYS[${3 + shift}], ARGV[2])
     end
 
     if ARGV[4] == "1" then
-      redis.call("sadd", KEYS[4], ARGV[2])
+      redis.call("sadd", KEYS[${4 + shift}], ARGV[2])
     else
-      redis.call("srem", KEYS[4], ARGV[2])
+      redis.call("srem", KEYS[${4 + shift}], ARGV[2])
     end
+    ${writeExecutionIndexScript(`KEYS[${5 + shift}]`, `KEYS[${6 + shift}]`)}
   `;
 }
 
@@ -106,19 +111,23 @@ export async function createExecutionWithIdempotencyKey(
 
       redis.call("set", KEYS[1], ARGV[2])
       redis.call("set", KEYS[2], ARGV[1])
-      ${saveExecutionIndexesScript()}
+      ${saveExecutionIndexesScript(1)}
       return "__created__"
     `,
-    5,
+    7,
     runtime.idempotencyKey(params.workflowKey, params.idempotencyKey),
     runtime.executionKey(params.execution.id),
     runtime.allExecutionsKey(),
     runtime.activeExecutionsKey(),
     runtime.stuckExecutionsKey(),
+    runtime.k("execution_index_metadata"),
+    runtime.k("execution_index_states"),
     runtime.serializer.stringify(params.execution),
     params.execution.id,
     isActive,
     isStuck,
+    "",
+    ...executionIndexArgs(runtime, params.execution),
   );
 
   if (outcome === "__created__") {
@@ -142,15 +151,19 @@ export async function saveExecution(
   const { isActive, isStuck } = statusFlags(execution.status);
   await runtime.redis.eval(
     saveExecutionScript(),
-    4,
+    6,
     runtime.executionKey(execution.id),
     runtime.allExecutionsKey(),
     runtime.activeExecutionsKey(),
     runtime.stuckExecutionsKey(),
+    runtime.k("execution_index_metadata"),
+    runtime.k("execution_index_states"),
     runtime.serializer.stringify(execution),
     execution.id,
     isActive,
     isStuck,
+    "",
+    ...executionIndexArgs(runtime, execution),
   );
 }
 
@@ -193,16 +206,19 @@ export async function saveExecutionIfStatus(
       ${saveExecutionIndexesScript()}
       return 1
     `,
-    4,
+    6,
     runtime.executionKey(execution.id),
     runtime.allExecutionsKey(),
     runtime.activeExecutionsKey(),
     runtime.stuckExecutionsKey(),
+    runtime.k("execution_index_metadata"),
+    runtime.k("execution_index_states"),
     runtime.serializer.stringify(execution),
     execution.id,
     isActive,
     isStuck,
     runtime.serializer.stringify(expectedStatuses),
+    ...executionIndexArgs(runtime, execution),
   );
   runtime.assertEvalResultNotError(outcome);
   return outcome === 1;

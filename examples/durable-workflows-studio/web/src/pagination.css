@@ -1,0 +1,36 @@
+.workflow-disclosure {
+  position: relative;
+  min-width: 210px;
+  max-width: 280px;
+}
+.workflow-disclosure > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-overlay);
+  font-size: 12px;
+}
+.workflow-disclosure > .workflow-picker {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 290px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--bg-panel, #131516);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 32px #0006;
+}
+.workflow-nav-list {
+  overflow-anchor: none;
+}
+.exec-scroll {
+  overflow-anchor: none;
+}
+.exec-list > li[aria-hidden="true"] {
+  content-visibility: visible;
+}

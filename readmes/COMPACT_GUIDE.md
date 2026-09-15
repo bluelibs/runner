@@ -186,7 +186,7 @@ Useful examples:
 
 - `run(app, { debug: "verbose" })` for structured debug output
 - `run(app, { logs: { printThreshold: null } })` to silence console printing
-- Node durable workflows expose task-scoped repositories via `durable.getRepository(workflowTask)` for typed execution inspection. Use `find(filters, { sort, limit, skip })` for lists, `findOne(filters)` / `findOneOrFail(filters)` for single reads, and `findTree(filters, { sort, limit, skip })` for recursive subflow trees.
+- Node durable workflows expose task-scoped repositories via `durable.getRepository(workflowTask)` for typed execution inspection. Use `find(filters, { sort, limit, skip })` for lists, `findOne(filters)` / `findOneOrFail(filters)` for single reads, and `findTree(filters, { sort, limit, skip })` for recursive subflow trees. Dashboards should prefer `durable.operator.getExecutionState(id)` / `listExecutionStates({ limit, cursor })`: payload-free summaries with stable cursor pagination (`getExecutionDetail` is break-glass only, and the operator performs no auth — enforce it at the edge).
 
 Lifecycle order:
 
@@ -283,7 +283,8 @@ Health reporting:
 - If `health()` throws, Runner records that resource as `unhealthy` with the normalized error on `details`.
 - When health shows temporary pressure or outage, prefer `runtime.pause()` and `runtime.recoverWhen(...)` over shutdown.
 
-Dynamic registration callbacks receive the resolved mode:
+Dynamic registration callbacks receive the resource config and resolved mode
+(assuming `devToolsResource` is already defined):
 
 ```ts
 const app = r
@@ -292,6 +293,9 @@ const app = r
     ...(config.enableDevTools && mode === "dev" ? [devToolsResource] : []),
   ])
   .build();
+
+const runtime = await run(app.with({ enableDevTools: true }), { mode: "dev" });
+await runtime.dispose();
 ```
 
 ## Tasks
@@ -451,8 +455,9 @@ Operational notes:
 - Register `resources.cache` in a parent resource before using task cache middleware.
 - `cache.keyBuilder(canonicalTaskId, input)` may return either a plain key string or `{ cacheKey, refs? }`.
 - During an active cache miss, task code may add extra refs through `context.journal.get(middleware.task.cache.journalKeys.refs)!.add(...)`.
-- Call `resources.cache.invalidateKeys(key | key[], options?)` to delete cached entries by concrete storage key, or opt into identity scoping for the provided base key.
-- Call `resources.cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
+- Inject `.dependencies({ cache: resources.cache })`, then use the resolved `cache` value inside `.run(...)` or `.init(...)`.
+- Call `cache.invalidateKeys(key | key[], options?)` to delete cached entries by concrete storage key, or opt into identity scoping for the provided base key.
+- Call `cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `debounce`, `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast on non-serializable input. `rateLimit` defaults to `canonicalTaskId` (shared quota per task). The `canonicalTaskId` is the full runtime id, so sibling resources with the same local id don't share state by accident.
@@ -532,7 +537,7 @@ const userNotFound = r
 userNotFound.throw({ userId: "u1" });
 userNotFound.new({ userId: "u1" });
 userNotFound.is(err);
-userNotFound.is(err, { severity: "high" });
+userNotFound.is(err, { userId: "u1" });
 r.error.is(err);
 ```
 
@@ -862,4 +867,4 @@ Prefer feature-driven folders and naming by Runner item type:
 ## See Also
 
 - **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` to model durable progress while the store remains the source of truth and queue/pubsub or polling wakes work back up. See [Durable Workflows](./DURABLE_WORKFLOWS.md).
-- **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async, queue-based; RPC Lanes are sync, request/response. Only lane-assigned work is rerouted. See [Remote Lanes](./REMOTE_LANES.md).
+- **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async and queue-based; in `network` mode, RPC Lanes provide sync request/response with binding-level transport retries for lane-routed, non-served calls. Only lane-assigned work is rerouted. See [Remote Lanes](./REMOTE_LANES.md).
