@@ -381,6 +381,7 @@ export function App() {
         workflowFilter={workflowFilter}
         onWorkflowFilter={setWorkflowFilter}
         counts={counts}
+        totalExecutionCount={executionFeed.totalCount ?? undefined}
         hasMoreExecutions={executionFeed.hasMore}
         stuckCount={stuck.length}
         onRecover={() =>
@@ -420,6 +421,7 @@ export function App() {
             searchRef={overviewSearchRef}
             refreshedAt={refreshedAt}
             now={now}
+            totalExecutionCount={executionFeed.totalCount ?? undefined}
             hasMoreExecutions={executionFeed.hasMore}
           />
         </main>

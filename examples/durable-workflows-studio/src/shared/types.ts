@@ -196,6 +196,8 @@ export interface StudioExecutionPage {
   hasMore: boolean;
   /** Offset for the next page, or `null` when the result set is exhausted. */
   nextOffset: number | null;
+  /** Exact filtered total when the backing store can provide it cheaply. */
+  total?: number;
 }
 
 /** A durable schedule (cron / interval / one-time timer). */

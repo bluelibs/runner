@@ -35,6 +35,7 @@ export function Overview({
   searchRef,
   refreshedAt,
   now,
+  totalExecutionCount,
   hasMoreExecutions = false,
 }: {
   executions: StudioExecutionSummary[];
@@ -48,6 +49,7 @@ export function Overview({
   searchRef: RefObject<HTMLInputElement>;
   refreshedAt: number;
   now: number;
+  totalExecutionCount?: number;
   hasMoreExecutions?: boolean;
 }) {
   const [query, setQuery] = useState("");
@@ -145,9 +147,11 @@ export function Overview({
 
       <section className="metric-grid" aria-label="Key metrics">
         <Metric
-          label="Executions loaded"
-          value={`${model.metrics.total}${hasMoreExecutions ? "+" : ""}`}
-          detail={hasMoreExecutions ? "older runs available" : `${model.metrics.live} live now`}
+          label={totalExecutionCount === undefined ? "Executions loaded" : "Total executions"}
+          value={totalExecutionCount ?? `${model.metrics.total}${hasMoreExecutions ? "+" : ""}`}
+          detail={totalExecutionCount === undefined
+            ? hasMoreExecutions ? "older runs available" : `${model.metrics.live} live now`
+            : `${model.metrics.total} loaded · ${model.metrics.live} live`}
           tone="blue"
         />
         <Metric label="Success rate" value={`${model.metrics.successRate}%`} detail="of loaded finished runs" tone="green" />

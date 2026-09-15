@@ -121,6 +121,27 @@ await shot("05-start-modal.png", "?demo=1&modal=start");
 await shot("06-signal-modal.png", "?demo=1&select=demo_inc_live&modal=signal");
 await shot("08-onboarding-live.png", "?demo=1&select=demo_onb_live", 4500);
 await shot("10-overview.png", "?demo=1");
+
+await page.goto(`${pageUrl}?demo=1`, { waitUntil: "networkidle" });
+await sleep(1800);
+await page.getByLabel("Search workflows").fill("reconciliation");
+await sleep(400);
+await page.screenshot({ path: join(shotsDir, "16-workflow-search.png") });
+console.log("saved 16-workflow-search.png");
+
+await page.goto(`${pageUrl}?demo=1&view=executions`, {
+  waitUntil: "networkidle",
+});
+await sleep(1800);
+for (let pageIndex = 0; pageIndex < 4; pageIndex += 1) {
+  await page.locator(".exec-scroll").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await sleep(800);
+}
+await page.screenshot({ path: join(shotsDir, "17-infinite-history.png") });
+console.log("saved 17-infinite-history.png");
+
 await shotAfterClick(
   "11-portfolio-tree.png",
   "?demo=1&select=demo_portfolio_live",

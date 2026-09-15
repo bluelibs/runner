@@ -6,8 +6,9 @@
  */
 import type { StudioWorkflow } from "../../src/shared/types.js";
 import { OPERATIONS_WORKFLOWS } from "../../src/workflows/operationsCatalog.js";
+import { buildScaleWorkflows } from "./scaleDemoWorkflows.js";
 
-export const DEMO_WORKFLOWS: StudioWorkflow[] = [
+const CORE_DEMO_WORKFLOWS: StudioWorkflow[] = [
   {
     key: "processOrder",
     title: "Order processing",
@@ -341,3 +342,5 @@ export const DEMO_WORKFLOWS: StudioWorkflow[] = [
   },
   ...OPERATIONS_WORKFLOWS,
 ];
+
+export const DEMO_WORKFLOWS = buildScaleWorkflows(CORE_DEMO_WORKFLOWS);

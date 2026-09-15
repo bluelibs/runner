@@ -17,6 +17,7 @@ import type {
 } from "../../src/shared/types.js";
 import { ApiError, type ExecutionFilters, type StudioApi } from "./api.js";
 import { DEMO_WORKFLOWS } from "./demoWorkflows.js";
+import { buildScaleExecutionDetails } from "./scaleDemo.js";
 
 let sequence = 100;
 
@@ -778,7 +779,7 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
       result: live
         ? null
         : { region, batches: 3, ordersProcessed: 360 },
-      createdAt: iso(-480_000),
+      createdAt: iso(live ? -480_000 : -7_200_000),
       updatedAt: iso(live ? -30_000 : -300_000),
       completedAt: live ? null : iso(-300_000),
       timeline: child.detail.timeline.map((node, index) => ({
@@ -814,6 +815,25 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
   }
   notify(seedPortfolio);
 
+  for (const detail of buildScaleExecutionDetails(
+    DEMO_WORKFLOWS,
+    [...simulations.values()].map((simulation) => simulation.detail),
+  )) {
+    const workflow = DEMO_WORKFLOWS.find(
+      (candidate) => candidate.key === detail.workflowKey,
+    );
+    if (!workflow) {
+      throw new Error(`Scale fixture references unknown workflow '${detail.workflowKey}'.`);
+    }
+    simulations.set(detail.id, {
+      detail,
+      workflow,
+      timers: [],
+      listeners: new Set(),
+      auditSequence: 0,
+    });
+  }
+
   function executionPage(
     filters: ExecutionFilters = {},
   ): StudioExecutionPage {
@@ -839,6 +859,7 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
       executions: page.map(summaryOf),
       hasMore,
       nextOffset: hasMore ? offset + page.length : null,
+      total: details.length,
     };
   }
 
@@ -1080,7 +1101,7 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
       requireUnlocked();
       return [...simulations.values()]
         .map((sim) => sim.detail)
-        .filter((d) => d.status === "failed")
+        .filter((detail) => detail.id === "demo_inc_failed")
         .map(summaryOf);
     },
     recover: async () => {

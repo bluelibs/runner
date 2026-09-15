@@ -26,6 +26,8 @@ export function mergeExecutions(
 
 export interface ExecutionFeed {
   executions: StudioExecutionSummary[];
+  /** Exact total when the API can provide it without an extra full-store scan. */
+  totalCount: number | null;
   hasMore: boolean;
   loading: boolean;
   loadingMore: boolean;
@@ -48,6 +50,7 @@ export function useExecutionFeed({
   onError: (error: unknown) => void;
 }): ExecutionFeed {
   const [executions, setExecutions] = useState<StudioExecutionSummary[]>([]);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -71,6 +74,7 @@ export function useExecutionFeed({
       executionsRef.current = page.executions;
       nextOffsetRef.current = page.nextOffset ?? page.executions.length;
       setExecutions(page.executions);
+      setTotalCount(page.total ?? (page.hasMore ? null : page.executions.length));
       setHasMore(page.hasMore);
     } catch (error) {
       if (generation === generationRef.current) onError(error);
@@ -95,6 +99,7 @@ export function useExecutionFeed({
         executionsRef.current = page.executions;
         nextOffsetRef.current = page.nextOffset ?? page.executions.length;
         setExecutions(page.executions);
+        setTotalCount(page.total ?? (page.hasMore ? null : page.executions.length));
         setHasMore(page.hasMore);
         return;
       }
@@ -109,6 +114,7 @@ export function useExecutionFeed({
         executionsRef.current = page.executions;
         nextOffsetRef.current = page.nextOffset ?? page.executions.length;
         setExecutions(page.executions);
+        setTotalCount(page.total ?? null);
         setHasMore(true);
         return;
       }
@@ -120,6 +126,7 @@ export function useExecutionFeed({
       executionsRef.current = merged;
       nextOffsetRef.current += newHeadCount;
       setExecutions(merged);
+      if (page.total !== undefined) setTotalCount(page.total);
     } catch (error) {
       if (generation === generationRef.current) onError(error);
     } finally {
@@ -142,6 +149,9 @@ export function useExecutionFeed({
       executionsRef.current = merged;
       nextOffsetRef.current = page.nextOffset ?? nextOffsetRef.current;
       setExecutions(merged);
+      setTotalCount((current) =>
+        page.total ?? (page.hasMore ? current : merged.length),
+      );
       setHasMore(page.hasMore);
     } catch (error) {
       if (generation === generationRef.current) onError(error);
@@ -156,6 +166,7 @@ export function useExecutionFeed({
     executionsRef.current = [];
     nextOffsetRef.current = 0;
     setExecutions([]);
+    setTotalCount(null);
     setHasMore(false);
     if (paused) return;
     void replaceFromStart();
@@ -168,6 +179,7 @@ export function useExecutionFeed({
 
   return {
     executions,
+    totalCount,
     hasMore,
     loading,
     loadingMore,

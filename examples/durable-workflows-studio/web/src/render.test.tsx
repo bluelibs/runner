@@ -75,7 +75,9 @@ describe("studio rendering", () => {
         onView={noop}
         workflowFilter={null}
         onWorkflowFilter={noop}
-        counts={{ total: 4, live: 2, failed: 1 }}
+        counts={{ total: 40, live: 20, failed: 1 }}
+        totalExecutionCount={1_000}
+        hasMoreExecutions
         stuckCount={1}
         onRecover={noop}
         recovering={false}
@@ -84,6 +86,7 @@ describe("studio rendering", () => {
     );
     expect(sidebar).toContain("Order processing");
     expect(sidebar).toContain("Incident response");
+    expect(sidebar).toContain("40 of 1000 executions loaded");
 
     const list = renderToString(
       <ExecutionList
@@ -103,7 +106,7 @@ describe("studio rendering", () => {
     const workflows = await createDemoApi().listWorkflows();
     const compact = renderToString(
       <Sidebar
-        workflows={workflows}
+        workflows={workflows.slice(0, 5)}
         view="executions"
         onView={noop}
         workflowFilter={null}
@@ -121,10 +124,7 @@ describe("studio rendering", () => {
 
     const expanded = renderToString(
       <Sidebar
-        workflows={[
-          ...workflows,
-          { ...workflows[0]!, key: "sixth", title: "Sixth workflow" },
-        ]}
+        workflows={workflows.slice(0, 6)}
         view="executions"
         onView={noop}
         workflowFilter={null}
@@ -141,10 +141,7 @@ describe("studio rendering", () => {
 
     const start = renderToString(
       <StartModal
-        workflows={[
-          ...workflows,
-          { ...workflows[0]!, key: "sixth", title: "Sixth workflow" },
-        ]}
+        workflows={workflows.slice(0, 6)}
         initialWorkflow={null}
         busy={false}
         onStart={noop}

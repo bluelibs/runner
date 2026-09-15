@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isLiveStatus } from "../../src/shared/statuses.js";
 import { ApiError, type StudioApi } from "./api.js";
 import { createDemoApi } from "./demo.js";
 
@@ -27,20 +28,24 @@ describe("demo studio", () => {
   it("seeds waiting, completed and failed states", async () => {
     const api = createDemoApi();
     const workflows = await api.listWorkflows();
-    expect(workflows.map((workflow) => workflow.key).sort()).toEqual([
-      "incidentResponse",
-      "portfolioReconciliation",
-      "processOrder",
-      "regionalRollup",
-      "userOnboarding",
-    ]);
-    expect((await api.listExecutions()).length).toBe(8);
+    expect(workflows).toHaveLength(50);
+    expect(workflows.map((workflow) => workflow.key)).toEqual(
+      expect.arrayContaining([
+        "incidentResponse",
+        "portfolioReconciliation",
+        "processOrder",
+        "regionalRollup",
+        "userOnboarding",
+      ]),
+    );
+    expect((await api.listExecutions()).length).toBe(100);
     const firstPage = await api.listExecutionPage({ limit: 3 });
     const secondPage = await api.listExecutionPage({
       limit: 3,
       offset: firstPage.nextOffset ?? 0,
     });
     expect(firstPage.executions).toHaveLength(3);
+    expect(firstPage.total).toBe(1_000);
     expect(firstPage.hasMore).toBe(true);
     expect(secondPage.executions).toHaveLength(3);
     expect(
@@ -81,6 +86,30 @@ describe("demo studio", () => {
       "consumed",
       "queued",
     ]);
+  });
+
+  it("seeds 1,000 runs evenly across the fleet with 20 live at the head", async () => {
+    const api = createDemoApi();
+    const workflows = await api.listWorkflows();
+    const executions = [];
+    let offset = 0;
+    for (;;) {
+      const page = await api.listExecutionPage({ limit: 125, offset });
+      executions.push(...page.executions);
+      if (!page.hasMore) break;
+      offset = page.nextOffset!;
+    }
+
+    expect(executions).toHaveLength(1_000);
+    expect(new Set(executions.map((execution) => execution.id)).size).toBe(1_000);
+    expect(executions.filter((execution) => isLiveStatus(execution.status))).toHaveLength(20);
+    expect(executions.slice(0, 20).every((execution) => isLiveStatus(execution.status))).toBe(true);
+    expect(executions.slice(20).some((execution) => isLiveStatus(execution.status))).toBe(false);
+    for (const workflow of workflows) {
+      expect(
+        executions.filter((execution) => execution.workflowKey === workflow.key),
+      ).toHaveLength(20);
+    }
   });
 
   it("progresses executions and parks on signal waits", async () => {
@@ -210,8 +239,8 @@ describe("demo studio", () => {
     expect(api.isLocked?.()).toBe(true);
     await api.unlock?.("admin");
     expect(api.isLocked?.()).toBe(false);
-    expect((await api.listWorkflows()).length).toBe(5);
-    expect((await api.listExecutions()).length).toBe(8);
+    expect((await api.listWorkflows()).length).toBe(50);
+    expect((await api.listExecutions()).length).toBe(100);
   });
 
   it("manages schedules, stuck and recover in memory", async () => {
@@ -239,6 +268,7 @@ describe("demo studio", () => {
     expect((await api.listSchedules()).length).toBe(2);
 
     const stuck = await api.listStuck();
+    expect(stuck).toHaveLength(1);
     expect(stuck.some((execution) => execution.id === "demo_inc_failed")).toBe(true);
     const report = await api.recover();
     expect(report.failedCount).toBe(0);

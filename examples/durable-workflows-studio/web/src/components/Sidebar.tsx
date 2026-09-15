@@ -14,6 +14,7 @@ export function Sidebar({
   workflowFilter,
   onWorkflowFilter,
   counts,
+  totalExecutionCount,
   hasMoreExecutions,
   stuckCount,
   onRecover,
@@ -28,6 +29,7 @@ export function Sidebar({
   workflowFilter: string | null;
   onWorkflowFilter: (key: string | null) => void;
   counts: { total: number; live: number; failed: number };
+  totalExecutionCount?: number;
   hasMoreExecutions?: boolean;
   stuckCount: number;
   onRecover: () => void;
@@ -42,6 +44,9 @@ export function Sidebar({
     [workflowQuery, workflows],
   );
   const searchable = workflows.length > WORKFLOW_SEARCH_THRESHOLD;
+  const displayedExecutionCount = totalExecutionCount ?? counts.total;
+  const executionCountIsLowerBound =
+    totalExecutionCount === undefined && hasMoreExecutions;
 
   return (
     <aside className="sidebar">
@@ -80,11 +85,13 @@ export function Sidebar({
             className="count"
             title={
               hasMoreExecutions
-                ? `${counts.total} executions loaded; older runs are available`
-                : `${counts.total} executions`
+                ? totalExecutionCount === undefined
+                  ? `${counts.total} executions loaded; older runs are available`
+                  : `${counts.total} of ${totalExecutionCount} executions loaded`
+                : `${displayedExecutionCount} executions`
             }
           >
-            {counts.total}{hasMoreExecutions ? "+" : ""}
+            {displayedExecutionCount}{executionCountIsLowerBound ? "+" : ""}
           </span>
         </button>
         <button
