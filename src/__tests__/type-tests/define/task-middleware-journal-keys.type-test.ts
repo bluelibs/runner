@@ -60,10 +60,10 @@ import { defineTaskMiddleware } from "../../../define";
     "type-tests.define.task-middleware.journal.explicit.active",
   );
 
-  // @ts-expect-error explicit config generics cannot also infer journal keys;
-  // use the inferred/schema path or the fluent builder instead.
   const middleware = defineTaskMiddleware<{ enabled: boolean }>({
     id: "define-journal-keys-explicit-generic",
+    // @ts-expect-error explicit config generics cannot also infer journal keys;
+    // use the inferred/schema path or the fluent builder instead.
     journal: {
       active: activeKey,
     },

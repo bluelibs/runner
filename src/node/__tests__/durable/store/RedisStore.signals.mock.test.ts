@@ -39,6 +39,7 @@ describe("durable: RedisStore signals (mock)", () => {
         scriptUnknown: unknown,
         _keyCountUnknown: unknown,
         keyUnknown: unknown,
+        _signalIdsKeyUnknown: unknown,
         defaultStateUnknown?: unknown,
         recordUnknown?: unknown,
       ) => {
@@ -143,6 +144,7 @@ describe("durable: RedisStore signals (mock)", () => {
         scriptUnknown: unknown,
         _keyCountUnknown: unknown,
         keyUnknown: unknown,
+        _signalIdsKeyUnknown: unknown,
         defaultStateUnknown?: unknown,
         recordUnknown?: unknown,
       ) => {
@@ -183,5 +185,52 @@ describe("durable: RedisStore signals (mock)", () => {
     });
 
     expect((await store.getSignalState("e1", "paid"))?.queued).toHaveLength(2);
+  });
+
+  it("lists indexed signal journals without scanning Redis keys", async () => {
+    const { redisMock, store } = harness;
+    const paidState = {
+      executionId: "e1",
+      signalId: "paid",
+      queued: [],
+      history: [],
+    };
+    const approvedState = { ...paidState, signalId: "approved" };
+    redisMock.sscan.mockResolvedValueOnce(["0", ["paid", "approved"]]);
+    redisMock.pipeline.mockReturnValueOnce({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        [null, serializer.stringify(paidState)],
+        [null, serializer.stringify(approvedState)],
+      ]),
+    });
+
+    await expect(store.listSignalStates("e1")).resolves.toEqual([
+      approvedState,
+      paidState,
+    ]);
+    expect(redisMock.sscan).toHaveBeenCalledWith(
+      "durable:signal_ids:e1",
+      "0",
+      "COUNT",
+      100,
+    );
+  });
+
+  it("returns an empty journal when no signal ids or pipeline result exist", async () => {
+    const { redisMock, store } = harness;
+
+    redisMock.sscan.mockResolvedValueOnce(["0", []]);
+    await expect(store.listSignalStates("empty")).resolves.toEqual([]);
+    expect(redisMock.pipeline).not.toHaveBeenCalled();
+
+    redisMock.sscan.mockResolvedValueOnce(["0", ["paid"]]);
+    redisMock.pipeline.mockReturnValueOnce({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(null),
+    });
+    await expect(store.listSignalStates("missing-result")).resolves.toEqual([]);
   });
 });

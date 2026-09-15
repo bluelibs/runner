@@ -62,6 +62,10 @@ export const processOrder = r
       stepId: "awaitPaymentConfirmation",
     });
 
+    if (confirmation.kind !== "signal") {
+      throw new Error("Payment confirmation timed out");
+    }
+
     // Step 5 — ship
     const shipment = await durableContext.step("shipOrder", async () => {
       return {

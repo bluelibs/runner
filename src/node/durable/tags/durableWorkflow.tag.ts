@@ -9,6 +9,17 @@ export type DurableWorkflowSignalDefinition = Pick<
   "id"
 >;
 
+/** Fixed-window admission policy for durable workflow attempts. */
+export interface DurableWorkflowRateLimit {
+  /** Window duration in milliseconds. */
+  windowMs: number;
+  /** Maximum workflow attempts admitted during one window. */
+  max: number;
+}
+
+/** Global admission policy shared by every worker using the durable store. */
+export type DurableWorkflowConcurrency = number | DurableWorkflowRateLimit;
+
 export interface DurableWorkflowTagConfig {
   /**
    * Optional stable durable workflow key persisted across refactors.
@@ -29,7 +40,17 @@ export interface DurableWorkflowTagConfig {
    * used by the workflow.
    */
   signals?: DurableWorkflowSignalDefinition[];
+  /**
+   * Optional global attempt admission policy.
+   *
+   * A number caps simultaneously running attempts. A fixed-window object caps
+   * attempt admissions during each window. Both policies coordinate through
+   * the durable store, so the limit is shared across workers.
+   */
+  concurrency?: DurableWorkflowConcurrency;
 }
+
+const positiveInteger = Match.Range({ min: 1, integer: true });
 
 const durableWorkflowConfigPattern = Match.compile({
   key: Match.Optional(Match.NonEmptyString),
@@ -37,6 +58,12 @@ const durableWorkflowConfigPattern = Match.compile({
   metadata: Match.Optional(Object),
   signals: Match.Optional(
     Match.ArrayOf(Match.ObjectIncluding({ id: Match.NonEmptyString })),
+  ),
+  concurrency: Match.Optional(
+    Match.OneOf(positiveInteger, {
+      windowMs: positiveInteger,
+      max: positiveInteger,
+    }),
   ),
 });
 
@@ -74,6 +101,14 @@ export function getDurableWorkflowKey(
   if (!task) return canonicalTaskId;
   const config = durableWorkflowTag.extract(task.tags ?? []);
   return config?.key ?? canonicalTaskId ?? task.id;
+}
+
+/** Returns the workflow's global attempt-admission policy, when configured. */
+export function getDurableWorkflowConcurrency(
+  task: Pick<AnyTask, "id" | "tags"> | undefined,
+): DurableWorkflowConcurrency | undefined {
+  if (!task) return undefined;
+  return durableWorkflowTag.extract(task.tags ?? [])?.concurrency;
 }
 
 /**

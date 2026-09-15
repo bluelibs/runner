@@ -15,7 +15,7 @@ export const eventBus = new MemoryEventBus();
 
 // ─── Durable resource (in-memory, queue-less poller/executor) ───────────────
 
-export const durable = durableResource.fork("durable");
+export const durable = durableResource.fork("workflows");
 
 export const durableRegistration = durable.with({
   store,

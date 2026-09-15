@@ -488,16 +488,15 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark built-in cache middleware performance", async () => {
-    const iterations = 200;
-    const cacheHitIterations = 100;
+    const iterations = 500;
+    const cacheHitIterations = 500;
 
     const expensiveTask = defineTask({
       id: "benchmark-cache-expensive",
       middleware: [middleware.task.cache.with({ ttl: 5000 })],
       run: async (n: number) => {
-        // Simulate expensive computation
         let result = 0;
-        for (let i = 0; i < 1000; i++) {
+        for (let i = 0; i < 5000; i++) {
           result += (n + i) % 7;
         }
         return result;
@@ -510,46 +509,75 @@ describe("Comprehensive Performance Benchmarks", () => {
       init: async () => "ready",
     });
 
-    const { dispose, runTask } = await run(app);
+    const runBenchmark = async () => {
+      const { dispose, runTask } = await run(app);
 
-    const start1 = performance.now();
-    for (let i = 0; i < iterations; i++) {
-      await runTask(expensiveTask, i);
-    }
-    const withoutCacheDuration = performance.now() - start1;
+      // Prime JIT and middleware paths without warming the measured keys.
+      for (let index = 0; index < 100; index++) {
+        await runTask(expensiveTask, -index - 1);
+      }
 
-    const start2 = performance.now();
-    for (let i = 0; i < cacheHitIterations; i++) {
-      await runTask(expensiveTask, i % 10);
+      const missStart = performance.now();
+      for (let index = 0; index < iterations; index++) {
+        await runTask(expensiveTask, 10_000 + index);
+      }
+      const withoutCacheDuration = performance.now() - missStart;
+
+      for (let index = 0; index < 10; index++) {
+        await runTask(expensiveTask, index);
+      }
+      const hitStart = performance.now();
+      for (let index = 0; index < cacheHitIterations; index++) {
+        await runTask(expensiveTask, index % 10);
+      }
+      const withCacheDuration = performance.now() - hitStart;
+      await dispose();
+      return {
+        withoutCacheDuration,
+        withCacheDuration,
+        speedupFactor:
+          withoutCacheDuration /
+          iterations /
+          (withCacheDuration / cacheHitIterations),
+      };
+    };
+
+    for (let index = 0; index < BENCHMARK_CONFIG.warmupRuns; index++) {
+      await runBenchmark();
     }
-    const withCacheDuration = performance.now() - start2;
+    const benchmarkResults = await runMultipleTimes(
+      runBenchmark,
+      BENCHMARK_CONFIG.runs,
+    );
+    const withoutCacheDurations = benchmarkResults.map(
+      (result) => result.withoutCacheDuration,
+    );
+    const withCacheDurations = benchmarkResults.map(
+      (result) => result.withCacheDuration,
+    );
+    const speedupFactors = benchmarkResults.map(
+      (result) => result.speedupFactor,
+    );
 
     results.cacheMiddleware = {
       iterationsWithoutCache: iterations,
       iterationsWithCache: cacheHitIterations,
       phase: "runtime",
-      timeWithoutCacheMs: parseFloat(withoutCacheDuration.toFixed(2)),
-      timeWithCacheMs: parseFloat(withCacheDuration.toFixed(2)),
-      avgTimeWithoutCacheMs: parseFloat(
-        (withoutCacheDuration / iterations).toFixed(4),
+      runs: BENCHMARK_CONFIG.runs,
+      timeWithoutCacheMs: calculateStats(withoutCacheDurations),
+      timeWithCacheMs: calculateStats(withCacheDurations),
+      avgTimeWithoutCacheMs: calculateStats(
+        withoutCacheDurations.map((duration) => duration / iterations),
       ),
-      avgTimeWithCacheMs: parseFloat(
-        (withCacheDuration / cacheHitIterations).toFixed(4),
+      avgTimeWithCacheMs: calculateStats(
+        withCacheDurations.map((duration) => duration / cacheHitIterations),
       ),
-      speedupFactor: parseFloat(
-        (
-          withoutCacheDuration /
-          iterations /
-          (withCacheDuration / cacheHitIterations)
-        ).toFixed(2),
-      ),
+      speedupFactor: calculateStats(speedupFactors),
     };
 
     console.log(
-      `Runtime cache middleware speedup: ${results.cacheMiddleware.speedupFactor}x faster with cache hits`,
+      `Runtime cache middleware speedup: ${results.cacheMiddleware.speedupFactor.median.toFixed(2)}x faster with cache hits (median of ${BENCHMARK_CONFIG.runs} runs)`,
     );
-
-    await dispose();
   });
 
   it("should benchmark memory usage patterns", async () => {

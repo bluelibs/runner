@@ -136,6 +136,10 @@ export class RedisStoreRuntime {
     return this.k(`signal:${executionId}:${this.encodeKeyPart(signalId)}`);
   }
 
+  signalIdsKey(executionId: string): string {
+    return this.k(`signal_ids:${executionId}`);
+  }
+
   signalWaiterOrderKey(executionId: string, signalId: string): string {
     return this.k(
       `signal_waiters:${executionId}:${this.encodeKeyPart(signalId)}:order`,

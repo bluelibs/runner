@@ -16,6 +16,7 @@ import { createExecutionId, sleepMs } from "../utils";
 import { withStoreLock } from "../locking";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ITask } from "../../../../types/task";
+import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
 import {
   durableExecutionInvariantError,
   durableScheduleConfigError,
@@ -47,6 +48,9 @@ export class ScheduleManager {
 
     const task = this.resolveTaskReference(taskRef, "ensureSchedule");
     this.taskRegistry.register(task);
+
+    // Fail fast on invalid input before anything is persisted.
+    ValidationHelper.validateInput(input, task.inputSchema, task.id, "Task");
 
     const scheduleId = options.id;
 
@@ -114,6 +118,9 @@ export class ScheduleManager {
   ): Promise<string> {
     const task = this.resolveTaskReference(taskRef, "schedule");
     this.taskRegistry.register(task);
+
+    // Fail fast on invalid input before anything is persisted.
+    ValidationHelper.validateInput(input, task.inputSchema, task.id, "Task");
 
     const id = options.id ?? createExecutionId();
 

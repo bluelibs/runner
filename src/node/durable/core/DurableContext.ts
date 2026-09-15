@@ -343,6 +343,18 @@ export class DurableContext implements IDurableContext {
 
   async waitForSignal<TPayload>(
     signal: IEventDefinition<TPayload>,
+    options?: SignalOptions & { timeoutMs?: never },
+  ): Promise<Extract<WaitForSignalResult<TPayload>, { kind: "signal" }>>;
+  async waitForSignal<TPayload>(
+    signal: IEventDefinition<TPayload>,
+    options: SignalOptions & { timeoutMs: number },
+  ): Promise<WaitForSignalResult<TPayload>>;
+  async waitForSignal<TPayload>(
+    signal: IEventDefinition<TPayload>,
+    options: SignalOptions,
+  ): Promise<WaitForSignalResult<TPayload>>;
+  async waitForSignal<TPayload>(
+    signal: IEventDefinition<TPayload>,
     options?: SignalOptions,
   ): Promise<WaitForSignalResult<TPayload>> {
     if (

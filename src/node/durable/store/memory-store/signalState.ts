@@ -46,6 +46,17 @@ export async function getSignalState(
   });
 }
 
+export async function listSignalStates(
+  runtime: MemoryStoreRuntime,
+  executionId: string,
+): Promise<DurableSignalState[]> {
+  return runtime.withSignalStatePermit(() =>
+    Array.from(runtime.signalStates.get(executionId)?.values() ?? [])
+      .sort((left, right) => left.signalId.localeCompare(right.signalId))
+      .map(cloneSignalState),
+  );
+}
+
 export async function appendSignalRecord(
   runtime: MemoryStoreRuntime,
   executionId: string,

@@ -74,11 +74,6 @@ describe("durable: idempotent start safe default", () => {
         const payment = await ctx.waitForSignal(Paid, {
           stepId: "wait-for-signal",
         });
-
-        if (payment.kind === "timeout") {
-          return { ok: false, paidAt: -1 };
-        }
-
         return { ok: true, paidAt: payment.payload.paidAt };
       })
       .build();

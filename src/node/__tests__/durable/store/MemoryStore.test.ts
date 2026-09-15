@@ -217,6 +217,7 @@ describe("durable: MemoryStore", () => {
     await saveExecution(store, {
       id: "e1",
       workflowKey: "t1",
+      parentExecutionId: "parent-1",
       status: "pending",
       createdAt: new Date(now.getTime() - 10),
       updatedAt: now,
@@ -250,6 +251,11 @@ describe("durable: MemoryStore", () => {
 
     const byTask = await store.listExecutions({ workflowKey: "t2" });
     expect(byTask.map((e) => e.id)).toEqual(["e2"]);
+
+    const byParent = await store.listExecutions({
+      parentExecutionId: "parent-1",
+    });
+    expect(byParent.map((e) => e.id)).toEqual(["e1"]);
 
     const paged = await store.listExecutions({ offset: 1, limit: 1 });
     expect(paged.map((e) => e.id)).toEqual(["e1"]);

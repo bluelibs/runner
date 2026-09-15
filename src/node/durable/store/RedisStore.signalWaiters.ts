@@ -110,6 +110,7 @@ export async function commitSignalDelivery(
 
       table.insert(state.history, record)
       redis.call("set", KEYS[1], cjson.encode(state))
+      redis.call("sadd", KEYS[8], ARGV[2])
       redis.call("hset", KEYS[2], ARGV[1], cjson.encode(completedStep))
       redis.call("zrem", KEYS[3], member)
       redis.call("hdel", KEYS[4], member)
@@ -122,7 +123,7 @@ export async function commitSignalDelivery(
 
       return 1
     `,
-    7,
+    8,
     runtime.signalKey(params.executionId, params.signalId),
     runtime.stepBucketKey(params.executionId),
     runtime.signalWaiterOrderKey(params.executionId, params.signalId),
@@ -130,6 +131,7 @@ export async function commitSignalDelivery(
     runtime.signalWaiterStepKey(params.executionId, params.signalId),
     runtime.timersKey(),
     runtime.timersScheduleKey(),
+    runtime.signalIdsKey(params.executionId),
     params.stepId,
     params.signalId,
     runtime.serializer.stringify(params.stepResult),

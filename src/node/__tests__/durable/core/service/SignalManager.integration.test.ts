@@ -26,9 +26,6 @@ describe("durable: signals integration", () => {
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
         const payment = await ctx.waitForSignal(Paid);
-        if (payment.kind === "timeout") {
-          return { ok: false, paidAt: -1 };
-        }
         return { ok: true, paidAt: payment.payload.paidAt };
       })
       .build();
@@ -150,9 +147,6 @@ describe("durable: signals integration", () => {
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
         const payment = await ctx.waitForSignal(Paid);
-        if (payment.kind === "timeout") {
-          return { ok: false, paidAt: -1 };
-        }
         return { ok: true, paidAt: payment.payload.paidAt };
       })
       .build();

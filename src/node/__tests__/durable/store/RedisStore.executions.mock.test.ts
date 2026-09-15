@@ -89,16 +89,21 @@ describe("durable: RedisStore executions (mock)", () => {
 
     expect(redisMock.eval).toHaveBeenCalledWith(
       expect.any(String),
-      5,
+      7,
       "durable:idem:task%2Fwith%20spaces:key%3Awith%3Fchars",
       "durable:exec:exec-encoded",
       "durable:all_executions",
       "durable:active_executions",
       "durable:stuck_executions",
+      "durable:execution_index_metadata",
+      "durable:execution_index_states",
       expect.any(String),
       "exec-encoded",
       "1",
       "0",
+      "",
+      expect.any(String),
+      expect.any(String),
     );
 
     redisMock.eval.mockResolvedValueOnce(123 as any);
@@ -137,15 +142,20 @@ describe("durable: RedisStore executions (mock)", () => {
     await store.saveExecution(execution);
     expect(redisMock.eval).toHaveBeenCalledWith(
       expect.stringContaining('redis.call("set", KEYS[1], ARGV[1])'),
-      4,
+      6,
       "durable:exec:1",
       "durable:all_executions",
       "durable:active_executions",
       "durable:stuck_executions",
+      "durable:execution_index_metadata",
+      "durable:execution_index_states",
       expect.any(String),
       "1",
       "1",
       "0",
+      "",
+      expect.any(String),
+      expect.any(String),
     );
 
     redisMock.get.mockResolvedValue(serializer.stringify(execution));
@@ -177,15 +187,20 @@ describe("durable: RedisStore executions (mock)", () => {
     });
     expect(redisMock.eval).toHaveBeenLastCalledWith(
       expect.stringContaining('redis.call("set", KEYS[1], ARGV[1])'),
-      4,
+      6,
       "durable:exec:c1",
       "durable:all_executions",
       "durable:active_executions",
       "durable:stuck_executions",
+      "durable:execution_index_metadata",
+      "durable:execution_index_states",
       expect.any(String),
       "c1",
       "0",
       "0",
+      "",
+      expect.any(String),
+      expect.any(String),
     );
 
     await store.saveExecution({
@@ -200,15 +215,20 @@ describe("durable: RedisStore executions (mock)", () => {
     });
     expect(redisMock.eval).toHaveBeenLastCalledWith(
       expect.stringContaining('redis.call("set", KEYS[1], ARGV[1])'),
-      4,
+      6,
       "durable:exec:stuck-1",
       "durable:all_executions",
       "durable:active_executions",
       "durable:stuck_executions",
+      "durable:execution_index_metadata",
+      "durable:execution_index_states",
       expect.any(String),
       "stuck-1",
       "0",
       "1",
+      "",
+      expect.any(String),
+      expect.any(String),
     );
   });
 
@@ -254,6 +274,8 @@ describe("durable: RedisStore executions (mock)", () => {
         _allExecutionsKeyUnknown: unknown,
         _activeExecutionsKeyUnknown: unknown,
         _stuckExecutionsKeyUnknown: unknown,
+        _indexMetadataKey: unknown,
+        _indexStatesKey: unknown,
         executionPayloadUnknown: unknown,
       ) => {
         const script = typeof scriptUnknown === "string" ? scriptUnknown : "";
@@ -291,7 +313,7 @@ describe("durable: RedisStore executions (mock)", () => {
     );
   });
 
-  it("lists executions with status and task filters", async () => {
+  it("lists executions with status, task, and parent filters", async () => {
     const { redisMock, store } = harness;
     const pending = {
       id: "exec-pending",
@@ -336,6 +358,7 @@ describe("durable: RedisStore executions (mock)", () => {
       store.listExecutions({
         status: [ExecutionStatus.Pending],
         workflowKey: "task-a",
+        parentExecutionId: "parent-a",
       }),
     ).resolves.toEqual([pending]);
   });

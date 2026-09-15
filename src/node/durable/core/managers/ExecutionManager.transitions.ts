@@ -5,6 +5,10 @@ import {
   TimerType,
   type Execution,
 } from "../types";
+import {
+  attachCurrentStepToError,
+  readLatestAttemptSnapshot,
+} from "./ExecutionManager.transitionState";
 
 type StatusChangeCallback = (params: {
   execution: Execution<unknown, unknown>;
@@ -82,17 +86,28 @@ export async function transitionExecutionToFailed(params: {
   error: {
     message: string;
     stack?: string;
+    stepId?: string;
   };
   logStatusChange: StatusChangeCallback;
   notifyFinished: NotifyFinishedCallback;
   finalizeCancellation: FinalizeCancellationCallback;
 }): Promise<void> {
+  const latestExecution = await readLatestAttemptSnapshot(
+    params.store,
+    params.execution,
+    params.from,
+  );
+  if (!latestExecution) {
+    if (params.from === ExecutionStatus.Running) {
+      await params.finalizeCancellation(params.execution);
+    }
+    return;
+  }
   const completedAt = new Date();
   const failedExecution: Execution = {
-    ...params.execution,
+    ...latestExecution,
     status: ExecutionStatus.Failed,
-    current: undefined,
-    error: params.error,
+    error: attachCurrentStepToError(params.error, latestExecution),
     completedAt,
     updatedAt: completedAt,
   };
@@ -170,8 +185,20 @@ export async function suspendExecutionAttempt(params: {
     return;
   }
 
+  const latestExecution = await readLatestAttemptSnapshot(
+    params.store,
+    params.execution,
+    ExecutionStatus.Running,
+  );
+  if (!latestExecution) {
+    await params.finalizeCancellation(
+      params.execution,
+      params.canPersistOutcome,
+    );
+    return;
+  }
   const sleepingExecution: Execution = {
-    ...params.execution,
+    ...latestExecution,
     status: ExecutionStatus.Sleeping,
     updatedAt: new Date(),
   };
@@ -198,12 +225,25 @@ export async function suspendExecutionAttempt(params: {
 export async function scheduleExecutionRetry(params: {
   store: IDurableStore;
   runningExecution: Execution<unknown, unknown>;
-  error: { message: string; stack?: string };
+  error: { message: string; stack?: string; stepId?: string };
   canPersistOutcome?: () => Promise<boolean>;
   logStatusChange: StatusChangeCallback;
   finalizeCancellation: FinalizeCancellationCallback;
 }): Promise<void> {
   if (params.canPersistOutcome && !(await params.canPersistOutcome())) {
+    return;
+  }
+
+  const latestExecution = await readLatestAttemptSnapshot(
+    params.store,
+    params.runningExecution,
+    ExecutionStatus.Running,
+  );
+  if (!latestExecution) {
+    await params.finalizeCancellation(
+      params.runningExecution,
+      params.canPersistOutcome,
+    );
     return;
   }
 
@@ -220,11 +260,10 @@ export async function scheduleExecutionRetry(params: {
   });
 
   const retryingExecution: Execution = {
-    ...params.runningExecution,
+    ...latestExecution,
     status: ExecutionStatus.Retrying,
-    current: undefined,
     attempt: params.runningExecution.attempt + 1,
-    error: params.error,
+    error: attachCurrentStepToError(params.error, latestExecution),
     updatedAt: new Date(),
   };
   const scheduledRetry = await params.store.saveExecutionIfStatus(

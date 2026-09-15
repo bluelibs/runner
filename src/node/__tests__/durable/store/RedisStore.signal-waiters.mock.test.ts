@@ -82,11 +82,11 @@ describe("durable: RedisStore signal waiters (mock)", () => {
                 history: unknown[];
                 queued: unknown[];
               })
-            : (serializer.parse(String(arg4)) as {
+            : (serializer.parse(String(arg5)) as {
                 history: unknown[];
                 queued: unknown[];
               });
-          const record = serializer.parse(String(arg5));
+          const record = serializer.parse(String(arg6));
           state.history.push(record);
           state.queued.push(record);
           redisState.set(signalKey, serializer.stringify(state));
