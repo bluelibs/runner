@@ -13,9 +13,15 @@ import type {
 import type { DurableAuditEntry } from "../audit";
 
 export interface ListExecutionsOptions {
+  /** Lifecycle states to include. Omit to include every state. */
   status?: ExecutionStatus[];
+  /** Durable workflow key to include. */
   workflowKey?: string;
+  /** Return only executions started directly by this parent execution. */
+  parentExecutionId?: string;
+  /** Maximum rows to return. Defaults to 100. */
   limit?: number;
+  /** Number of matching rows to skip. Defaults to 0. */
   offset?: number;
   /**
    * Opaque keyset cursor for stable large-scale pagination.
@@ -105,6 +111,8 @@ export interface IDurableStore {
     executionId: string,
     signalId: string,
   ): Promise<DurableSignalState | null>;
+  /** Lists every persisted signal journal for one execution, when supported. */
+  listSignalStates?(executionId: string): Promise<DurableSignalState[]>;
   appendSignalRecord(
     executionId: string,
     signalId: string,

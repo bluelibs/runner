@@ -275,6 +275,11 @@ export class MemoryStore implements IDurableStore {
     );
   }
 
+  /** Lists every signal journal retained for one execution. */
+  async listSignalStates(executionId: string): Promise<DurableSignalState[]> {
+    return await signalStateOps.listSignalStates(this.runtime, executionId);
+  }
+
   async appendSignalRecord(
     executionId: string,
     signalId: string,

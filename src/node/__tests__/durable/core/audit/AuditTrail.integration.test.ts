@@ -101,9 +101,6 @@ describe("durable: audit trail (integration)", () => {
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
         const payment = await ctx.waitForSignal(Paid);
-        if (payment.kind === "timeout") {
-          return { ok: false };
-        }
         await ctx.note("payment-received", { paidAt: payment.payload.paidAt });
         return { ok: true };
       })

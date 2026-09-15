@@ -27,6 +27,8 @@ void (() => {
     .run(async () => "ok" as const)
     .build();
 
+  const approved = r.event<{ approvedBy: string }>("types-approved").build();
+
   const parentWorkflow = r
     .task("types-durable-parent")
     .tags([tags.durableWorkflow.with({ category: "tests" })])
@@ -87,6 +89,30 @@ void (() => {
         void timeoutKind;
       }
 
+      const signal = await ctx.waitForSignal(approved, {
+        stepId: "await-approval",
+      });
+      const signalKind: "signal" = signal.kind;
+      const approvedBy: string = signal.payload.approvedBy;
+      void signalKind;
+      void approvedBy;
+
+      // @ts-expect-error no-timeout signal waits cannot resolve as timeout
+      const impossibleTimeout: "timeout" = signal.kind;
+      void impossibleTimeout;
+
+      const signalWithTimeout = await ctx.waitForSignal(approved, {
+        stepId: "await-approval-with-timeout",
+        timeoutMs: 1_000,
+      });
+      if (signalWithTimeout.kind === "signal") {
+        const timedApprovedBy: string = signalWithTimeout.payload.approvedBy;
+        void timedApprovedBy;
+      } else {
+        const timeoutKind: "timeout" = signalWithTimeout.kind;
+        void timeoutKind;
+      }
+
       // @ts-expect-error required child input must be provided
       await ctx.workflow("missing-input", childWorkflow);
 
@@ -120,6 +146,7 @@ void (() => {
     .register([
       resources.durable,
       durableRegistration,
+      approved,
       childWorkflow,
       childWorkflowWithoutInput,
       parentWorkflow,

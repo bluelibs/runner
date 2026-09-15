@@ -429,6 +429,8 @@ Suspended executions (`sleep()`, waits, pending/retrying) still cancel immediate
 ### Scheduling
 
 ```ts
+import { CronParser } from "@bluelibs/runner/node";
+
 // One-time schedule
 const executionId = await durable.schedule(task, input, {
   at: new Date("2025-06-01T10:00:00Z"),
@@ -460,6 +462,10 @@ await durable.updateSchedule("daily-cleanup", {
   timezone: "UTC",
 });
 await durable.removeSchedule("daily-cleanup");
+
+// Validate and preview before persisting operator input
+CronParser.isValid("0 4 * * *", "UTC");
+const nextFire = CronParser.getNextRun("0 4 * * *", new Date(), "UTC");
 ```
 
 ### Repository (Task-Scoped Queries)
@@ -480,9 +486,11 @@ const tree = await repo.findTree({ id: parentExecutionId });
 ```ts
 const stuck = await durable.operator.listStuckExecutions();
 const detail = await durable.operator.getExecutionDetail(executionId);
-await durable.operator.forceFail(executionId, { message: "Manual override" });
+const children = await durable.operator.listChildExecutions(executionId);
+const signals = await durable.operator.listSignals(executionId);
+await durable.operator.forceFail(executionId, "Manual override");
 await durable.operator.skipStep(executionId, "failing-step");
-await durable.operator.editStepResult(executionId, "step-id", newResult);
+await durable.operator.editState(executionId, "step-id", newResult);
 await durable.operator.retryRollback(executionId);
 ```
 
@@ -1036,6 +1044,8 @@ Waiting states are durable truth (persisted). Running states are best-effort (ma
 
 ### Audit Trail
 
+Audit collection is disabled by default.
+
 Enable via config:
 
 ```ts
@@ -1229,7 +1239,7 @@ interface Execution<TInput = unknown, TResult = unknown> {
   input: TInput | undefined;
   status: ExecutionStatus;
   result?: TResult;
-  error?: { message: string; stack?: string };
+  error?: { message: string; stack?: string; stepId?: string };
   attempt: number;
   maxAttempts: number;
   timeout?: number;

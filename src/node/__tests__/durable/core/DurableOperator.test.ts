@@ -69,6 +69,9 @@ describe("durable: DurableOperator", () => {
     await expect(operator.listStuckExecutions()).rejects.toThrow(
       "listStuckExecutions",
     );
+    await expect(operator.listSignals("e1")).rejects.toThrow(
+      "listSignalStates",
+    );
   });
 
   it("lists executions via the required store query API", async () => {
@@ -88,6 +91,47 @@ describe("durable: DurableOperator", () => {
 
     const executions = await operator.listExecutions({ workflowKey: "t" });
     expect(executions.map((e) => e.id)).toEqual(["e1"]);
+  });
+
+  it("lists direct children and signal journals for operator tooling", async () => {
+    const store = new MemoryStore();
+    const operator = new DurableOperator(store);
+    const now = new Date();
+
+    await store.saveExecution({
+      id: "child-1",
+      workflowKey: "child",
+      parentExecutionId: "parent-1",
+      input: undefined,
+      status: "pending",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await store.saveExecution({
+      id: "other-child",
+      workflowKey: "child",
+      parentExecutionId: "parent-2",
+      input: undefined,
+      status: "pending",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await store.bufferSignalRecord("child-1", "approved", {
+      id: "signal-1",
+      payload: { by: "ops" },
+      receivedAt: now,
+    });
+
+    await expect(operator.listChildExecutions("parent-1")).resolves.toEqual([
+      expect.objectContaining({ id: "child-1" }),
+    ]);
+    await expect(operator.listSignals("child-1")).resolves.toEqual([
+      expect.objectContaining({ signalId: "approved" }),
+    ]);
   });
 
   it("returns raw execution detail including steps and audit trail", async () => {

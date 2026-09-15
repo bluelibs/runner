@@ -135,6 +135,7 @@
       "writeInputFileToPath"
     ],
     "advanced": [
+      "CronParser",
       "DurableAuditEntryKind",
       "ExecutionStatus",
       "ScheduleStatus",

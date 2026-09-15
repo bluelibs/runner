@@ -219,7 +219,7 @@ try {
 await d.note("Payment confirmed", { amount: 100, currency: "USD" });
 ```
 
-No-op if audit disabled. Replay-safe.
+Audit collection is disabled by default. `note()` is a no-op while disabled and is replay-safe.
 
 ## DurableService API
 
@@ -301,6 +301,10 @@ await durableRuntime.removeSchedule("daily-report");
 
 Cron schedules use the process local timezone when `timezone` is omitted. Set an explicit IANA timezone for business-facing wall-clock schedules so DST behavior is predictable.
 
+Use `CronParser.isValid(expression, timezone)` and
+`CronParser.getNextRun(expression, from, timezone)` to validate and preview
+operator input before creating or updating a schedule.
+
 ### Repository (Task-Scoped Queries)
 
 ```ts
@@ -319,11 +323,11 @@ const tree = await repo.findTree({ id: parentExecutionId }); // With children
 ```ts
 const detail = await durableRuntime.operator.getExecutionDetail(executionId);
 const stuck = await durableRuntime.operator.listStuckExecutions();
-await durableRuntime.operator.forceFail(executionId, {
-  message: "Manual override",
-});
+const children = await durableRuntime.operator.listChildExecutions(executionId);
+const signals = await durableRuntime.operator.listSignals(executionId);
+await durableRuntime.operator.forceFail(executionId, "Manual override");
 await durableRuntime.operator.skipStep(executionId, "failing-step");
-await durableRuntime.operator.editStepResult(executionId, "step-id", newResult);
+await durableRuntime.operator.editState(executionId, "step-id", newResult);
 await durableRuntime.operator.retryRollback(executionId);
 ```
 

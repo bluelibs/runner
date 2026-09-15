@@ -1,0 +1,26 @@
+{
+  "name": "@runner-examples/durable-workflows-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Visual studio for Runner durable workflows — start, watch and operate executions",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p .",
+    "build:web": "npm --prefix web run build",
+    "build:all": "npm run build && npm run build:web",
+    "start": "npm run build && node dist/server/index.js",
+    "dev:server": "npm run build && node dist/server/index.js",
+    "dev:web": "npm --prefix web run dev",
+    "test": "npm run build && node --test dist/shared.test.js dist/workflows.test.js dist/timeline.test.js dist/http.test.js dist/api.e2e.test.js dist/api.ops.test.js && npm run test:web",
+    "test:web": "npm --prefix web run test",
+    "shots": "npm run build:web && node web/scripts/shots.mjs",
+    "check": "npm run build:all && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "@bluelibs/runner": "file:../../"
+  }
+}

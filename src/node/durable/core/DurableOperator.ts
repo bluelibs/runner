@@ -1,5 +1,5 @@
 import { IDurableStore } from "./interfaces/store";
-import { Execution } from "./types";
+import { DurableSignalState, Execution } from "./types";
 import type { DurableAuditEntry } from "./audit";
 import type { DurableExecutionState, ExecutionStatus } from "./types";
 import type { StepResult } from "./types";
@@ -74,6 +74,27 @@ export class DurableOperator {
 
   async listExecutions(options?: ListExecutionsOptions): Promise<Execution[]> {
     return await this.store.listExecutions(options);
+  }
+
+  /** Lists executions started directly by the supplied parent execution. */
+  async listChildExecutions(
+    parentExecutionId: string,
+    options: Omit<ListExecutionsOptions, "parentExecutionId"> = {},
+  ): Promise<Execution[]> {
+    return await this.store.listExecutions({
+      ...options,
+      parentExecutionId,
+    });
+  }
+
+  /** Lists retained and queued signal journals for one execution. */
+  async listSignals(executionId: string): Promise<DurableSignalState[]> {
+    if (!this.store.listSignalStates) {
+      durableOperatorUnsupportedStoreCapabilityError.throw({
+        operation: "listSignalStates",
+      });
+    }
+    return await this.store.listSignalStates!(executionId);
   }
 
   /**

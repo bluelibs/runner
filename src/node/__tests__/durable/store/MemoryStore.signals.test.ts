@@ -152,12 +152,28 @@ describe("durable: MemoryStore signals", () => {
 
     await store.appendSignalRecord("e1", "paid", record);
     await store.enqueueQueuedSignalRecord("e1", "paid", record);
+    await store.appendSignalRecord("e1", "approved", record);
     await expect(store.getSignalState("e1", "paid")).resolves.toEqual({
       executionId: "e1",
       signalId: "paid",
       queued: [record],
       history: [record],
     });
+    await expect(store.listSignalStates("e1")).resolves.toEqual([
+      {
+        executionId: "e1",
+        signalId: "approved",
+        queued: [],
+        history: [record],
+      },
+      {
+        executionId: "e1",
+        signalId: "paid",
+        queued: [record],
+        history: [record],
+      },
+    ]);
+    await expect(store.listSignalStates("missing")).resolves.toEqual([]);
   });
 
   it("buffers signal records atomically into history and queue", async () => {

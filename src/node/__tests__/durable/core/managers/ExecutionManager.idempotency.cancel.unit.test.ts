@@ -848,15 +848,20 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const saveExecutionIfStatus = createSaveExecutionIfStatusMock(false)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
-    const store = createStore({
-      saveExecution: async () => {},
-      getExecution: async () =>
+    const getExecution = jest
+      .fn()
+      .mockResolvedValueOnce(createExecution({ id: "e-failed-cancel-race" }))
+      .mockResolvedValue(
         createExecution({
           id: "e-failed-cancel-race",
           status: ExecutionStatus.Cancelling,
           cancelRequestedAt: requestedAt,
           error: { message: "cancel me" },
         }),
+      );
+    const store = createStore({
+      saveExecution: async () => {},
+      getExecution,
       saveExecutionIfStatus,
       updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
@@ -1336,9 +1341,15 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       updatedAt: new Date(),
     };
 
+    const getExecution = jest
+      .fn()
+      .mockResolvedValueOnce(execution)
+      .mockResolvedValueOnce(execution)
+      .mockResolvedValueOnce(execution)
+      .mockResolvedValue({ ...execution, status: ExecutionStatus.Running });
     const store = createStore({
       saveExecution: async () => {},
-      getExecution: async () => execution,
+      getExecution,
       saveExecutionIfStatus,
       updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
@@ -1391,9 +1402,15 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       updatedAt: new Date(),
     };
 
+    const getExecution = jest
+      .fn()
+      .mockResolvedValueOnce(execution)
+      .mockResolvedValueOnce(execution)
+      .mockResolvedValueOnce(execution)
+      .mockResolvedValue({ ...execution, status: ExecutionStatus.Running });
     const store = createStore({
       saveExecution: async () => {},
-      getExecution: async () => execution,
+      getExecution,
       saveExecutionIfStatus,
       updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
@@ -1486,18 +1503,28 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
 
+    const pendingExecution = {
+      id: "e-suspend-race",
+      workflowKey: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const getExecution = jest
+      .fn()
+      .mockResolvedValueOnce(pendingExecution)
+      .mockResolvedValueOnce(pendingExecution)
+      .mockResolvedValueOnce(pendingExecution)
+      .mockResolvedValue({
+        ...pendingExecution,
+        status: ExecutionStatus.Running,
+      });
     const store = createStore({
       saveExecution: async () => {},
-      getExecution: async () => ({
-        id: "e-suspend-race",
-        workflowKey: TaskId.T,
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }),
+      getExecution,
       saveExecutionIfStatus,
       updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],
@@ -1525,18 +1552,28 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       throw genericError.new({ message: "cleanup-failed" });
     });
 
+    const pendingExecution = {
+      id: "e-retry-race",
+      workflowKey: TaskId.T,
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 2,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const getExecution = jest
+      .fn()
+      .mockResolvedValueOnce(pendingExecution)
+      .mockResolvedValueOnce(pendingExecution)
+      .mockResolvedValueOnce(pendingExecution)
+      .mockResolvedValue({
+        ...pendingExecution,
+        status: ExecutionStatus.Running,
+      });
     const store = createStore({
       saveExecution: async () => {},
-      getExecution: async () => ({
-        id: "e-retry-race",
-        workflowKey: TaskId.T,
-        input: undefined,
-        status: ExecutionStatus.Pending,
-        attempt: 1,
-        maxAttempts: 2,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }),
+      getExecution,
       saveExecutionIfStatus,
       updateExecution: async () => undefined,
       listIncompleteExecutions: async () => [],

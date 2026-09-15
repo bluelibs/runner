@@ -25,6 +25,7 @@ export type ExecutionAttemptGuards = {
 export type ExecutionErrorInfo = {
   message: string;
   stack?: string;
+  stepId?: string;
 };
 
 export type TaskAttemptOutcome =

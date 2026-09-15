@@ -47,6 +47,11 @@ export async function listExecutions(
       (execution) => execution.workflowKey === options.workflowKey,
     );
   }
+  if (options.parentExecutionId !== undefined) {
+    executions = executions.filter(
+      (execution) => execution.parentExecutionId === options.parentExecutionId,
+    );
+  }
   executions.sort(compareExecutionsForListing);
   const limit = options.limit ?? 100;
   if (options.cursor !== undefined) {

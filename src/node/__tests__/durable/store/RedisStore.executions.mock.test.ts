@@ -291,7 +291,7 @@ describe("durable: RedisStore executions (mock)", () => {
     );
   });
 
-  it("lists executions with status and task filters", async () => {
+  it("lists executions with status, task, and parent filters", async () => {
     const { redisMock, store } = harness;
     const pending = {
       id: "exec-pending",
@@ -336,6 +336,7 @@ describe("durable: RedisStore executions (mock)", () => {
       store.listExecutions({
         status: [ExecutionStatus.Pending],
         workflowKey: "task-a",
+        parentExecutionId: "parent-a",
       }),
     ).resolves.toEqual([pending]);
   });

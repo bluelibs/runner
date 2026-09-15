@@ -142,6 +142,8 @@ export interface Execution<TInput = unknown, TResult = unknown> {
   error?: {
     message: string;
     stack?: string;
+    /** Durable step or switch position active when the attempt failed. */
+    stepId?: string;
   };
   /** Optional cancellation metadata (cooperative cancellation). */
   cancelledAt?: Date;

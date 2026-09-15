@@ -30,6 +30,7 @@ export async function listExecutions(
   let results = Array.from(runtime.executions.values());
   const statusFilter = options?.status;
   const workflowKey = options?.workflowKey;
+  const parentExecutionId = options?.parentExecutionId;
   const limit = options?.limit ?? 100;
 
   if (statusFilter && statusFilter.length > 0) {
@@ -41,6 +42,12 @@ export async function listExecutions(
   if (workflowKey) {
     results = results.filter(
       (execution) => execution.workflowKey === workflowKey,
+    );
+  }
+
+  if (parentExecutionId !== undefined) {
+    results = results.filter(
+      (execution) => execution.parentExecutionId === parentExecutionId,
     );
   }
 

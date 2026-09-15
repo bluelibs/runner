@@ -286,7 +286,7 @@ export class ExecutionAttemptRunner {
       | "workflow_key_missing"
       | "task_not_registered"
       | "delivery_attempts_exhausted";
-    error: { message: string; stack?: string };
+    error: { message: string; stack?: string; stepId?: string };
   }): Promise<void> {
     await transitionToFailedFn({
       store: this.deps.store,

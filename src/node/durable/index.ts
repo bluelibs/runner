@@ -24,6 +24,7 @@ export type {
   RunnerDurableRuntimeConfig,
 } from "./core/createRunnerDurableRuntime";
 export { DurableContext } from "./core/DurableContext";
+export { CronParser } from "./core/CronParser";
 export { StepBuilder } from "./core/StepBuilder";
 export { DurableOperator } from "./core/DurableOperator";
 export { DurableWorker, initDurableWorker } from "./core/DurableWorker";

@@ -50,6 +50,29 @@ export async function getSignalState(
   return data ? (runtime.serializer.parse(data) as DurableSignalState) : null;
 }
 
+export async function listSignalStates(
+  runtime: RedisStoreRuntime,
+  executionId: string,
+): Promise<DurableSignalState[]> {
+  const signalIds = await runtime.scanSetMembers(
+    runtime.signalIdsKey(executionId),
+  );
+  if (signalIds.length === 0) return [];
+
+  const pipeline = runtime.redis.pipeline();
+  signalIds.forEach((signalId) =>
+    pipeline.get(runtime.signalKey(executionId, signalId)),
+  );
+  const results = await pipeline.exec();
+  if (!results) return [];
+
+  return results
+    .map((entry) => runtime.parseRedisString(entry?.[1]))
+    .filter((payload): payload is string => payload !== null)
+    .map((payload) => runtime.serializer.parse(payload) as DurableSignalState)
+    .sort((left, right) => left.signalId.localeCompare(right.signalId));
+}
+
 async function mutateSignalState(params: {
   runtime: RedisStoreRuntime;
   executionId: string;
@@ -72,17 +95,20 @@ async function mutateSignalState(params: {
     ${params.mutateHistory ? "table.insert(state.history, record)" : ""}
     ${params.mutateQueue ? "table.insert(state.queued, record)" : ""}
     redis.call("set", KEYS[1], cjson.encode(state))
+    redis.call("sadd", KEYS[2], ARGV[3])
     return "OK"
   `;
 
   const outcome = await params.runtime.redis.eval(
     script,
-    1,
+    2,
     params.runtime.signalKey(params.executionId, params.signalId),
+    params.runtime.signalIdsKey(params.executionId),
     params.runtime.serializer.stringify(
       createRedisSignalState(params.executionId, params.signalId),
     ),
     params.runtime.serializer.stringify(params.record),
+    params.signalId,
   );
   params.runtime.assertEvalResultNotError(outcome);
 }
