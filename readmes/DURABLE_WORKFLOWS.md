@@ -564,17 +564,52 @@ r.task("payment").tags([
     key: "billing.payment", // Stable key (survives refactors)
     category: "billing", // Optional grouping
     signals: [Paid, Refunded], // Optional signal contract
+    concurrency: 10, // At most 10 active attempts across all workers
   }),
 ]);
 ```
 
-| Field      | Description                                                                        |
-| ---------- | ---------------------------------------------------------------------------------- |
-| `key`      | Stable workflow identity persisted in executions. Falls back to canonical task ID. |
-| `category` | Optional grouping for dashboards                                                   |
-| `signals`  | Whitelist of allowed signals. Omit for backwards-compatible any-signal mode.       |
+| Field         | Description                                                                        |
+| ------------- | ---------------------------------------------------------------------------------- |
+| `key`         | Stable workflow identity persisted in executions. Falls back to canonical task ID. |
+| `category`    | Optional grouping for dashboards                                                   |
+| `signals`     | Whitelist of allowed signals. Omit for backwards-compatible any-signal mode.       |
+| `concurrency` | Global concurrent-attempt cap or fixed-window attempt rate limit.                   |
 
 **Why `key` matters**: The canonical task ID changes when you move/rename tasks. A stable `key` lets in-flight executions survive refactors.
+
+### Global Workflow Admission
+
+Use a number to cap attempts that may actively run at the same time:
+
+```ts
+tags.durableWorkflow.with({
+  key: "billing.payment",
+  concurrency: 1,
+});
+```
+
+Use a fixed-window policy to cap how many attempts may begin during each
+window:
+
+```ts
+tags.durableWorkflow.with({
+  key: "billing.payment",
+  concurrency: { windowMs: 60_000, max: 100 },
+});
+```
+
+Admission is scoped by the persisted workflow key and coordinated through the
+durable store, so every process sharing that store observes the same limit.
+Retries and resumptions are attempts and therefore pass through admission too.
+When capacity is unavailable, the execution keeps its current durable state and
+a store-backed timer retries it later. Enable polling in at least one worker
+sharing the store so deferred attempts resume. Concurrency slots are renewable
+leases; outcome writes recheck both the execution lock and the admission lease.
+
+Numeric concurrency requires store implementations with `acquireLock()`,
+`renewLock()`, and `releaseLock()`. Fixed-window rate limiting requires
+`acquireLock()`. The built-in memory and Redis stores support these contracts.
 
 ---
 

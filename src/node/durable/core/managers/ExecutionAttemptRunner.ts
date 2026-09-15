@@ -41,6 +41,7 @@ import {
 } from "./ExecutionManager.attempt";
 import { logExecutionStatusChange } from "./ExecutionManager.persistence";
 import type { AttemptCancellationController } from "./AttemptCancellationController";
+import { WorkflowAdmissionController } from "./WorkflowAdmissionController";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -72,7 +73,11 @@ export interface ExecutionAttemptRunnerDeps {
  * owns the public service API and wiring.
  */
 export class ExecutionAttemptRunner {
-  constructor(private readonly deps: ExecutionAttemptRunnerDeps) {}
+  private readonly workflowAdmission: WorkflowAdmissionController;
+
+  constructor(private readonly deps: ExecutionAttemptRunnerDeps) {
+    this.workflowAdmission = new WorkflowAdmissionController(deps.store);
+  }
 
   async processExecution(executionId: string): Promise<void> {
     const snapshot = await this.deps.store.getExecution(executionId);
@@ -130,7 +135,29 @@ export class ExecutionAttemptRunner {
         return;
       }
 
-      await this.runExecutionAttempt(execution, task, lockState);
+      const admission = await this.workflowAdmission.tryAdmit({
+        task,
+        workflowKey: execution.workflowKey,
+        executionLockState: lockState,
+      });
+      if (admission.kind === "deferred") {
+        await this.workflowAdmission.defer(
+          execution.id,
+          admission.retryAfterMs,
+        );
+        return;
+      }
+
+      try {
+        await this.runExecutionAttempt(
+          execution,
+          task,
+          lockState,
+          admission.assertOwnership,
+        );
+      } finally {
+        await admission.release();
+      }
     } finally {
       stopHeartbeat();
       await acquiredLock.release();
@@ -141,10 +168,12 @@ export class ExecutionAttemptRunner {
     execution: Execution<unknown, unknown>,
     task: AnyTask,
     executionLockState: ExecutionLockState,
+    assertAdmissionOwnership?: () => Promise<void>,
   ): Promise<void> {
     const guards = this.createExecutionAttemptGuards(
       execution.id,
       executionLockState,
+      assertAdmissionOwnership,
     );
     guards.assertLockOwnership();
 
@@ -374,12 +403,16 @@ export class ExecutionAttemptRunner {
   private createExecutionAttemptGuards(
     executionId: string,
     lockState: ExecutionLockState,
+    assertAdmissionOwnership?: () => Promise<void>,
   ): ExecutionAttemptGuards {
     return createGuardsFn({
       executionId,
       lockState,
       store: this.deps.store,
-      assertStoreLockOwnership: (ls) => this.assertStoreLockOwnership(ls),
+      assertStoreLockOwnership: async (ls) => {
+        await this.assertStoreLockOwnership(ls);
+        await assertAdmissionOwnership?.();
+      },
       getCancellationState: (exec) => this.getCancellationState(exec),
     });
   }

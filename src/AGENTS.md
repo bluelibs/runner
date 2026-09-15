@@ -58,4 +58,4 @@ Runner is a strongly typed application composition framework built around explic
 - **Error**: A dynamically typed framework-aware error helper (`RunnerError`) carrying HTTP codes, safe serialization, and remediation formatting.
 - **Journal (`ExecutionJournal`)**: Typed state scoped to a single task execution, shared between middleware and the task runtime.
 - **Runtime**: The bootstrapped graph initialized via `run(app)`, returning an API to execute tasks, emit events, and manage lifecycle.
-- **Durable Workflow** (Node Only): Pausable, deterministic, resumable task execution using `step()` and `waitForSignal()`.
+- **Durable Workflow** (Node Only): Pausable, deterministic, resumable task execution using `step()` and `waitForSignal()`. Workflow admission uses store-backed concurrency leases or fixed-window rate slots scoped by the persisted workflow key; outcome writes verify execution and concurrency lease ownership.
