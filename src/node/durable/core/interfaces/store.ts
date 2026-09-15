@@ -97,6 +97,20 @@ export interface IDurableStore {
     stepId: string,
     newResult: unknown,
   ): Promise<void>;
+  /**
+   * Deletes the persisted history of one execution: the execution record,
+   * its step results, audit entries, and signal journals.
+   *
+   * Live runtime state is intentionally left untouched: idempotency mappings
+   * (so start dedupe keeps working), timers, signal/execution waiters,
+   * schedules, and locks. Timer handlers and signal delivery already tolerate
+   * terminal executions, so leftover timers and waiters self-consume instead
+   * of resurrecting hot state.
+   *
+   * Deleting an unknown execution is a no-op, which keeps archive/restore
+   * sweeps idempotent across crashes and retries.
+   */
+  deleteExecutionData?(executionId: string): Promise<void>;
 
   getStepResult(
     executionId: string,

@@ -535,6 +535,24 @@ fails fast at startup if that contract is missing.
 
 **Rule**: RabbitMQ makes it fast; Redis makes it correct.
 
+### Cold Storage
+
+Move terminal executions out of Redis without losing history:
+
+```ts
+const hot = new RedisStore({ redis: process.env.REDIS_URL! });
+const cold = new PersistentMemoryStore({
+  filePath: "./.runner/durable-cold.json",
+});
+await cold.init();
+const store = new TieredDurableStore({ hot, cold }); // pass as runtime `store`
+const sweep = startColdStorageSweep({ hot, cold, intervalMs: 300_000 });
+```
+
+- Hot owns writes/timers/listings; cold is consulted only for executions unknown to hot.
+- `archiveTerminalExecutions({ hot, cold, minAgeMs?, limit?, statuses?, dryRun? })`: terminal-only, 24h grace, verified copy-then-delete, idempotent reruns. `compensation_failed` excluded by default.
+- Operator actions auto-restore archived executions to hot. Query `cold` directly for archived history.
+
 ## Testing
 
 ```ts

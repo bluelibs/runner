@@ -21,6 +21,7 @@
 - [Scheduling & Cron](#scheduling--cron)
 - [Production Setup](#production-setup)
 - [Scaling & Topology](#scaling--topology)
+- [Cold Storage](#cold-storage)
 - [Testing](#testing)
 - [Operator & Observability](#operator--observability)
 - [Safety Guarantees](#safety-guarantees)
@@ -964,6 +965,65 @@ Resource IDs derive key prefixes. Use different `.fork("id")` values to run mult
 - Workers coordinate via store (not in-memory state)
 - Crash safety: other workers recover orphaned executions
 - Locks prevent duplicate processing
+
+---
+
+## Cold Storage
+
+Terminal executions (`completed`/`failed`/`cancelled`) accumulate in the hot
+store forever. At scale that means a growing Redis holding history nobody
+polls. Cold storage moves finished executions to a cheaper tier while keeping
+them fully queryable.
+
+Both tiers are plain `IDurableStore` implementations, so any store can serve
+either role — typically Redis hot and a file-backed `PersistentMemoryStore`
+(or a custom S3-style store) cold:
+
+```ts
+import {
+  PersistentMemoryStore,
+  RedisStore,
+  TieredDurableStore,
+  startColdStorageSweep,
+} from "@bluelibs/runner/node";
+
+const hot = new RedisStore({ redis: process.env.REDIS_URL! });
+const cold = new PersistentMemoryStore({
+  filePath: "./.runner/durable-cold.json",
+});
+await cold.init();
+
+// One uniform store for the runtime: pass it as `store` in
+// createRunnerDurableRuntime().
+const store = new TieredDurableStore({ hot, cold });
+
+// Background loop archiving terminal executions every 5 minutes.
+// Runs never overlap; failures are reported via onError.
+const sweep = startColdStorageSweep({ hot, cold, intervalMs: 300_000 });
+```
+
+**Routing rules**:
+
+- All writes, timers, schedules, locks, waiters, and listings stay on hot.
+  Hot owns live state; dashboards keep reading active executions from there.
+- Execution, step, audit, and signal-journal reads consult cold only for
+  executions unknown to hot, so live traffic never pays for cold reads.
+- Operator actions (`retryRollback`, `skipStep`, `forceFail`, `editState`)
+  transparently restore archived executions to hot first, so recovery tooling
+  works unchanged after archival.
+- Optional store capabilities mirror hot exactly.
+
+**Archive semantics** (`archiveTerminalExecutions`):
+
+- Only terminal executions older than `minAgeMs` (default 24h) move. The
+  grace period lets late timers and signals settle before the move.
+- Every move is copy → verify → delete, and reruns are idempotent, so a
+  crashed sweep can simply run again.
+- `compensation_failed` is excluded by default: it still needs operator
+  recovery first. Pass `statuses` explicitly to include it.
+- Idempotency mappings stay hot, so start dedupe keeps working after archival.
+- Query cold directly (it is just another store) for archived history:
+  `cold.listExecutions({ status: ["completed"] })`.
 
 ---
 
