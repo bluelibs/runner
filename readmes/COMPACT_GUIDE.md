@@ -866,5 +866,6 @@ Prefer feature-driven folders and naming by Runner item type:
 
 ## See Also
 
+- **Live Data (Node)**: `live.mongo({ collection, key, scope? })` creates `find`, `findOne`, and `count` bindings exposing ordinary read tasks. Register each `.task` and `resources.liveData.with({ queries })`, subscribe through the live data resource, and invalidate `source.topic()` after committed writes. Memory is the default; `resources.redisLiveDataProvider.with({ redis, prefix })` broadcasts invalidations across runtimes sharing an explicit prefix. See [Live Data](./LIVE_DATA.md) and the [Mongo example](../examples/live-data-mongo/README.md).
 - **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` to model durable progress while the store remains the source of truth and queue/pubsub or polling wakes work back up. See [Durable Workflows](./DURABLE_WORKFLOWS.md).
 - **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async and queue-based; in `network` mode, RPC Lanes provide sync request/response with binding-level transport retries for lane-routed, non-served calls. Only lane-assigned work is rerouted. See [Remote Lanes](./REMOTE_LANES.md).

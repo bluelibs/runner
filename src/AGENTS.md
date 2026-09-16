@@ -35,6 +35,7 @@ Runner is a strongly typed application composition framework built around explic
     - `/src/node/durable/`: Split natively between `core/` (engine orchestrator), `store/` (state persistence for memory vs redis), `bus/` (pub-sub coordination), and `queue/` (execution limits distribution).
     - `/src/node/rpc-lanes/` & `/src/node/event-lanes/`: Network layer isolation resolving topology bindings parsing configuration against networking implementations (e.g., Network Transports vs RabbitMQ queues or transparent proxying).
     - `/src/node/exposure/`: Full independent external HTTP stack (`exposureServer.ts`, `router.ts`, `requestHandlers.ts`) for mapping runtime task ingress controls logic safely via JSON/Multipart body limits.
+    - `/src/node/live-data/`: Task-backed snapshot subscriptions, memory/Redis Pub/Sub providers, and Mongo query adapters with explicit post-commit invalidation.
   - `/src/__tests__/`: Core isolation boundaries mirroring the main module paths. All tests ensure 100% rigid code coverage. Look here for examples of any architecture mechanism.
 - `/readmes/` and `/guide-units/`: Source repositories for the dynamic modular documentation which compiles directly into full markdown files. Note: `FULL_GUIDE.md` is an auto-generated artifact—do not edit manually.
 
