@@ -1068,6 +1068,40 @@ npm run coverage:ai
 
 ## Operator & Observability
 
+### Durable Workflows Studio
+
+Runner includes a complete [Durable Workflows Studio example](../examples/durable-workflows-studio/README.md)
+that turns the operator APIs into an operations dashboard. It is a reference
+application rather than an embedded framework UI, so you can adapt its HTTP
+boundary, authentication, and deployment model to your environment.
+
+The overview dashboard combines live freshness, execution and failure metrics,
+health insights, activity charts, workflow filters, and recent runs. Execution
+views add cursor-paged history, exact-ID lookup, timelines, parent/child trees,
+signal and audit history, persisted data, and guarded operator actions. The
+schedules dashboard previews and manages cron, interval, and one-time timers.
+
+![Durable Workflows Studio overview dashboard](../examples/durable-workflows-studio/docs/shots/10-overview.png)
+
+![Durable Workflows Studio execution tree](../examples/durable-workflows-studio/docs/shots/11-portfolio-tree.png)
+
+Run the live Studio against an in-memory Runner backend:
+
+```bash
+cd examples/durable-workflows-studio
+npm install
+npm run build:all
+npm start
+```
+
+Then open `http://localhost:4317`. Use `STUDIO_TOKEN` to enable the example's
+shared admin-token boundary. For production systems, treat that boundary as a
+starting point: the durable operator does not perform authentication or
+authorization itself, so enforce both before exposing any read or mutation
+endpoint. See the [Studio guide](../examples/durable-workflows-studio/README.md)
+for demo mode, deep links, API routes, tests, and the complete
+[screenshot gallery](../examples/durable-workflows-studio/docs/shots/).
+
 ### Execution Status
 
 ```ts

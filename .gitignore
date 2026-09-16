@@ -12,7 +12,6 @@ dist
 node_modules
 examples/**/node_modules
 examples/**/package-lock.json
-examples/durable-workflows-studio/docs/shots/
 npm-debug.log
 typings
 .vscode

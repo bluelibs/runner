@@ -187,8 +187,12 @@ describe("durable: DurableOperator execution state", () => {
     ).rejects.toThrow("Invalid execution listing cursor.");
   });
 
-  it("orders identical executions as equal", () => {
-    const execution = seedExecution({ id: "e1" });
-    expect(compareExecutionsForListing(execution, { ...execution })).toBe(0);
+  it("orders equal timestamps by id and identical executions as equal", () => {
+    const first = seedExecution({ id: "e1" });
+    const second = seedExecution({ id: "e2" });
+
+    expect(compareExecutionsForListing(first, second)).toBe(-1);
+    expect(compareExecutionsForListing(second, first)).toBe(1);
+    expect(compareExecutionsForListing(first, { ...first })).toBe(0);
   });
 });

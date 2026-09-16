@@ -9,8 +9,9 @@ npm run shots
 ```
 
 Requires Google Chrome (or set `SHOTS_CHROME` to a Chromium binary).
-The generated PNGs are local review artifacts and are intentionally ignored by
-Git.
+The generated PNGs are tracked so the durable-workflows guide and release notes
+can link to a stable visual reference. Review image changes before committing a
+new capture set.
 
 ## The set
 
@@ -32,6 +33,9 @@ Git.
 | `13-signal-history.png` | incident + Signals click | Delivered, consumed, and queued signal records with payload inspection |
 | `14-edit-state.png` | portfolio + Operate → Edit state | Guarded state-repair flow with step selection, JSON editor, and required audit reason |
 | `15-schedule-edit.png` | schedules + Edit click | In-place schedule cadence and input editing |
+| `16-workflow-search.png` | execution workflow picker | Search across a large workflow catalog |
+| `17-infinite-history.png` | long execution history | Progressive history loading with bounded client state |
+| `18-workflow-scroll.png` | large workflow catalog | Progressive workflow discovery and navigation |
 | `19-live-100k-history.png` | live HTTP API, scale fixtures | 100,000 stored executions, paged history, bounded cache and virtualized rows |
 | `20-live-100k-oldest.png` | live HTTP API, exact-ID search | Finds the oldest execution without downloading the intervening history |
 

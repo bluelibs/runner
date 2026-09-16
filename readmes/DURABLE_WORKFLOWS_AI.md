@@ -305,6 +305,16 @@ Use `CronParser.isValid(expression, timezone)` and
 `CronParser.getNextRun(expression, from, timezone)` to validate and preview
 operator input before creating or updating a schedule.
 
+### Durable Workflows Studio
+
+The [Durable Workflows Studio example](../examples/durable-workflows-studio/README.md)
+turns these APIs into a live operations UI: overview and health dashboards,
+cursor-paged execution history, timelines, workflow trees, signals, audit data,
+schedules, and guarded repair actions. It is a reference application, not an
+embedded framework dashboard. Authenticate and authorize its operator boundary
+for production use. The example includes a tracked
+[screenshot gallery](../examples/durable-workflows-studio/docs/shots/).
+
 ### Repository (Task-Scoped Queries)
 
 ```ts
