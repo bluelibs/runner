@@ -1,11 +1,62 @@
 import { ExecutionStatus } from "../../../durable/core/types";
+import type { DurableAuditEntry } from "../../../durable/core/audit";
+import type {
+  DurableSignalRecord,
+  Execution,
+  StepResult,
+} from "../../../durable/core/types";
 import { MemoryStore } from "../../../durable/store/MemoryStore";
-import {
-  createStubAuditEntry,
-  createStubExecution,
-  createStubSignalRecord,
-  createStubStep,
-} from "./tiered/stub.helpers";
+
+function createStubExecution(overrides: Partial<Execution> = {}): Execution {
+  return {
+    id: "exec-1",
+    workflowKey: "workflow-1",
+    input: undefined,
+    status: ExecutionStatus.Completed,
+    result: { ok: true },
+    attempt: 1,
+    maxAttempts: 1,
+    createdAt: new Date("2024-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+    completedAt: new Date("2024-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createStubStep(overrides: Partial<StepResult> = {}): StepResult {
+  return {
+    executionId: "exec-1",
+    stepId: "step-1",
+    result: { ok: true },
+    completedAt: new Date("2024-01-01T00:00:01.000Z"),
+    ...overrides,
+  };
+}
+
+function createStubAuditEntry(
+  overrides: Partial<Extract<DurableAuditEntry, { kind: "note" }>> = {},
+): Extract<DurableAuditEntry, { kind: "note" }> {
+  return {
+    id: "audit-1",
+    kind: "note",
+    executionId: "exec-1",
+    attempt: 1,
+    at: new Date("2024-01-01T00:00:02.000Z"),
+    message: "saved",
+    ...overrides,
+  };
+}
+
+function createStubSignalRecord(
+  overrides: Partial<DurableSignalRecord> = {},
+): DurableSignalRecord {
+  return {
+    id: "signal-1",
+    payload: { ok: true },
+    receivedAt: new Date("2024-01-01T00:00:03.000Z"),
+    ...overrides,
+  };
+}
 
 describe("durable: MemoryStore.deleteExecutionData", () => {
   it("deletes history while keeping live runtime state", async () => {

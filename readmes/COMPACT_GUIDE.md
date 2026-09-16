@@ -186,8 +186,7 @@ Useful examples:
 
 - `run(app, { debug: "verbose" })` for structured debug output
 - `run(app, { logs: { printThreshold: null } })` to silence console printing
-- Node durable workflows expose task-scoped repositories via `durable.getRepository(workflowTask)` for typed execution inspection. Use `find(filters, { sort, limit, skip })` for lists, `findOne(filters)` / `findOneOrFail(filters)` for single reads, and `findTree(filters, { sort, limit, skip })` for recursive subflow trees. Dashboards should prefer `durable.operator.getExecutionState(id)` / `listExecutionStates({ limit, cursor })`: payload-free summaries with stable cursor pagination (`getExecutionDetail` is break-glass only, and the operator performs no auth — enforce it at the edge).
-- Archive finished durable executions out of Redis with `TieredDurableStore({ hot, cold })` (pass as runtime `store`) plus `archiveTerminalExecutions()` / `startColdStorageSweep()`: hot owns live state, cold (any `IDurableStore`, e.g. file-backed `PersistentMemoryStore`) holds terminal history, operator actions auto-restore. See [Durable Workflows](./DURABLE_WORKFLOWS.md#cold-storage).
+- Node durable workflows expose task-scoped repositories via `durable.getRepository(workflowTask)` for typed execution inspection. Use `find(filters, { sort, limit, skip })` for lists, `findOne(filters)` / `findOneOrFail(filters)` for single reads, and `findTree(filters, { sort, limit, skip })` for recursive subflow trees. Dashboards should prefer `durable.operator.getExecutionState(id)` / `listExecutionStates({ limit, cursor })`: payload-free summaries with stable cursor pagination (`getExecutionDetail` is break-glass only, and the operator performs no auth — enforce it at the edge). For retention, keep scheduling external and use `durable.operator.fetchWorkflowsBefore(cutoff)` plus `deleteWorkflowsBefore(cutoff)`; `compensation_failed` stays recoverable.
 
 Lifecycle order:
 

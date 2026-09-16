@@ -9,6 +9,10 @@ import {
   durableExecutionInvariantError,
   durableOperatorUnsupportedStoreCapabilityError,
 } from "../../../errors";
+import {
+  deleteWorkflowsBefore as deleteWorkflowsBeforeInStore,
+  fetchWorkflowsBefore as fetchWorkflowsBeforeInStore,
+} from "./workflowRetention";
 
 /**
  * Filters for dashboard-safe execution listing. Cursor pagination is
@@ -80,6 +84,31 @@ export class DurableOperator {
 
   async listExecutions(options?: ListExecutionsOptions): Promise<Execution[]> {
     return await this.store.listExecutions(options);
+  }
+
+  /**
+   * Fetches completed, failed, and cancelled workflows whose retained terminal
+   * record predates `before`.
+   *
+   * Intended for external retention jobs (for example a cron) that first copy
+   * workflow data elsewhere, then call `deleteWorkflowsBefore()` once archival
+   * is confirmed. `compensation_failed` is intentionally excluded because those
+   * workflows still need operator recovery.
+   */
+  async fetchWorkflowsBefore(before: Date, limit = 100): Promise<Execution[]> {
+    return await fetchWorkflowsBeforeInStore(this.store, before, limit);
+  }
+
+  /**
+   * Deletes the stored history for completed, failed, and cancelled workflows
+   * older than `before`, up to `limit`.
+   *
+   * This requires store support for `deleteExecutionData()`. Each workflow is
+   * re-read immediately before deletion so operator recovery or other late
+   * updates cannot accidentally remove a workflow that is no longer eligible.
+   */
+  async deleteWorkflowsBefore(before: Date, limit = 100): Promise<string[]> {
+    return await deleteWorkflowsBeforeInStore(this.store, before, limit);
   }
 
   /** Lists executions started directly by the supplied parent execution. */

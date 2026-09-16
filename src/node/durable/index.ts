@@ -34,21 +34,6 @@ export type { MemoryStoreSnapshot } from "./store/MemoryStore";
 export { PersistentMemoryStore } from "./store/PersistentMemoryStore";
 export type { PersistentMemoryStoreConfig } from "./store/PersistentMemoryStore";
 export { RedisStore } from "./store/RedisStore";
-export { TieredDurableStore } from "./store/tiered/TieredDurableStore";
-export {
-  archiveTerminalExecutions,
-  restoreArchivedExecution,
-} from "./store/tiered/archiver";
-export { startColdStorageSweep } from "./store/tiered/sweeper";
-export type {
-  ArchiveSkippedExecution,
-  ArchiveSkipReason,
-  ArchiveTerminalExecutionsOptions,
-  ArchiveTerminalExecutionsResult,
-  ColdStorageSweepConfig,
-  ColdStorageSweepHandle,
-  TieredDurableStoreConfig,
-} from "./store/tiered/tieredTypes";
 
 export { MemoryQueue } from "./queue/MemoryQueue";
 export { RabbitMQQueue } from "./queue/RabbitMQQueue";

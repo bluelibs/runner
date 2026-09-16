@@ -106,8 +106,6 @@
       "RedisEventBus",
       "RedisStore",
       "StepBuilder",
-      "TieredDurableStore",
-      "archiveTerminalExecutions",
       "computeRpcLaneAllowList",
       "createDurableAuditEntryId",
       "createDurableRunnerAuditEmitter",
@@ -131,9 +129,7 @@
       "readInputFileToBuffer",
       "redisCacheProviderResource",
       "redisDurableResource",
-      "restoreArchivedExecution",
       "rpcLanesResource",
-      "startColdStorageSweep",
       "useRpcLaneRequestContext",
       "waitUntil",
       "writeInputFileToPath"
