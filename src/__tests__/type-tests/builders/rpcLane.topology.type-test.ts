@@ -74,4 +74,36 @@ import { r } from "../../..";
     // @ts-expect-error task-only rpc tags cannot be attached to resources.
     .tags([rpcTag.with({ lane: laneA })])
     .build();
+
+  r.rpcLane.topology({
+    profiles: {
+      api: { serve: [laneB] },
+    },
+    bindings: [
+      {
+        lane: laneA,
+        communicator,
+        retry: {
+          maxAttempts: 3,
+          delayMs: (attempt) => attempt * 100,
+          retryIf: () => true,
+        },
+      },
+      { lane: laneB, communicator, retry: { maxAttempts: 1 } },
+    ],
+  });
+
+  r.rpcLane.topology({
+    profiles: {
+      api: { serve: [] },
+    },
+    bindings: [
+      {
+        lane: laneA,
+        communicator,
+        // @ts-expect-error retry fields are strictly typed.
+        retry: { maxAttempts: "3" },
+      },
+    ],
+  });
 }

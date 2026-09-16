@@ -228,6 +228,15 @@ export type {
 export * from "./http-client";
 
 /**
+ * Transport error and retry helpers for RPC-lane communicators.
+ */
+export { RemoteLaneTransportError } from "./remote-lanes/http/protocol";
+export {
+  createRetryingRpcLaneCommunicator,
+  isRetryableRemoteLaneError,
+} from "./remote-lanes/retry";
+
+/**
  * Serialization primitives used by HTTP transport, async context exchange, and custom codecs.
  */
 export {

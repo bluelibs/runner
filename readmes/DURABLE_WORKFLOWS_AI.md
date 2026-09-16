@@ -219,7 +219,7 @@ try {
 await d.note("Payment confirmed", { amount: 100, currency: "USD" });
 ```
 
-No-op if audit disabled. Replay-safe.
+Audit collection is disabled by default. `note()` is a no-op while disabled and is replay-safe.
 
 ## DurableService API
 
@@ -301,6 +301,20 @@ await durableRuntime.removeSchedule("daily-report");
 
 Cron schedules use the process local timezone when `timezone` is omitted. Set an explicit IANA timezone for business-facing wall-clock schedules so DST behavior is predictable.
 
+Use `CronParser.isValid(expression, timezone)` and
+`CronParser.getNextRun(expression, from, timezone)` to validate and preview
+operator input before creating or updating a schedule.
+
+### Durable Workflows Studio
+
+The [Durable Workflows Studio example](../examples/durable-workflows-studio/README.md)
+turns these APIs into a live operations UI: overview and health dashboards,
+cursor-paged execution history, timelines, workflow trees, signals, audit data,
+schedules, and guarded repair actions. It is a reference application, not an
+embedded framework dashboard. Authenticate and authorize its operator boundary
+for production use. The example includes a tracked
+[screenshot gallery](../examples/durable-workflows-studio/docs/shots/).
+
 ### Repository (Task-Scoped Queries)
 
 ```ts
@@ -319,11 +333,11 @@ const tree = await repo.findTree({ id: parentExecutionId }); // With children
 ```ts
 const detail = await durableRuntime.operator.getExecutionDetail(executionId);
 const stuck = await durableRuntime.operator.listStuckExecutions();
-await durableRuntime.operator.forceFail(executionId, {
-  message: "Manual override",
-});
+const children = await durableRuntime.operator.listChildExecutions(executionId);
+const signals = await durableRuntime.operator.listSignals(executionId);
+await durableRuntime.operator.forceFail(executionId, "Manual override");
 await durableRuntime.operator.skipStep(executionId, "failing-step");
-await durableRuntime.operator.editStepResult(executionId, "step-id", newResult);
+await durableRuntime.operator.editState(executionId, "step-id", newResult);
 await durableRuntime.operator.retryRollback(executionId);
 ```
 
@@ -360,6 +374,25 @@ tags.durableWorkflow.with({
   signals: [Paid, Refunded], // Only these signal IDs allowed
 });
 ```
+
+**Global workflow admission**:
+
+```ts
+tags.durableWorkflow.with({ concurrency: 1 });
+tags.durableWorkflow.with({
+  concurrency: { windowMs: 60_000, max: 100 },
+});
+```
+
+- A number caps simultaneously active attempts across every worker sharing the
+  durable store.
+- `{ windowMs, max }` is a global fixed-window attempt rate limit.
+- Retries and resumptions are attempts and are admitted again.
+- Deferred attempts keep their durable state and retry through a store-backed
+  timer. At least one worker sharing the store must have polling enabled.
+- Outcome writes verify ownership of both execution and concurrency leases.
+- Numeric limits require store locks with acquire/renew/release; fixed-window
+  limits require acquire. Built-in memory and Redis stores support both.
 
 ## Child Workflows
 

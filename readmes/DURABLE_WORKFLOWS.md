@@ -429,6 +429,8 @@ Suspended executions (`sleep()`, waits, pending/retrying) still cancel immediate
 ### Scheduling
 
 ```ts
+import { CronParser } from "@bluelibs/runner/node";
+
 // One-time schedule
 const executionId = await durable.schedule(task, input, {
   at: new Date("2025-06-01T10:00:00Z"),
@@ -460,6 +462,10 @@ await durable.updateSchedule("daily-cleanup", {
   timezone: "UTC",
 });
 await durable.removeSchedule("daily-cleanup");
+
+// Validate and preview before persisting operator input
+CronParser.isValid("0 4 * * *", "UTC");
+const nextFire = CronParser.getNextRun("0 4 * * *", new Date(), "UTC");
 ```
 
 ### Repository (Task-Scoped Queries)
@@ -480,11 +486,61 @@ const tree = await repo.findTree({ id: parentExecutionId });
 ```ts
 const stuck = await durable.operator.listStuckExecutions();
 const detail = await durable.operator.getExecutionDetail(executionId);
-await durable.operator.forceFail(executionId, { message: "Manual override" });
+const children = await durable.operator.listChildExecutions(executionId);
+const signals = await durable.operator.listSignals(executionId);
+await durable.operator.forceFail(executionId, "Manual override");
 await durable.operator.skipStep(executionId, "failing-step");
-await durable.operator.editStepResult(executionId, "step-id", newResult);
+await durable.operator.editState(executionId, "step-id", newResult);
 await durable.operator.retryRollback(executionId);
 ```
+
+### Dashboard Reads (Execution State)
+
+Status pages should use the dashboard-safe state, not the raw detail path.
+`getExecutionState` carries status, attempt counters, timings, and the live
+position (`current`) — but never `input`, `result`, or `error` payloads.
+Reserve `getExecutionDetail` for break-glass recovery.
+
+```ts
+const state = await durable.operator.getExecutionState(executionId);
+state?.status; // "pending" | "running" | "sleeping" | ...
+state?.current; // Live position ({ kind: "waitForSignal", stepId, ... })
+```
+
+Page large listings with cursors, not offsets. Rows come newest-first and
+stay stable while new executions are created concurrently:
+
+```ts
+let cursor: string | undefined;
+do {
+  const page = await durable.operator.listExecutionStates({
+    status: ["running", "sleeping"],
+    limit: 100,
+    cursor,
+  });
+  render(page.states);
+  cursor = page.nextCursor ?? undefined;
+} while (cursor);
+```
+
+The built-in memory and Redis stores use write-through metadata indexes for
+these reads, including combined workflow/status filters. `limit` defaults to
+100 and is capped at 1000. An exact `executionId` filter avoids an unindexed
+text scan. Custom stores without `listExecutionStates`/`getExecutionState`
+retain the legacy fallback; those stores must provide indexed capabilities
+for equivalent large-history performance. The raw `listExecutions` API is
+not the indexed dashboard path.
+
+Redis data written before metadata indexing needs a resumable one-time
+backfill. Call `durable.operator.rebuildExecutionIndex({ cursor, limit: 500 })`
+until `nextCursor` is `null`, retaining the returned cursor between batches.
+Indexed lists fail explicitly while backfill is incomplete. Concurrent writes
+are preserved by compare-and-set. `SSCAN COUNT` is a batch-size hint, not a
+strict work bound. See the [Studio pagination contract](../examples/durable-workflows-studio/docs/PAGINATION.md).
+
+> **Note:** the operator performs no authentication or authorization. It is an
+> internal API for trusted processes: enforce tenancy and access control at
+> your lane/edge before calling it.
 
 ### Recovery
 
@@ -508,17 +564,52 @@ r.task("payment").tags([
     key: "billing.payment", // Stable key (survives refactors)
     category: "billing", // Optional grouping
     signals: [Paid, Refunded], // Optional signal contract
+    concurrency: 10, // At most 10 active attempts across all workers
   }),
 ]);
 ```
 
-| Field      | Description                                                                        |
-| ---------- | ---------------------------------------------------------------------------------- |
-| `key`      | Stable workflow identity persisted in executions. Falls back to canonical task ID. |
-| `category` | Optional grouping for dashboards                                                   |
-| `signals`  | Whitelist of allowed signals. Omit for backwards-compatible any-signal mode.       |
+| Field         | Description                                                                        |
+| ------------- | ---------------------------------------------------------------------------------- |
+| `key`         | Stable workflow identity persisted in executions. Falls back to canonical task ID. |
+| `category`    | Optional grouping for dashboards                                                   |
+| `signals`     | Whitelist of allowed signals. Omit for backwards-compatible any-signal mode.       |
+| `concurrency` | Global concurrent-attempt cap or fixed-window attempt rate limit.                   |
 
 **Why `key` matters**: The canonical task ID changes when you move/rename tasks. A stable `key` lets in-flight executions survive refactors.
+
+### Global Workflow Admission
+
+Use a number to cap attempts that may actively run at the same time:
+
+```ts
+tags.durableWorkflow.with({
+  key: "billing.payment",
+  concurrency: 1,
+});
+```
+
+Use a fixed-window policy to cap how many attempts may begin during each
+window:
+
+```ts
+tags.durableWorkflow.with({
+  key: "billing.payment",
+  concurrency: { windowMs: 60_000, max: 100 },
+});
+```
+
+Admission is scoped by the persisted workflow key and coordinated through the
+durable store, so every process sharing that store observes the same limit.
+Retries and resumptions are attempts and therefore pass through admission too.
+When capacity is unavailable, the execution keeps its current durable state and
+a store-backed timer retries it later. Enable polling in at least one worker
+sharing the store so deferred attempts resume. Concurrency slots are renewable
+leases; outcome writes recheck both the execution lock and the admission lease.
+
+Numeric concurrency requires store implementations with `acquireLock()`,
+`renewLock()`, and `releaseLock()`. Fixed-window rate limiting requires
+`acquireLock()`. The built-in memory and Redis stores support these contracts.
 
 ---
 
@@ -977,6 +1068,40 @@ npm run coverage:ai
 
 ## Operator & Observability
 
+### Durable Workflows Studio
+
+Runner includes a complete [Durable Workflows Studio example](../examples/durable-workflows-studio/README.md)
+that turns the operator APIs into an operations dashboard. It is a reference
+application rather than an embedded framework UI, so you can adapt its HTTP
+boundary, authentication, and deployment model to your environment.
+
+The overview dashboard combines live freshness, execution and failure metrics,
+health insights, activity charts, workflow filters, and recent runs. Execution
+views add cursor-paged history, exact-ID lookup, timelines, parent/child trees,
+signal and audit history, persisted data, and guarded operator actions. The
+schedules dashboard previews and manages cron, interval, and one-time timers.
+
+![Durable Workflows Studio overview dashboard](../examples/durable-workflows-studio/docs/shots/10-overview.png)
+
+![Durable Workflows Studio execution tree](../examples/durable-workflows-studio/docs/shots/11-portfolio-tree.png)
+
+Run the live Studio against an in-memory Runner backend:
+
+```bash
+cd examples/durable-workflows-studio
+npm install
+npm run build:all
+npm start
+```
+
+Then open `http://localhost:4317`. Use `STUDIO_TOKEN` to enable the example's
+shared admin-token boundary. For production systems, treat that boundary as a
+starting point: the durable operator does not perform authentication or
+authorization itself, so enforce both before exposing any read or mutation
+endpoint. See the [Studio guide](../examples/durable-workflows-studio/README.md)
+for demo mode, deep links, API routes, tests, and the complete
+[screenshot gallery](../examples/durable-workflows-studio/docs/shots/).
+
 ### Execution Status
 
 ```ts
@@ -1002,6 +1127,8 @@ execution.error; // Error details (when failed)
 Waiting states are durable truth (persisted). Running states are best-effort (may be stale after worker loss).
 
 ### Audit Trail
+
+Audit collection is disabled by default.
 
 Enable via config:
 
@@ -1196,7 +1323,7 @@ interface Execution<TInput = unknown, TResult = unknown> {
   input: TInput | undefined;
   status: ExecutionStatus;
   result?: TResult;
-  error?: { message: string; stack?: string };
+  error?: { message: string; stack?: string; stepId?: string };
   attempt: number;
   maxAttempts: number;
   timeout?: number;

@@ -1,6 +1,7 @@
 import { createIORedisClient } from "../optionalDeps/ioredis";
 import type {
   DurableQueuedSignalRecord,
+  DurableExecutionState,
   DurableExecutionWaiter,
   DurableSignalRecord,
   DurableSignalState,
@@ -30,10 +31,30 @@ import * as executionWaiterOps from "./RedisStore.executionWaiters";
 import * as signalWaiterOps from "./RedisStore.signalWaiters";
 import * as timerOps from "./RedisStore.timers";
 import * as schedulingOps from "./RedisStore.scheduling";
+import * as executionIndexOps from "./RedisStore.executionIndex";
 
 export type { RedisClient, RedisPipeline, RedisStoreConfig };
 
 export class RedisStore implements IDurableStore {
+  /** Reads only metadata for an exact execution storage identity. */
+  async getExecutionState(id: string): Promise<DurableExecutionState | null> {
+    return executionIndexOps.getExecutionState(this.runtime, id);
+  }
+
+  /** Reads a bounded page from atomic metadata indexes without execution payloads. */
+  async listExecutionStates(
+    options: ListExecutionsOptions = {},
+  ): Promise<DurableExecutionState[]> {
+    return executionIndexOps.listExecutionStates(this.runtime, options);
+  }
+
+  /** Resumable one-time backfill for executions written before metadata indexing. */
+  async rebuildExecutionIndex(
+    options: { cursor?: string; limit?: number } = {},
+  ): Promise<{ nextCursor: string | null }> {
+    return executionIndexOps.rebuildExecutionIndex(this.runtime, options);
+  }
+
   private readonly runtime: RedisStoreRuntime;
 
   constructor(config: RedisStoreConfig) {
@@ -179,6 +200,11 @@ export class RedisStore implements IDurableStore {
       executionId,
       signalId,
     );
+  }
+
+  /** Lists every signal journal retained for one execution. */
+  async listSignalStates(executionId: string): Promise<DurableSignalState[]> {
+    return await signalStateOps.listSignalStates(this.runtime, executionId);
   }
 
   async appendSignalRecord(
