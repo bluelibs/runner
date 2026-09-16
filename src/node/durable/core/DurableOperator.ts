@@ -93,7 +93,8 @@ export class DurableOperator {
    * Intended for external retention jobs (for example a cron) that first copy
    * workflow data elsewhere, then call `deleteWorkflowsBefore()` once archival
    * is confirmed. `compensation_failed` is intentionally excluded because those
-   * workflows still need operator recovery.
+   * workflows still need operator recovery. `limit` defaults to 100 and caps
+   * the returned oldest eligible workflows per call.
    */
   async fetchWorkflowsBefore(before: Date, limit = 100): Promise<Execution[]> {
     return await fetchWorkflowsBeforeInStore(this.store, before, limit);
@@ -106,6 +107,8 @@ export class DurableOperator {
    * This requires store support for `deleteExecutionData()`. Each workflow is
    * re-read immediately before deletion so operator recovery or other late
    * updates cannot accidentally remove a workflow that is no longer eligible.
+   * `limit` defaults to 100 and caps the number of oldest eligible workflows
+   * deleted per call.
    */
   async deleteWorkflowsBefore(before: Date, limit = 100): Promise<string[]> {
     return await deleteWorkflowsBeforeInStore(this.store, before, limit);

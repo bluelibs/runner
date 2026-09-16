@@ -40,6 +40,25 @@ function getWorkflowRetentionTimestamp(execution: Execution): number {
   return new Date(execution.completedAt ?? execution.updatedAt).getTime();
 }
 
+function compareWorkflowsForRetention(
+  left: Execution,
+  right: Execution,
+): number {
+  const retentionDiff =
+    getWorkflowRetentionTimestamp(left) - getWorkflowRetentionTimestamp(right);
+  if (retentionDiff !== 0) {
+    return retentionDiff;
+  }
+
+  const createdAtDiff =
+    new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+  if (createdAtDiff !== 0) {
+    return createdAtDiff;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
 function isArchivableWorkflowStatus(status: ExecutionStatus): boolean {
   return (
     status === ExecutionStatuses.Completed ||
@@ -58,8 +77,8 @@ async function scanWorkflowsBefore(
   const matches: Execution[] = [];
   let cursor: string | undefined;
 
-  while (matches.length < target) {
-    const pageSize = Math.min(target - matches.length, 100);
+  while (true) {
+    const pageSize = 100;
     const page = await store.listExecutions({
       status: [...ARCHIVABLE_WORKFLOW_STATUSES],
       limit: pageSize,
@@ -72,9 +91,6 @@ async function scanWorkflowsBefore(
     for (const execution of page) {
       if (getWorkflowRetentionTimestamp(execution) < cutoff) {
         matches.push(execution);
-        if (matches.length === target) {
-          break;
-        }
       }
     }
 
@@ -88,7 +104,7 @@ async function scanWorkflowsBefore(
     });
   }
 
-  return matches;
+  return matches.sort(compareWorkflowsForRetention).slice(0, target);
 }
 
 /**
@@ -98,7 +114,8 @@ async function scanWorkflowsBefore(
  * Intended for external retention jobs (for example a cron) that first copy
  * workflow data elsewhere, then call `deleteWorkflowsBefore()` once archival
  * is confirmed. `compensation_failed` is intentionally excluded because those
- * workflows still need operator recovery.
+ * workflows still need operator recovery. `limit` defaults to 100 and caps the
+ * returned oldest eligible workflows per call.
  */
 export async function fetchWorkflowsBefore(
   store: IDurableStore,
@@ -115,6 +132,8 @@ export async function fetchWorkflowsBefore(
  * This requires store support for `deleteExecutionData()`. Each workflow is
  * re-read immediately before deletion so operator recovery or other late
  * updates cannot accidentally remove a workflow that is no longer eligible.
+ * `limit` defaults to 100 and caps the number of oldest eligible workflows
+ * deleted per call.
  */
 export async function deleteWorkflowsBefore(
   store: IDurableStore,

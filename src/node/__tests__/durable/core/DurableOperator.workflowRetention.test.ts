@@ -30,7 +30,7 @@ function createExecution(
 }
 
 describe("durable: DurableOperator workflow retention", () => {
-  it("fetches archive-safe workflows older than a cutoff", async () => {
+  it("fetches the oldest archive-safe workflows older than a cutoff", async () => {
     const store = new MemoryStore();
     const operator = new DurableOperator(store);
     const now = new Date("2026-01-05T00:00:00.000Z");
@@ -45,12 +45,12 @@ describe("durable: DurableOperator workflow retention", () => {
         completedAt: new Date("2026-01-05T00:00:05.000Z"),
       }),
       createExecution({
-        id: "fresh-2",
+        id: "older-created-later",
         workflowKey: "orders",
         status: ExecutionStatus.Failed,
         createdAt: new Date("2026-01-05T00:00:04.000Z"),
-        updatedAt: new Date("2026-01-05T00:00:04.000Z"),
-        completedAt: new Date("2026-01-05T00:00:04.000Z"),
+        updatedAt: new Date("2025-12-20T00:00:00.000Z"),
+        completedAt: new Date("2025-12-20T00:00:00.000Z"),
       }),
       createExecution({
         id: "ignored-stuck",
@@ -60,7 +60,7 @@ describe("durable: DurableOperator workflow retention", () => {
         updatedAt: new Date("2025-12-01T00:00:00.000Z"),
       }),
       createExecution({
-        id: "old-1",
+        id: "oldest",
         workflowKey: "orders",
         status: ExecutionStatus.Completed,
         createdAt: new Date("2026-01-05T00:00:02.000Z"),
@@ -68,23 +68,24 @@ describe("durable: DurableOperator workflow retention", () => {
         completedAt: new Date("2025-12-01T00:00:00.000Z"),
       }),
       createExecution({
-        id: "old-2",
+        id: "older-created-earlier",
         workflowKey: "orders",
         status: ExecutionStatus.Cancelled,
         createdAt: new Date("2026-01-05T00:00:01.000Z"),
-        updatedAt: new Date("2025-12-02T00:00:00.000Z"),
+        updatedAt: new Date("2025-12-19T00:00:00.000Z"),
       }),
     ]) {
       await store.saveExecution(execution);
     }
 
     await expect(operator.fetchWorkflowsBefore(now, 2)).resolves.toEqual([
-      expect.objectContaining({ id: "old-1" }),
-      expect.objectContaining({ id: "old-2" }),
+      expect.objectContaining({ id: "oldest" }),
+      expect.objectContaining({ id: "older-created-earlier" }),
     ]);
     await expect(operator.fetchWorkflowsBefore(now, 5)).resolves.toEqual([
-      expect.objectContaining({ id: "old-1" }),
-      expect.objectContaining({ id: "old-2" }),
+      expect.objectContaining({ id: "oldest" }),
+      expect.objectContaining({ id: "older-created-earlier" }),
+      expect.objectContaining({ id: "older-created-later" }),
     ]);
   });
 
@@ -109,6 +110,77 @@ describe("durable: DurableOperator workflow retention", () => {
 
     await expect(operator.fetchWorkflowsBefore(cutoff)).resolves.toEqual([]);
     await expect(fetchWorkflowsBefore(store, cutoff)).resolves.toEqual([]);
+  });
+
+  it("orders equal-retention workflows deterministically", async () => {
+    const store = new MemoryStore();
+    const cutoff = new Date("2026-01-05T00:00:00.000Z");
+
+    for (const execution of [
+      createExecution({
+        id: "created-later",
+        workflowKey: "orders",
+        status: ExecutionStatus.Completed,
+        createdAt: new Date("2026-01-05T00:00:03.000Z"),
+        updatedAt: new Date("2025-12-20T00:00:00.000Z"),
+        completedAt: new Date("2025-12-20T00:00:00.000Z"),
+      }),
+      createExecution({
+        id: "created-earlier",
+        workflowKey: "orders",
+        status: ExecutionStatus.Completed,
+        createdAt: new Date("2026-01-05T00:00:02.000Z"),
+        updatedAt: new Date("2025-12-20T00:00:00.000Z"),
+        completedAt: new Date("2025-12-20T00:00:00.000Z"),
+      }),
+      createExecution({
+        id: "b-id",
+        workflowKey: "orders",
+        status: ExecutionStatus.Cancelled,
+        createdAt: new Date("2026-01-05T00:00:01.000Z"),
+        updatedAt: new Date("2025-12-21T00:00:00.000Z"),
+        completedAt: new Date("2025-12-21T00:00:00.000Z"),
+      }),
+      createExecution({
+        id: "a-id",
+        workflowKey: "orders",
+        status: ExecutionStatus.Cancelled,
+        createdAt: new Date("2026-01-05T00:00:01.000Z"),
+        updatedAt: new Date("2025-12-21T00:00:00.000Z"),
+        completedAt: new Date("2025-12-21T00:00:00.000Z"),
+      }),
+    ]) {
+      await store.saveExecution(execution);
+    }
+
+    await expect(fetchWorkflowsBefore(store, cutoff, 10)).resolves.toEqual([
+      expect.objectContaining({ id: "created-earlier" }),
+      expect.objectContaining({ id: "created-later" }),
+      expect.objectContaining({ id: "a-id" }),
+      expect.objectContaining({ id: "b-id" }),
+    ]);
+  });
+
+  it("scans across multiple retention pages", async () => {
+    const store = new MemoryStore();
+    const cutoff = new Date("2026-01-05T00:00:00.000Z");
+
+    for (let index = 0; index <= 100; index += 1) {
+      await store.saveExecution(
+        createExecution({
+          id: `exec-${index.toString().padStart(3, "0")}`,
+          workflowKey: "orders",
+          status: ExecutionStatus.Completed,
+          createdAt: new Date(2_000 + (100 - index)),
+          updatedAt: new Date("2025-12-20T00:00:00.000Z"),
+          completedAt: new Date("2025-12-20T00:00:00.000Z"),
+        }),
+      );
+    }
+
+    await expect(fetchWorkflowsBefore(store, cutoff, 1)).resolves.toEqual([
+      expect.objectContaining({ id: "exec-100" }),
+    ]);
   });
 
   it("deletes only workflows still eligible at deletion time", async () => {
