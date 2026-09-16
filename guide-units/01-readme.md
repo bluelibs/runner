@@ -87,6 +87,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 - [AWS Lambda Quickstart](./examples/aws-lambda-quickstart/README.md)
 - [Express + OpenAPI + SQLite](./examples/express-openapi-sqlite/README.md)
 - [Fastify + MikroORM + PostgreSQL](./examples/fastify-mikroorm/README.md)
+- [Live Data + MongoDB + Redis](./examples/live-data-mongo/README.md)
 
 ---
 
@@ -104,6 +105,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
   - [Remote Lanes](./readmes/REMOTE_LANES.md)
+  - [Live Data](./readmes/LIVE_DATA.md)
 - **Releases and upgrades**:
   - [GitHub Releases](https://github.com/bluelibs/runner/releases)
   - [Support & Release Policy](./readmes/ENTERPRISE.md)

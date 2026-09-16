@@ -1,0 +1,20 @@
+{
+  "name": "runner-live-data-mongo-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "start:redis": "REDIS_URL=redis://localhost:6387 tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bluelibs/runner": "file:../..",
+    "mongodb": "^7.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.23.13",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  }
+}
