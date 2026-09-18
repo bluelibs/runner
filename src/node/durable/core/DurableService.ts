@@ -285,11 +285,9 @@ export class DurableService implements IDurableService {
 
   async restartExecution(
     executionId: string,
-    _options?: RestartExecutionOptions,
+    options?: RestartExecutionOptions,
   ): Promise<string> {
-    return durableExecutionInvariantError.throw({
-      message: `DurableService.restartExecution("${executionId}") is not implemented in this build.`,
-    });
+    return await this.executionManager.restartExecution(executionId, options);
   }
 
   async getState<T>(executionId: string): Promise<T | undefined> {

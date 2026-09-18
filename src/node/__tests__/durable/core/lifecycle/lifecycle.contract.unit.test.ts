@@ -48,7 +48,7 @@ describe("durable: lifecycle contract (U0)", () => {
     expect(isExecutionTerminal(ExecutionStatus.Running)).toBe(false);
   });
 
-  it("exposes the lifecycle service surface (U1 implements pause/resume)", async () => {
+  it("exposes the lifecycle service surface (U1/U2 implement pause/resume/restart)", async () => {
     const service = createService();
 
     await expect(service.pauseExecution("e1")).rejects.toThrow(
@@ -58,7 +58,7 @@ describe("durable: lifecycle contract (U0)", () => {
       'Cannot resume execution "e1" with status "unknown": it is not paused.',
     );
     await expect(service.restartExecution("e1")).rejects.toThrow(
-      'DurableService.restartExecution("e1") is not implemented in this build.',
+      'Cannot restart execution "e1" with status "unknown".',
     );
     await expect(service.getState("e1")).rejects.toThrow(
       'DurableService.getState("e1") is not implemented in this build.',

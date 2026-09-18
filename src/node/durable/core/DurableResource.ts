@@ -13,6 +13,7 @@ import type {
   ExecuteOptions,
   IDurableService,
   RecoverReportType,
+  RestartExecutionOptions,
   ScheduleOptions,
   StartAndWaitOptions,
   UpdateScheduleOptions,
@@ -203,6 +204,13 @@ export class DurableResource implements IDurableResource {
 
   resumeExecution(executionId: string): Promise<void> {
     return this.service.resumeExecution(executionId);
+  }
+
+  restartExecution(
+    executionId: string,
+    options?: RestartExecutionOptions,
+  ): Promise<string> {
+    return this.service.restartExecution(executionId, options);
   }
 
   wait<TResult>(

@@ -6,6 +6,7 @@ import type {
   DurableServiceConfig,
   ExecuteOptions,
   ITaskExecutor,
+  RestartExecutionOptions,
   StartAndWaitOptions,
 } from "../interfaces/service";
 import type { ITask } from "../../../../types/task";
@@ -36,6 +37,7 @@ import {
   pauseExecution as pauseExecutionFlow,
   resumeExecution as resumeExecutionFlow,
 } from "./ExecutionManager.pause";
+import { restartExecution as restartExecutionFlow } from "./ExecutionManager.restart";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -224,6 +226,20 @@ export class ExecutionManager {
 
   async resumeExecution(executionId: string): Promise<void> {
     await resumeExecutionFlow(this.pauseDeps, executionId);
+  }
+
+  async restartExecution(
+    executionId: string,
+    options?: RestartExecutionOptions,
+  ): Promise<string> {
+    return await restartExecutionFlow(
+      {
+        persistence: this.persistenceDeps,
+        resolveTask: (workflowKey) => this.taskRegistry.find(workflowKey),
+      },
+      executionId,
+      options,
+    );
   }
 
   async processExecution(executionId: string): Promise<void> {
