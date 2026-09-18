@@ -6,6 +6,7 @@ import type {
   ExecuteOptions,
   IDurableService,
   RecoverReportType,
+  RestartExecutionOptions,
   ScheduleOptions,
   StartAndWaitOptions,
   UpdateScheduleOptions,
@@ -272,6 +273,33 @@ export class DurableService implements IDurableService {
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
     await this.executionManager.cancelExecution(executionId, reason);
+  }
+
+  async pauseExecution(executionId: string): Promise<void> {
+    return durableExecutionInvariantError.throw({
+      message: `DurableService.pauseExecution("${executionId}") is not implemented in this build.`,
+    });
+  }
+
+  async resumeExecution(executionId: string): Promise<void> {
+    return durableExecutionInvariantError.throw({
+      message: `DurableService.resumeExecution("${executionId}") is not implemented in this build.`,
+    });
+  }
+
+  async restartExecution(
+    executionId: string,
+    _options?: RestartExecutionOptions,
+  ): Promise<string> {
+    return durableExecutionInvariantError.throw({
+      message: `DurableService.restartExecution("${executionId}") is not implemented in this build.`,
+    });
+  }
+
+  async getState<T>(executionId: string): Promise<T | undefined> {
+    return durableExecutionInvariantError.throw({
+      message: `DurableService.getState("${executionId}") is not implemented in this build.`,
+    });
   }
 
   /** @internal */

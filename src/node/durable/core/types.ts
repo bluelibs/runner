@@ -4,10 +4,12 @@ export const ExecutionStatus = {
   Cancelling: "cancelling",
   Retrying: "retrying",
   Sleeping: "sleeping",
+  Paused: "paused",
   Completed: "completed",
   CompensationFailed: "compensation_failed",
   Failed: "failed",
   Cancelled: "cancelled",
+  ContinuedAsNew: "continued_as_new",
 } as const;
 
 export type ExecutionStatus =
@@ -23,7 +25,8 @@ export function isExecutionTerminal(status: ExecutionStatus): boolean {
     status === ExecutionStatus.Completed ||
     status === ExecutionStatus.Failed ||
     status === ExecutionStatus.CompensationFailed ||
-    status === ExecutionStatus.Cancelled
+    status === ExecutionStatus.Cancelled ||
+    status === ExecutionStatus.ContinuedAsNew
   );
 }
 
@@ -148,6 +151,25 @@ export interface Execution<TInput = unknown, TResult = unknown> {
   /** Optional cancellation metadata (cooperative cancellation). */
   cancelledAt?: Date;
   cancelRequestedAt?: Date;
+  /** Timestamp when the execution entered `paused` status, if ever. */
+  pausedAt?: Date;
+  /**
+   * Source execution id when this execution was created via restart.
+   * Always set on restart-created executions.
+   */
+  restartedFromExecutionId?: string;
+  /**
+   * Best-effort forward link to the execution created by restarting this one.
+   * Last-writer-wins when restarted more than once.
+   */
+  restartedAsExecutionId?: string;
+  /** Source execution id when this execution was created via continue-as-new. */
+  continuedFromExecutionId?: string;
+  /**
+   * Forward link to the live successor when this execution closed as
+   * `continued_as_new`. Waiters and signals follow this chain to the tip.
+   */
+  continuedAsExecutionId?: string;
   attempt: number;
   maxAttempts: number;
   timeout?: number;
@@ -167,6 +189,21 @@ export interface StepResult<T = unknown> {
   stepId: string;
   result: T;
   completedAt: Date;
+}
+
+/**
+ * Workflow-owned typed state record for one durable execution.
+ *
+ * There is at most one record per execution id; replay converges via
+ * last-write-wins because replay re-executes the deterministic prefix.
+ * The record is carried across continue-as-new and never carried on restart.
+ * Deliberately not named `ExecutionState`, which is taken by the dashboard
+ * projection (`DurableExecutionState`).
+ */
+export interface WorkflowState<TState = unknown> {
+  executionId: string;
+  state: TState;
+  updatedAt: Date;
 }
 
 /**

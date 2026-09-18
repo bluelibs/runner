@@ -218,6 +218,23 @@ export interface WaitOptions {
   waitPollIntervalMs?: number;
 }
 
+/**
+ * Options for restarting a terminal or paused execution.
+ */
+export interface RestartExecutionOptions {
+  /**
+   * Optional fresh idempotency key for the restart call itself, so repeated
+   * restart calls with the same key dedupe to one new execution.
+   */
+  idempotencyKey?: string;
+  /**
+   * Optional input override for the restarted run. When omitted, the source
+   * execution input is reused. Workflow state is never carried: restart
+   * always starts from input; use continue-as-new to carry state.
+   */
+  input?: unknown;
+}
+
 export interface StartAndWaitOptions extends ExecuteOptions {
   /**
    * Optional caller wait timeout for `startAndWait()`.
@@ -315,6 +332,37 @@ export interface IDurableService {
    * becomes terminal `cancelled`.
    */
   cancelExecution(executionId: string, reason?: string): Promise<void>;
+
+  /**
+   * Pauses a non-terminal execution so timers and signals stop being
+   * processed until it is resumed. Pause is wall-clock: timers keep their
+   * `fireAt`, and resume re-kicks the execution to let replay sort it out.
+   * Rejected for terminal and `cancelling` executions.
+   */
+  pauseExecution(executionId: string): Promise<void>;
+
+  /**
+   * Resumes a paused execution from its pause point with no lost signals.
+   * Rejected for executions that are not paused.
+   */
+  resumeExecution(executionId: string): Promise<void>;
+
+  /**
+   * Restarts a terminal or paused execution as a fresh run and returns the
+   * new execution id. Restart re-runs from (optionally overridden) input
+   * with fresh steps and no carried state. Rejected for active executions:
+   * pause or cancel them first.
+   */
+  restartExecution(
+    executionId: string,
+    options?: RestartExecutionOptions,
+  ): Promise<string>;
+
+  /**
+   * Reads the workflow-owned typed state for an execution.
+   * Resolves `undefined` until the workflow first sets state.
+   */
+  getState<T>(executionId: string): Promise<T | undefined>;
 
   wait<TResult>(executionId: string, options?: WaitOptions): Promise<TResult>;
 

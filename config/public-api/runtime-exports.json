@@ -138,6 +138,7 @@
       "writeInputFileToPath"
     ],
     "advanced": [
+      "ContinuationSignal",
       "CronParser",
       "DurableAuditEntryKind",
       "ExecutionStatus",

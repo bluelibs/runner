@@ -900,6 +900,74 @@ export const durableOperatorUnsupportedStoreCapabilityError = error<
   )
   .build();
 
+export const durableLifecycleUnsupportedStoreCapabilityError = error<
+  { operation: string } & DefaultErrorType
+>(RunnerErrorId.DurableLifecycleUnsupportedStoreCapability)
+  .format(({ operation }) => `Store does not support ${operation}`)
+  .remediation(
+    ({ operation }) =>
+      `Use a durable store implementation that supports lifecycle capability "${operation}".`,
+  )
+  .build();
+
+export const durablePauseRejectedError = error<
+  { executionId: string; status: string } & DefaultErrorType
+>(RunnerErrorId.DurablePauseRejected)
+  .format(
+    ({ executionId, status }) =>
+      `Cannot pause execution "${executionId}" with status "${status}".`,
+  )
+  .remediation(
+    "Pause applies to non-terminal executions that are not already stopping; restart terminal executions instead of pausing them.",
+  )
+  .build();
+
+export const durableResumeRejectedError = error<
+  { executionId: string; status: string } & DefaultErrorType
+>(RunnerErrorId.DurableResumeRejected)
+  .format(
+    ({ executionId, status }) =>
+      `Cannot resume execution "${executionId}" with status "${status}": it is not paused.`,
+  )
+  .remediation("Only paused executions can be resumed.")
+  .build();
+
+export const durableRestartRejectedError = error<
+  { executionId: string; status: string } & DefaultErrorType
+>(RunnerErrorId.DurableRestartRejected)
+  .format(
+    ({ executionId, status }) =>
+      `Cannot restart execution "${executionId}" with status "${status}".`,
+  )
+  .remediation(
+    "Restart applies to terminal or paused executions; pause or cancel active executions first, then restart.",
+  )
+  .build();
+
+export const durableContinueAsNewRejectedError = error<
+  { executionId: string; reason: string } & DefaultErrorType
+>(RunnerErrorId.DurableContinueAsNewRejected)
+  .format(
+    ({ executionId, reason }) =>
+      `Cannot continue execution "${executionId}" as new: ${reason}.`,
+  )
+  .remediation(
+    "Finish in-flight signal handlers and call continueAsNew only from a running workflow attempt.",
+  )
+  .build();
+
+export const durableWorkflowStateInvalidError = error<
+  { executionId: string; reason: string } & DefaultErrorType
+>(RunnerErrorId.DurableWorkflowStateInvalid)
+  .format(
+    ({ executionId, reason }) =>
+      `Invalid workflow state for execution "${executionId}": ${reason}.`,
+  )
+  .remediation(
+    "Pass a serializable object patch to setState, or a serializable value to replaceState.",
+  )
+  .build();
+
 export const lockableMapLockedError = error<
   { mapName: string } & DefaultErrorType
 >(RunnerErrorId.LockableMapLocked)

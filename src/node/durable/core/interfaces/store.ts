@@ -10,6 +10,7 @@ import type {
   StepResult,
   Timer,
   Schedule,
+  WorkflowState,
 } from "../types";
 import type { DurableAuditEntry } from "../audit";
 
@@ -76,6 +77,35 @@ export interface IDurableStore {
     | { created: true; executionId: string }
     | { created: false; executionId: string }
   >;
+
+  /**
+   * Atomically closes the prior run as `continued_as_new` (with its forward
+   * link) and creates the successor execution (with its back-link).
+   *
+   * Optional for backward compatibility: existing custom stores keep
+   * compiling and running without it. Using continue-as-new against a store
+   * that lacks this method fails fast with a clear lifecycle error.
+   */
+  createContinuedExecution?(params: {
+    priorExecution: Execution;
+    successorExecution: Execution;
+  }): Promise<void>;
+
+  /**
+   * Reads the workflow-owned typed state record for one execution.
+   * Resolves `null` until state is first saved.
+   *
+   * Optional for backward compatibility; using workflow state against a
+   * store that lacks these methods fails fast with a clear lifecycle error.
+   */
+  getWorkflowState?<TState = unknown>(
+    executionId: string,
+  ): Promise<WorkflowState<TState> | null>;
+  /**
+   * Persists the workflow-owned typed state record for one execution,
+   * replacing any previous record. See `getWorkflowState` for optionality.
+   */
+  saveWorkflowState?(state: WorkflowState): Promise<void>;
 
   // Enhanced querying for operator tooling
   /** Reads one payload-free metadata projection without loading the execution payload. */

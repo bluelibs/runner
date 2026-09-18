@@ -44,5 +44,11 @@ export enum RunnerErrorId {
   DurableExecutionError = "durable-executionError",
   DurableExecutionInvariant = "durable-executionInvariant",
   DurableOperatorUnsupportedStoreCapability = "durable-operator-unsupportedStoreCapability",
+  DurableLifecycleUnsupportedStoreCapability = "durable-lifecycle-unsupportedStoreCapability",
+  DurablePauseRejected = "durable-lifecycle-pauseRejected",
+  DurableResumeRejected = "durable-lifecycle-resumeRejected",
+  DurableRestartRejected = "durable-lifecycle-restartRejected",
+  DurableContinueAsNewRejected = "durable-lifecycle-continueAsNewRejected",
+  DurableWorkflowStateInvalid = "durable-lifecycle-workflowStateInvalid",
   LockableMapLocked = "tools-lockableMapLocked",
 }

@@ -1,5 +1,7 @@
 import type { IEventBus } from "./interfaces/bus";
 import type {
+  ContinueAsNewOptions,
+  DurableInfo,
   DurableStepRunContext,
   EmitOptions,
   IDurableContext,
@@ -292,6 +294,39 @@ export class DurableContext implements IDurableContext {
       compensations: this.compensations,
       assertUniqueStepId: this.determinism.assertUniqueStepId,
       internalStep: this.internalStep.bind(this),
+    });
+  }
+
+  async continueAsNew<TInput>(
+    _nextInput: TInput,
+    _options?: ContinueAsNewOptions,
+  ): Promise<never> {
+    return durableExecutionInvariantError.throw({
+      message: `DurableContext.continueAsNew("${this.executionId}") is not implemented in this build.`,
+    });
+  }
+
+  async setState<T>(_patch: Partial<T>): Promise<void> {
+    return durableExecutionInvariantError.throw({
+      message: `DurableContext.setState("${this.executionId}") is not implemented in this build.`,
+    });
+  }
+
+  async replaceState<T>(_next: T): Promise<void> {
+    return durableExecutionInvariantError.throw({
+      message: `DurableContext.replaceState("${this.executionId}") is not implemented in this build.`,
+    });
+  }
+
+  async getState<T>(): Promise<T | undefined> {
+    return durableExecutionInvariantError.throw({
+      message: `DurableContext.getState("${this.executionId}") is not implemented in this build.`,
+    });
+  }
+
+  info(): DurableInfo {
+    return durableExecutionInvariantError.throw({
+      message: `DurableContext.info("${this.executionId}") is not implemented in this build.`,
     });
   }
 

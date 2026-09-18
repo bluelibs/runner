@@ -79,6 +79,31 @@ export interface WorkflowOptions {
 }
 
 /**
+ * In-memory info about the current durable attempt.
+ *
+ * `stepCount` counts durable steps recorded so far in this attempt, so
+ * workflows can chapter long histories with `continueAsNew` before they
+ * grow unbounded.
+ */
+export interface DurableInfo {
+  executionId: string;
+  attempt: number;
+  stepCount: number;
+}
+
+/**
+ * Options for `continueAsNew`.
+ */
+export interface ContinueAsNewOptions<TState = unknown> {
+  /**
+   * Replacement for the carried workflow state in the successor execution.
+   * Omit to carry the current state; the step cache, signal buffers, and
+   * waiters are never carried either way.
+   */
+  state?: TState;
+}
+
+/**
  * A single branch in a durable switch expression.
  *
  * `id` identifies the branch for replay; `match` tests whether this branch applies;
@@ -227,6 +252,43 @@ export interface IDurableContext {
   ): Promise<TResult>;
 
   rollback(): Promise<void>;
+
+  /**
+   * Atomically closes this run as `continued_as_new` and starts a successor
+   * with the given input, carried workflow state, and fresh steps.
+   *
+   * This method never resolves: it throws a `ContinuationSignal` that the
+   * execution manager converts into the atomic close-and-create. In-flight
+   * waits on the old run are abandoned, so finish signal handlers before
+   * continuing. Waiters and signals transparently follow the chain to the
+   * live tip.
+   */
+  continueAsNew<TInput>(
+    nextInput: TInput,
+    options?: ContinueAsNewOptions,
+  ): Promise<never>;
+
+  /**
+   * Merges a patch into the workflow-owned typed state record.
+   * Replay converges via last-write-wins on the single per-execution record.
+   */
+  setState<T>(patch: Partial<T>): Promise<void>;
+
+  /**
+   * Replaces the workflow-owned typed state record wholesale.
+   */
+  replaceState<T>(next: T): Promise<void>;
+
+  /**
+   * Reads the workflow-owned typed state.
+   * Resolves `undefined` until the workflow first sets state.
+   */
+  getState<T>(): Promise<T | undefined>;
+
+  /**
+   * Returns in-memory info about the current attempt.
+   */
+  info(): DurableInfo;
 }
 
 /**
@@ -243,5 +305,26 @@ export class SuspensionSignal extends Error {
   constructor(public readonly reason: "sleep" | "yield" | "timeout") {
     super(`Execution suspended: ${reason}`);
     this.name = "SuspensionSignal";
+  }
+}
+
+/**
+ * Internal control-flow signal used to continue a durable execution as new.
+ *
+ * `DurableContext.continueAsNew()` throws this error to indicate "close this
+ * run and start a successor": the execution manager atomically marks the old
+ * run `continued_as_new` and creates/kicks the successor with the carried
+ * input (and, unless overridden, the carried workflow state).
+ *
+ * Like `SuspensionSignal`, this bypasses step retries: it is control flow,
+ * not a failure.
+ */
+export class ContinuationSignal extends Error {
+  constructor(
+    public readonly nextInput: unknown,
+    public readonly options?: ContinueAsNewOptions,
+  ) {
+    super("Execution continued as new");
+    this.name = "ContinuationSignal";
   }
 }
