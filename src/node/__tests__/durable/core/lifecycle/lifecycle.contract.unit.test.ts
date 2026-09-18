@@ -60,9 +60,7 @@ describe("durable: lifecycle contract (U0)", () => {
     await expect(service.restartExecution("e1")).rejects.toThrow(
       'Cannot restart execution "e1" with status "unknown".',
     );
-    await expect(service.getState("e1")).rejects.toThrow(
-      'DurableService.getState("e1") is not implemented in this build.',
-    );
+    await expect(service.getState("e1")).resolves.toBeUndefined();
   });
 
   it("exposes the lifecycle context surface (U4 implements the remaining behavior)", async () => {
@@ -71,18 +69,15 @@ describe("durable: lifecycle contract (U0)", () => {
     await expect(ctx.continueAsNew({})).rejects.toThrow(
       'Cannot continue execution "lifecycle-contract" as new: execution does not exist.',
     );
-    await expect(ctx.setState({})).rejects.toThrow(
-      'DurableContext.setState("lifecycle-contract") is not implemented in this build.',
-    );
-    await expect(ctx.replaceState({})).rejects.toThrow(
-      'DurableContext.replaceState("lifecycle-contract") is not implemented in this build.',
-    );
-    await expect(ctx.getState()).rejects.toThrow(
-      'DurableContext.getState("lifecycle-contract") is not implemented in this build.',
-    );
-    expect(() => ctx.info()).toThrow(
-      'DurableContext.info("lifecycle-contract") is not implemented in this build.',
-    );
+    await expect(ctx.setState({ page: 1 })).resolves.toBeUndefined();
+    await expect(ctx.getState()).resolves.toEqual({ page: 1 });
+    await expect(ctx.replaceState({ page: 2 })).resolves.toBeUndefined();
+    await expect(ctx.getState()).resolves.toEqual({ page: 2 });
+    expect(ctx.info()).toEqual({
+      executionId: "lifecycle-contract",
+      attempt: 1,
+      stepCount: 0,
+    });
   });
 
   it("shapes ContinuationSignal like the SuspensionSignal control signal", () => {

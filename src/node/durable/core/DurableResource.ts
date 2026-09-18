@@ -213,6 +213,14 @@ export class DurableResource implements IDurableResource {
     return this.service.restartExecution(executionId, options);
   }
 
+  /**
+   * Reads the workflow-owned typed state for one execution.
+   * Resolves `undefined` until the workflow first sets state.
+   */
+  getState<T>(executionId: string): Promise<T | undefined> {
+    return this.service.getState<T>(executionId);
+  }
+
   wait<TResult>(
     executionId: string,
     options?: { timeout?: number; waitPollIntervalMs?: number },

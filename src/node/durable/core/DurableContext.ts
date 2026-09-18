@@ -34,6 +34,11 @@ import type { DurableExecutionCurrentWorkflowMeta } from "./types";
 import { ExecutionStatus } from "./types";
 import { createDurableContextAudit } from "./durable-context/DurableContext.audit";
 import {
+  mergeDurableStatePatch,
+  readDurableState,
+  writeDurableState,
+} from "./durable-context/state";
+import {
   createDurableContextDeterminism,
   type ImplicitInternalStepIdsPolicy,
 } from "./durable-context/DurableContext.determinism";
@@ -317,28 +322,34 @@ export class DurableContext implements IDurableContext {
     throw new ContinuationSignal(nextInput, options);
   }
 
-  async setState<T>(_patch: Partial<T>): Promise<void> {
-    return durableExecutionInvariantError.throw({
-      message: `DurableContext.setState("${this.executionId}") is not implemented in this build.`,
-    });
+  async setState<T>(patch: Partial<T>): Promise<void> {
+    await this.assertCanContinue();
+    const current = await readDurableState<T>(this.store, this.executionId);
+    await writeDurableState(
+      this.store,
+      this.executionId,
+      mergeDurableStatePatch(current, patch),
+    );
   }
 
-  async replaceState<T>(_next: T): Promise<void> {
-    return durableExecutionInvariantError.throw({
-      message: `DurableContext.replaceState("${this.executionId}") is not implemented in this build.`,
-    });
+  async replaceState<T>(next: T): Promise<void> {
+    await this.assertCanContinue();
+    await writeDurableState(this.store, this.executionId, next);
   }
 
   async getState<T>(): Promise<T | undefined> {
-    return durableExecutionInvariantError.throw({
-      message: `DurableContext.getState("${this.executionId}") is not implemented in this build.`,
-    });
+    // Reads stay available during cancellation teardown: they cannot mutate,
+    // so only stale-attempt lock ownership is enforced.
+    this.assertLockOwnership();
+    return await readDurableState<T>(this.store, this.executionId);
   }
 
   info(): DurableInfo {
-    return durableExecutionInvariantError.throw({
-      message: `DurableContext.info("${this.executionId}") is not implemented in this build.`,
-    });
+    return {
+      executionId: this.executionId,
+      attempt: this.attempt,
+      stepCount: this.seenStepIds.size,
+    };
   }
 
   async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
