@@ -252,7 +252,10 @@ function setStatus(sim: Simulation, status: StudioExecutionStatus): void {
     ...sim.detail,
     status,
     position: positionFor(sim, status),
-    ...(status === "completed" || status === "failed" || status === "cancelled"
+    ...(status === "completed" ||
+      status === "failed" ||
+      status === "cancelled" ||
+      status === "continued_as_new"
       ? { completedAt: iso() }
       : {}),
   };
@@ -263,6 +266,8 @@ function positionFor(sim: Simulation, status: StudioExecutionStatus): string | n
   const waiting = sim.detail.timeline.find((node) => node.state === "waiting");
   if (status === "completed") return "Completed";
   if (status === "cancelled") return "Cancelled";
+  if (status === "continued_as_new") return "Continued as new";
+  if (status === "paused") return "Paused";
   if (status === "failed") {
     const failed = sim.detail.timeline.find((node) => node.state === "failed");
     return `Failed at \`${failed?.id ?? "unknown"}\`: ${sim.detail.error?.message ?? "error"}`;
@@ -300,10 +305,14 @@ function advance(sim: Simulation): void {
   if (
     sim.detail.status === "cancelled" ||
     sim.detail.status === "failed" ||
-    sim.detail.status === "completed"
+    sim.detail.status === "completed" ||
+    sim.detail.status === "continued_as_new" ||
+    sim.detail.status === "paused"
   ) {
     return;
   }
+  // Parked on a wait: nothing completes until a signal or timer lands.
+  if (sim.detail.timeline.some((node) => node.state === "waiting")) return;
   const next = sim.detail.timeline.find((node) => node.state === "pending");
   if (!next) {
     finish(sim);
@@ -425,7 +434,29 @@ function summaryOf(detail: StudioExecutionDetail): StudioExecutionSummary {
     ...(detail.parentExecutionId
       ? { parentExecutionId: detail.parentExecutionId }
       : {}),
+    ...(detail.continuedAsExecutionId
+      ? { continuedAsExecutionId: detail.continuedAsExecutionId }
+      : {}),
+    ...(detail.continuedFromExecutionId
+      ? { continuedFromExecutionId: detail.continuedFromExecutionId }
+      : {}),
+    ...(detail.restartedAsExecutionId
+      ? { restartedAsExecutionId: detail.restartedAsExecutionId }
+      : {}),
+    ...(detail.restartedFromExecutionId
+      ? { restartedFromExecutionId: detail.restartedFromExecutionId }
+      : {}),
   };
+}
+
+/** Demo-side terminal guard mirroring the server's conflict rules. */
+function isDemoTerminal(status: StudioExecutionStatus): boolean {
+  return (
+    status === "completed" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "continued_as_new"
+  );
 }
 
 export const DEMO_TOKEN = "admin";
@@ -497,6 +528,7 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
         steps: [],
         audit: [],
         signals: [],
+        state: null,
         relations: { parent: null, children: [] },
       },
     };
@@ -708,6 +740,240 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
   );
   later(seedRunner, 600, () => advance(seedRunner));
 
+  // A paused order: parked on its payment wait with workflow state kept.
+  const seedPaused = createSimulation(
+    order,
+    { orderId: "ORD-2077", customerId: "CUST-9", amount: 129.5 },
+    "demo_ord_paused",
+  );
+  for (const node of seedPaused.detail.timeline) {
+    if (
+      ["validateOrder", "chargeCustomer", "__sleep:processingDelay"].includes(
+        node.id,
+      )
+    ) {
+      setNode(seedPaused, node.id, {
+        state: "completed",
+        result:
+          node.kind === "sleep"
+            ? { state: "completed" }
+            : cannedResult(node.id, seedPaused.detail.input),
+        completedAt: iso(-600_000),
+      });
+    } else if (node.id === "__signal:awaitPaymentConfirmation") {
+      setNode(seedPaused, node.id, {
+        state: "waiting",
+        wait: {
+          signalId: "paymentConfirmed",
+          timeoutAtMs: Date.now() + 600_000,
+        },
+      });
+    }
+  }
+  seedPaused.detail = {
+    ...seedPaused.detail,
+    status: "paused",
+    pausedFrom: "sleeping",
+    position: "Paused",
+    createdAt: iso(-800_000),
+    state: {
+      state: {
+        cartId: "cart_2077",
+        authorizedAmount: 129.5,
+        paymentAttempts: 1,
+      },
+      updatedAt: iso(-500_000),
+    },
+    audit: [
+      { id: "c1", at: iso(-800_000), kind: "execution_status_changed", attempt: 1, detail: { from: null, to: "running" } },
+      { id: "c2", at: iso(-799_000), kind: "step_completed", attempt: 1, detail: { stepId: "validateOrder", durationMs: 11 } },
+      { id: "c3", at: iso(-798_000), kind: "step_completed", attempt: 1, detail: { stepId: "chargeCustomer", durationMs: 92 } },
+      { id: "c4", at: iso(-600_000), kind: "signal_waiting", attempt: 1, detail: { stepId: "__signal:awaitPaymentConfirmation", signalId: "paymentConfirmed" } },
+      { id: "c5", at: iso(-500_000), kind: "execution_status_changed", attempt: 1, detail: { from: "sleeping", to: "paused" } },
+      { id: "c6", at: iso(-500_000), kind: "note", attempt: 1, detail: { message: "Operator paused execution", meta: { pausedFrom: "sleeping" } } },
+    ],
+  };
+  notify(seedPaused);
+
+  // A continued order: the source closed as continued_as_new and the live tip
+  // carries the workflow state forward.
+  const seedContinuedTip = createSimulation(
+    order,
+    { orderId: "ORD-3051", customerId: "CUST-3", amount: 59.0 },
+    "demo_ord_continued_tip",
+  );
+  for (const node of seedContinuedTip.detail.timeline) {
+    if (node.id !== "shipOrder") {
+      setNode(seedContinuedTip, node.id, {
+        state: "completed",
+        result:
+          node.kind === "signal"
+            ? { state: "completed", signalId: node.signal, payload: { transactionId: "txn_cont_204" } }
+            : node.kind === "sleep"
+              ? { state: "completed" }
+              : cannedResult(node.id, seedContinuedTip.detail.input),
+        completedAt: iso(-150_000),
+      });
+    } else {
+      setNode(seedContinuedTip, node.id, { state: "active" });
+    }
+  }
+  seedContinuedTip.detail = {
+    ...seedContinuedTip.detail,
+    continuedFromExecutionId: "demo_ord_continued",
+    status: "running",
+    position: "Running step `shipOrder`",
+    createdAt: iso(-700_000),
+    state: {
+      state: {
+        cartId: "cart_3051",
+        authorizedAmount: 59.0,
+        paymentAttempts: 2,
+      },
+      updatedAt: iso(-100_000),
+    },
+    signals: [
+      {
+        signalId: "paymentConfirmed",
+        history: [
+          {
+            id: "sig_payment_continued",
+            payload: { transactionId: "txn_cont_204" },
+            receivedAt: iso(-160_000),
+            state: "consumed",
+          },
+        ],
+      },
+    ],
+    audit: [
+      { id: "d1", at: iso(-700_000), kind: "execution_status_changed", attempt: 1, detail: { from: null, to: "running" } },
+      { id: "d2", at: iso(-160_000), kind: "signal_delivered", attempt: 1, detail: { stepId: "__signal:awaitPaymentConfirmation", signalId: "paymentConfirmed" } },
+    ],
+  };
+  notify(seedContinuedTip);
+
+  const seedContinued = createSimulation(
+    order,
+    { orderId: "ORD-3051", customerId: "CUST-3", amount: 59.0 },
+    "demo_ord_continued",
+  );
+  for (const node of seedContinued.detail.timeline) {
+    if (node.id === "shipOrder") {
+      setNode(seedContinued, node.id, { state: "skipped" });
+    } else {
+      setNode(seedContinued, node.id, {
+        state: "completed",
+        result:
+          node.kind === "signal"
+            ? { state: "completed", signalId: node.signal, payload: { transactionId: "txn_cont_204" } }
+            : node.kind === "sleep"
+              ? { state: "completed" }
+              : cannedResult(node.id, seedContinued.detail.input),
+        completedAt: iso(-750_000),
+      });
+    }
+  }
+  seedContinued.detail = {
+    ...seedContinued.detail,
+    continuedAsExecutionId: "demo_ord_continued_tip",
+    status: "continued_as_new",
+    position: "Continued as new",
+    createdAt: iso(-3_000_000),
+    completedAt: iso(-700_000),
+    audit: [
+      { id: "e1", at: iso(-3_000_000), kind: "execution_status_changed", attempt: 1, detail: { from: null, to: "running" } },
+      { id: "e2", at: iso(-700_000), kind: "execution_status_changed", attempt: 1, detail: { from: "running", to: "continued_as_new" } },
+      { id: "e3", at: iso(-700_000), kind: "note", attempt: 1, detail: { message: "Continued as demo_ord_continued_tip" } },
+    ],
+  };
+  notify(seedContinued);
+
+  // A restarted incident: the failed source links forward to its fresh rerun.
+  const seedRestarted = createSimulation(
+    incident,
+    { incidentId: "INC-1099", severity: "SEV-2", summary: "Queue workers stalled" },
+    "demo_inc_restarted",
+  );
+  for (const node of seedRestarted.detail.timeline) {
+    if (node.id === "triageAlert") {
+      setNode(seedRestarted, node.id, {
+        state: "completed",
+        result: cannedResult(node.id, seedRestarted.detail.input),
+        completedAt: iso(-280_000),
+      });
+    } else if (node.id === "pageOnCall") {
+      setNode(seedRestarted, node.id, { state: "active" });
+    }
+  }
+  seedRestarted.detail = {
+    ...seedRestarted.detail,
+    restartedFromExecutionId: "demo_inc_restart_src",
+    status: "running",
+    position: "Running step `pageOnCall`",
+    createdAt: iso(-300_000),
+    audit: [
+      { id: "f1", at: iso(-300_000), kind: "execution_status_changed", attempt: 1, detail: { from: null, to: "running" } },
+      { id: "f2", at: iso(-280_000), kind: "step_completed", attempt: 1, detail: { stepId: "triageAlert", durationMs: 14 } },
+    ],
+  };
+  notify(seedRestarted);
+
+  const seedRestartSrc = createSimulation(
+    incident,
+    { incidentId: "INC-1099", severity: "SEV-2", summary: "Queue workers stalled" },
+    "demo_inc_restart_src",
+  );
+  for (const node of seedRestartSrc.detail.timeline) {
+    if (["triageAlert", "pageOnCall"].includes(node.id)) {
+      setNode(seedRestartSrc, node.id, {
+        state: "completed",
+        result: cannedResult(node.id, seedRestartSrc.detail.input),
+        completedAt: iso(-5_200_000),
+      });
+    } else if (node.id === "__signal:awaitAck") {
+      setNode(seedRestartSrc, node.id, {
+        state: "completed",
+        result: {
+          state: "completed",
+          signalId: "incidentAcknowledged",
+          payload: { acknowledgedBy: "ops@acme.dev", acknowledgedAt: Date.now() - 5_100_000 },
+        },
+        completedAt: iso(-5_100_000),
+      });
+    } else if (node.id === "ackBranch") {
+      setNode(seedRestartSrc, node.id, {
+        state: "completed",
+        branchTaken: "acked",
+        result: { branchId: "acked", result: "acked" },
+        completedAt: iso(-5_090_000),
+      });
+    } else if (node.id === "diagnose") {
+      setNode(seedRestartSrc, node.id, { state: "failed" });
+    } else if (node.id === "escalate") {
+      setNode(seedRestartSrc, node.id, { state: "skipped" });
+    } else {
+      setNode(seedRestartSrc, node.id, { state: "unreached" });
+    }
+  }
+  seedRestartSrc.detail = {
+    ...seedRestartSrc.detail,
+    restartedAsExecutionId: "demo_inc_restarted",
+    status: "failed",
+    position: "Failed at `diagnose`: Diagnosis timed out after 3 attempts",
+    error: {
+      message: "Diagnosis timed out after 3 attempts",
+      stepId: "diagnose",
+    },
+    createdAt: iso(-5_400_000),
+    completedAt: iso(-5_000_000),
+    audit: [
+      { id: "g1", at: iso(-5_400_000), kind: "execution_status_changed", attempt: 1, detail: { from: null, to: "running" } },
+      { id: "g2", at: iso(-5_000_000), kind: "execution_status_changed", attempt: 1, detail: { from: "running", to: "failed" } },
+      { id: "g3", at: iso(-300_000), kind: "note", attempt: 1, detail: { message: "Operator restarted execution", meta: { restartedAsExecutionId: "demo_inc_restarted" } } },
+    ],
+  };
+  notify(seedRestartSrc);
+
   // Parent/child fixture: two regional loops are complete while APAC is on
   // its final iteration, leaving the parent visibly parked on the join.
   const portfolio = DEMO_WORKFLOWS.find(
@@ -912,11 +1178,7 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
       const waiting = sim.detail.timeline.find(
         (node) => node.state === "waiting" && node.wait?.signalId === signal,
       );
-      if (
-        sim.detail.status === "completed" ||
-        sim.detail.status === "failed" ||
-        sim.detail.status === "cancelled"
-      ) {
+      if (isDemoTerminal(sim.detail.status)) {
         throw new ApiError(409, `Execution '${id}' is already ${sim.detail.status}.`);
       }
       if (!waiting) {
@@ -939,11 +1201,7 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
     cancelExecution: async (id) => {
       requireUnlocked();
       const sim = requireSim(id);
-      if (
-        sim.detail.status === "completed" ||
-        sim.detail.status === "failed" ||
-        sim.detail.status === "cancelled"
-      ) {
+      if (isDemoTerminal(sim.detail.status)) {
         throw new ApiError(409, `Execution '${id}' is already ${sim.detail.status}.`);
       }
       clearTimers(sim);
@@ -977,14 +1235,87 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
       notify(sim);
       later(sim, 400, () => advance(sim));
     },
-    forceFailExecution: async (id, reason) => {
+    pauseExecution: async (id) => {
       requireUnlocked();
       const sim = requireSim(id);
       if (
-        sim.detail.status === "completed" ||
-        sim.detail.status === "failed" ||
-        sim.detail.status === "cancelled"
+        !isLiveStatus(sim.detail.status) ||
+        sim.detail.status === "paused" ||
+        sim.detail.status === "cancelling"
       ) {
+        throw new ApiError(
+          409,
+          `Execution '${id}' cannot be paused while ${sim.detail.status}.`,
+        );
+      }
+      const pausedFrom = sim.detail.status;
+      clearTimers(sim);
+      // In-flight steps replay from scratch on resume, like the live engine.
+      for (const node of sim.detail.timeline) {
+        if (node.state === "active") {
+          setNode(sim, node.id, { state: "pending", result: null });
+        }
+      }
+      sim.detail = { ...sim.detail, pausedFrom };
+      setStatus(sim, "paused");
+      pushAudit(sim, "note", {
+        message: "Operator paused execution",
+        meta: { pausedFrom },
+      });
+      notify(sim);
+    },
+    resumeExecution: async (id) => {
+      requireUnlocked();
+      const sim = requireSim(id);
+      if (sim.detail.status !== "paused") {
+        throw new ApiError(
+          409,
+          `Only paused executions can be resumed (now ${sim.detail.status}).`,
+        );
+      }
+      const { pausedFrom, ...rest } = sim.detail;
+      sim.detail = rest;
+      setStatus(sim, pausedFrom ?? "running");
+      pushAudit(sim, "note", {
+        message: "Operator resumed execution",
+        meta: { resumedFrom: pausedFrom ?? "paused" },
+      });
+      notify(sim);
+      advance(sim);
+    },
+    restartExecution: async (id, input) => {
+      requireUnlocked();
+      const sim = requireSim(id);
+      if (
+        isLiveStatus(sim.detail.status) &&
+        sim.detail.status !== "paused"
+      ) {
+        throw new ApiError(
+          409,
+          `Only terminal or paused executions can be restarted (now ${sim.detail.status}); pause or cancel it first.`,
+        );
+      }
+      sequence += 1;
+      const nextId = `demo_${sequence.toString(36)}_${Date.now().toString(36)}`;
+      const next = createSimulation(
+        sim.workflow,
+        input ?? sim.detail.input,
+        nextId,
+      );
+      next.detail = { ...next.detail, restartedFromExecutionId: id };
+      sim.detail = { ...sim.detail, restartedAsExecutionId: nextId };
+      pushAudit(sim, "note", {
+        message: "Operator restarted execution",
+        meta: { restartedAsExecutionId: nextId },
+      });
+      notify(sim);
+      later(next, 400, () => advance(next));
+      return nextId;
+    },
+    forceFailExecution: async (id, reason) => {
+      requireUnlocked();
+      const sim = requireSim(id);
+      if (isDemoTerminal(sim.detail.status)) {
         throw new ApiError(409, `Execution '${id}' is already ${sim.detail.status}.`);
       }
       clearTimers(sim);

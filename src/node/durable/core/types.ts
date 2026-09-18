@@ -207,8 +207,11 @@ export interface StepResult<T = unknown> {
  * projection (`DurableExecutionState`).
  */
 export interface WorkflowState<TState = unknown> {
+  /** Execution that owns this state record. */
   executionId: string;
+  /** Workflow-owned typed value. */
   state: TState;
+  /** Last write time (last-write-wins on this record). */
   updatedAt: Date;
 }
 

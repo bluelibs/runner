@@ -39,6 +39,7 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "live", label: "Live" },
   { id: "sleeping", label: "Sleeping" },
+  { id: "paused", label: "Paused" },
   { id: "failed", label: "Failed" },
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
@@ -80,7 +81,7 @@ export function App() {
   const [starting, setStarting] = useState(() => PARAMS.get("modal") === "start");
   const [signalling, setSignalling] = useState(() => PARAMS.get("modal") === "signal");
   const [signalPreset, setSignalPreset] = useState<string | undefined>(undefined);
-  const [confirming, setConfirming] = useState<"cancel" | "retry" | "force-fail" | null>(null);
+  const [confirming, setConfirming] = useState<"cancel" | "retry" | "restart" | "force-fail" | null>(null);
   const [operatorAction, setOperatorAction] = useState<OperatorAction | null>(null);
   const [busy, setBusy] = useState(false);
   const [recovering, setRecovering] = useState(false);
@@ -318,6 +319,25 @@ export function App() {
     }
   }
 
+  async function restartExecution(id: string) {
+    setBusy(true);
+    try {
+      const nextId = await api.restartExecution(id);
+      setSelectedId(nextId);
+      pushToast("success", `Restarted as ${truncateMiddle(nextId)}.`);
+      await refreshLists();
+    } catch (error) {
+      if (!noteUnauthorized(error)) {
+        pushToast(
+          "error",
+          error instanceof ApiError ? error.message : "Failed to restart.",
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function exportExecution(detailToExport: StudioExecutionDetail) {
     const payload = JSON.stringify(detailToExport, null, 2);
     const url = URL.createObjectURL(
@@ -526,6 +546,9 @@ export function App() {
                 }}
                 onCancel={() => setConfirming("cancel")}
                 onRetry={() => setConfirming("retry")}
+                onPause={() => selectedId && void act("Pause", () => api.pauseExecution(selectedId))}
+                onResume={() => selectedId && void act("Resume", () => api.resumeExecution(selectedId))}
+                onRestart={() => setConfirming("restart")}
                 onForceFail={() => setConfirming("force-fail")}
                 onSkip={() => setOperatorAction("skip")}
                 onEdit={() => setOperatorAction("edit")}
@@ -614,6 +637,19 @@ export function App() {
           onConfirm={() => {
             setConfirming(null);
             void act("Retry", () => api.retryExecution(selectedId));
+          }}
+          onClose={() => setConfirming(null)}
+        />
+      ) : null}
+      {confirming === "restart" && selectedId ? (
+        <ConfirmDialog
+          title="Restart execution"
+          message="Start a fresh run from this execution's input? Steps re-run from the beginning with no carried state."
+          confirmLabel="Restart execution"
+          onConfirm={() => {
+            const id = selectedId;
+            setConfirming(null);
+            void restartExecution(id);
           }}
           onClose={() => setConfirming(null)}
         />

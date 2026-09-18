@@ -32,6 +32,9 @@ export interface StudioApi {
   sendSignal(id: string, signal: string, payload: unknown): Promise<void>;
   cancelExecution(id: string): Promise<void>;
   retryExecution(id: string): Promise<void>;
+  pauseExecution(id: string): Promise<void>;
+  resumeExecution(id: string): Promise<void>;
+  restartExecution(id: string, input?: unknown): Promise<string>;
   forceFailExecution(id: string, reason: string): Promise<void>;
   skipStep(id: string, stepId: string, reason: string): Promise<void>;
   editState(
@@ -187,6 +190,20 @@ export function createLiveApi(
     retryExecution: async (id) => {
       await request("POST", `/api/executions/${encodeURIComponent(id)}/retry`);
     },
+    pauseExecution: async (id) => {
+      await request("POST", `/api/executions/${encodeURIComponent(id)}/pause`);
+    },
+    resumeExecution: async (id) => {
+      await request("POST", `/api/executions/${encodeURIComponent(id)}/resume`);
+    },
+    restartExecution: async (id, input) =>
+      (
+        await request<{ executionId: string }>(
+          "POST",
+          `/api/executions/${encodeURIComponent(id)}/restart`,
+          input === undefined ? undefined : { input },
+        )
+      ).executionId,
     forceFailExecution: async (id, reason) => {
       await request(
         "POST",

@@ -14,7 +14,9 @@ test("execution statuses cover the full engine lifecycle", () => {
     "cancelling",
     "compensation_failed",
     "completed",
+    "continued_as_new",
     "failed",
+    "paused",
     "pending",
     "retrying",
     "running",
@@ -32,6 +34,8 @@ test("live statuses exclude only terminal states", () => {
   assert.equal(isLiveStatus("pending"), true);
   assert.equal(isLiveStatus("retrying"), true);
   assert.equal(isLiveStatus("cancelling"), true);
+  assert.equal(isLiveStatus("paused"), true);
+  assert.equal(isLiveStatus("continued_as_new"), false);
   assert.equal(isLiveStatus("completed"), false);
   assert.equal(isLiveStatus("failed"), false);
   assert.equal(isLiveStatus("cancelled"), false);

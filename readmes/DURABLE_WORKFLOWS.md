@@ -16,6 +16,8 @@
 - [Workflow Identity & Tagging](#workflow-identity--tagging)
 - [Signals](#signals)
 - [Child Workflows](#child-workflows)
+- [Lifecycle Control](#lifecycle-control)
+- [Workflow State](#workflow-state)
 - [Compensation / Rollback](#compensation--rollback)
 - [Branching with switch()](#branching-with-switch)
 - [Scheduling & Cron](#scheduling--cron)
@@ -376,6 +378,38 @@ await d.note("Payment confirmed", { amount: 100, currency: "USD" });
 
 No-op if audit is disabled. Replay-safe.
 
+### `continueAsNew()` — Chapter a Long Workflow
+
+```ts
+await d.continueAsNew({ orderId, page: page + 1 });
+```
+
+Atomically closes the current run as `continued_as_new` and starts a linked successor with the given input and a fresh step cache. The method never returns: it throws a control signal the manager converts into the close-and-create commit.
+
+Rules:
+
+- Finish in-flight signal handlers first: waits on the old run are abandoned.
+- Workflow state carries to the successor by default; pass `{ state: fresh }` to start clean.
+- Waiters and signals addressed to the old run transparently follow the chain to the live tip.
+
+### `setState()` / `replaceState()` / `getState()` — Typed Workflow State
+
+```ts
+await d.setState<Counter>({ page: 2 }); // shallow merge
+await d.replaceState<Counter>({ page: 0, total: 0 }); // wholesale
+const state = await d.getState<Counter>(); // Counter | undefined
+```
+
+Each execution owns one state record. `getState()` resolves `undefined` until first set, so pair it with a module-level default. Replay re-executes writes last-write-wins, so derivations must be idempotent (guard read-modify-write appends).
+
+### `info()` — Attempt Info
+
+```ts
+const { executionId, attempt, stepCount } = d.info();
+```
+
+In-memory info about the current attempt. `stepCount` is the number of durable calls observed so far, which is what manual chaptering checks before calling `continueAsNew()`.
+
 ---
 
 ## DurableService API
@@ -408,6 +442,17 @@ await durable.signal(executionId, Paid, { paidAt: Date.now() });
 
 // Cancel (cooperative)
 await durable.cancelExecution(executionId, "User requested");
+
+// Pause / resume (run stops advancing; wall-clock timers keep running)
+await durable.pauseExecution(executionId);
+await durable.resumeExecution(executionId);
+
+// Restart a finished (or paused) run as a fresh linked execution
+const rerunId = await durable.restartExecution(executionId);
+const rerunId = await durable.restartExecution(executionId, { input: next });
+
+// Read typed workflow state (undefined until first set)
+const state = await durable.getState<Counter>(executionId);
 ```
 
 Once the durable runtime enters `cooldown()`, new top-level `start(...)` and
@@ -695,6 +740,49 @@ Child terminal states:
 | `failed`              | Throws `DurableExecutionError` |
 | `cancelled`           | Throws `DurableExecutionError` |
 | `compensation_failed` | Throws `DurableExecutionError` |
+
+---
+
+## Lifecycle Control
+
+Pause, restart, and continue-as-new manage runs without touching workflow code.
+
+```ts
+// An operator pauses a noisy workflow, then resumes it later.
+await durable.pauseExecution(executionId);
+await durable.resumeExecution(executionId);
+
+// A failed run is retried from scratch as a new linked execution.
+const rerunId = await durable.restartExecution(executionId);
+
+// Inside a workflow: chapter before history grows unbounded.
+if (d.info().stepCount > 500) {
+  await d.continueAsNew({ orderId, page: page + 1 });
+}
+```
+
+Pause stops the run from advancing and records the pre-pause status in `pausedFrom`; resume restores it. Timers and signals still land on wall-clock time while paused, but attempts, polling kicks, and recovery skip the run until resume. Restart rejects active runs: only terminal or paused executions restart, and the new run starts fresh (new input optional, no carried steps or state). Continue-as-new links runs both ways (`continuedAsExecutionId` / `continuedFromExecutionId`); waits and signals follow the chain, so callers keep addressing the original id.
+
+Rules:
+
+- Pause applies to non-terminal runs that are not already stopping.
+- A racing cancellation wins over both pause and continue-as-new.
+- Restarted runs get `restartedFromExecutionId` / `restartedAsExecutionId` lineage; continued runs get `continuedFromExecutionId` / `continuedAsExecutionId`.
+
+## Workflow State
+
+Workflows that need more than step results keep one typed record per execution:
+
+```ts
+type Counter = { page: number; total: number };
+
+const current = (await d.getState<Counter>()) ?? { page: 0, total: 0 };
+await d.setState<Counter>({ page: current.page + 1 });
+```
+
+Operators read the same record id-addressed via `durable.getState<Counter>(executionId)`, and break-glass tooling sees it in `operator.getExecutionDetail()`. The payload-free `DurableExecutionState` projection stays lean and excludes it.
+
+State carries across continue-as-new (override with `{ state }`) and never carries across restart. Because replay re-executes writes, derivations must be idempotent: a guarded append converges, a blind read-append accumulates once per replay.
 
 ---
 
@@ -1080,10 +1168,18 @@ health insights, activity charts, workflow filters, and recent runs. Execution
 views add cursor-paged history, exact-ID lookup, timelines, parent/child trees,
 signal and audit history, persisted data, and guarded operator actions. The
 schedules dashboard previews and manages cron, interval, and one-time timers.
+Execution detail also exposes lifecycle actions (pause, resume, restart),
+the workflow state record, and continuation/restart lineage links.
 
 ![Durable Workflows Studio overview dashboard](../examples/durable-workflows-studio/docs/shots/10-overview.png)
 
 ![Durable Workflows Studio execution tree](../examples/durable-workflows-studio/docs/shots/11-portfolio-tree.png)
+
+![Paused execution with lifecycle actions](../examples/durable-workflows-studio/docs/shots/21-lifecycle-paused.png)
+
+![Continued execution with lifecycle lineage](../examples/durable-workflows-studio/docs/shots/22-continued-lineage.png)
+
+![Workflow state viewer](../examples/durable-workflows-studio/docs/shots/23-workflow-state.png)
 
 Run the live Studio against an in-memory Runner backend:
 
@@ -1113,6 +1209,8 @@ execution.current; // Live position (see below)
 execution.result; // Final result (when completed)
 execution.error; // Error details (when failed)
 ```
+
+Lifecycle statuses: `paused` (non-terminal; the run resumes from `pausedFrom`) and `continued_as_new` (terminal; the run's successor id is in `continuedAsExecutionId`). Restarted runs link via `restartedFromExecutionId` / `restartedAsExecutionId`; continued runs via `continuedFromExecutionId` / `continuedAsExecutionId`.
 
 ### Live Position (`execution.current`)
 
@@ -1267,6 +1365,30 @@ interface IDurableStore {
 The live poller uses `claimReadyTimers(...)` so each worker only claims the
 number of ready timers it can currently process.
 
+Lifecycle store methods are optional so existing custom stores keep compiling
+and running. Using a feature on a store that lacks it fails fast with a clear
+lifecycle error:
+
+```ts
+interface IDurableStore {
+  // Atomic close-and-create for continue-as-new. Resolves false when the
+  // prior run is no longer running (a racing operator decision wins).
+  createContinuedExecution?(params: {
+    priorExecution: Execution;
+    successorExecution: Execution;
+  }): Promise<boolean>;
+
+  // Workflow-owned typed state record.
+  getWorkflowState?(executionId: string): Promise<WorkflowState | null>;
+  saveWorkflowState?(state: WorkflowState): Promise<void>;
+
+  // Atomic execution-waiter completion accepts an optional
+  // waitTargetExecutionId: the waited-on root, which differs from the
+  // registration target when the waiter followed a continuation chain.
+  // Stores that support continue-as-new must honor it.
+}
+```
+
 ### IDurableQueue
 
 ```ts
@@ -1300,6 +1422,10 @@ interface IEventBus {
 | Workflow stuck         | Worker died mid-step     | Recovery loop picks it up                  |
 | Compensation fails     | Downstream service issue | Fix issue, use `retryRollback()`           |
 | Intervals overlap      | Long-running task        | Use `sleep()` for completion-based spacing |
+| Continue rejected      | Run paused or finished   | Call only from a running attempt           |
+| Restart rejected       | Run still active         | Wait for terminal state, or pause first    |
+| State grows per replay | Blind read-append-write  | Guard appends so writes are idempotent     |
+| Store lacks lifecycle  | Custom pre-feature store | Implement the optional store methods       |
 
 ---
 
@@ -1311,10 +1437,12 @@ type ExecutionStatus =
   | "running"
   | "retrying"
   | "sleeping"
+  | "paused"
   | "completed"
   | "failed"
   | "compensation_failed"
-  | "cancelled";
+  | "cancelled"
+  | "continued_as_new";
 
 interface Execution<TInput = unknown, TResult = unknown> {
   id: string;
@@ -1328,9 +1456,26 @@ interface Execution<TInput = unknown, TResult = unknown> {
   maxAttempts: number;
   timeout?: number;
   current?: DurableExecutionCurrent;
+  pausedFrom?: ExecutionStatus;
+  continuedAsExecutionId?: string;
+  continuedFromExecutionId?: string;
+  restartedAsExecutionId?: string;
+  restartedFromExecutionId?: string;
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;
+}
+
+interface WorkflowState<TState = unknown> {
+  executionId: string;
+  state: TState;
+  updatedAt: Date;
+}
+
+interface DurableInfo {
+  executionId: string;
+  attempt: number;
+  stepCount: number;
 }
 
 interface StepResult<T = unknown> {

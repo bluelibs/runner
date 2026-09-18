@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { App } from "./App.js";
 import { ExecutionDetail } from "./components/ExecutionDetail.js";
+import { ExecutionRelations } from "./components/ExecutionRelations.js";
 import { ExecutionList } from "./components/ExecutionList.js";
 import { Overview } from "./components/Overview.js";
 import { Sidebar } from "./components/Sidebar.js";
@@ -176,6 +177,9 @@ describe("studio rendering", () => {
         onSignal={noop}
         onCancel={noop}
         onRetry={noop}
+        onPause={noop}
+        onResume={noop}
+        onRestart={noop}
         onForceFail={noop}
         onSkip={noop}
         onEdit={noop}
@@ -204,6 +208,9 @@ describe("studio rendering", () => {
         onSignal={noop}
         onCancel={noop}
         onRetry={noop}
+        onPause={noop}
+        onResume={noop}
+        onRestart={noop}
         onForceFail={noop}
         onSkip={noop}
         onEdit={noop}
@@ -213,6 +220,49 @@ describe("studio rendering", () => {
     );
     expect(html).toContain("Failed");
     expect(html).toContain("Runbook exploded");
+  });
+
+  it("renders lifecycle actions, lineage and workflow state", async () => {
+    const api = createDemoApi();
+    const [paused, continued, workflows] = await Promise.all([
+      api.getExecution("demo_ord_paused"),
+      api.getExecution("demo_ord_continued"),
+      api.listWorkflows(),
+    ]);
+    const pausedHtml = renderToString(
+      <ExecutionDetail
+        detail={paused}
+        workflow={workflows.find((w) => w.key === paused.workflowKey)}
+        now={Date.now()}
+        onSignal={noop}
+        onCancel={noop}
+        onRetry={noop}
+        onPause={noop}
+        onResume={noop}
+        onRestart={noop}
+        onForceFail={noop}
+        onSkip={noop}
+        onEdit={noop}
+        onExport={noop}
+        onOpenExecution={noop}
+      />,
+    );
+    expect(pausedHtml).toContain("Paused");
+    expect(pausedHtml).toContain(">Resume<");
+    expect(pausedHtml).toContain(">Restart<");
+    expect(pausedHtml).not.toContain(">Pause<");
+
+    const continuedHtml = renderToString(
+      <ExecutionRelations
+        detail={continued}
+        now={Date.now()}
+        onOpen={noop}
+      />,
+    );
+    expect(continuedHtml).toContain("Continued as new");
+    expect(continuedHtml).toContain("Lifecycle lineage");
+    expect(continuedHtml).toContain("Continued as");
+    expect(continuedHtml).toContain("demo_ord_continued_tip");
   });
 
   it("renders start, signal and schedule dialogs", async () => {

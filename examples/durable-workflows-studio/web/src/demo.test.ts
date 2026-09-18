@@ -227,6 +227,57 @@ describe("demo studio", () => {
     await expect(api.getExecution("nope")).rejects.toBeInstanceOf(ApiError);
   }, 30_000);
 
+  it("supports pause, resume and restart lifecycles", async () => {
+    const api: StudioApi = createDemoApi();
+
+    const paused = await api.getExecution("demo_ord_paused");
+    expect(paused.status).toBe("paused");
+    expect(paused.pausedFrom).toBe("sleeping");
+    expect(paused.position).toBe("Paused");
+    expect(paused.state).not.toBeNull();
+    await expect(api.pauseExecution("demo_ord_paused")).rejects.toBeInstanceOf(
+      ApiError,
+    );
+
+    await api.resumeExecution("demo_ord_paused");
+    expect((await api.getExecution("demo_ord_paused")).status).toBe(
+      "sleeping",
+    );
+    await api.pauseExecution("demo_ord_paused");
+    expect((await api.getExecution("demo_ord_paused")).status).toBe("paused");
+    await expect(
+      api.resumeExecution("demo_ord_completed"),
+    ).rejects.toBeInstanceOf(ApiError);
+
+    const continued = await api.getExecution("demo_ord_continued");
+    expect(continued.status).toBe("continued_as_new");
+    expect(continued.continuedAsExecutionId).toBe("demo_ord_continued_tip");
+    const tip = await api.getExecution("demo_ord_continued_tip");
+    expect(tip.continuedFromExecutionId).toBe("demo_ord_continued");
+    expect(tip.state).not.toBeNull();
+    await expect(
+      api.pauseExecution("demo_ord_continued"),
+    ).rejects.toBeInstanceOf(ApiError);
+
+    const restarted = await api.getExecution("demo_inc_restarted");
+    expect(restarted.restartedFromExecutionId).toBe("demo_inc_restart_src");
+    expect(
+      (await api.getExecution("demo_inc_restart_src")).restartedAsExecutionId,
+    ).toBe("demo_inc_restarted");
+
+    await expect(api.restartExecution("demo_inc_live")).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    const nextId = await api.restartExecution("demo_ord_completed");
+    expect(nextId).not.toBe("demo_ord_completed");
+    expect(
+      (await api.getExecution("demo_ord_completed")).restartedAsExecutionId,
+    ).toBe(nextId);
+    expect((await api.getExecution(nextId)).restartedFromExecutionId).toBe(
+      "demo_ord_completed",
+    );
+  });
+
   it("locks data behind unlock() when created locked", async () => {
     const api = createDemoApi({ locked: true });
     expect(api.isLocked?.()).toBe(true);

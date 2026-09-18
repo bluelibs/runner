@@ -86,8 +86,11 @@ export interface WorkflowOptions {
  * grow unbounded.
  */
 export interface DurableInfo {
+  /** Canonical id of the running execution. */
   executionId: string;
+  /** 1-based attempt number of the running execution. */
   attempt: number;
+  /** Durable calls observed so far in this attempt. */
   stepCount: number;
 }
 
