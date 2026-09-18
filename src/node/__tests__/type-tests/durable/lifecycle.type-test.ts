@@ -1,7 +1,10 @@
 import type { IDurableContext } from "../../../../node/durable/core/interfaces/context";
 import type { IDurableService } from "../../../../node/durable/core/interfaces/service";
 import type { IDurableStore } from "../../../../node/durable/core/interfaces/store";
-import type { Execution } from "../../../../node/durable/core/types";
+import type {
+  Execution,
+  ExecutionStatus,
+} from "../../../../node/durable/core/types";
 
 // The new store methods are optional: a pre-change store surface (without
 // them) still satisfies IDurableStore, so existing custom stores keep
@@ -77,6 +80,8 @@ async function checkStoreSurface(store: IDurableStore): Promise<void> {
 
 function checkExecutionLineage(execution: Execution): void {
   const pausedAt: Date | undefined = execution.pausedAt;
+  const pausedFrom: ExecutionStatus | undefined = execution.pausedFrom;
+  void pausedFrom;
   const restartedFrom: string | undefined = execution.restartedFromExecutionId;
   const restartedAs: string | undefined = execution.restartedAsExecutionId;
   const continuedFrom: string | undefined = execution.continuedFromExecutionId;

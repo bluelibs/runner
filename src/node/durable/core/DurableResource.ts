@@ -197,6 +197,14 @@ export class DurableResource implements IDurableResource {
     return this.service.cancelExecution(executionId, reason);
   }
 
+  pauseExecution(executionId: string): Promise<void> {
+    return this.service.pauseExecution(executionId);
+  }
+
+  resumeExecution(executionId: string): Promise<void> {
+    return this.service.resumeExecution(executionId);
+  }
+
   wait<TResult>(
     executionId: string,
     options?: { timeout?: number; waitPollIntervalMs?: number },

@@ -125,6 +125,8 @@ export interface IDurableExecutionRepository<
 export interface IDurableResource extends Pick<
   IDurableService,
   | "cancelExecution"
+  | "pauseExecution"
+  | "resumeExecution"
   | "wait"
   | "schedule"
   | "ensureSchedule"

@@ -83,6 +83,9 @@ export class ExecutionAttemptRunner {
     const snapshot = await this.deps.store.getExecution(executionId);
     if (!snapshot) return;
     if (isExecutionTerminal(snapshot.status)) return;
+    // Paused executions ignore stale queue messages and timer kicks until
+    // resume restores their pre-pause status and re-kicks them.
+    if (snapshot.status === ExecutionStatus.Paused) return;
 
     const lockResource = `execution:${executionId}`;
     const lockTtlMs = 30_000;
@@ -111,6 +114,7 @@ export class ExecutionAttemptRunner {
       const execution = await this.deps.store.getExecution(executionId);
       if (!execution) return;
       if (isExecutionTerminal(execution.status)) return;
+      if (execution.status === ExecutionStatus.Paused) return;
 
       if (!execution.workflowKey) {
         await this.transitionExecutionToFailed({
@@ -176,6 +180,10 @@ export class ExecutionAttemptRunner {
       assertAdmissionOwnership,
     );
     guards.assertLockOwnership();
+
+    // Only resume owns the paused → runnable transition; a stale direct caller
+    // must never flip a paused execution back to running.
+    if (execution.status === ExecutionStatus.Paused) return;
 
     const initialCancellation = await guards.getCancellationState();
     if (initialCancellation) {

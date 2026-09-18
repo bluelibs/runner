@@ -154,6 +154,12 @@ export interface Execution<TInput = unknown, TResult = unknown> {
   /** Timestamp when the execution entered `paused` status, if ever. */
   pausedAt?: Date;
   /**
+   * Non-terminal status the execution held when it was paused. Resume
+   * restores this status and re-kicks, letting replay sort out timers and
+   * signals. Cleared on resume.
+   */
+  pausedFrom?: ExecutionStatus;
+  /**
    * Source execution id when this execution was created via restart.
    * Always set on restart-created executions.
    */

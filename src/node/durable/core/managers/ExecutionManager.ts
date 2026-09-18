@@ -31,6 +31,11 @@ import {
   cancelExecution as cancelExecutionFlow,
   failExecutionDeliveryExhausted as failExecutionDeliveryExhaustedFlow,
 } from "./ExecutionManager.terminal";
+import {
+  type ExecutionPauseDeps,
+  pauseExecution as pauseExecutionFlow,
+  resumeExecution as resumeExecutionFlow,
+} from "./ExecutionManager.pause";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -69,6 +74,7 @@ export class ExecutionManager {
   readonly attemptRunner: ExecutionAttemptRunner;
   private readonly persistenceDeps: ExecutionPersistenceDeps;
   private readonly terminalDeps: ExecutionTerminalDeps;
+  private readonly pauseDeps: ExecutionPauseDeps;
 
   constructor(
     private readonly config: ExecutionManagerConfig,
@@ -133,6 +139,16 @@ export class ExecutionManager {
       publishLiveCancellationRequested: (executionId, reason) =>
         this.cancellation.publishLiveCancellationRequested(executionId, reason),
       notifyFinished: (execution) => this.notifyExecutionFinished(execution),
+    };
+
+    this.pauseDeps = {
+      store: this.config.store,
+      auditLogger: this.auditLogger,
+      abortActiveAttempt: (executionId, reason) =>
+        this.cancellation.abortActiveAttempt(executionId, reason),
+      publishLivePauseRequested: (executionId, reason) =>
+        this.cancellation.publishLivePauseRequested(executionId, reason),
+      kickoffExecution: (executionId) => this.kickoffExecution(executionId),
     };
   }
 
@@ -200,6 +216,14 @@ export class ExecutionManager {
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
     await cancelExecutionFlow(this.terminalDeps, executionId, reason);
+  }
+
+  async pauseExecution(executionId: string): Promise<void> {
+    await pauseExecutionFlow(this.pauseDeps, executionId);
+  }
+
+  async resumeExecution(executionId: string): Promise<void> {
+    await resumeExecutionFlow(this.pauseDeps, executionId);
   }
 
   async processExecution(executionId: string): Promise<void> {

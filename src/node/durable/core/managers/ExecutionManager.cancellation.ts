@@ -6,19 +6,31 @@ export type ExecutionCancellationState = {
   reason: string;
 };
 
+export type ExecutionPauseState = {
+  reason: string;
+};
+
+/**
+ * Abort reason used when a live attempt is stopped for pause. Deliberately
+ * distinct from the shutdown-interruption reason so pause aborts are never
+ * mistaken for cooperative shutdown drains (and vice versa).
+ */
+export const EXECUTION_PAUSED_ABORT_REASON = "Execution paused";
+
 export const DURABLE_EXECUTION_CONTROL_CHANNEL = "durable:execution-control";
 export const DurableExecutionControlEventType = {
   CancellationRequested: "cancellation_requested",
+  PauseRequested: "pause_requested",
 } as const;
 
-type CancellationRequestedPayload = {
+type ExecutionControlPayload = {
   executionId: string;
   reason: string;
 };
 
-function isCancellationRequestedPayload(
+function isControlPayloadWithReason(
   value: unknown,
-): value is CancellationRequestedPayload {
+): value is ExecutionControlPayload {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -31,12 +43,22 @@ function isCancellationRequestedPayload(
 
 function parseCancellationRequestedEvent(
   event: BusEvent,
-): CancellationRequestedPayload | null {
+): ExecutionControlPayload | null {
   if (event.type !== DurableExecutionControlEventType.CancellationRequested) {
     return null;
   }
 
-  return isCancellationRequestedPayload(event.payload) ? event.payload : null;
+  return isControlPayloadWithReason(event.payload) ? event.payload : null;
+}
+
+function parsePauseRequestedEvent(
+  event: BusEvent,
+): ExecutionControlPayload | null {
+  if (event.type !== DurableExecutionControlEventType.PauseRequested) {
+    return null;
+  }
+
+  return isControlPayloadWithReason(event.payload) ? event.payload : null;
 }
 
 export function resolveCancellationReason(
@@ -70,11 +92,35 @@ export function getCancellationState(
   };
 }
 
+export function getPauseState(
+  execution: Execution<unknown, unknown> | null,
+): ExecutionPauseState | null {
+  if (!execution || execution.status !== ExecutionStatus.Paused) {
+    return null;
+  }
+
+  return {
+    reason: EXECUTION_PAUSED_ABORT_REASON,
+  };
+}
+
 export async function startLiveExecutionCancellationListener(params: {
   eventBus: IEventBus;
   abortActiveAttempt: (executionId: string, reason: string) => void;
 }): Promise<() => Promise<void>> {
   const handler: BusEventHandler = async (event) => {
+    // Pause rides the same live control channel as cancellation: a paused
+    // execution aborts its in-flight attempt promptly on every worker, and
+    // the attempt then exits quietly because its outcome CAS no longer matches.
+    const pauseRequested = parsePauseRequestedEvent(event);
+    if (pauseRequested) {
+      params.abortActiveAttempt(
+        pauseRequested.executionId,
+        pauseRequested.reason,
+      );
+      return;
+    }
+
     const cancellationRequested = parseCancellationRequestedEvent(event);
     if (!cancellationRequested) {
       return;
@@ -111,6 +157,21 @@ export async function publishExecutionCancellationRequested(params: {
   });
 }
 
+export async function publishExecutionPauseRequested(params: {
+  eventBus: IEventBus;
+  executionId: string;
+  reason: string;
+}): Promise<void> {
+  await params.eventBus.publish(DURABLE_EXECUTION_CONTROL_CHANNEL, {
+    type: DurableExecutionControlEventType.PauseRequested,
+    payload: {
+      executionId: params.executionId,
+      reason: params.reason,
+    },
+    timestamp: new Date(),
+  });
+}
+
 export function startExecutionCancellationPollingFallback(params: {
   executionId: string;
   controller: AbortController;
@@ -137,6 +198,12 @@ export function startExecutionCancellationPollingFallback(params: {
               params.executionId,
               cancellationState.reason,
             );
+            return;
+          }
+
+          const pauseState = getPauseState(execution);
+          if (pauseState) {
+            params.abortActiveAttempt(params.executionId, pauseState.reason);
           }
         })
         .catch(() => {

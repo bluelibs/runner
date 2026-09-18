@@ -276,15 +276,11 @@ export class DurableService implements IDurableService {
   }
 
   async pauseExecution(executionId: string): Promise<void> {
-    return durableExecutionInvariantError.throw({
-      message: `DurableService.pauseExecution("${executionId}") is not implemented in this build.`,
-    });
+    await this.executionManager.pauseExecution(executionId);
   }
 
   async resumeExecution(executionId: string): Promise<void> {
-    return durableExecutionInvariantError.throw({
-      message: `DurableService.resumeExecution("${executionId}") is not implemented in this build.`,
-    });
+    await this.executionManager.resumeExecution(executionId);
   }
 
   async restartExecution(

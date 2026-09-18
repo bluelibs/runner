@@ -4,7 +4,9 @@ import { Logger } from "../../../../models/Logger";
 import { runtimeShutdownAbortReason } from "../../../../tools/runtimeShutdownAbortReason";
 import {
   getCancellationState,
+  getPauseState,
   publishExecutionCancellationRequested,
+  publishExecutionPauseRequested,
   startExecutionCancellationPollingFallback,
   startLiveExecutionCancellationListener,
 } from "./ExecutionManager.cancellation";
@@ -127,6 +129,36 @@ export class AttemptCancellationController {
     }
   }
 
+  async publishLivePauseRequested(
+    executionId: string,
+    reason: string,
+  ): Promise<void> {
+    const eventBus = this.deps.liveCancellationEventBus;
+    if (!eventBus) {
+      return;
+    }
+
+    try {
+      await publishExecutionPauseRequested({
+        eventBus,
+        executionId,
+        reason,
+      });
+    } catch (error) {
+      try {
+        await this.deps.logger.warn(
+          "Durable live pause publish failed; relying on local abort or polling fallback.",
+          {
+            executionId,
+            error,
+          },
+        );
+      } catch {
+        // Logging must not affect durable pause semantics.
+      }
+    }
+  }
+
   /**
    * Registers an abort controller for an attempt. When a live listener is active
    * it does a single immediate store recheck (covering a cancellation that
@@ -147,6 +179,11 @@ export class AttemptCancellationController {
         const cancellationState = getCancellationState(execution);
         if (cancellationState) {
           this.abortActiveAttempt(params.executionId, cancellationState.reason);
+        } else {
+          const pauseState = getPauseState(execution);
+          if (pauseState) {
+            this.abortActiveAttempt(params.executionId, pauseState.reason);
+          }
         }
       } catch (error) {
         try {

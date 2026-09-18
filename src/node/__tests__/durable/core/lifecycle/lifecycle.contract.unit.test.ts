@@ -48,14 +48,14 @@ describe("durable: lifecycle contract (U0)", () => {
     expect(isExecutionTerminal(ExecutionStatus.Running)).toBe(false);
   });
 
-  it("exposes the lifecycle service surface (U1+ implement the behavior)", async () => {
+  it("exposes the lifecycle service surface (U1 implements pause/resume)", async () => {
     const service = createService();
 
     await expect(service.pauseExecution("e1")).rejects.toThrow(
-      'DurableService.pauseExecution("e1") is not implemented in this build.',
+      'Cannot pause execution "e1" with status "unknown".',
     );
     await expect(service.resumeExecution("e1")).rejects.toThrow(
-      'DurableService.resumeExecution("e1") is not implemented in this build.',
+      'Cannot resume execution "e1" with status "unknown": it is not paused.',
     );
     await expect(service.restartExecution("e1")).rejects.toThrow(
       'DurableService.restartExecution("e1") is not implemented in this build.',
@@ -86,7 +86,10 @@ describe("durable: lifecycle contract (U0)", () => {
   });
 
   it("shapes ContinuationSignal like the SuspensionSignal control signal", () => {
-    const signal = new ContinuationSignal({ orderId: "o1" }, { state: { n: 1 } });
+    const signal = new ContinuationSignal(
+      { orderId: "o1" },
+      { state: { n: 1 } },
+    );
 
     expect(signal).toBeInstanceOf(Error);
     expect(signal).not.toBeInstanceOf(SuspensionSignal);
@@ -171,9 +174,7 @@ describe("durable: lifecycle contract (U0)", () => {
       expect(durableLifecycleUnsupportedStoreCapabilityError.is(error)).toBe(
         true,
       );
-      expect(String(error)).toContain(
-        "Store does not support continue-as-new",
-      );
+      expect(String(error)).toContain("Store does not support continue-as-new");
     }
 
     try {
