@@ -182,6 +182,10 @@ export class RedisStoreRuntime {
     return this.k(`exec:${executionId}`);
   }
 
+  workflowStateKey(executionId: string): string {
+    return this.k(`workflow_state:${executionId}`);
+  }
+
   idempotencyKey(workflowKey: string, idempotencyKey: string): string {
     return this.k(
       `idem:${this.encodeKeyPart(workflowKey)}:${this.encodeKeyPart(idempotencyKey)}`,

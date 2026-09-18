@@ -6,6 +6,7 @@ import type {
   Schedule,
   StepResult,
   Timer,
+  WorkflowState,
 } from "../../core/types";
 import type { DurableAuditEntry } from "../../core/audit";
 import { Semaphore } from "../../../../models/Semaphore";
@@ -37,6 +38,7 @@ export class MemoryStoreRuntime {
     Map<string, Map<string, DurableSignalWaiter>>
   >();
   executionWaiters = new Map<string, Map<string, DurableExecutionWaiter>>();
+  workflowStates = new Map<string, WorkflowState>();
   auditEntries = new Map<string, DurableAuditEntry[]>();
   timers = new Map<string, Timer>();
   schedules = new Map<string, Schedule>();

@@ -8,6 +8,7 @@ import type {
   Schedule,
   StepResult,
   Timer,
+  WorkflowState,
 } from "../../core/types";
 import type { DurableAuditEntry } from "../../core/audit";
 import { getSignalIdFromStepId } from "../../core/signalWaiters";
@@ -172,6 +173,12 @@ export const cloneTimer = (timer: Timer): Timer => ({ ...timer });
 
 export const cloneSchedule = (schedule: Schedule): Schedule => ({
   ...schedule,
+});
+
+export const cloneWorkflowState = (record: WorkflowState): WorkflowState => ({
+  executionId: record.executionId,
+  state: cloneDurableValue(record.state),
+  updatedAt: record.updatedAt,
 });
 
 export const compareTimersByReadyOrder = (

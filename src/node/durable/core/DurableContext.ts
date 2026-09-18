@@ -15,6 +15,7 @@ import type {
   WorkflowOptions,
 } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
+import { ContinuationSignal } from "./interfaces/context";
 import { StepBuilder } from "./StepBuilder";
 import {
   createStepCurrent,
@@ -50,6 +51,7 @@ import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSi
 import { switchDurably } from "./durable-context/DurableContext.switch";
 import {
   durableContextCancelledError,
+  durableContinueAsNewRejectedError,
   durableExecutionInvariantError,
 } from "../../../errors";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
@@ -298,12 +300,21 @@ export class DurableContext implements IDurableContext {
   }
 
   async continueAsNew<TInput>(
-    _nextInput: TInput,
-    _options?: ContinueAsNewOptions,
+    nextInput: TInput,
+    options?: ContinueAsNewOptions,
   ): Promise<never> {
-    return durableExecutionInvariantError.throw({
-      message: `DurableContext.continueAsNew("${this.executionId}") is not implemented in this build.`,
-    });
+    await this.assertCanContinue();
+    const execution = await this.store.getExecution(this.executionId);
+    if (!execution || execution.status !== ExecutionStatus.Running) {
+      return durableContinueAsNewRejectedError.throw({
+        executionId: this.executionId,
+        reason: execution
+          ? `execution is ${execution.status}`
+          : "execution does not exist",
+      });
+    }
+
+    throw new ContinuationSignal(nextInput, options);
   }
 
   async setState<T>(_patch: Partial<T>): Promise<void> {

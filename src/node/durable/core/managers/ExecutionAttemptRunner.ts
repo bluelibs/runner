@@ -5,6 +5,7 @@ import type {
   ITaskExecutor,
 } from "../interfaces/service";
 import type { ITask } from "../../../../types/task";
+import type { ContinueAsNewOptions } from "../interfaces/context";
 import { ExecutionStatus, isExecutionTerminal, type Execution } from "../types";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { AuditLogger } from "./AuditLogger";
@@ -39,7 +40,11 @@ import {
   runTaskAttempt as runTaskAttemptFn,
   handleExecutionAttemptError as handleAttemptErrorFn,
 } from "./ExecutionManager.attempt";
-import { logExecutionStatusChange } from "./ExecutionManager.persistence";
+import {
+  logExecutionStatusChange,
+  type ExecutionPersistenceDeps,
+} from "./ExecutionManager.persistence";
+import { continueExecutionAsNew as continueAsNewFlow } from "./ExecutionManager.continueAsNew";
 import type { AttemptCancellationController } from "./AttemptCancellationController";
 import { WorkflowAdmissionController } from "./WorkflowAdmissionController";
 
@@ -63,6 +68,7 @@ export interface ExecutionAttemptRunnerDeps {
   ) => Promise<string>;
   getTaskWorkflowKey: (task: AnyTask) => string;
   assertTaskExecutorConfigured: () => void;
+  persistence: ExecutionPersistenceDeps;
 }
 
 /**
@@ -382,6 +388,24 @@ export class ExecutionAttemptRunner {
     });
   }
 
+  async continueExecutionAsNew(params: {
+    runningExecution: Execution<unknown, unknown>;
+    nextInput: unknown;
+    options?: ContinueAsNewOptions;
+    canPersistOutcome?: () => Promise<boolean>;
+  }): Promise<void> {
+    await continueAsNewFlow({
+      deps: {
+        persistence: this.deps.persistence,
+        notifyFinished: (e) => this.deps.notifyFinished(e),
+      },
+      ...params,
+      logStatusChange: (p) => this.logStatusChange(p),
+      finalizeCancellation: (exec, can) =>
+        this.finalizeCancellationIfRequested(exec, can),
+    });
+  }
+
   private async transitionRunningExecutionToCancelled(params: {
     execution: Execution<unknown, unknown>;
     reason: string;
@@ -447,6 +471,7 @@ export class ExecutionAttemptRunner {
       suspendAttempt: (exec, reason, can) =>
         this.suspendExecutionAttempt(exec, reason, can),
       scheduleRetry: (p) => this.scheduleExecutionRetry(p),
+      continueAsNew: (p) => this.continueExecutionAsNew(p),
     });
   }
 

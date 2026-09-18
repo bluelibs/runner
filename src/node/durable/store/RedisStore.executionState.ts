@@ -13,7 +13,8 @@ function isActiveExecutionStatus(status: ExecutionStatus): boolean {
     status !== ExecutionStatus.Completed &&
     status !== ExecutionStatus.Failed &&
     status !== ExecutionStatus.CompensationFailed &&
-    status !== ExecutionStatus.Cancelled
+    status !== ExecutionStatus.Cancelled &&
+    status !== ExecutionStatus.ContinuedAsNew
   );
 }
 
@@ -219,6 +220,92 @@ export async function saveExecutionIfStatus(
     isStuck,
     runtime.serializer.stringify(expectedStatuses),
     ...executionIndexArgs(runtime, execution),
+  );
+  runtime.assertEvalResultNotError(outcome);
+  return outcome === 1;
+}
+
+export async function createContinuedExecution(
+  runtime: RedisStoreRuntime,
+  params: {
+    priorExecution: Execution;
+    successorExecution: Execution;
+  },
+): Promise<boolean> {
+  const priorFlags = statusFlags(params.priorExecution.status);
+  const successorFlags = statusFlags(params.successorExecution.status);
+  const outcome = await runtime.redis.eval(
+    `
+      local current = redis.call("get", KEYS[1])
+      if not current then
+        return 0
+      end
+
+      local okCurrent, currentExecution = pcall(cjson.decode, current)
+      if not okCurrent then
+        return "__error__:Corrupted durable execution payload"
+      end
+
+      if currentExecution.status ~= ARGV[13] then
+        return 0
+      end
+
+      redis.call("set", KEYS[1], ARGV[1])
+      redis.call("sadd", KEYS[3], ARGV[2])
+      if ARGV[3] == "1" then
+        redis.call("sadd", KEYS[4], ARGV[2])
+      else
+        redis.call("srem", KEYS[4], ARGV[2])
+      end
+      if ARGV[4] == "1" then
+        redis.call("sadd", KEYS[5], ARGV[2])
+      else
+        redis.call("srem", KEYS[5], ARGV[2])
+      end
+      ${writeExecutionIndexScript("KEYS[6]", "KEYS[7]", {
+        idArg: "ARGV[2]",
+        indexArg: "ARGV[9]",
+        stateArg: "ARGV[10]",
+      })}
+
+      redis.call("set", KEYS[2], ARGV[5])
+      redis.call("sadd", KEYS[3], ARGV[6])
+      if ARGV[7] == "1" then
+        redis.call("sadd", KEYS[4], ARGV[6])
+      else
+        redis.call("srem", KEYS[4], ARGV[6])
+      end
+      if ARGV[8] == "1" then
+        redis.call("sadd", KEYS[5], ARGV[6])
+      else
+        redis.call("srem", KEYS[5], ARGV[6])
+      end
+      ${writeExecutionIndexScript("KEYS[6]", "KEYS[7]", {
+        idArg: "ARGV[6]",
+        indexArg: "ARGV[11]",
+        stateArg: "ARGV[12]",
+      })}
+      return 1
+    `,
+    7,
+    runtime.executionKey(params.priorExecution.id),
+    runtime.executionKey(params.successorExecution.id),
+    runtime.allExecutionsKey(),
+    runtime.activeExecutionsKey(),
+    runtime.stuckExecutionsKey(),
+    runtime.k("execution_index_metadata"),
+    runtime.k("execution_index_states"),
+    runtime.serializer.stringify(params.priorExecution),
+    params.priorExecution.id,
+    priorFlags.isActive,
+    priorFlags.isStuck,
+    runtime.serializer.stringify(params.successorExecution),
+    params.successorExecution.id,
+    successorFlags.isActive,
+    successorFlags.isStuck,
+    ...executionIndexArgs(runtime, params.priorExecution),
+    ...executionIndexArgs(runtime, params.successorExecution),
+    ExecutionStatus.Running,
   );
   runtime.assertEvalResultNotError(outcome);
   return outcome === 1;

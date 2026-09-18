@@ -104,6 +104,18 @@ export class ExecutionManager {
       liveCancellationEventBus,
     });
 
+    this.persistenceDeps = {
+      store: this.config.store,
+      queue: this.config.queue,
+      auditLogger: this.auditLogger,
+      getTaskWorkflowKey: (task) => this.getTaskWorkflowKey(task),
+      maxAttempts: this.config.execution?.maxAttempts ?? 3,
+      defaultTimeout: this.config.execution?.timeout,
+      kickoffFailsafeDelayMs:
+        this.config.execution?.kickoffFailsafeDelayMs ?? 10_000,
+      kickoffExecution: (executionId) => this.kickoffExecution(executionId),
+    };
+
     this.attemptRunner = new ExecutionAttemptRunner({
       store: this.config.store,
       eventBus: this.eventBus,
@@ -119,19 +131,8 @@ export class ExecutionManager {
         this.start(task, input, options),
       getTaskWorkflowKey: (task) => this.getTaskWorkflowKey(task),
       assertTaskExecutorConfigured: () => this.assertTaskExecutorConfigured(),
+      persistence: this.persistenceDeps,
     });
-
-    this.persistenceDeps = {
-      store: this.config.store,
-      queue: this.config.queue,
-      auditLogger: this.auditLogger,
-      getTaskWorkflowKey: (task) => this.getTaskWorkflowKey(task),
-      maxAttempts: this.config.execution?.maxAttempts ?? 3,
-      defaultTimeout: this.config.execution?.timeout,
-      kickoffFailsafeDelayMs:
-        this.config.execution?.kickoffFailsafeDelayMs ?? 10_000,
-      kickoffExecution: (executionId) => this.kickoffExecution(executionId),
-    };
 
     this.terminalDeps = {
       store: this.config.store,

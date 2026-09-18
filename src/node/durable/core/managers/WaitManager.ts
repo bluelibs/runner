@@ -57,51 +57,80 @@ export class WaitManager {
     const check = async (): Promise<
       { done: false } | { done: true; value: TResult }
     > => {
-      const exec = await this.store.getExecution(executionId);
-      if (!exec) {
-        throw new DurableExecutionError(
-          `Execution ${executionId} not found`,
-          executionId,
-          "unknown",
-          0,
-        );
-      }
+      // Follow the continuation chain so waiting on a continued run resolves
+      // with the live tip's outcome instead of stalling on a closed run.
+      let currentId = executionId;
+      const visited = new Set<string>();
+      for (;;) {
+        if (visited.has(currentId)) {
+          throw new DurableExecutionError(
+            `Continuation chain for execution ${executionId} is cyclic at ${currentId}`,
+            currentId,
+            "unknown",
+            0,
+          );
+        }
+        visited.add(currentId);
 
-      if (exec.status === ExecutionStatus.Completed) {
-        return { done: true, value: exec.result as TResult };
-      }
+        const exec = await this.store.getExecution(currentId);
+        if (!exec) {
+          throw new DurableExecutionError(
+            `Execution ${currentId} not found`,
+            currentId,
+            "unknown",
+            0,
+          );
+        }
 
-      if (exec.status === ExecutionStatus.Failed) {
-        throw new DurableExecutionError(
-          exec.error?.message || "Execution failed",
-          exec.id,
-          exec.workflowKey || "unknown",
-          exec.attempt,
-          exec.error,
-        );
-      }
+        if (exec.status === ExecutionStatus.ContinuedAsNew) {
+          if (!exec.continuedAsExecutionId) {
+            throw new DurableExecutionError(
+              `Continuation chain for execution ${executionId} is broken at ${currentId}`,
+              currentId,
+              exec.workflowKey || "unknown",
+              exec.attempt,
+            );
+          }
+          currentId = exec.continuedAsExecutionId;
+          continue;
+        }
 
-      if (exec.status === ExecutionStatus.CompensationFailed) {
-        throw new DurableExecutionError(
-          exec.error?.message || "Compensation failed",
-          exec.id,
-          exec.workflowKey || "unknown",
-          exec.attempt,
-          exec.error,
-        );
-      }
+        if (exec.status === ExecutionStatus.Completed) {
+          return { done: true, value: exec.result as TResult };
+        }
 
-      if (exec.status === ExecutionStatus.Cancelled) {
-        throw new DurableExecutionError(
-          exec.error?.message || "Execution cancelled",
-          exec.id,
-          exec.workflowKey || "unknown",
-          exec.attempt,
-          exec.error,
-        );
-      }
+        if (exec.status === ExecutionStatus.Failed) {
+          throw new DurableExecutionError(
+            exec.error?.message || "Execution failed",
+            exec.id,
+            exec.workflowKey || "unknown",
+            exec.attempt,
+            exec.error,
+          );
+        }
 
-      return { done: false };
+        if (exec.status === ExecutionStatus.CompensationFailed) {
+          throw new DurableExecutionError(
+            exec.error?.message || "Compensation failed",
+            exec.id,
+            exec.workflowKey || "unknown",
+            exec.attempt,
+            exec.error,
+          );
+        }
+
+        if (exec.status === ExecutionStatus.Cancelled) {
+          throw new DurableExecutionError(
+            exec.error?.message || "Execution cancelled",
+            exec.id,
+            exec.workflowKey || "unknown",
+            exec.attempt,
+            exec.error,
+          );
+        }
+
+        return { done: false };
+      }
     };
 
     const pollingFallback = async (): Promise<TResult> =>

@@ -7,7 +7,11 @@ import type {
 import type { ITask } from "../../../../types/task";
 import { ExecutionStatus, type Execution } from "../types";
 import { DurableContext } from "../DurableContext";
-import { SuspensionSignal } from "../interfaces/context";
+import {
+  ContinuationSignal,
+  SuspensionSignal,
+  type ContinueAsNewOptions,
+} from "../interfaces/context";
 import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.tag";
 import { isTimeoutExceededError, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
@@ -224,6 +228,12 @@ export async function handleExecutionAttemptError(params: {
     error: ExecutionErrorInfo;
     canPersistOutcome?: () => Promise<boolean>;
   }) => Promise<void>;
+  continueAsNew: (p: {
+    runningExecution: Execution<unknown, unknown>;
+    nextInput: unknown;
+    options?: ContinueAsNewOptions;
+    canPersistOutcome?: () => Promise<boolean>;
+  }) => Promise<void>;
 }): Promise<void> {
   if (
     params.error === params.executionLockState.lossError ||
@@ -248,6 +258,24 @@ export async function handleExecutionAttemptError(params: {
       params.error.reason,
       params.guards.canPersistOutcome,
     );
+    return;
+  }
+
+  if (params.error instanceof ContinuationSignal) {
+    if (cancellationState) {
+      await params.transitionToCancelled({
+        execution: params.runningExecution,
+        reason: cancellationState.reason,
+        canPersistOutcome: params.guards.canPersistOutcome,
+      });
+      return;
+    }
+    await params.continueAsNew({
+      runningExecution: params.runningExecution,
+      nextInput: params.error.nextInput,
+      options: params.error.options,
+      canPersistOutcome: params.guards.canPersistOutcome,
+    });
     return;
   }
 

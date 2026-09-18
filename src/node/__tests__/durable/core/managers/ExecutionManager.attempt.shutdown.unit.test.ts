@@ -56,6 +56,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
       transitionToFailed,
       suspendAttempt,
       scheduleRetry,
+      continueAsNew: jest.fn(async () => undefined),
     });
 
     expect(transitionToCancelled).not.toHaveBeenCalled();
@@ -84,6 +85,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
       transitionToFailed: jest.fn(async () => undefined),
       suspendAttempt: jest.fn(async () => undefined),
       scheduleRetry: jest.fn(async () => undefined),
+      continueAsNew: jest.fn(async () => undefined),
     });
 
     expect(transitionToCancelled).toHaveBeenCalledTimes(1);
@@ -114,6 +116,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
       transitionToFailed: jest.fn(async () => undefined),
       suspendAttempt: jest.fn(async () => undefined),
       scheduleRetry,
+      continueAsNew: jest.fn(async () => undefined),
     });
 
     expect(scheduleRetry).toHaveBeenCalledTimes(1);
@@ -148,6 +151,7 @@ describe("durable: handleExecutionAttemptError shutdown interruption", () => {
         transitionToFailed,
         suspendAttempt: jest.fn(async () => undefined),
         scheduleRetry: jest.fn(async () => undefined),
+        continueAsNew: jest.fn(async () => undefined),
       });
 
       expect(transitionToFailed).toHaveBeenCalledWith({

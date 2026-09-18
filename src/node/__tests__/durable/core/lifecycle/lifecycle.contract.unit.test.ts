@@ -65,11 +65,11 @@ describe("durable: lifecycle contract (U0)", () => {
     );
   });
 
-  it("exposes the lifecycle context surface (U3/U4 implement the behavior)", async () => {
+  it("exposes the lifecycle context surface (U4 implements the remaining behavior)", async () => {
     const ctx = createContext();
 
     await expect(ctx.continueAsNew({})).rejects.toThrow(
-      'DurableContext.continueAsNew("lifecycle-contract") is not implemented in this build.',
+      'Cannot continue execution "lifecycle-contract" as new: execution does not exist.',
     );
     await expect(ctx.setState({})).rejects.toThrow(
       'DurableContext.setState("lifecycle-contract") is not implemented in this build.',
