@@ -229,6 +229,31 @@ async function toSummary(
     ...(execution.parentExecutionId
       ? { parentExecutionId: execution.parentExecutionId }
       : {}),
+    ...lineageOf(execution),
+  };
+}
+
+/** Continue-as-new / restart links shared by summaries and detail rows. */
+function lineageOf(execution: Execution): Pick<
+  StudioExecutionSummary,
+  | "continuedAsExecutionId"
+  | "continuedFromExecutionId"
+  | "restartedAsExecutionId"
+  | "restartedFromExecutionId"
+> {
+  return {
+    ...(execution.continuedAsExecutionId
+      ? { continuedAsExecutionId: execution.continuedAsExecutionId }
+      : {}),
+    ...(execution.continuedFromExecutionId
+      ? { continuedFromExecutionId: execution.continuedFromExecutionId }
+      : {}),
+    ...(execution.restartedAsExecutionId
+      ? { restartedAsExecutionId: execution.restartedAsExecutionId }
+      : {}),
+    ...(execution.restartedFromExecutionId
+      ? { restartedFromExecutionId: execution.restartedFromExecutionId }
+      : {}),
   };
 }
 
@@ -238,10 +263,12 @@ const VALID_STATUSES: StudioExecutionStatus[] = [
   "cancelling",
   "retrying",
   "sleeping",
+  "paused",
   "completed",
   "compensation_failed",
   "failed",
   "cancelled",
+  "continued_as_new",
 ];
 
 export function listWorkflows(query?: WorkflowQuery): ApiResponse {
@@ -447,7 +474,7 @@ export async function getExecutionDetail(
   handles: StudioHandles,
   id: string,
 ): Promise<ApiResponse> {
-  const { execution, steps, audit } =
+  const { execution, steps, audit, state } =
     await handles.operator.getExecutionDetail(id);
   if (!execution) return notFound(`Unknown execution '${id}'.`);
   const workflow = resolveWorkflow(execution, steps);
@@ -467,6 +494,8 @@ export async function getExecutionDetail(
     ...(execution.parentExecutionId
       ? { parentExecutionId: execution.parentExecutionId }
       : {}),
+    ...lineageOf(execution),
+    ...(execution.pausedFrom ? { pausedFrom: execution.pausedFrom } : {}),
     workflowKey: execution.workflowKey,
     workflowTitle: workflow.title,
     status: execution.status,
@@ -494,6 +523,12 @@ export async function getExecutionDetail(
     steps: steps.map(toStepDto),
     audit: audit.map(toAuditDto),
     signals: signalStates.map(toSignalDto),
+    state: state
+      ? {
+          state: jsonSafe(state.state),
+          updatedAt: state.updatedAt.toISOString(),
+        }
+      : null,
     relations: {
       parent: parentSummary,
       children: childSummaries,
@@ -697,6 +732,88 @@ export async function retryExecution(
   await handles.operator.retryRollback(id);
   await handles.durable.recover();
   return accepted({ retried: true });
+}
+
+export async function pauseExecution(
+  handles: StudioHandles,
+  id: string,
+): Promise<ApiResponse> {
+  const execution = await requireExecution(handles, id);
+  if (!execution) return notFound(`Unknown execution '${id}'.`);
+  if (
+    isTerminalStatus(execution.status) ||
+    execution.status === "paused" ||
+    execution.status === "cancelling"
+  ) {
+    return conflict(`Execution '${id}' cannot be paused while ${execution.status}.`);
+  }
+  await handles.durable.pauseExecution(id);
+  await appendOperatorNote(handles, execution, "Operator paused execution", {
+    pausedFrom: execution.status,
+  });
+  return accepted({ paused: true });
+}
+
+export async function resumeExecution(
+  handles: StudioHandles,
+  id: string,
+): Promise<ApiResponse> {
+  const execution = await requireExecution(handles, id);
+  if (!execution) return notFound(`Unknown execution '${id}'.`);
+  if (execution.status !== "paused") {
+    return conflict(
+      `Only paused executions can be resumed (now ${execution.status}).`,
+    );
+  }
+  await handles.durable.resumeExecution(id);
+  await appendOperatorNote(handles, execution, "Operator resumed execution", {
+    resumedFrom: execution.pausedFrom ?? "paused",
+  });
+  return accepted({ resumed: true });
+}
+
+/** Reads an optional restart input override from the action body. */
+function readRestartInput(
+  execution: Execution,
+  body: unknown,
+): { input?: unknown } | ApiResponse {
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !Object.prototype.hasOwnProperty.call(body, "input")
+  ) {
+    return {};
+  }
+  const override = (body as Record<string, unknown>).input;
+  if (execution.workflowKey in TASKS_BY_KEY) {
+    const error = validateWorkflowInput(execution.workflowKey, override);
+    if (error) return error;
+  }
+  return { input: override };
+}
+
+export async function restartExecution(
+  handles: StudioHandles,
+  id: string,
+  body?: unknown,
+): Promise<ApiResponse> {
+  const execution = await requireExecution(handles, id);
+  if (!execution) return notFound(`Unknown execution '${id}'.`);
+  if (!isTerminalStatus(execution.status) && execution.status !== "paused") {
+    return conflict(
+      `Only terminal or paused executions can be restarted (now ${execution.status}); pause or cancel it first.`,
+    );
+  }
+  const restartInput = readRestartInput(execution, body);
+  if ("status" in restartInput) return restartInput;
+  const executionId = await handles.durable.restartExecution(
+    id,
+    "input" in restartInput ? { input: restartInput.input } : undefined,
+  );
+  await appendOperatorNote(handles, execution, "Operator restarted execution", {
+    restartedAsExecutionId: executionId,
+  });
+  return accepted({ restarted: true, executionId });
 }
 
 function toScheduleDto(schedule: Schedule): StudioSchedule {

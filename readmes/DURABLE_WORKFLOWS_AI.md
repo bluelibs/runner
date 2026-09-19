@@ -221,6 +221,33 @@ await d.note("Payment confirmed", { amount: 100, currency: "USD" });
 
 Audit collection is disabled by default. `note()` is a no-op while disabled and is replay-safe.
 
+### continueAsNew()
+
+```ts
+await d.continueAsNew(nextInput); // never returns
+await d.continueAsNew(nextInput, { state: fresh }); // skip state carry
+```
+
+Closes the run as `continued_as_new`, starts a linked successor with fresh steps. State carries by default; waits/signals follow the chain. Finish signal handlers first.
+
+### setState() / replaceState() / getState()
+
+```ts
+await d.setState<Counter>({ page: 2 }); // merge
+await d.replaceState<Counter>({ page: 0, total: 0 }); // wholesale
+const state = await d.getState<Counter>(); // Counter | undefined
+```
+
+One typed record per execution. Writes re-execute on replay: keep derivations idempotent.
+
+### info()
+
+```ts
+const { executionId, attempt, stepCount } = d.info();
+```
+
+In-memory attempt info. `stepCount` drives manual chaptering before `continueAsNew()`.
+
 ## DurableService API
 
 ```ts
@@ -253,6 +280,17 @@ await durableRuntime.signal(executionId, Paid, { paidAt: Date.now() });
 
 // Cancel (cooperative)
 await durableRuntime.cancelExecution(executionId, "User requested");
+
+// Pause / resume (run stops advancing; wall-clock timers keep running)
+await durableRuntime.pauseExecution(executionId);
+await durableRuntime.resumeExecution(executionId);
+
+// Restart terminal/paused run fresh (new id, optional new input)
+const rerunId = await durableRuntime.restartExecution(executionId);
+const rerunId = await durableRuntime.restartExecution(executionId, { input: next });
+
+// Typed state read (undefined until first set)
+const state = await durableRuntime.getState<Counter>(executionId);
 ```
 
 After `cooldown()` starts, new top-level `start(...)`, `startAndWait(...)`, and
@@ -602,6 +640,10 @@ await runtime.dispose();
 | Compensation fails     | Fix downstream, use `retryRollback()`                  |
 | Intervals overlap      | Use `d.sleep()` for completion-based spacing           |
 | Timers don't fire      | Ensure `polling.enabled: true` in at least one process |
+| Continue rejected      | Call only from a running attempt                       |
+| Restart rejected       | Wait for terminal state, or pause first                |
+| State grows per replay | Guard appends so writes are idempotent                 |
+| Store lacks lifecycle  | Implement the optional store methods                   |
 
 ## Reserved Step IDs
 
@@ -615,10 +657,12 @@ type ExecutionStatus =
   | "running"
   | "retrying"
   | "sleeping"
+  | "paused"
   | "completed"
   | "failed"
   | "compensation_failed"
-  | "cancelled";
+  | "cancelled"
+  | "continued_as_new";
 
 interface Execution<TInput = unknown, TResult = unknown> {
   id: string;
@@ -632,8 +676,19 @@ interface Execution<TInput = unknown, TResult = unknown> {
   maxAttempts: number;
   timeout?: number;
   current?: DurableExecutionCurrent;
+  pausedFrom?: ExecutionStatus;
+  continuedAsExecutionId?: string;
+  continuedFromExecutionId?: string;
+  restartedAsExecutionId?: string;
+  restartedFromExecutionId?: string;
   createdAt: Date;
   completedAt?: Date;
+}
+
+interface WorkflowState<TState = unknown> {
+  executionId: string;
+  state: TState;
+  updatedAt: Date;
 }
 
 interface Schedule<TInput = unknown> {

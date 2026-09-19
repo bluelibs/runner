@@ -41,6 +41,30 @@ export async function saveExecution(
   await runtime.persistDurableMutation();
 }
 
+export async function createContinuedExecution(
+  runtime: MemoryStoreRuntime,
+  params: {
+    priorExecution: Execution;
+    successorExecution: Execution;
+  },
+): Promise<boolean> {
+  const current = runtime.executions.get(params.priorExecution.id);
+  if (!current || current.status !== ExecutionStatus.Running) {
+    return false;
+  }
+
+  runtime.executions.set(
+    params.priorExecution.id,
+    cloneExecution(params.priorExecution),
+  );
+  runtime.executions.set(
+    params.successorExecution.id,
+    cloneExecution(params.successorExecution),
+  );
+  await runtime.persistDurableMutation();
+  return true;
+}
+
 export async function saveExecutionIfStatus(
   runtime: MemoryStoreRuntime,
   execution: Execution,
@@ -93,7 +117,8 @@ export async function listIncompleteExecutions(
         execution.status !== ExecutionStatus.Completed &&
         execution.status !== ExecutionStatus.Failed &&
         execution.status !== ExecutionStatus.CompensationFailed &&
-        execution.status !== ExecutionStatus.Cancelled,
+        execution.status !== ExecutionStatus.Cancelled &&
+        execution.status !== ExecutionStatus.ContinuedAsNew,
     )
     .map(cloneExecution);
 }

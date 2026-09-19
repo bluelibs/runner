@@ -41,7 +41,8 @@ const isTerminalExecutionStatus = (status: ExecutionStatus): boolean =>
   status === ExecutionStatus.Completed ||
   status === ExecutionStatus.Failed ||
   status === ExecutionStatus.CompensationFailed ||
-  status === ExecutionStatus.Cancelled;
+  status === ExecutionStatus.Cancelled ||
+  status === ExecutionStatus.ContinuedAsNew;
 
 const isValidationSchema = <TPayload>(
   value: IEventDefinition<TPayload>["payloadSchema"],
@@ -119,6 +120,21 @@ export class SignalHandler {
       } catch {
         // Logging must stay best-effort here.
       }
+    }
+  }
+
+  private async warnBrokenContinuationChainBestEffort(params: {
+    executionId: string;
+    tipExecutionId: string;
+    reason: string;
+  }): Promise<void> {
+    try {
+      await this.logger.warn(
+        "Durable signal dropped: continuation chain is broken.",
+        params,
+      );
+    } catch {
+      // Observability stays best-effort; the drop itself is the contract.
     }
   }
 
@@ -224,147 +240,196 @@ export class SignalHandler {
     const baseStepId = `__signal:${signalId}`;
     const validatedPayload = this.validateSignalPayload(signal, payload);
 
-    const deliver = async (): Promise<{
-      auditStepId: string;
-      shouldResume: boolean;
-    } | null> => {
-      const execution = await this.store.getExecution(executionId);
-      if (!execution) return null;
-      if (isTerminalExecutionStatus(execution.status)) return null;
-      const workflowKey = execution.workflowKey;
-      const task = this.callbacks.resolveTask(workflowKey);
-      const declaredSignalIds = task
-        ? getDeclaredDurableWorkflowSignalIds(task)
-        : null;
-      if (declaredSignalIds !== null && !declaredSignalIds.has(signalId)) {
+    // Follow the continuation chain so signals addressed to a continued run
+    // land on the live tip: each hop reads and delivers under that hop's own
+    // signal lock, so the follow decision and the delivery are atomic and the
+    // read sequence for a live tip matches the pre-continuation shape.
+    let tipExecutionId = executionId;
+    const visited = new Set<string>();
+    for (;;) {
+      if (visited.has(tipExecutionId)) {
         return durableExecutionInvariantError.throw({
-          message: `Signal '${signalId}' is not declared in durableWorkflow.signals for workflow '${workflowKey}'.`,
+          message: `Continuation chain for execution '${executionId}' is cyclic at '${tipExecutionId}'.`,
         });
       }
+      visited.add(tipExecutionId);
 
-      const signalRecord: DurableSignalRecord<TPayload> = {
-        id: createExecutionId(),
-        payload: validatedPayload,
-        receivedAt: new Date(),
-      };
+      const deliver = async (): Promise<
+        | {
+            auditStepId: string;
+            shouldResume: boolean;
+          }
+        | { follow: string }
+        | null
+      > => {
+        const execution = await this.store.getExecution(tipExecutionId);
+        if (!execution) {
+          // A missing address is a quiet no-op by contract, but a missing
+          // successor mid-chain means corrupt lineage worth surfacing.
+          if (tipExecutionId !== executionId) {
+            await this.warnBrokenContinuationChainBestEffort({
+              executionId,
+              tipExecutionId,
+              reason: "successor record is missing",
+            });
+          }
+          return null;
+        }
+        if (execution.status === ExecutionStatus.ContinuedAsNew) {
+          if (!execution.continuedAsExecutionId) {
+            await this.warnBrokenContinuationChainBestEffort({
+              executionId,
+              tipExecutionId,
+              reason: "continued_as_new without a successor link",
+            });
+            return null;
+          }
+          return { follow: execution.continuedAsExecutionId };
+        }
+        if (isTerminalExecutionStatus(execution.status)) return null;
+        const workflowKey = execution.workflowKey;
+        const task = this.callbacks.resolveTask(workflowKey);
+        const declaredSignalIds = task
+          ? getDeclaredDurableWorkflowSignalIds(task)
+          : null;
+        if (declaredSignalIds !== null && !declaredSignalIds.has(signalId)) {
+          return durableExecutionInvariantError.throw({
+            message: `Signal '${signalId}' is not declared in durableWorkflow.signals for workflow '${workflowKey}'.`,
+          });
+        }
 
-      let completedStepId: string | null = null;
-      let shouldResume = false;
-      let commitConflictCount = 0;
+        const signalRecord: DurableSignalRecord<TPayload> = {
+          id: createExecutionId(),
+          payload: validatedPayload,
+          receivedAt: new Date(),
+        };
 
-      while (true) {
-        const waiter = await this.store.peekNextSignalWaiter(
-          executionId,
-          signalId,
-        );
-        if (!waiter) {
+        let completedStepId: string | null = null;
+        let shouldResume = false;
+        let commitConflictCount = 0;
+
+        while (true) {
+          const waiter = await this.store.peekNextSignalWaiter(
+            tipExecutionId,
+            signalId,
+          );
+          if (!waiter) {
+            break;
+          }
+
+          const waitingStep = await this.store.getStepResult(
+            tipExecutionId,
+            waiter.stepId,
+          );
+          if (!waitingStep) {
+            await this.store.deleteSignalWaiter(
+              tipExecutionId,
+              signalId,
+              waiter.stepId,
+            );
+            continue;
+          }
+
+          const waiterState = inspectSignalWaiterState({
+            signalId,
+            stepId: waiter.stepId,
+            result: waitingStep.result,
+          });
+          if (waiterState.kind === "stale") {
+            await this.store.deleteSignalWaiter(
+              tipExecutionId,
+              signalId,
+              waiter.stepId,
+            );
+            continue;
+          }
+
+          const completedSignalState = shouldPersistStableSignalId(
+            waiter.stepId,
+            signalId,
+          )
+            ? {
+                state: "completed" as const,
+                signalId,
+                payload: validatedPayload,
+              }
+            : { state: "completed" as const, payload: validatedPayload };
+          const committed = await this.commitDeliveredSignal({
+            executionId: tipExecutionId,
+            signalId,
+            stepId: waiter.stepId,
+            completedSignalState,
+            signalRecord,
+            timerId: waiterState.timerId ?? waiter.timerId,
+          });
+          if (!committed) {
+            commitConflictCount += 1;
+            if (commitConflictCount >= 10) {
+              return durableExecutionInvariantError.throw({
+                message: `Signal '${signalId}' delivery for execution '${tipExecutionId}' exceeded the atomic commit retry budget.`,
+              });
+            }
+            continue;
+          }
+          await this.clearSignalWaitCurrentBestEffort({
+            executionId: tipExecutionId,
+            signalId,
+            stepId: waiter.stepId,
+          });
+          completedStepId = waiter.stepId;
+          shouldResume = true;
           break;
         }
 
-        const waitingStep = await this.store.getStepResult(
-          executionId,
-          waiter.stepId,
-        );
-        if (!waitingStep) {
-          await this.store.deleteSignalWaiter(
-            executionId,
+        if (!shouldResume) {
+          await this.store.bufferSignalRecord(
+            tipExecutionId,
             signalId,
-            waiter.stepId,
+            signalRecord,
           );
-          continue;
         }
 
-        const waiterState = inspectSignalWaiterState({
-          signalId,
-          stepId: waiter.stepId,
-          result: waitingStep.result,
-        });
-        if (waiterState.kind === "stale") {
-          await this.store.deleteSignalWaiter(
-            executionId,
-            signalId,
-            waiter.stepId,
-          );
-          continue;
-        }
-
-        const completedSignalState = shouldPersistStableSignalId(
-          waiter.stepId,
-          signalId,
-        )
-          ? {
-              state: "completed" as const,
-              signalId,
-              payload: validatedPayload,
-            }
-          : { state: "completed" as const, payload: validatedPayload };
-        const committed = await this.commitDeliveredSignal({
-          executionId,
-          signalId,
-          stepId: waiter.stepId,
-          completedSignalState,
-          signalRecord,
-          timerId: waiterState.timerId ?? waiter.timerId,
-        });
-        if (!committed) {
-          commitConflictCount += 1;
-          if (commitConflictCount >= 10) {
-            return durableExecutionInvariantError.throw({
-              message: `Signal '${signalId}' delivery for execution '${executionId}' exceeded the atomic commit retry budget.`,
-            });
-          }
-          continue;
-        }
-        await this.clearSignalWaitCurrentBestEffort({
-          executionId,
-          signalId,
-          stepId: waiter.stepId,
-        });
-        completedStepId = waiter.stepId;
-        shouldResume = true;
-        break;
-      }
-
-      if (!shouldResume) {
-        await this.store.bufferSignalRecord(
-          executionId,
-          signalId,
-          signalRecord,
-        );
-      }
-
-      return {
-        auditStepId: completedStepId ?? baseStepId,
-        shouldResume,
+        return {
+          auditStepId: completedStepId ?? baseStepId,
+          shouldResume,
+        };
       };
-    };
 
-    const delivered = await withSignalLock({
-      store: this.store,
-      executionId,
-      signalId,
-      fn: deliver,
-    });
+      const delivered = await withSignalLock({
+        store: this.store,
+        executionId: tipExecutionId,
+        signalId,
+        fn: deliver,
+      });
 
-    if (!delivered) return;
+      if (!delivered) return;
+      if ("follow" in delivered) {
+        tipExecutionId = delivered.follow;
+        continue;
+      }
 
-    const execution = await this.store.getExecution(executionId);
-    const attempt = execution ? execution.attempt : 0;
-    await this.auditLogger.log({
-      kind: DurableAuditEntryKind.SignalDelivered,
-      executionId,
-      workflowKey: execution?.workflowKey,
-      attempt,
-      stepId: delivered.auditStepId,
-      signalId,
-    });
+      const execution = await this.store.getExecution(tipExecutionId);
+      const attempt = execution ? execution.attempt : 0;
+      await this.auditLogger.log({
+        kind: DurableAuditEntryKind.SignalDelivered,
+        executionId: tipExecutionId,
+        workflowKey: execution?.workflowKey,
+        attempt,
+        stepId: delivered.auditStepId,
+        signalId,
+      });
 
-    if (!delivered.shouldResume) return;
+      if (!delivered.shouldResume) return;
 
-    if (!execution) return;
-    if (isTerminalExecutionStatus(execution.status)) return;
+      if (!execution) return;
+      if (isTerminalExecutionStatus(execution.status)) return;
 
-    await this.resumeExecutionWithFailsafe(executionId, delivered.auditStepId);
+      await this.resumeExecutionWithFailsafe(
+        tipExecutionId,
+        delivered.auditStepId,
+      );
+      return;
+    }
   }
 
   private validateSignalPayload<TPayload>(

@@ -59,6 +59,21 @@ export function ExecutionRelations({
       : {}),
   };
 
+  const lineage: Array<{ role: string; id: string }> = [
+    ...(detail.continuedFromExecutionId
+      ? [{ role: "Continued from", id: detail.continuedFromExecutionId }]
+      : []),
+    ...(detail.continuedAsExecutionId
+      ? [{ role: "Continued as", id: detail.continuedAsExecutionId }]
+      : []),
+    ...(detail.restartedFromExecutionId
+      ? [{ role: "Restarted from", id: detail.restartedFromExecutionId }]
+      : []),
+    ...(detail.restartedAsExecutionId
+      ? [{ role: "Restarted as", id: detail.restartedAsExecutionId }]
+      : []),
+  ];
+
   return (
     <section className="relations-view" aria-label="Execution relationships">
       <div className="inspection-summary">
@@ -107,6 +122,24 @@ export function ExecutionRelations({
           </p>
         ) : null}
       </div>
+      {lineage.length > 0 ? (
+        <div className="lineage-block">
+          <span className="eyebrow">Lifecycle lineage</span>
+          <div className="lineage-links">
+            {lineage.map((link) => (
+              <button
+                key={link.role}
+                type="button"
+                className="lineage-link"
+                onClick={() => onOpen(link.id)}
+              >
+                <span className="relation-role">{link.role}</span>
+                <code>{truncateId(link.id, 20)}</code>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

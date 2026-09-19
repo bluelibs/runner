@@ -1,5 +1,7 @@
 import type { IEventBus } from "./interfaces/bus";
 import type {
+  ContinueAsNewOptions,
+  DurableInfo,
   DurableStepRunContext,
   EmitOptions,
   IDurableContext,
@@ -13,6 +15,7 @@ import type {
   WorkflowOptions,
 } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
+import { ContinuationSignal } from "./interfaces/context";
 import { StepBuilder } from "./StepBuilder";
 import {
   createStepCurrent,
@@ -31,6 +34,11 @@ import type { DurableExecutionCurrentWorkflowMeta } from "./types";
 import { ExecutionStatus } from "./types";
 import { createDurableContextAudit } from "./durable-context/DurableContext.audit";
 import {
+  mergeDurableStatePatch,
+  readDurableState,
+  writeDurableState,
+} from "./durable-context/state";
+import {
   createDurableContextDeterminism,
   type ImplicitInternalStepIdsPolicy,
 } from "./durable-context/DurableContext.determinism";
@@ -46,8 +54,10 @@ import { sleepDurably } from "./durable-context/DurableContext.sleep";
 import { waitForExecutionDurably } from "./durable-context/DurableContext.waitForExecution";
 import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSignal";
 import { switchDurably } from "./durable-context/DurableContext.switch";
+import { assertFiniteDurationMs } from "./utils";
 import {
   durableContextCancelledError,
+  durableContinueAsNewRejectedError,
   durableExecutionInvariantError,
 } from "../../../errors";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
@@ -295,7 +305,56 @@ export class DurableContext implements IDurableContext {
     });
   }
 
+  async continueAsNew<TInput>(
+    nextInput: TInput,
+    options?: ContinueAsNewOptions,
+  ): Promise<never> {
+    await this.assertCanContinue();
+    const execution = await this.store.getExecution(this.executionId);
+    if (!execution || execution.status !== ExecutionStatus.Running) {
+      return durableContinueAsNewRejectedError.throw({
+        executionId: this.executionId,
+        reason: execution
+          ? `execution is ${execution.status}`
+          : "execution does not exist",
+      });
+    }
+
+    throw new ContinuationSignal(nextInput, options);
+  }
+
+  async setState<T>(patch: Partial<T>): Promise<void> {
+    await this.assertCanContinue();
+    const current = await readDurableState<T>(this.store, this.executionId);
+    await writeDurableState(
+      this.store,
+      this.executionId,
+      mergeDurableStatePatch(current, patch),
+    );
+  }
+
+  async replaceState<T>(next: T): Promise<void> {
+    await this.assertCanContinue();
+    await writeDurableState(this.store, this.executionId, next);
+  }
+
+  async getState<T>(): Promise<T | undefined> {
+    // Reads stay available during cancellation teardown: they cannot mutate,
+    // so only stale-attempt lock ownership is enforced.
+    this.assertLockOwnership();
+    return await readDurableState<T>(this.store, this.executionId);
+  }
+
+  info(): DurableInfo {
+    return {
+      executionId: this.executionId,
+      attempt: this.attempt,
+      stepCount: this.seenStepIds.size,
+    };
+  }
+
   async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
+    assertFiniteDurationMs("sleep duration", durationMs);
     return await sleepDurably({
       store: this.store,
       executionId: this.executionId,
@@ -365,6 +424,7 @@ export class DurableContext implements IDurableContext {
         message: `Signal '${signal.id}' is not declared in durableWorkflow.signals for this workflow.`,
       });
     }
+    assertFiniteDurationMs("signal timeout", options?.timeoutMs);
 
     return await waitForSignalDurably({
       store: this.store,
@@ -401,6 +461,7 @@ export class DurableContext implements IDurableContext {
     executionId: string,
     options?: WaitForExecutionOptions,
   ): Promise<any> {
+    assertFiniteDurationMs("execution-wait timeout", options?.timeoutMs);
     return await waitForExecutionDurably<ResolveTaskOutput<TTask>>({
       store: this.store,
       executionId: this.executionId,

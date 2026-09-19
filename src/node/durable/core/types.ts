@@ -1,13 +1,29 @@
+/**
+ * Maximum buffered (unconsumed) signals per execution+signal key. Senders
+ * past this point get an explicit backpressure error instead of growing
+ * the backlog without bound.
+ */
+export const MAX_QUEUED_SIGNALS_PER_KEY = 10_000;
+
+/**
+ * Maximum retained signal history records per execution+signal key. Older
+ * records past this point are trimmed (newest kept) as a bounded-retention
+ * policy; delivery state is never trimmed.
+ */
+export const MAX_SIGNAL_HISTORY_PER_KEY = 1_000;
+
 export const ExecutionStatus = {
   Pending: "pending",
   Running: "running",
   Cancelling: "cancelling",
   Retrying: "retrying",
   Sleeping: "sleeping",
+  Paused: "paused",
   Completed: "completed",
   CompensationFailed: "compensation_failed",
   Failed: "failed",
   Cancelled: "cancelled",
+  ContinuedAsNew: "continued_as_new",
 } as const;
 
 export type ExecutionStatus =
@@ -23,7 +39,8 @@ export function isExecutionTerminal(status: ExecutionStatus): boolean {
     status === ExecutionStatus.Completed ||
     status === ExecutionStatus.Failed ||
     status === ExecutionStatus.CompensationFailed ||
-    status === ExecutionStatus.Cancelled
+    status === ExecutionStatus.Cancelled ||
+    status === ExecutionStatus.ContinuedAsNew
   );
 }
 
@@ -148,6 +165,44 @@ export interface Execution<TInput = unknown, TResult = unknown> {
   /** Optional cancellation metadata (cooperative cancellation). */
   cancelledAt?: Date;
   cancelRequestedAt?: Date;
+  /** Timestamp when the execution entered `paused` status, if ever. */
+  pausedAt?: Date;
+  /**
+   * Non-terminal status the execution held when it was paused. Resume
+   * restores this status and re-kicks, letting replay sort out timers and
+   * signals. Cleared on resume.
+   */
+  pausedFrom?: ExecutionStatus;
+  /**
+   * Source execution id when this execution was created via restart.
+   * Always set on restart-created executions.
+   */
+  restartedFromExecutionId?: string;
+  /**
+   * Best-effort forward link to the execution created by restarting this one.
+   * Last-writer-wins when restarted more than once.
+   */
+  restartedAsExecutionId?: string;
+  /**
+   * Marks input that crossed runtimes without schema validation (a restart
+   * override issued where the task is unknown, or a continue-as-new
+   * payload). The first worker that runs this execution validates the input
+   * and either fails fast or clears the flag.
+   */
+  inputNeedsValidation?: boolean;
+  /**
+   * Continue-as-new hops from the lineage root. Roots and pre-bound
+   * executions carry no value (treated as zero); each successor stores its
+   * own depth so the bound needs no chain walk.
+   */
+  continuationDepth?: number;
+  /** Source execution id when this execution was created via continue-as-new. */
+  continuedFromExecutionId?: string;
+  /**
+   * Forward link to the live successor when this execution closed as
+   * `continued_as_new`. Waiters and signals follow this chain to the tip.
+   */
+  continuedAsExecutionId?: string;
   attempt: number;
   maxAttempts: number;
   timeout?: number;
@@ -167,6 +222,24 @@ export interface StepResult<T = unknown> {
   stepId: string;
   result: T;
   completedAt: Date;
+}
+
+/**
+ * Workflow-owned typed state record for one durable execution.
+ *
+ * There is at most one record per execution id; replay converges via
+ * last-write-wins because replay re-executes the deterministic prefix.
+ * The record is carried across continue-as-new and never carried on restart.
+ * Deliberately not named `ExecutionState`, which is taken by the dashboard
+ * projection (`DurableExecutionState`).
+ */
+export interface WorkflowState<TState = unknown> {
+  /** Execution that owns this state record. */
+  executionId: string;
+  /** Workflow-owned typed value. */
+  state: TState;
+  /** Last write time (last-write-wins on this record). */
+  updatedAt: Date;
 }
 
 /**

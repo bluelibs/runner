@@ -25,6 +25,11 @@ export interface ExecutionPersistenceDeps {
   auditLogger: AuditLogger;
   getTaskWorkflowKey: (task: AnyTask) => string;
   maxAttempts: number;
+  /**
+   * Bound on continue-as-new hops per lineage. Undefined means the flow
+   * default; zero or less disables continuations.
+   */
+  maxContinuationDepth?: number;
   defaultTimeout?: number;
   kickoffFailsafeDelayMs: number;
   kickoffExecution: (executionId: string) => Promise<void>;

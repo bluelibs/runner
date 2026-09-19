@@ -19,10 +19,13 @@ import {
   listSchedules,
   listStuck,
   listWorkflows,
+  pauseExecution,
   pauseSchedule,
   previewSchedule,
   recoverOrphans,
   removeSchedule,
+  restartExecution,
+  resumeExecution,
   resumeSchedule,
   retryExecution,
   sendSignal,
@@ -200,7 +203,7 @@ export async function dispatchApiRequest(
     return { kind: "json", status: result.status, body: result.body };
   }
   const actionMatch = pathname.match(
-    /^\/api\/executions\/([^/]+)\/(cancel|retry|force-fail)$/,
+    /^\/api\/executions\/([^/]+)\/(cancel|retry|force-fail|pause|resume|restart)$/,
   );
   if (method === "POST" && actionMatch) {
     const id = decodeURIComponent(actionMatch[1]!);
@@ -210,7 +213,13 @@ export async function dispatchApiRequest(
         ? await cancelExecution(handles, id)
         : action === "retry"
           ? await retryExecution(handles, id)
-          : await forceFailExecution(handles, id, body);
+          : action === "pause"
+            ? await pauseExecution(handles, id)
+            : action === "resume"
+              ? await resumeExecution(handles, id)
+              : action === "restart"
+                ? await restartExecution(handles, id, body)
+                : await forceFailExecution(handles, id, body);
     return { kind: "json", status: result.status, body: result.body };
   }
   const stateActionMatch = pathname.match(
@@ -290,7 +299,8 @@ export interface StudioServerOptions {
    * Optional admin token. When set, every `/api` route except
    * `GET /api/health` requires `Authorization: Bearer <token>` (or the
    * `?token=` query fallback for SSE, which cannot set headers).
-   * Unset means open access.
+   * Prefer the header: query tokens can land in access logs. Unset means
+   * open access.
    */
   token?: string;
 }

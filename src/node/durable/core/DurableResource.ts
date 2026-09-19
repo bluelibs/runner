@@ -13,6 +13,7 @@ import type {
   ExecuteOptions,
   IDurableService,
   RecoverReportType,
+  RestartExecutionOptions,
   ScheduleOptions,
   StartAndWaitOptions,
   UpdateScheduleOptions,
@@ -195,6 +196,39 @@ export class DurableResource implements IDurableResource {
 
   cancelExecution(executionId: string, reason?: string): Promise<void> {
     return this.service.cancelExecution(executionId, reason);
+  }
+
+  /**
+   * Pauses a non-terminal execution; resume restores its pre-pause status.
+   */
+  pauseExecution(executionId: string): Promise<void> {
+    return this.service.pauseExecution(executionId);
+  }
+
+  /**
+   * Resumes a paused execution from its pause point.
+   */
+  resumeExecution(executionId: string): Promise<void> {
+    return this.service.resumeExecution(executionId);
+  }
+
+  /**
+   * Restarts a terminal or paused execution as a fresh run and returns the
+   * new execution id.
+   */
+  restartExecution(
+    executionId: string,
+    options?: RestartExecutionOptions,
+  ): Promise<string> {
+    return this.service.restartExecution(executionId, options);
+  }
+
+  /**
+   * Reads the workflow-owned typed state for one execution.
+   * Resolves `undefined` until the workflow first sets state.
+   */
+  getState<T>(executionId: string): Promise<T | undefined> {
+    return this.service.getState<T>(executionId);
   }
 
   wait<TResult>(

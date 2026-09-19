@@ -245,6 +245,10 @@ test("unknown ids and payloads are rejected", async () => {
       (await client.post("/api/executions", { workflow: "nope" })).status,
       400,
     );
+    assert.equal(
+      (await client.get("/api/executions?cursor=!!!not-a-cursor")).status,
+      400,
+    );
     assert.equal((await client.post("/api/executions", null)).status, 400);
     assert.equal(
       (await client.post("/api/schedules/nope/pause")).status,
@@ -526,6 +530,134 @@ test("stuck list and recovery report are served", async () => {
     }>("/api/recover");
     assert.equal(recovered.status, 202);
     assert.ok(recovered.body.report.scannedCount >= 0);
+  });
+});
+
+test("pause and resume park a waiting execution without losing it", async () => {
+  await withStudio(async (client) => {
+    const executionId = await startWorkflow(client, "processOrder", {
+      orderId: "ORD-PAUSE",
+      customerId: "C",
+      amount: 3,
+      processingDelayMs: 30_000,
+    });
+    await waitForNodeState(
+      client,
+      executionId,
+      "__sleep:processingDelay",
+      "waiting",
+    );
+
+    const paused = await client.post(`/api/executions/${executionId}/pause`);
+    assert.equal(paused.status, 202);
+    const parked = await waitForStatus(client, executionId, "paused");
+    assert.equal(parked.position, "Paused");
+    assert.equal(parked.pausedFrom, "sleeping");
+    assert.equal(parked.state, null);
+    assert.ok(
+      parked.audit.some(
+        (entry) =>
+          entry.kind === "note" &&
+          entry.detail.message === "Operator paused execution",
+      ),
+    );
+
+    assert.equal(
+      (await client.post(`/api/executions/${executionId}/pause`)).status,
+      409,
+    );
+    assert.equal(
+      (await client.post(`/api/executions/${executionId}/restart`)).status,
+      202,
+    );
+
+    const resumed = await client.post(`/api/executions/${executionId}/resume`);
+    assert.equal(resumed.status, 202);
+    const awake = await waitForStatus(client, executionId, "sleeping");
+    assert.equal(awake.pausedFrom, undefined);
+    assert.equal(
+      (await client.post(`/api/executions/${executionId}/resume`)).status,
+      409,
+    );
+
+    const cancelled = await client.post(
+      `/api/executions/${executionId}/cancel`,
+    );
+    assert.equal(cancelled.status, 202);
+    await waitForStatus(client, executionId, "cancelled");
+  });
+});
+
+test("restart re-runs terminal executions and links lineage", async () => {
+  await withStudio(async (client) => {
+    const executionId = await startWorkflow(client, "userOnboarding", {
+      email: "restart@example.com",
+      plan: "free",
+      verificationTimeoutMs: 200,
+    });
+    await waitForStatus(client, executionId, "completed");
+
+    assert.equal(
+      (await client.post(`/api/executions/${executionId}/pause`)).status,
+      409,
+    );
+    assert.equal(
+      (await client.post(`/api/executions/${executionId}/resume`)).status,
+      409,
+    );
+
+    const restarted = await client.post<{ executionId: string }>(
+      `/api/executions/${executionId}/restart`,
+    );
+    assert.equal(restarted.status, 202);
+    const nextId = restarted.body.executionId;
+    assert.ok(nextId.length > 0);
+    assert.notEqual(nextId, executionId);
+
+    const source = await getDetail(client, executionId);
+    assert.equal(source.restartedAsExecutionId, nextId);
+    const next = await getDetail(client, nextId);
+    assert.equal(next.restartedFromExecutionId, executionId);
+    assert.equal(next.state, null);
+    await waitForStatus(client, nextId, "completed");
+
+    const live = await startWorkflow(client, "processOrder", {
+      orderId: "ORD-NO-RESTART",
+      customerId: "C",
+      amount: 3,
+      processingDelayMs: 30_000,
+    });
+    await waitForNodeState(
+      client,
+      live,
+      "__sleep:processingDelay",
+      "waiting",
+    );
+    assert.equal(
+      (await client.post(`/api/executions/${live}/restart`)).status,
+      409,
+    );
+
+    assert.equal(
+      (
+        await client.post(`/api/executions/${executionId}/restart`, {
+          input: { email: "not-an-email", plan: "enterprise" },
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (await client.post("/api/executions/nope/pause")).status,
+      404,
+    );
+    assert.equal(
+      (await client.post("/api/executions/nope/resume")).status,
+      404,
+    );
+    assert.equal(
+      (await client.post("/api/executions/nope/restart")).status,
+      404,
+    );
   });
 });
 

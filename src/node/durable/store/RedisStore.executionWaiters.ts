@@ -34,6 +34,7 @@ export async function commitExecutionWaiterCompletion(
     stepId: string;
     stepResult: StepResult;
     timerId?: string;
+    waitTargetExecutionId?: string;
   },
 ): Promise<boolean> {
   const result = await runtime.redis.eval(
@@ -56,7 +57,11 @@ export async function commitExecutionWaiterCompletion(
       if step.result.state ~= "waiting" then
         return 0
       end
-      if step.result.targetExecutionId ~= ARGV[3] then
+      local stepTargetAccepted = step.result.targetExecutionId == ARGV[3]
+      if not stepTargetAccepted and ARGV[6] ~= "" then
+        stepTargetAccepted = step.result.targetExecutionId == ARGV[6]
+      end
+      if not stepTargetAccepted then
         return 0
       end
 
@@ -85,6 +90,7 @@ export async function commitExecutionWaiterCompletion(
     params.targetExecutionId,
     runtime.serializer.stringify(params.stepResult),
     params.timerId ?? "",
+    params.waitTargetExecutionId ?? "",
   );
   runtime.assertEvalResultNotError(result);
   return Number(result) === 1;

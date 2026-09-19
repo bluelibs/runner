@@ -5,6 +5,7 @@ import type {
   ITaskExecutor,
 } from "../interfaces/service";
 import type { ITask } from "../../../../types/task";
+import type { ContinueAsNewOptions } from "../interfaces/context";
 import { ExecutionStatus, isExecutionTerminal, type Execution } from "../types";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { AuditLogger } from "./AuditLogger";
@@ -38,8 +39,14 @@ import {
   createExecutionContext as createContextFn,
   runTaskAttempt as runTaskAttemptFn,
   handleExecutionAttemptError as handleAttemptErrorFn,
+  toExecutionErrorInfo,
 } from "./ExecutionManager.attempt";
-import { logExecutionStatusChange } from "./ExecutionManager.persistence";
+import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
+import {
+  logExecutionStatusChange,
+  type ExecutionPersistenceDeps,
+} from "./ExecutionManager.persistence";
+import { continueExecutionAsNew as continueAsNewFlow } from "./ExecutionManager.continueAsNew";
 import type { AttemptCancellationController } from "./AttemptCancellationController";
 import { WorkflowAdmissionController } from "./WorkflowAdmissionController";
 
@@ -63,6 +70,7 @@ export interface ExecutionAttemptRunnerDeps {
   ) => Promise<string>;
   getTaskWorkflowKey: (task: AnyTask) => string;
   assertTaskExecutorConfigured: () => void;
+  persistence: ExecutionPersistenceDeps;
 }
 
 /**
@@ -83,6 +91,9 @@ export class ExecutionAttemptRunner {
     const snapshot = await this.deps.store.getExecution(executionId);
     if (!snapshot) return;
     if (isExecutionTerminal(snapshot.status)) return;
+    // Paused executions ignore stale queue messages and timer kicks until
+    // resume restores their pre-pause status and re-kicks them.
+    if (snapshot.status === ExecutionStatus.Paused) return;
 
     const lockResource = `execution:${executionId}`;
     const lockTtlMs = 30_000;
@@ -108,31 +119,44 @@ export class ExecutionAttemptRunner {
     });
 
     try {
-      const execution = await this.deps.store.getExecution(executionId);
-      if (!execution) return;
-      if (isExecutionTerminal(execution.status)) return;
+      const snapshot = await this.deps.store.getExecution(executionId);
+      if (!snapshot) return;
+      if (isExecutionTerminal(snapshot.status)) return;
+      if (snapshot.status === ExecutionStatus.Paused) return;
 
-      if (!execution.workflowKey) {
+      if (!snapshot.workflowKey) {
         await this.transitionExecutionToFailed({
-          execution,
-          from: execution.status,
+          execution: snapshot,
+          from: snapshot.status,
           reason: "workflow_key_missing",
           error: { message: "Execution is missing its durable workflow key." },
         });
         return;
       }
 
-      const task = this.deps.taskRegistry.find(execution.workflowKey);
+      const task = this.deps.taskRegistry.find(snapshot.workflowKey);
       if (!task) {
         await this.transitionExecutionToFailed({
-          execution,
-          from: execution.status,
+          execution: snapshot,
+          from: snapshot.status,
           reason: "task_not_registered",
           error: {
-            message: `Task not registered for workflow key: ${execution.workflowKey}`,
+            message: `Task not registered for workflow key: ${snapshot.workflowKey}`,
           },
         });
         return;
+      }
+
+      let execution = snapshot;
+      if (execution.inputNeedsValidation) {
+        const validated = await this.validateDeferredExecutionInput({
+          execution,
+          task,
+        });
+        if (!validated) {
+          return;
+        }
+        execution = validated;
       }
 
       const admission = await this.workflowAdmission.tryAdmit({
@@ -176,6 +200,10 @@ export class ExecutionAttemptRunner {
       assertAdmissionOwnership,
     );
     guards.assertLockOwnership();
+
+    // Only resume owns the paused → runnable transition; a stale direct caller
+    // must never flip a paused execution back to running.
+    if (execution.status === ExecutionStatus.Paused) return;
 
     const initialCancellation = await guards.getCancellationState();
     if (initialCancellation) {
@@ -306,6 +334,47 @@ export class ExecutionAttemptRunner {
     });
   }
 
+  /**
+   * Validates input that crossed runtimes unchecked (a restart override
+   * issued where the task is unknown, or a continue-as-new payload).
+   * Invalid input fails the execution without running user code; valid or
+   * unschema'd input clears the flag so later attempts run unchecked.
+   */
+  private async validateDeferredExecutionInput(params: {
+    execution: Execution<unknown, unknown>;
+    task: AnyTask;
+  }): Promise<Execution<unknown, unknown> | null> {
+    try {
+      ValidationHelper.validateInput(
+        params.execution.input,
+        params.task.inputSchema,
+        params.execution.workflowKey,
+        "Task",
+      );
+    } catch (error) {
+      await this.transitionExecutionToFailed({
+        execution: params.execution,
+        from: params.execution.status,
+        reason: "invalid_input",
+        error: toExecutionErrorInfo(error),
+      });
+      return null;
+    }
+    // Best-effort clear: a lost race just means the next attempt revalidates
+    // the same (valid) input and clears the flag then. The cleared record is
+    // returned so later transitions in this attempt don't resurrect the flag
+    // from their stale snapshot.
+    const cleared: Execution<unknown, unknown> = {
+      ...params.execution,
+      inputNeedsValidation: undefined,
+      updatedAt: new Date(),
+    };
+    await this.deps.store.saveExecutionIfStatus(cleared, [
+      params.execution.status,
+    ]);
+    return cleared;
+  }
+
   async transitionExecutionToFailed(params: {
     execution: Execution<unknown, unknown>;
     from: ExecutionStatus;
@@ -314,6 +383,7 @@ export class ExecutionAttemptRunner {
       | "timed_out"
       | "workflow_key_missing"
       | "task_not_registered"
+      | "invalid_input"
       | "delivery_attempts_exhausted";
     error: { message: string; stack?: string; stepId?: string };
   }): Promise<void> {
@@ -367,6 +437,24 @@ export class ExecutionAttemptRunner {
   }): Promise<void> {
     await scheduleRetryFn({
       store: this.deps.store,
+      ...params,
+      logStatusChange: (p) => this.logStatusChange(p),
+      finalizeCancellation: (exec, can) =>
+        this.finalizeCancellationIfRequested(exec, can),
+    });
+  }
+
+  async continueExecutionAsNew(params: {
+    runningExecution: Execution<unknown, unknown>;
+    nextInput: unknown;
+    options?: ContinueAsNewOptions;
+    canPersistOutcome?: () => Promise<boolean>;
+  }): Promise<void> {
+    await continueAsNewFlow({
+      deps: {
+        persistence: this.deps.persistence,
+        notifyFinished: (e) => this.deps.notifyFinished(e),
+      },
       ...params,
       logStatusChange: (p) => this.logStatusChange(p),
       finalizeCancellation: (exec, can) =>
@@ -439,6 +527,7 @@ export class ExecutionAttemptRunner {
       suspendAttempt: (exec, reason, can) =>
         this.suspendExecutionAttempt(exec, reason, can),
       scheduleRetry: (p) => this.scheduleExecutionRetry(p),
+      continueAsNew: (p) => this.continueExecutionAsNew(p),
     });
   }
 

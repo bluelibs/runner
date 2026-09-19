@@ -855,6 +855,18 @@ export const durableSignalTimeoutError = error<
   )
   .build();
 
+export const durableSignalBacklogExceededError = error<
+  { executionId: string; signalId: string; limit: number } & DefaultErrorType
+>(RunnerErrorId.DurableSignalBacklogExceeded)
+  .format(
+    ({ executionId, signalId, limit }) =>
+      `Signal backlog for signal "${signalId}" on execution "${executionId}" is full (${limit} buffered signals).`,
+  )
+  .remediation(
+    "Drain the backlog by letting the workflow consume its signals, or signal a different execution.",
+  )
+  .build();
+
 export const durableScheduleConfigError = error<
   { message: string } & DefaultErrorType
 >(RunnerErrorId.DurableScheduleConfig)
@@ -897,6 +909,86 @@ export const durableOperatorUnsupportedStoreCapabilityError = error<
   .remediation(
     ({ operation }) =>
       `Use a durable store implementation that supports operator capability "${operation}".`,
+  )
+  .build();
+
+export const durableLifecycleUnsupportedStoreCapabilityError = error<
+  { operation: string } & DefaultErrorType
+>(RunnerErrorId.DurableLifecycleUnsupportedStoreCapability)
+  .format(({ operation }) => `Store does not support ${operation}`)
+  .remediation(
+    ({ operation }) =>
+      `Use a durable store implementation that supports lifecycle capability "${operation}".`,
+  )
+  .build();
+
+export const durablePauseRejectedError = error<
+  { executionId: string; status: string } & DefaultErrorType
+>(RunnerErrorId.DurablePauseRejected)
+  .format(
+    ({ executionId, status }) =>
+      `Cannot pause execution "${executionId}" with status "${status}".`,
+  )
+  .remediation(
+    "Pause applies to non-terminal executions that are not already stopping; restart terminal executions instead of pausing them.",
+  )
+  .build();
+
+export const durableResumeRejectedError = error<
+  { executionId: string; status: string } & DefaultErrorType
+>(RunnerErrorId.DurableResumeRejected)
+  .format(
+    ({ executionId, status }) =>
+      `Cannot resume execution "${executionId}" with status "${status}": it is not paused.`,
+  )
+  .remediation("Only paused executions can be resumed.")
+  .build();
+
+export const durableRestartRejectedError = error<
+  { executionId: string; status: string } & DefaultErrorType
+>(RunnerErrorId.DurableRestartRejected)
+  .format(
+    ({ executionId, status }) =>
+      `Cannot restart execution "${executionId}" with status "${status}".`,
+  )
+  .remediation(
+    "Restart applies to terminal or paused executions; pause or cancel active executions first, then restart.",
+  )
+  .build();
+
+export const durableRestartIdempotencyConflictError = error<
+  { sourceExecutionId: string; existingExecutionId: string } & DefaultErrorType
+>(RunnerErrorId.DurableRestartIdempotencyConflict)
+  .format(
+    ({ sourceExecutionId, existingExecutionId }) =>
+      `Cannot restart execution "${sourceExecutionId}" with this idempotency key: it already maps to execution "${existingExecutionId}", which was restarted from a different source.`,
+  )
+  .remediation(
+    "Use an idempotency key that is unique to each restarted source execution.",
+  )
+  .build();
+
+export const durableContinueAsNewRejectedError = error<
+  { executionId: string; reason: string } & DefaultErrorType
+>(RunnerErrorId.DurableContinueAsNewRejected)
+  .format(
+    ({ executionId, reason }) =>
+      `Cannot continue execution "${executionId}" as new: ${reason}.`,
+  )
+  .remediation(
+    "Finish in-flight signal handlers and call continueAsNew only from a running workflow attempt.",
+  )
+  .build();
+
+export const durableWorkflowStateInvalidError = error<
+  { executionId: string; reason: string } & DefaultErrorType
+>(RunnerErrorId.DurableWorkflowStateInvalid)
+  .format(
+    ({ executionId, reason }) =>
+      `Invalid workflow state for execution "${executionId}": ${reason}.`,
+  )
+  .remediation(
+    "Pass a serializable object patch to setState, or a serializable value to replaceState.",
   )
   .build();
 

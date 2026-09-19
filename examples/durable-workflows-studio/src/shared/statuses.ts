@@ -28,6 +28,7 @@ export const EXECUTION_STATUS_META: Record<
   cancelling: { label: "Cancelling", tone: "warning", terminal: false },
   retrying: { label: "Retrying", tone: "warning", terminal: false },
   sleeping: { label: "Sleeping", tone: "accent", terminal: false },
+  paused: { label: "Paused", tone: "warning", terminal: false },
   completed: { label: "Completed", tone: "success", terminal: true },
   compensation_failed: {
     label: "Compensation failed",
@@ -36,6 +37,11 @@ export const EXECUTION_STATUS_META: Record<
   },
   failed: { label: "Failed", tone: "danger", terminal: true },
   cancelled: { label: "Cancelled", tone: "neutral", terminal: true },
+  continued_as_new: {
+    label: "Continued as new",
+    tone: "neutral",
+    terminal: true,
+  },
 };
 
 export const NODE_STATE_META: Record<

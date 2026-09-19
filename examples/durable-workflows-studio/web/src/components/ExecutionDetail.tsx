@@ -38,6 +38,9 @@ export function ExecutionDetail({
   onSignal,
   onCancel,
   onRetry,
+  onPause,
+  onResume,
+  onRestart,
   onForceFail,
   onSkip,
   onEdit,
@@ -50,6 +53,9 @@ export function ExecutionDetail({
   onSignal: (signalId?: string) => void;
   onCancel: () => void;
   onRetry: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onRestart: () => void;
   onForceFail: () => void;
   onSkip: () => void;
   onEdit: () => void;
@@ -58,10 +64,12 @@ export function ExecutionDetail({
 }) {
   const [tab, setTab] = useState<Tab>("timeline");
   const live = isLiveStatus(detail.status);
+  const paused = detail.status === "paused";
   const canRetry =
     detail.status === "failed" ||
     detail.status === "cancelled" ||
     detail.status === "compensation_failed";
+  const canRestart = !live || paused;
   const waitingSignals = detail.timeline.filter(
     (node) => node.state === "waiting" && node.wait?.signalId,
   );
@@ -126,6 +134,21 @@ export function ExecutionDetail({
           {canRetry ? (
             <button type="button" className="btn ghost" onClick={onRetry}>
               Retry
+            </button>
+          ) : null}
+          {live && !paused ? (
+            <button type="button" className="btn ghost" onClick={onPause}>
+              Pause
+            </button>
+          ) : null}
+          {paused ? (
+            <button type="button" className="btn ghost" onClick={onResume}>
+              Resume
+            </button>
+          ) : null}
+          {canRestart ? (
+            <button type="button" className="btn ghost" onClick={onRestart}>
+              Restart
             </button>
           ) : null}
           <details className="operator-menu">
@@ -211,6 +234,17 @@ export function ExecutionDetail({
                 <p className="muted">No result yet — the workflow is still running.</p>
               ) : (
                 <JsonView value={detail.result} label="result" />
+              )}
+            </section>
+            <section>
+              <h3>Workflow state</h3>
+              {detail.state === null ? (
+                <p className="muted">No workflow state recorded — the workflow has not set state yet.</p>
+              ) : (
+                <>
+                  <p className="muted">Updated {formatDateTime(detail.state.updatedAt)}</p>
+                  <JsonView value={detail.state.state} label="state" />
+                </>
               )}
             </section>
             {detail.error?.stack ? (

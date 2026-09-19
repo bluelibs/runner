@@ -6,6 +6,7 @@ import type {
   ExecuteOptions,
   IDurableService,
   RecoverReportType,
+  RestartExecutionOptions,
   ScheduleOptions,
   StartAndWaitOptions,
   UpdateScheduleOptions,
@@ -15,6 +16,7 @@ import type { Schedule } from "./types";
 import type { IEventDefinition } from "../../../types/event";
 import type { ITask } from "../../../types/task";
 import { createExecutionId } from "./utils";
+import { readDurableState } from "./durable-context/state";
 
 import {
   TaskRegistry,
@@ -272,6 +274,32 @@ export class DurableService implements IDurableService {
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
     await this.executionManager.cancelExecution(executionId, reason);
+  }
+
+  async pauseExecution(executionId: string): Promise<void> {
+    await this.executionManager.pauseExecution(executionId);
+  }
+
+  async resumeExecution(executionId: string): Promise<void> {
+    await this.executionManager.resumeExecution(executionId);
+  }
+
+  async restartExecution(
+    executionId: string,
+    options?: RestartExecutionOptions,
+  ): Promise<string> {
+    return await this.executionManager.restartExecution(executionId, options);
+  }
+
+  /**
+   * Reads the workflow-owned typed state for one execution.
+   * Resolves `undefined` until the workflow first sets state. Each run owns
+   * its own record: after continue-as-new the successor carries a copy while
+   * the prior run keeps its frozen record, so this reads exactly the
+   * addressed execution without following the chain.
+   */
+  async getState<T>(executionId: string): Promise<T | undefined> {
+    return await readDurableState<T>(this.config.store, executionId);
   }
 
   /** @internal */
