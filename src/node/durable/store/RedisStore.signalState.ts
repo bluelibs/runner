@@ -1,11 +1,16 @@
 import {
+  MAX_QUEUED_SIGNALS_PER_KEY,
+  MAX_SIGNAL_HISTORY_PER_KEY,
   type DurableQueuedSignalRecord,
   type DurableSignalRecord,
   type DurableSignalState,
   type StepResult,
 } from "../core/types";
 import { getSignalIdFromStepId } from "../core/signalWaiters";
-import { durableExecutionInvariantError } from "../../../errors";
+import {
+  durableExecutionInvariantError,
+  durableSignalBacklogExceededError,
+} from "../../../errors";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
 
 export const createRedisSignalState = (
@@ -92,7 +97,17 @@ async function mutateSignalState(params: {
     if not okRecord then
       return "__error__:${params.invalidPayloadMessage}"
     end
+    ${
+      params.mutateQueue
+        ? `if #state.queued >= ${MAX_QUEUED_SIGNALS_PER_KEY} then return "__backlog_full__" end`
+        : ""
+    }
     ${params.mutateHistory ? "table.insert(state.history, record)" : ""}
+    ${
+      params.mutateHistory
+        ? `while #state.history > ${MAX_SIGNAL_HISTORY_PER_KEY} do table.remove(state.history, 1) end`
+        : ""
+    }
     ${params.mutateQueue ? "table.insert(state.queued, record)" : ""}
     redis.call("set", KEYS[1], cjson.encode(state))
     redis.call("sadd", KEYS[2], ARGV[3])
@@ -110,6 +125,13 @@ async function mutateSignalState(params: {
     params.runtime.serializer.stringify(params.record),
     params.signalId,
   );
+  if (outcome === "__backlog_full__") {
+    return durableSignalBacklogExceededError.throw({
+      executionId: params.executionId,
+      signalId: params.signalId,
+      limit: MAX_QUEUED_SIGNALS_PER_KEY,
+    });
+  }
   params.runtime.assertEvalResultNotError(outcome);
 }
 

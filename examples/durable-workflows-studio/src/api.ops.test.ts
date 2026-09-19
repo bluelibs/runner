@@ -245,6 +245,10 @@ test("unknown ids and payloads are rejected", async () => {
       (await client.post("/api/executions", { workflow: "nope" })).status,
       400,
     );
+    assert.equal(
+      (await client.get("/api/executions?cursor=!!!not-a-cursor")).status,
+      400,
+    );
     assert.equal((await client.post("/api/executions", null)).status, 400);
     assert.equal(
       (await client.post("/api/schedules/nope/pause")).status,

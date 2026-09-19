@@ -768,6 +768,7 @@ Rules:
 - Pause applies to non-terminal runs that are not already stopping.
 - A racing cancellation wins over both pause and continue-as-new.
 - Restarted runs get `restartedFromExecutionId` / `restartedAsExecutionId` lineage; continued runs get `continuedFromExecutionId` / `continuedAsExecutionId`.
+- Continuation chains are bounded (`execution.maxContinuationDepth`, default 1000); the over-limit run fails with a clear rejection instead of growing forever.
 
 ## Workflow State
 
@@ -1317,6 +1318,7 @@ Available events:
 | At-least-once execution | Executions retry on failure. Steps run at-most-once per execution (memoized). |
 | Durable sleep           | Timers persist. Resume after process restart.                                 |
 | Signal buffering        | Early signals queue until workflow waits.                                     |
+| Signal bounds           | Queued backlog is capped per key (backpressure); history keeps newest 1000.   |
 | Recovery                | Orphaned executions discovered and resumed on startup.                        |
 | Locks                   | Only one worker processes an execution at a time.                             |
 
@@ -1461,6 +1463,8 @@ interface Execution<TInput = unknown, TResult = unknown> {
   continuedFromExecutionId?: string;
   restartedAsExecutionId?: string;
   restartedFromExecutionId?: string;
+  inputNeedsValidation?: boolean;
+  continuationDepth?: number;
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;

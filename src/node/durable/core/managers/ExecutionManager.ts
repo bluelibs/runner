@@ -54,6 +54,7 @@ export interface ExecutionManagerConfig {
     maxAttempts?: number;
     timeout?: number;
     kickoffFailsafeDelayMs?: number;
+    maxContinuationDepth?: number;
   };
 }
 
@@ -110,6 +111,7 @@ export class ExecutionManager {
       auditLogger: this.auditLogger,
       getTaskWorkflowKey: (task) => this.getTaskWorkflowKey(task),
       maxAttempts: this.config.execution?.maxAttempts ?? 3,
+      maxContinuationDepth: this.config.execution?.maxContinuationDepth,
       defaultTimeout: this.config.execution?.timeout,
       kickoffFailsafeDelayMs:
         this.config.execution?.kickoffFailsafeDelayMs ?? 10_000,

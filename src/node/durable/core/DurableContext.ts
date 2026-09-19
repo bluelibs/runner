@@ -54,6 +54,7 @@ import { sleepDurably } from "./durable-context/DurableContext.sleep";
 import { waitForExecutionDurably } from "./durable-context/DurableContext.waitForExecution";
 import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSignal";
 import { switchDurably } from "./durable-context/DurableContext.switch";
+import { assertFiniteDurationMs } from "./utils";
 import {
   durableContextCancelledError,
   durableContinueAsNewRejectedError,
@@ -353,6 +354,7 @@ export class DurableContext implements IDurableContext {
   }
 
   async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
+    assertFiniteDurationMs("sleep duration", durationMs);
     return await sleepDurably({
       store: this.store,
       executionId: this.executionId,
@@ -422,6 +424,7 @@ export class DurableContext implements IDurableContext {
         message: `Signal '${signal.id}' is not declared in durableWorkflow.signals for this workflow.`,
       });
     }
+    assertFiniteDurationMs("signal timeout", options?.timeoutMs);
 
     return await waitForSignalDurably({
       store: this.store,
@@ -458,6 +461,7 @@ export class DurableContext implements IDurableContext {
     executionId: string,
     options?: WaitForExecutionOptions,
   ): Promise<any> {
+    assertFiniteDurationMs("execution-wait timeout", options?.timeoutMs);
     return await waitForExecutionDurably<ResolveTaskOutput<TTask>>({
       store: this.store,
       executionId: this.executionId,

@@ -188,6 +188,13 @@ export interface DurableServiceConfig {
      * via the poller. Default: 10000 (10s). Set to 0 to disable.
      */
     kickoffFailsafeDelayMs?: number;
+    /**
+     * Maximum continue-as-new hops per lineage. Traversals walk the chain
+     * hop by hop, so this bounds both runaway growth and worst-case
+     * traversal cost. Default: 1000. Zero or less disables continuations
+     * (the over-limit run fails with a clear rejection instead).
+     */
+    maxContinuationDepth?: number;
   };
   schedules?: ScheduleConfig[];
   tasks?: Array<ITask<any, Promise<any>, any, any, any, any>>;
@@ -224,13 +231,17 @@ export interface WaitOptions {
 export interface RestartExecutionOptions {
   /**
    * Optional fresh idempotency key for the restart call itself, so repeated
-   * restart calls with the same key dedupe to one new execution.
+   * restart calls with the same key dedupe to one new execution. Keys are
+   * scoped by workflow, not by source: reusing one key across different
+   * sources is rejected as a conflict instead of cross-linking lineages.
    */
   idempotencyKey?: string;
   /**
    * Optional input override for the restarted run. When omitted, the source
    * execution input is reused. Workflow state is never carried: restart
-   * always starts from input; use continue-as-new to carry state.
+   * always starts from input; use continue-as-new to carry state. Overrides
+   * issued where the task is unknown are validated by the first worker that
+   * runs the restarted execution instead.
    */
   input?: unknown;
 }

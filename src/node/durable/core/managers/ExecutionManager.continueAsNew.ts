@@ -1,7 +1,19 @@
 import type { ContinueAsNewOptions } from "../interfaces/context";
 import { ExecutionStatus, type Execution } from "../types";
 import { createExecutionId } from "../utils";
-import { durableLifecycleUnsupportedStoreCapabilityError } from "../../../../errors";
+import { transitionExecutionToFailed } from "./ExecutionManager.transitions";
+import {
+  durableContinueAsNewRejectedError,
+  durableLifecycleUnsupportedStoreCapabilityError,
+} from "../../../../errors";
+
+/**
+ * Default bound on continue-as-new hops per lineage. Traversals (waits,
+ * signals, timers) walk the chain hop by hop, so an unbounded chain is a
+ * slow-burn availability risk; bugs that chapter in a loop hit this instead
+ * of growing forever. Override with `execution.maxContinuationDepth`.
+ */
+export const DEFAULT_MAX_CONTINUATION_DEPTH = 1000;
 import { readLatestAttemptSnapshot } from "./ExecutionManager.transitionState";
 import {
   kickoffWithFailsafe,
@@ -88,12 +100,42 @@ export async function continueExecutionAsNew(params: {
     return;
   }
 
+  const continuationDepth = (latest.continuationDepth ?? 0) + 1;
+  const maxDepth =
+    params.deps.persistence.maxContinuationDepth ??
+    DEFAULT_MAX_CONTINUATION_DEPTH;
+  if (continuationDepth > maxDepth) {
+    // Fail terminally (instead of throwing past the attempt handler) so the
+    // run never strands in `running`: waiters resolve with the rejection and
+    // the operator sees a failed run with a clear reason. A racing
+    // pause/cancel still wins via the compare-and-set.
+    const rejection = durableContinueAsNewRejectedError.new({
+      executionId: latest.id,
+      reason: `continuation depth limit of ${maxDepth} exceeded`,
+    });
+    await transitionExecutionToFailed({
+      store,
+      execution: latest,
+      from: ExecutionStatus.Running,
+      reason: "continuation_depth_exceeded",
+      error: { message: rejection.message },
+      logStatusChange: params.logStatusChange,
+      notifyFinished: params.deps.notifyFinished,
+      finalizeCancellation: params.finalizeCancellation,
+    });
+    return;
+  }
+
   const now = new Date();
   const successor: Execution = {
     id: createExecutionId(),
     workflowKey: latest.workflowKey,
     parentExecutionId: latest.parentExecutionId,
     input: params.nextInput,
+    // Workflow code supplies the next input without a boundary check here;
+    // the first worker that runs the successor validates it instead.
+    inputNeedsValidation: true,
+    continuationDepth,
     status: ExecutionStatus.Pending,
     attempt: 1,
     maxAttempts: params.deps.persistence.maxAttempts,

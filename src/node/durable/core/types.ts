@@ -1,3 +1,17 @@
+/**
+ * Maximum buffered (unconsumed) signals per execution+signal key. Senders
+ * past this point get an explicit backpressure error instead of growing
+ * the backlog without bound.
+ */
+export const MAX_QUEUED_SIGNALS_PER_KEY = 10_000;
+
+/**
+ * Maximum retained signal history records per execution+signal key. Older
+ * records past this point are trimmed (newest kept) as a bounded-retention
+ * policy; delivery state is never trimmed.
+ */
+export const MAX_SIGNAL_HISTORY_PER_KEY = 1_000;
+
 export const ExecutionStatus = {
   Pending: "pending",
   Running: "running",
@@ -169,6 +183,19 @@ export interface Execution<TInput = unknown, TResult = unknown> {
    * Last-writer-wins when restarted more than once.
    */
   restartedAsExecutionId?: string;
+  /**
+   * Marks input that crossed runtimes without schema validation (a restart
+   * override issued where the task is unknown, or a continue-as-new
+   * payload). The first worker that runs this execution validates the input
+   * and either fails fast or clears the flag.
+   */
+  inputNeedsValidation?: boolean;
+  /**
+   * Continue-as-new hops from the lineage root. Roots and pre-bound
+   * executions carry no value (treated as zero); each successor stores its
+   * own depth so the bound needs no chain walk.
+   */
+  continuationDepth?: number;
   /** Source execution id when this execution was created via continue-as-new. */
   continuedFromExecutionId?: string;
   /**

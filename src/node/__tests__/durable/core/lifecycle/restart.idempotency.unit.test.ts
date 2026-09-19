@@ -117,7 +117,7 @@ describe("durable: restart idempotency", () => {
     ).toBe(restartedId);
   });
 
-  it("returns the deduped id when the mapped execution is gone", async () => {
+  it("fails fast when the mapped execution is gone", async () => {
     const backing = new MemoryStore();
     await backing.saveExecution(createExecution());
     const store = createBareStore(backing, {
@@ -128,13 +128,41 @@ describe("durable: restart idempotency", () => {
     });
     const manager = createManager({ store });
 
-    const restartedId = await manager.restartExecution("e-restart", {
-      idempotencyKey: "restart-ghost-key",
-    });
-
-    expect(restartedId).toBe("e-ghost");
+    await expect(
+      manager.restartExecution("e-restart", {
+        idempotencyKey: "restart-ghost-key",
+      }),
+    ).rejects.toThrow(
+      'Idempotency mapping for restart of execution "e-restart" points to missing execution "e-ghost".',
+    );
     expect(
       (await backing.getExecution("e-restart"))?.restartedAsExecutionId,
-    ).toBe("e-ghost");
+    ).toBeUndefined();
+  });
+
+  it("rejects a key that already maps to another source's restart", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution(createExecution({ id: "e-source-a" }));
+    await store.saveExecution(createExecution({ id: "e-source-b" }));
+    const manager = createManager({
+      store,
+      taskExecutor: createFixedTaskExecutor("restarted-ok"),
+    });
+
+    const first = await manager.restartExecution("e-source-a", {
+      idempotencyKey: "shared-key",
+    });
+
+    await expect(
+      manager.restartExecution("e-source-b", { idempotencyKey: "shared-key" }),
+    ).rejects.toThrow(
+      `Cannot restart execution "e-source-b" with this idempotency key: it already maps to execution "${first}", which was restarted from a different source.`,
+    );
+    expect(
+      (await store.getExecution("e-source-b"))?.restartedAsExecutionId,
+    ).toBeUndefined();
+    expect(
+      (await store.getExecution("e-source-a"))?.restartedAsExecutionId,
+    ).toBe(first);
   });
 });

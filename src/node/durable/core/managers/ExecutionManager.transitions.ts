@@ -82,6 +82,8 @@ export async function transitionExecutionToFailed(params: {
     | "timed_out"
     | "workflow_key_missing"
     | "task_not_registered"
+    | "invalid_input"
+    | "continuation_depth_exceeded"
     | "delivery_attempts_exhausted";
   error: {
     message: string;

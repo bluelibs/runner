@@ -1,7 +1,11 @@
 import type { IDurableStore } from "../interfaces/store";
 import type { IEventBus, BusEvent } from "../interfaces/bus";
 import type { WaitOptions } from "../interfaces/service";
-import { sleepMs, DurableExecutionError } from "../utils";
+import {
+  sleepMs,
+  assertFiniteDurationMs,
+  DurableExecutionError,
+} from "../utils";
 import { clearTimeout, setTimeout } from "node:timers";
 import { ExecutionStatus } from "../types";
 
@@ -33,6 +37,8 @@ export class WaitManager {
     executionId: string,
     options?: WaitOptions,
   ): Promise<TResult> {
+    assertFiniteDurationMs("wait timeout", options?.timeout);
+    assertFiniteDurationMs("wait poll interval", options?.waitPollIntervalMs);
     const startedAt = Date.now();
     const timeoutMs = options?.timeout ?? this.config?.defaultTimeout;
     const pollEveryMs =

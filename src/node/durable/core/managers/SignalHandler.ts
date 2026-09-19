@@ -123,6 +123,21 @@ export class SignalHandler {
     }
   }
 
+  private async warnBrokenContinuationChainBestEffort(params: {
+    executionId: string;
+    tipExecutionId: string;
+    reason: string;
+  }): Promise<void> {
+    try {
+      await this.logger.warn(
+        "Durable signal dropped: continuation chain is broken.",
+        params,
+      );
+    } catch {
+      // Observability stays best-effort; the drop itself is the contract.
+    }
+  }
+
   private async resumeExecutionWithFailsafe(
     executionId: string,
     stepId: string,
@@ -248,9 +263,27 @@ export class SignalHandler {
         | null
       > => {
         const execution = await this.store.getExecution(tipExecutionId);
-        if (!execution) return null;
+        if (!execution) {
+          // A missing address is a quiet no-op by contract, but a missing
+          // successor mid-chain means corrupt lineage worth surfacing.
+          if (tipExecutionId !== executionId) {
+            await this.warnBrokenContinuationChainBestEffort({
+              executionId,
+              tipExecutionId,
+              reason: "successor record is missing",
+            });
+          }
+          return null;
+        }
         if (execution.status === ExecutionStatus.ContinuedAsNew) {
-          if (!execution.continuedAsExecutionId) return null;
+          if (!execution.continuedAsExecutionId) {
+            await this.warnBrokenContinuationChainBestEffort({
+              executionId,
+              tipExecutionId,
+              reason: "continued_as_new without a successor link",
+            });
+            return null;
+          }
           return { follow: execution.continuedAsExecutionId };
         }
         if (isTerminalExecutionStatus(execution.status)) return null;

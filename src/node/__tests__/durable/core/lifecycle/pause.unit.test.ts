@@ -217,6 +217,49 @@ describe("durable: pause execution", () => {
     );
   });
 
+  it("re-aborts and re-publishes when pausing an already-paused running execution", async () => {
+    const bus = new SpyBus();
+    const store = new MemoryStore();
+    await store.saveExecution(
+      createExecution({ status: ExecutionStatus.Running }),
+    );
+    const manager = createManager({ store, eventBus: bus });
+
+    const first = new AbortController();
+    (manager as any).cancellation.activeAttemptControllers.set(
+      "e-pause",
+      first,
+    );
+    await manager.pauseExecution("e-pause");
+
+    const second = new AbortController();
+    (manager as any).cancellation.activeAttemptControllers.set(
+      "e-pause",
+      second,
+    );
+    await manager.pauseExecution("e-pause");
+
+    expect(first.signal.aborted).toBe(true);
+    expect(second.signal.aborted).toBe(true);
+    expect(second.signal.reason).toBe(EXECUTION_PAUSED_ABORT_REASON);
+    expect(bus.publish).toHaveBeenCalledTimes(2);
+    expect((await store.getExecution("e-pause"))?.status).toBe(
+      ExecutionStatus.Paused,
+    );
+  });
+
+  it("does not re-publish when pausing an already-paused pending execution", async () => {
+    const bus = new SpyBus();
+    const store = new MemoryStore();
+    await store.saveExecution(createExecution());
+    const manager = createManager({ store, eventBus: bus });
+
+    await manager.pauseExecution("e-pause");
+    await manager.pauseExecution("e-pause");
+
+    expect(bus.publish).not.toHaveBeenCalled();
+  });
+
   it("pauses even when live pause publish fails", async () => {
     const bus = new SpyBus();
     bus.publish.mockRejectedValueOnce(

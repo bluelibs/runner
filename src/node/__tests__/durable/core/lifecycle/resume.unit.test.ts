@@ -198,4 +198,36 @@ describe("durable: resume execution", () => {
 
     expect(restored).toEqual([ExecutionStatus.Pending]);
   });
+
+  it.each([
+    ExecutionStatus.Completed,
+    ExecutionStatus.Failed,
+    ExecutionStatus.Paused,
+    ExecutionStatus.Cancelling,
+  ])(
+    "falls back to inference when the stashed pause origin is %s",
+    async (pausedFrom) => {
+      const backing = new MemoryStore();
+      await backing.saveExecution(
+        createPausedExecution({ pausedFrom, current: undefined }),
+      );
+      const restored: ExecutionStatus[] = [];
+      const store = createBareStore(backing, {
+        saveExecutionIfStatus: async (execution, expected) => {
+          if (expected.includes(ExecutionStatus.Paused)) {
+            restored.push(execution.status);
+          }
+          return await backing.saveExecutionIfStatus(execution, expected);
+        },
+      });
+      const run = jest.fn();
+      run.mockImplementation(async () => "resumed-ok");
+      const manager = createManager({ store, taskExecutor: { run } });
+
+      await manager.resumeExecution("e-resume");
+
+      expect(restored).toEqual([ExecutionStatus.Pending]);
+      expect(run).toHaveBeenCalled();
+    },
+  );
 });

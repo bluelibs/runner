@@ -8,7 +8,7 @@ import type {
 } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { clearExecutionCurrent } from "../current";
-import { ExecutionStatus } from "../types";
+import { ExecutionStatus, isExecutionTerminal } from "../types";
 import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { createCancellationErrorFromSignal } from "../../../../tools/abortSignals";
@@ -137,6 +137,38 @@ export async function executeDurableStep<T>(params: {
   return result;
 }
 
+async function persistCompensationFailure(params: {
+  store: IDurableStore;
+  executionId: string;
+  error: { message: string; stack?: string };
+}): Promise<void> {
+  const current = await params.store.getExecution(params.executionId);
+  if (!current) {
+    return;
+  }
+  // Never resurrect a terminal run or un-park a paused one: the operator's
+  // terminal/park decision stands while the compensation error still
+  // propagates to the caller.
+  if (
+    isExecutionTerminal(current.status) ||
+    current.status === ExecutionStatus.Paused
+  ) {
+    return;
+  }
+  // Compare-and-set so a pause/cancel that commits first is never
+  // overwritten; a lost race simply leaves the winner's status in place.
+  await params.store.saveExecutionIfStatus(
+    {
+      ...current,
+      status: ExecutionStatus.CompensationFailed,
+      current: undefined,
+      error: params.error,
+      updatedAt: new Date(),
+    },
+    [current.status],
+  );
+}
+
 export async function rollbackDurableCompensations(params: {
   store: IDurableStore;
   executionId: string;
@@ -165,11 +197,10 @@ export async function rollbackDurableCompensations(params: {
       stack: error instanceof Error ? error.stack : undefined,
     };
 
-    await params.store.updateExecution(params.executionId, {
-      status: ExecutionStatus.CompensationFailed,
-      current: undefined,
+    await persistCompensationFailure({
+      store: params.store,
+      executionId: params.executionId,
       error: errorInfo,
-      updatedAt: new Date(),
     });
 
     durableExecutionInvariantError.throw({

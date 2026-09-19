@@ -855,6 +855,18 @@ export const durableSignalTimeoutError = error<
   )
   .build();
 
+export const durableSignalBacklogExceededError = error<
+  { executionId: string; signalId: string; limit: number } & DefaultErrorType
+>(RunnerErrorId.DurableSignalBacklogExceeded)
+  .format(
+    ({ executionId, signalId, limit }) =>
+      `Signal backlog for signal "${signalId}" on execution "${executionId}" is full (${limit} buffered signals).`,
+  )
+  .remediation(
+    "Drain the backlog by letting the workflow consume its signals, or signal a different execution.",
+  )
+  .build();
+
 export const durableScheduleConfigError = error<
   { message: string } & DefaultErrorType
 >(RunnerErrorId.DurableScheduleConfig)
@@ -941,6 +953,18 @@ export const durableRestartRejectedError = error<
   )
   .remediation(
     "Restart applies to terminal or paused executions; pause or cancel active executions first, then restart.",
+  )
+  .build();
+
+export const durableRestartIdempotencyConflictError = error<
+  { sourceExecutionId: string; existingExecutionId: string } & DefaultErrorType
+>(RunnerErrorId.DurableRestartIdempotencyConflict)
+  .format(
+    ({ sourceExecutionId, existingExecutionId }) =>
+      `Cannot restart execution "${sourceExecutionId}" with this idempotency key: it already maps to execution "${existingExecutionId}", which was restarted from a different source.`,
+  )
+  .remediation(
+    "Use an idempotency key that is unique to each restarted source execution.",
   )
   .build();
 

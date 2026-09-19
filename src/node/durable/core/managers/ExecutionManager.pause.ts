@@ -29,6 +29,36 @@ export interface ExecutionPauseDeps {
   kickoffExecution: (executionId: string) => Promise<void>;
 }
 
+function isRestorableResumeStatus(status: ExecutionStatus): boolean {
+  return (
+    !isExecutionTerminal(status) &&
+    status !== ExecutionStatus.Paused &&
+    status !== ExecutionStatus.Cancelling
+  );
+}
+
+/**
+ * Re-issues the live stop for an already-paused execution that was paused
+ * out of `running`: a prior publish may have gone out before any worker
+ * was listening (or been lost), and without a re-issue the live attempt
+ * would only notice via the slower polling fallback. Other origins never
+ * had a live attempt, so there is nothing to re-issue.
+ */
+async function reissueLivePauseIfRunningOrigin(
+  deps: ExecutionPauseDeps,
+  executionId: string,
+  execution: Execution<unknown, unknown>,
+): Promise<void> {
+  if (execution.pausedFrom !== ExecutionStatus.Running) {
+    return;
+  }
+  deps.abortActiveAttempt(executionId, EXECUTION_PAUSED_ABORT_REASON);
+  await deps.publishLivePauseRequested(
+    executionId,
+    EXECUTION_PAUSED_ABORT_REASON,
+  );
+}
+
 function inferResumeStatus(
   execution: Execution<unknown, unknown>,
 ): ExecutionStatus {
@@ -68,6 +98,7 @@ export async function pauseExecution(
       });
     }
     if (execution.status === ExecutionStatus.Paused) {
+      await reissueLivePauseIfRunningOrigin(deps, executionId, execution);
       return;
     }
     if (
@@ -123,6 +154,7 @@ export async function pauseExecution(
     });
   }
   if (getPauseState(latestExecution)) {
+    await reissueLivePauseIfRunningOrigin(deps, executionId, latestExecution);
     return;
   }
   if (
@@ -167,7 +199,13 @@ export async function resumeExecution(
       });
     }
 
-    const restoredStatus = execution.pausedFrom ?? inferResumeStatus(execution);
+    // Pause only ever stashes a live status, but a tampered or migrated
+    // record could carry a terminal (or otherwise unrestorable) value;
+    // fall back to inference rather than resurrecting or re-parking it.
+    const stashedStatus = execution.pausedFrom ?? inferResumeStatus(execution);
+    const restoredStatus = isRestorableResumeStatus(stashedStatus)
+      ? stashedStatus
+      : inferResumeStatus(execution);
     const now = new Date();
     const resumedExecution: Execution = {
       ...execution,

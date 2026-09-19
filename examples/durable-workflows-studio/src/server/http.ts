@@ -299,7 +299,8 @@ export interface StudioServerOptions {
    * Optional admin token. When set, every `/api` route except
    * `GET /api/health` requires `Authorization: Bearer <token>` (or the
    * `?token=` query fallback for SSE, which cannot set headers).
-   * Unset means open access.
+   * Prefer the header: query tokens can land in access logs. Unset means
+   * open access.
    */
   token?: string;
 }

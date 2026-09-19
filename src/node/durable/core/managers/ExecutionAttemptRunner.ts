@@ -39,7 +39,9 @@ import {
   createExecutionContext as createContextFn,
   runTaskAttempt as runTaskAttemptFn,
   handleExecutionAttemptError as handleAttemptErrorFn,
+  toExecutionErrorInfo,
 } from "./ExecutionManager.attempt";
+import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
 import {
   logExecutionStatusChange,
   type ExecutionPersistenceDeps,
@@ -117,32 +119,44 @@ export class ExecutionAttemptRunner {
     });
 
     try {
-      const execution = await this.deps.store.getExecution(executionId);
-      if (!execution) return;
-      if (isExecutionTerminal(execution.status)) return;
-      if (execution.status === ExecutionStatus.Paused) return;
+      const snapshot = await this.deps.store.getExecution(executionId);
+      if (!snapshot) return;
+      if (isExecutionTerminal(snapshot.status)) return;
+      if (snapshot.status === ExecutionStatus.Paused) return;
 
-      if (!execution.workflowKey) {
+      if (!snapshot.workflowKey) {
         await this.transitionExecutionToFailed({
-          execution,
-          from: execution.status,
+          execution: snapshot,
+          from: snapshot.status,
           reason: "workflow_key_missing",
           error: { message: "Execution is missing its durable workflow key." },
         });
         return;
       }
 
-      const task = this.deps.taskRegistry.find(execution.workflowKey);
+      const task = this.deps.taskRegistry.find(snapshot.workflowKey);
       if (!task) {
         await this.transitionExecutionToFailed({
-          execution,
-          from: execution.status,
+          execution: snapshot,
+          from: snapshot.status,
           reason: "task_not_registered",
           error: {
-            message: `Task not registered for workflow key: ${execution.workflowKey}`,
+            message: `Task not registered for workflow key: ${snapshot.workflowKey}`,
           },
         });
         return;
+      }
+
+      let execution = snapshot;
+      if (execution.inputNeedsValidation) {
+        const validated = await this.validateDeferredExecutionInput({
+          execution,
+          task,
+        });
+        if (!validated) {
+          return;
+        }
+        execution = validated;
       }
 
       const admission = await this.workflowAdmission.tryAdmit({
@@ -320,6 +334,47 @@ export class ExecutionAttemptRunner {
     });
   }
 
+  /**
+   * Validates input that crossed runtimes unchecked (a restart override
+   * issued where the task is unknown, or a continue-as-new payload).
+   * Invalid input fails the execution without running user code; valid or
+   * unschema'd input clears the flag so later attempts run unchecked.
+   */
+  private async validateDeferredExecutionInput(params: {
+    execution: Execution<unknown, unknown>;
+    task: AnyTask;
+  }): Promise<Execution<unknown, unknown> | null> {
+    try {
+      ValidationHelper.validateInput(
+        params.execution.input,
+        params.task.inputSchema,
+        params.execution.workflowKey,
+        "Task",
+      );
+    } catch (error) {
+      await this.transitionExecutionToFailed({
+        execution: params.execution,
+        from: params.execution.status,
+        reason: "invalid_input",
+        error: toExecutionErrorInfo(error),
+      });
+      return null;
+    }
+    // Best-effort clear: a lost race just means the next attempt revalidates
+    // the same (valid) input and clears the flag then. The cleared record is
+    // returned so later transitions in this attempt don't resurrect the flag
+    // from their stale snapshot.
+    const cleared: Execution<unknown, unknown> = {
+      ...params.execution,
+      inputNeedsValidation: undefined,
+      updatedAt: new Date(),
+    };
+    await this.deps.store.saveExecutionIfStatus(cleared, [
+      params.execution.status,
+    ]);
+    return cleared;
+  }
+
   async transitionExecutionToFailed(params: {
     execution: Execution<unknown, unknown>;
     from: ExecutionStatus;
@@ -328,6 +383,7 @@ export class ExecutionAttemptRunner {
       | "timed_out"
       | "workflow_key_missing"
       | "task_not_registered"
+      | "invalid_input"
       | "delivery_attempts_exhausted";
     error: { message: string; stack?: string; stepId?: string };
   }): Promise<void> {

@@ -1,4 +1,6 @@
 import { createSignalWaiterSortKey } from "../../../../durable/core/signalWaiters";
+import { AuditLogger } from "../../../../durable/core/managers/AuditLogger";
+import { SignalHandler } from "../../../../durable/core/managers/SignalHandler";
 import {
   ExecutionStatus,
   type Execution,
@@ -157,5 +159,72 @@ describe("durable: SignalHandler continuation", () => {
     expect(queue!.enqueued).toEqual([
       { type: "resume", payload: { executionId: "tip" } },
     ]);
+  });
+
+  it("warns when dropping a signal on a link-less continuation", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution(continuedExecution("root", undefined));
+    const warn = jest.fn().mockResolvedValue(undefined);
+    const handler = new SignalHandler(
+      store,
+      new AuditLogger({ enabled: false }, store),
+      { warn } as any,
+      undefined,
+      3,
+      { processExecution: async () => {}, resolveTask: () => undefined },
+    );
+
+    await handler.signal("root", Paid, { paidAt: 1 });
+
+    expect(warn).toHaveBeenCalledWith(
+      "Durable signal dropped: continuation chain is broken.",
+      expect.objectContaining({
+        executionId: "root",
+        tipExecutionId: "root",
+        reason: "continued_as_new without a successor link",
+      }),
+    );
+  });
+
+  it("warns when dropping a signal on a missing successor", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution(continuedExecution("root", "ghost"));
+    const warn = jest.fn().mockResolvedValue(undefined);
+    const handler = new SignalHandler(
+      store,
+      new AuditLogger({ enabled: false }, store),
+      { warn } as any,
+      undefined,
+      3,
+      { processExecution: async () => {}, resolveTask: () => undefined },
+    );
+
+    await handler.signal("root", Paid, { paidAt: 1 });
+
+    expect(warn).toHaveBeenCalledWith(
+      "Durable signal dropped: continuation chain is broken.",
+      expect.objectContaining({
+        executionId: "root",
+        tipExecutionId: "ghost",
+        reason: "successor record is missing",
+      }),
+    );
+  });
+
+  it("stays silent when the signaled execution itself is missing", async () => {
+    const store = new MemoryStore();
+    const warn = jest.fn().mockResolvedValue(undefined);
+    const handler = new SignalHandler(
+      store,
+      new AuditLogger({ enabled: false }, store),
+      { warn } as any,
+      undefined,
+      3,
+      { processExecution: async () => {}, resolveTask: () => undefined },
+    );
+
+    await handler.signal("missing", Paid, { paidAt: 1 });
+
+    expect(warn).not.toHaveBeenCalled();
   });
 });
