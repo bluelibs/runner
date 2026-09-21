@@ -761,7 +761,7 @@ if (d.info().stepCount > 500) {
 }
 ```
 
-Pause stops the run from advancing and records the pre-pause status in `pausedFrom`; resume restores it. Timers and signals still land on wall-clock time while paused, but attempts, polling kicks, and recovery skip the run until resume. Restart rejects active runs: only terminal or paused executions restart, and the new run starts fresh (new input optional, no carried steps or state). Continue-as-new links runs both ways (`continuedAsExecutionId` / `continuedFromExecutionId`); waits and signals follow the chain, so callers keep addressing the original id.
+Pause stops the run from advancing and records the pre-pause status in `pausedFrom`; resume restores it. Timers and signals still land on wall-clock time while paused, but attempts, polling kicks, and recovery skip the run until resume. Restart rejects active runs: only terminal or paused executions restart, and the new run starts fresh (new input optional, no carried steps or state). Restart does not retarget existing `wait(...)` / `waitForExecution(...)` callers: they stay attached to the source execution, so code that wants the rerun must switch to the returned `rerunId`. Continue-as-new links runs both ways (`continuedAsExecutionId` / `continuedFromExecutionId`); waits and signals follow the chain, so callers keep addressing the original id.
 
 Rules:
 
