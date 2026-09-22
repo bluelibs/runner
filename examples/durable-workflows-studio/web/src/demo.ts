@@ -454,6 +454,7 @@ function isDemoTerminal(status: StudioExecutionStatus): boolean {
   return (
     status === "completed" ||
     status === "failed" ||
+    status === "compensation_failed" ||
     status === "cancelled" ||
     status === "continued_as_new"
   );
@@ -1299,7 +1300,7 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
       const nextId = `demo_${sequence.toString(36)}_${Date.now().toString(36)}`;
       const next = createSimulation(
         sim.workflow,
-        input ?? sim.detail.input,
+        input !== undefined ? input : sim.detail.input,
         nextId,
       );
       next.detail = { ...next.detail, restartedFromExecutionId: id };

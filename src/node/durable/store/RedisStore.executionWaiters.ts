@@ -54,7 +54,7 @@ export async function commitExecutionWaiterCompletion(
       if not okStep or type(step) ~= "table" or type(step.result) ~= "table" then
         return 0
       end
-      if step.result.state ~= "waiting" then
+      if step.result.state ~= "waiting" and step.result.state ~= "continued" then
         return 0
       end
       local stepTargetAccepted = step.result.targetExecutionId == ARGV[3]

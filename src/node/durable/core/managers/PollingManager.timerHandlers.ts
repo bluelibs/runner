@@ -223,7 +223,8 @@ export async function handleExecutionWaitTimeoutTimer(params: {
   );
   const currentWaitState = parseExecutionWaitState(currentWaitStep?.result);
   if (
-    currentWaitState?.state !== "waiting" ||
+    (currentWaitState?.state !== "waiting" &&
+      currentWaitState?.state !== "continued") ||
     !currentWaitState.targetExecutionId
   ) {
     return false;
@@ -251,7 +252,7 @@ export async function handleExecutionWaitTimeoutTimer(params: {
           params.timer.stepId!,
         );
         const state = parseExecutionWaitState(existing?.result);
-        if (state?.state !== "waiting") {
+        if (state?.state !== "waiting" && state?.state !== "continued") {
           return { kind: "done", handled: false };
         }
         if (state.timerId !== undefined && state.timerId !== params.timer.id) {

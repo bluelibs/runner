@@ -181,6 +181,25 @@ describe("durable: restart execution", () => {
     expect((await store.getExecution("e-restart"))?.input).toEqual({ v: 1 });
   });
 
+  it("preserves an explicit null input override", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution(createExecution({ input: { v: 1 } }));
+    const seen: unknown[] = [];
+    const run = jest.fn();
+    run.mockImplementation(async (_task: unknown, input: unknown) => {
+      seen.push(input);
+      return input;
+    });
+    const manager = createManager({ store, taskExecutor: { run } });
+
+    const restartedId = await manager.restartExecution("e-restart", {
+      input: null,
+    });
+
+    expect(seen).toEqual([null]);
+    expect((await store.getExecution(restartedId))?.input).toBeNull();
+  });
+
   it.each([
     ExecutionStatus.Pending,
     ExecutionStatus.Running,

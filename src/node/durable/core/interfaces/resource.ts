@@ -128,6 +128,7 @@ export interface IDurableResource extends Pick<
   | "pauseExecution"
   | "resumeExecution"
   | "restartExecution"
+  | "getState"
   | "wait"
   | "schedule"
   | "ensureSchedule"

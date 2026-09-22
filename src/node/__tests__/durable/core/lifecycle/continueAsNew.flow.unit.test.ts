@@ -112,6 +112,9 @@ describe("durable: continueExecutionAsNew", () => {
         status: ExecutionStatus.ContinuedAsNew,
       }),
     );
+    expect(notifyFinished.mock.invocationCallOrder[0]).toBeLessThan(
+      kickoffExecution.mock.invocationCallOrder[0]!,
+    );
     expect(callbacks.logStatusChange).toHaveBeenCalledWith({
       execution: expect.objectContaining({ id: "root" }),
       from: ExecutionStatus.Running,

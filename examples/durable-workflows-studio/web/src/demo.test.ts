@@ -276,6 +276,18 @@ describe("demo studio", () => {
     expect((await api.getExecution(nextId)).restartedFromExecutionId).toBe(
       "demo_ord_completed",
     );
+
+    const nullInputId = await api.restartExecution("demo_ord_completed", null);
+    expect((await api.getExecution(nullInputId)).input).toBeNull();
+    await api.cancelExecution(nullInputId);
+
+    const compensationFailed = (
+      await api.listExecutionPage({ status: "compensation_failed", limit: 1 })
+    ).executions[0];
+    expect(compensationFailed).toBeDefined();
+    await expect(
+      api.cancelExecution(compensationFailed!.id),
+    ).rejects.toBeInstanceOf(ApiError);
   });
 
   it("locks data behind unlock() when created locked", async () => {

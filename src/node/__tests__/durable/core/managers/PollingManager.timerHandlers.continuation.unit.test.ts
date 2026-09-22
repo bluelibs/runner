@@ -61,6 +61,23 @@ async function seedWaitingParent(store: MemoryStore): Promise<void> {
   });
 }
 
+async function seedContinuedParent(store: MemoryStore): Promise<void> {
+  await store.saveExecution(waitingParent());
+  await store.saveStepResult({
+    executionId: "wait-exec",
+    stepId: "__execution:child",
+    result: {
+      state: "continued",
+      targetExecutionId: "child",
+      continuedAsExecutionId: "tip",
+      workflowKey: "canonical.child",
+      timerId: "execution_timeout:wait-exec:__execution:child",
+      timeoutAtMs: Date.now() - 1,
+    },
+    completedAt: new Date(),
+  });
+}
+
 function timeoutTimer() {
   return {
     id: "execution_timeout:wait-exec:__execution:child",
@@ -114,6 +131,37 @@ describe("durable: execution-wait timeout continuation", () => {
   it("times out against a live tip instead of following forever", async () => {
     const store = new MemoryStore();
     await seedWaitingParent(store);
+    await store.saveExecution(continuedChild("tip"));
+    await store.saveExecution({
+      id: "tip",
+      workflowKey: "canonical.child",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "wait-exec",
+      targetExecutionId: "tip",
+      stepId: "__execution:child",
+    });
+
+    await expect(
+      handleExecutionWaitTimeoutTimer({ store, timer: timeoutTimer() }),
+    ).resolves.toBe(true);
+
+    expect(await store.getStepResult("wait-exec", "__execution:child")).toEqual(
+      expect.objectContaining({
+        result: { state: "timed_out", targetExecutionId: "child" },
+      }),
+    );
+  });
+
+  it("times out after replay has persisted a continuation marker", async () => {
+    const store = new MemoryStore();
+    await seedContinuedParent(store);
     await store.saveExecution(continuedChild("tip"));
     await store.saveExecution({
       id: "tip",

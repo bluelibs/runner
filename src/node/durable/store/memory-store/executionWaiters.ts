@@ -91,7 +91,10 @@ export async function commitExecutionWaiterCompletion(
       waitState?.targetExecutionId === params.targetExecutionId ||
       (params.waitTargetExecutionId !== undefined &&
         waitState?.targetExecutionId === params.waitTargetExecutionId);
-    if (waitState?.state !== "waiting" || !stepTargetAccepted) {
+    if (
+      (waitState?.state !== "waiting" && waitState?.state !== "continued") ||
+      !stepTargetAccepted
+    ) {
       return { result: false, changed: false };
     }
 

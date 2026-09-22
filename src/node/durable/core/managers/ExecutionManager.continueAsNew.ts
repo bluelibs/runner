@@ -191,6 +191,9 @@ export async function continueExecutionAsNew(params: {
     reason: "continued_as_new",
   });
   await logCreatedExecution(params.deps.persistence.auditLogger, successor);
-  await kickoffWithFailsafe(params.deps.persistence, successor.id);
   await params.deps.notifyFinished(closedPrior);
+  // Move waiters onto the persisted successor before kickoff. In queue mode
+  // an enqueue failure must not strand waiters forever on the now-terminal
+  // prior run; in direct mode a parent can safely register on the pending tip.
+  await kickoffWithFailsafe(params.deps.persistence, successor.id);
 }

@@ -39,6 +39,9 @@ const RESTARTABLE_STATUSES: ExpectedExecutionStatuses = [
   ExecutionStatus.ContinuedAsNew,
 ];
 
+const ORPHANED_RESTART_ERROR_MESSAGE =
+  "Restart rejected: source resumed concurrently.";
+
 function isRestartableStatus(status: ExecutionStatus): boolean {
   return isExecutionTerminal(status) || status === ExecutionStatus.Paused;
 }
@@ -103,12 +106,48 @@ async function cancelOrphanedRestart(
     {
       ...current,
       status: ExecutionStatus.Cancelled,
-      error: { message: "Restart rejected: source resumed concurrently." },
+      error: { message: ORPHANED_RESTART_ERROR_MESSAGE },
       completedAt: new Date(),
       updatedAt: new Date(),
     },
     [ExecutionStatus.Pending],
   );
+}
+
+/** Restores the never-started successor retained by its idempotency mapping. */
+async function reviveOrphanedRestart(
+  store: IDurableStore,
+  execution: Execution,
+): Promise<{ execution: Execution; revived: boolean }> {
+  if (
+    execution.status !== ExecutionStatus.Cancelled ||
+    execution.error?.message !== ORPHANED_RESTART_ERROR_MESSAGE ||
+    execution.cancelRequestedAt !== undefined ||
+    execution.cancelledAt !== undefined
+  ) {
+    return { execution, revived: false };
+  }
+
+  const pendingExecution: Execution = {
+    ...execution,
+    status: ExecutionStatus.Pending,
+    current: undefined,
+    result: undefined,
+    error: undefined,
+    completedAt: undefined,
+    cancelledAt: undefined,
+    cancelRequestedAt: undefined,
+    updatedAt: new Date(),
+  };
+  const revived = await store.saveExecutionIfStatus(pendingExecution, [
+    ExecutionStatus.Cancelled,
+  ]);
+  if (revived) {
+    return { execution: pendingExecution, revived: true };
+  }
+
+  // A concurrent winner owns audit/kickoff for the shared id.
+  return { execution, revived: false };
 }
 
 /**
@@ -142,7 +181,7 @@ export async function restartExecution(
     });
   }
 
-  const input = options?.input ?? source.input;
+  const input = options?.input !== undefined ? options.input : source.input;
   // Reused input was validated at the original start; overrides are
   // validated when the task is registered in this runtime. Operator-only
   // runtimes (whose tasks live on workers) flag the override for
@@ -206,7 +245,16 @@ export async function restartExecution(
         });
       }
       await linkRestartedAs(store, source.id, effectiveId);
-      if (shouldKickoffExistingIdempotentExecution(existing.status)) {
+      const recovered = await reviveOrphanedRestart(store, existing);
+      if (recovered.revived) {
+        await logCreatedExecution(
+          deps.persistence.auditLogger,
+          recovered.execution,
+        );
+      }
+      if (
+        shouldKickoffExistingIdempotentExecution(recovered.execution.status)
+      ) {
         await kickoffWithFailsafe(deps.persistence, effectiveId);
       }
       return effectiveId;

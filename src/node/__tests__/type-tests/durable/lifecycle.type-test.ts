@@ -1,4 +1,5 @@
 import type { IDurableContext } from "../../../../node/durable/core/interfaces/context";
+import type { IDurableResource } from "../../../../node/durable/core/interfaces/resource";
 import type { IDurableService } from "../../../../node/durable/core/interfaces/service";
 import type { IDurableStore } from "../../../../node/durable/core/interfaces/store";
 import type {
@@ -54,6 +55,14 @@ async function checkServiceGenerics(service: IDurableService): Promise<void> {
   void narrowed;
 }
 
+async function checkResourceGenerics(
+  resource: IDurableResource,
+): Promise<void> {
+  const state = await resource.getState<{ count: number }>("e1");
+  const narrowed: { count: number } | undefined = state;
+  void narrowed;
+}
+
 async function checkStoreSurface(store: IDurableStore): Promise<void> {
   const prior = null as unknown as Execution;
   const successor = null as unknown as Execution;
@@ -95,5 +104,6 @@ function checkExecutionLineage(execution: Execution): void {
 
 void checkStateGenerics;
 void checkServiceGenerics;
+void checkResourceGenerics;
 void checkStoreSurface;
 void checkExecutionLineage;

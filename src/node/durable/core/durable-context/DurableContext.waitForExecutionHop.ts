@@ -122,10 +122,18 @@ async function resolveReplayedWait<TResult>(
       actualWorkflowKey: waitingState.workflowKey,
       targetExecutionId: params.tipExecutionId,
     });
-    if (waitingState.continuedAsExecutionId !== params.tipExecutionId) {
+    if (
+      waitingState.continuedAsExecutionId !== params.tipExecutionId &&
+      (params.tipExecutionId === params.targetExecutionId ||
+        waitingState.continuedAsExecutionId === params.targetExecutionId)
+    ) {
       return { kind: "follow", follow: waitingState.continuedAsExecutionId };
     }
-    // Marker for this tip: re-register below, preserving the deadline.
+    // The first hop uses the marker as a shortcut, while an explicit link
+    // back to the root is left for the outer cycle detector. Other later-hop
+    // markers can legitimately lag behind when successors continue before
+    // this parent gets CPU; following those would walk backwards into a
+    // false cycle.
   }
 
   const settled = await resolveTerminalTip<TResult>({

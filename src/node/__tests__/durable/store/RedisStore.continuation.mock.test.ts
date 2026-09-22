@@ -145,6 +145,9 @@ describe("durable: RedisStore continuation (mock)", () => {
     });
 
     const args = redisMock.eval.mock.calls[0] as unknown[];
+    expect(args[0]).toEqual(
+      expect.stringContaining('step.result.state ~= "continued"'),
+    );
     expect(args[args.length - 1]).toBe("child");
     expect(args[args.length - 2]).toBe("");
   });

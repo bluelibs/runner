@@ -95,6 +95,99 @@ describe("durable: idempotent restart races", () => {
     expect(successor?.status).toBe(ExecutionStatus.Cancelled);
   });
 
+  it("revives the same idempotent successor when a rejected restart is retried", async () => {
+    const base = new MemoryStore();
+    await base.saveExecution(createSource());
+    const racingStore = createBareStore(base, {
+      createExecutionWithIdempotencyKey: async (params) => {
+        const source = await base.getExecution("e-restart-idem");
+        if (source) {
+          await base.saveExecution({
+            ...source,
+            status: ExecutionStatus.Pending,
+            pausedFrom: undefined,
+          });
+        }
+        return base.createExecutionWithIdempotencyKey(params);
+      },
+    });
+    const racingManager = createManager({ store: racingStore });
+
+    await expect(
+      racingManager.restartExecution("e-restart-idem", {
+        idempotencyKey: "k-recover",
+      }),
+    ).rejects.toThrow(
+      'Cannot restart execution "e-restart-idem" with status "pending".',
+    );
+    const orphan = (await base.listExecutions()).find(
+      (execution) => execution.id !== "e-restart-idem",
+    );
+    expect(orphan?.status).toBe(ExecutionStatus.Cancelled);
+
+    const source = await base.getExecution("e-restart-idem");
+    if (!source || !orphan) throw new Error("expected source and orphan");
+    await base.saveExecution({
+      ...source,
+      status: ExecutionStatus.Paused,
+      pausedFrom: ExecutionStatus.Pending,
+    });
+    const retryManager = createManager({
+      store: base,
+      taskExecutor: fixedExecutor("restarted-ok"),
+    });
+
+    const restartedId = await retryManager.restartExecution("e-restart-idem", {
+      idempotencyKey: "k-recover",
+    });
+
+    expect(restartedId).toBe(orphan.id);
+    expect(await base.getExecution(restartedId)).toMatchObject({
+      status: ExecutionStatus.Completed,
+      result: "restarted-ok",
+    });
+  });
+
+  it("leaves a concurrently revived idempotent successor to the winning caller", async () => {
+    const base = new MemoryStore();
+    await base.saveExecution(createSource());
+    const orphan: Execution = {
+      ...createSource(),
+      id: "e-restart-orphan",
+      status: ExecutionStatus.Cancelled,
+      pausedAt: undefined,
+      pausedFrom: undefined,
+      restartedFromExecutionId: "e-restart-idem",
+      error: { message: "Restart rejected: source resumed concurrently." },
+      completedAt: new Date(),
+    };
+    await base.createExecutionWithIdempotencyKey({
+      execution: orphan,
+      workflowKey: task.id,
+      idempotencyKey: "k-concurrent-revive",
+    });
+
+    const store = createBareStore(base, {
+      saveExecutionIfStatus: async (execution, expected) => {
+        if (execution.id === orphan.id) {
+          await base.saveExecutionIfStatus(execution, expected);
+          return false;
+        }
+        return await base.saveExecutionIfStatus(execution, expected);
+      },
+    });
+    const manager = createManager({ store });
+
+    await expect(
+      manager.restartExecution("e-restart-idem", {
+        idempotencyKey: "k-concurrent-revive",
+      }),
+    ).resolves.toBe(orphan.id);
+    expect((await base.getExecution(orphan.id))?.status).toBe(
+      ExecutionStatus.Pending,
+    );
+  });
+
   it("leaves a previously claimed successor alone when a retry loses", async () => {
     const base = new MemoryStore();
     await base.saveExecution(createSource());

@@ -77,6 +77,59 @@ describe("durable: resolveExecutionWaiters continuation", () => {
     expect(kickoffExecution).toHaveBeenCalledWith("parent");
   });
 
+  it("completes a followed wait whose replayed step still holds a follow marker", async () => {
+    const store = new MemoryStore();
+    const kickoffExecution = jest.fn(async () => undefined);
+    const tip: Execution = {
+      id: "tip",
+      workflowKey: "child-task",
+      input: undefined,
+      status: ExecutionStatus.Completed,
+      result: { ok: true },
+      continuedFromExecutionId: "child",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await store.saveExecution(tip);
+    await store.saveStepResult({
+      executionId: "parent",
+      stepId: "__execution:child",
+      result: {
+        state: "continued",
+        targetExecutionId: "child",
+        continuedAsExecutionId: "tip",
+        workflowKey: "child-task",
+      },
+      completedAt: new Date(),
+    });
+    await store.upsertExecutionWaiter({
+      executionId: "parent",
+      targetExecutionId: "tip",
+      stepId: "__execution:child",
+    });
+
+    await resolveExecutionWaiters({
+      store,
+      execution: tip,
+      kickoffExecution,
+      logger: createLogger(),
+    });
+
+    expect(await store.getStepResult("parent", "__execution:child")).toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          state: "completed",
+          targetExecutionId: "child",
+          result: { ok: true },
+        }),
+      }),
+    );
+    expect(await store.listExecutionWaiters("tip")).toEqual([]);
+    expect(kickoffExecution).toHaveBeenCalledWith("parent");
+  });
+
   it("resolves waiters with follow markers preserving root and deadline", async () => {
     const store = new MemoryStore();
     const kickoffExecution = jest.fn(async () => undefined);

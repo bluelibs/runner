@@ -192,6 +192,38 @@ describe("durable: waitForExecutionDurably continuation", () => {
     expect(store.deleteExecutionWaiter).not.toHaveBeenCalled();
   });
 
+  it("does not follow a stale marker backwards after the marked tip continued again", async () => {
+    const store = createStoreMock({
+      getStepResult: jest.fn().mockResolvedValue({
+        executionId: "parent",
+        stepId: "__execution:child",
+        result: {
+          state: "continued",
+          targetExecutionId: "child",
+          continuedAsExecutionId: "middle",
+          workflowKey: "child-task",
+        },
+        completedAt: new Date(),
+      }),
+      getExecution: jest.fn(async (id: string) =>
+        id === "middle"
+          ? {
+              ...continuedRoot("tip"),
+              id: "middle",
+            }
+          : runningTip(),
+      ),
+    });
+
+    await expect(
+      waitForExecutionDurably({ ...baseParams, store }),
+    ).rejects.toBeInstanceOf(SuspensionSignal);
+
+    expect(store.upsertExecutionWaiter).toHaveBeenCalledWith(
+      expect.objectContaining({ targetExecutionId: "tip" }),
+    );
+  });
+
   it("rejects a follow marker for a different workflow", async () => {
     const store = createStoreMock({
       getStepResult: jest.fn().mockResolvedValue({
