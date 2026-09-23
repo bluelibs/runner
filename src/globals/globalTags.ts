@@ -10,7 +10,7 @@ import { cronTag } from "./cron/cron.tag";
 import type { IdentityScopedMiddlewareConfig } from "./middleware/identityScope.shared";
 import { debugTag } from "./resources/debug/debug.tag";
 
-/** @deprecated Internal framework definitions no longer rely on this tag. */
+/** @deprecated No replacement needed: this tag has no effect, remove it from your definitions. */
 const deprecatedSystemTag = defineTag<{
   metadata?: Record<string, any>;
 }>({
@@ -32,7 +32,7 @@ const eventLaneHookConfigPattern = Match.ObjectStrict({
 });
 
 const globalTagsBase = {
-  /** @deprecated Internal framework definitions no longer rely on this tag. */
+  /** @deprecated No replacement needed: this tag has no effect, remove it from your definitions. */
   system: deprecatedSystemTag,
   excludeFromGlobalHooks: defineTag<{
     metadata?: Record<string, any>;
