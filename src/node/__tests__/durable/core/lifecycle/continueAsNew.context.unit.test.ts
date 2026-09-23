@@ -62,14 +62,12 @@ describe("durable: DurableContext.continueAsNew", () => {
     );
   });
 
-  it("rejects continuing a paused execution", async () => {
+  it("parks instead of continuing a paused execution", async () => {
     const { ctx } = await createContext(
       runningExecution({ status: ExecutionStatus.Paused }),
     );
 
-    await expect(ctx.continueAsNew({})).rejects.toThrow(
-      'Cannot continue execution "workflow-1" as new: execution is paused.',
-    );
+    await expect(ctx.continueAsNew({})).rejects.toThrow("Execution paused");
   });
 
   it("rejects continuing a terminal execution", async () => {

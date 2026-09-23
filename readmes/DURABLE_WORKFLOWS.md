@@ -766,6 +766,7 @@ Pause stops the run from advancing and records the pre-pause status in `pausedFr
 Rules:
 
 - Pause applies to non-terminal runs that are not already stopping.
+- Pausing a live attempt aborts its step `signal`; a step body that already finished keeps its result, but no new step, sleep, emit, wait, or continue-as-new starts until resume. The interrupted attempt does not consume a retry.
 - A racing cancellation wins over both pause and continue-as-new.
 - Restarted runs get `restartedFromExecutionId` / `restartedAsExecutionId` lineage; continued runs get `continuedFromExecutionId` / `continuedAsExecutionId`.
 - Continuation chains are bounded (`execution.maxContinuationDepth`, default 1000); the over-limit run fails with a clear rejection instead of growing forever.

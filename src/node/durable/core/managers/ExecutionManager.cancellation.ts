@@ -1,6 +1,7 @@
 import type { BusEvent, BusEventHandler, IEventBus } from "../interfaces/bus";
 import type { IDurableStore } from "../interfaces/store";
 import { ExecutionStatus, type Execution } from "../types";
+import { EXECUTION_PAUSED_ABORT_REASON } from "../pauseInterruption";
 
 export type ExecutionCancellationState = {
   reason: string;
@@ -10,12 +11,7 @@ export type ExecutionPauseState = {
   reason: string;
 };
 
-/**
- * Abort reason used when a live attempt is stopped for pause. Deliberately
- * distinct from the shutdown-interruption reason so pause aborts are never
- * mistaken for cooperative shutdown drains (and vice versa).
- */
-export const EXECUTION_PAUSED_ABORT_REASON = "Execution paused";
+export { EXECUTION_PAUSED_ABORT_REASON };
 
 export const DURABLE_EXECUTION_CONTROL_CHANNEL = "durable:execution-control";
 export const DurableExecutionControlEventType = {

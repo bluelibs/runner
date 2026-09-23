@@ -18,6 +18,7 @@ import { durableExecutionInvariantError } from "../../../../errors";
 import type { ExecutionLockState } from "./ExecutionManager.locking";
 import type { ExecutionCancellationState } from "./ExecutionManager.cancellation";
 import { isDurableShutdownInterruptionError } from "../shutdownInterruption";
+import { isDurablePauseInterruptionError } from "../pauseInterruption";
 
 export type ExecutionAttemptGuards = {
   assertLockOwnership: () => void;
@@ -292,11 +293,15 @@ export async function handleExecutionAttemptError(params: {
     return;
   }
 
+  // Shutdown and pause both park the attempt rather than fail it: no retry
+  // is consumed and the record keeps its status. A paused attempt that lost
+  // the race with a quick resume is re-driven once its lock is released.
   if (
     isDurableShutdownInterruptionError(
       params.error,
       params.getShutdownInterruptionReason(),
-    )
+    ) ||
+    isDurablePauseInterruptionError(params.error)
   ) {
     return;
   }

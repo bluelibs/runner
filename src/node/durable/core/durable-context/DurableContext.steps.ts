@@ -1,6 +1,6 @@
 import type { DurableAuditEntryInput } from "../audit";
 import { DurableAuditEntryKind, isDurableInternalStepId } from "../audit";
-import { SuspensionSignal } from "../interfaces/context";
+import { ContinuationSignal, SuspensionSignal } from "../interfaces/context";
 import type {
   DurableStepRunContext,
   IStepBuilder,
@@ -12,11 +12,23 @@ import { ExecutionStatus, isExecutionTerminal } from "../types";
 import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { createCancellationErrorFromSignal } from "../../../../tools/abortSignals";
+import { isDurablePauseInterruptionError } from "../pauseInterruption";
 
 export type DurableCompensation = {
   stepId: string;
   action: () => Promise<void>;
 };
+
+/**
+ * Suspension and continue-as-new are control flow rather than failures: a
+ * retry would re-run the step body and duplicate its side effects, and a
+ * rollback must let them through instead of recording a compensation failure.
+ */
+function isControlFlowSignal(error: unknown): boolean {
+  return (
+    error instanceof SuspensionSignal || error instanceof ContinuationSignal
+  );
+}
 
 function registerCompensation<T>(
   compensations: DurableCompensation[],
@@ -34,6 +46,8 @@ export async function executeDurableStep<T>(params: {
   store: IDurableStore;
   executionId: string;
   assertCanContinue: () => Promise<void>;
+  /** Gate before saving a finished body's result; tolerates a pause. */
+  assertCanPersistResult: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
   setCurrent: () => Promise<void>;
   stepId: string;
@@ -70,6 +84,15 @@ export async function executeDurableStep<T>(params: {
   const startedAt = Date.now();
 
   const executeWithRetry = async (): Promise<T> => {
+    // An aborted attempt must not start new side effects, even when the
+    // store gate raced ahead of the abort (e.g. pause then quick resume).
+    if (params.signal.aborted) {
+      throw createCancellationErrorFromSignal(
+        params.signal,
+        `Durable step '${params.stepId}' cancelled`,
+      );
+    }
+
     try {
       const context: DurableStepRunContext = { signal: params.signal };
       if (params.options.timeout) {
@@ -81,6 +104,10 @@ export async function executeDurableStep<T>(params: {
       }
       return await params.upFn(context);
     } catch (error) {
+      if (isControlFlowSignal(error)) {
+        throw error;
+      }
+
       if (params.signal.aborted) {
         throw createCancellationErrorFromSignal(
           params.signal,
@@ -107,7 +134,7 @@ export async function executeDurableStep<T>(params: {
   const result = await executeWithRetry();
   const durationMs = Date.now() - startedAt;
 
-  await params.assertCanContinue();
+  await params.assertCanPersistResult();
 
   await params.store.saveStepResult({
     executionId: params.executionId,
@@ -190,7 +217,11 @@ export async function rollbackDurableCompensations(params: {
         });
     }
   } catch (error) {
-    if (error instanceof SuspensionSignal) throw error;
+    // A pause interruption parks the rollback so resume can finish it; it
+    // is not a compensation failure.
+    if (isControlFlowSignal(error) || isDurablePauseInterruptionError(error)) {
+      throw error;
+    }
 
     const errorInfo = {
       message: error instanceof Error ? error.message : String(error),

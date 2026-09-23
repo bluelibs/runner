@@ -61,6 +61,7 @@ import {
   durableExecutionInvariantError,
 } from "../../../errors";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
+import { throwDurablePauseInterruption } from "./pauseInterruption";
 
 /**
  * Per-execution workflow toolkit used by durable tasks.
@@ -171,33 +172,35 @@ export class DurableContext implements IDurableContext {
     });
   }
 
-  private async assertNotCancelled(): Promise<void> {
-    const exec = await this.store.getExecution(this.executionId);
-    if (exec?.status === ExecutionStatus.Cancelled) {
-      durableContextCancelledError.throw({
-        message: exec.error?.message || "Execution cancelled",
-      });
-    }
-  }
-
+  /**
+   * Gate every durable operation must pass before it starts. Pause rejects
+   * with the pause interruption so an attempt that ignores its abort signal
+   * still cannot run further steps; `allowPaused` exists only for persisting
+   * the result of a step body that had already finished when the pause
+   * landed, which avoids repeating its side effect on resume.
+   */
   private async assertCanContinue(
-    options: { allowCancellationRequested?: boolean } = {},
+    options: {
+      allowCancellationRequested?: boolean;
+      allowPaused?: boolean;
+    } = {},
   ): Promise<void> {
     this.assertLockOwnership();
-    await this.assertNotCancelled();
-
-    if (options.allowCancellationRequested) {
-      return;
-    }
-
     const exec = await this.store.getExecution(this.executionId);
-    if (
+    const cancellationRequested =
       exec?.status === ExecutionStatus.Cancelling ||
-      exec?.cancelRequestedAt !== undefined
+      exec?.cancelRequestedAt !== undefined;
+    if (
+      exec?.status === ExecutionStatus.Cancelled ||
+      (cancellationRequested && !options.allowCancellationRequested)
     ) {
       durableContextCancelledError.throw({
-        message: exec.error?.message || "Execution cancelled",
+        message: exec?.error?.message || "Execution cancelled",
       });
+    }
+
+    if (exec?.status === ExecutionStatus.Paused && !options.allowPaused) {
+      throwDurablePauseInterruption();
     }
   }
 
@@ -270,6 +273,11 @@ export class DurableContext implements IDurableContext {
       executionId: this.executionId,
       assertCanContinue: async () =>
         await this.assertCanContinue({ allowCancellationRequested }),
+      assertCanPersistResult: async () =>
+        await this.assertCanContinue({
+          allowCancellationRequested,
+          allowPaused: true,
+        }),
       appendAuditEntry: this.audit.append,
       setCurrent: async () =>
         await setExecutionCurrent(

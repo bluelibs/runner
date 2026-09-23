@@ -49,6 +49,7 @@ import {
 import { continueExecutionAsNew as continueAsNewFlow } from "./ExecutionManager.continueAsNew";
 import type { AttemptCancellationController } from "./AttemptCancellationController";
 import { WorkflowAdmissionController } from "./WorkflowAdmissionController";
+import { redriveIfResumedDuringLock } from "./ExecutionAttemptRunner.redrive";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -118,74 +119,94 @@ export class ExecutionAttemptRunner {
       lockState,
     });
 
+    let lockedSnapshot: Execution<unknown, unknown> | null;
     try {
-      const snapshot = await this.deps.store.getExecution(executionId);
-      if (!snapshot) return;
-      if (isExecutionTerminal(snapshot.status)) return;
-      if (snapshot.status === ExecutionStatus.Paused) return;
-
-      if (!snapshot.workflowKey) {
-        await this.transitionExecutionToFailed({
-          execution: snapshot,
-          from: snapshot.status,
-          reason: "workflow_key_missing",
-          error: { message: "Execution is missing its durable workflow key." },
-        });
-        return;
-      }
-
-      const task = this.deps.taskRegistry.find(snapshot.workflowKey);
-      if (!task) {
-        await this.transitionExecutionToFailed({
-          execution: snapshot,
-          from: snapshot.status,
-          reason: "task_not_registered",
-          error: {
-            message: `Task not registered for workflow key: ${snapshot.workflowKey}`,
-          },
-        });
-        return;
-      }
-
-      let execution = snapshot;
-      if (execution.inputNeedsValidation) {
-        const validated = await this.validateDeferredExecutionInput({
-          execution,
-          task,
-        });
-        if (!validated) {
-          return;
-        }
-        execution = validated;
-      }
-
-      const admission = await this.workflowAdmission.tryAdmit({
-        task,
-        workflowKey: execution.workflowKey,
-        executionLockState: lockState,
-      });
-      if (admission.kind === "deferred") {
-        await this.workflowAdmission.defer(
-          execution.id,
-          admission.retryAfterMs,
-        );
-        return;
-      }
-
-      try {
-        await this.runExecutionAttempt(
-          execution,
-          task,
-          lockState,
-          admission.assertOwnership,
-        );
-      } finally {
-        await admission.release();
-      }
+      lockedSnapshot = await this.runUnderExecutionLock(executionId, lockState);
     } finally {
       stopHeartbeat();
       await acquiredLock.release();
     }
+
+    await redriveIfResumedDuringLock({
+      store: this.deps.store,
+      lockedSnapshot,
+      lockState,
+      shutdownInterruptionReason:
+        this.deps.cancellation.getShutdownInterruptionReason(),
+      kickoffExecution: this.deps.persistence.kickoffExecution,
+    });
+  }
+
+  /**
+   * Body of {@link processExecution} while the execution lock is held.
+   * Returns the record read right after acquiring the lock so the caller can
+   * tell whether a pause/resume happened during its tenure.
+   */
+  private async runUnderExecutionLock(
+    executionId: string,
+    lockState: ExecutionLockState,
+  ): Promise<Execution<unknown, unknown> | null> {
+    const snapshot = await this.deps.store.getExecution(executionId);
+    if (!snapshot) return null;
+    if (isExecutionTerminal(snapshot.status)) return snapshot;
+    if (snapshot.status === ExecutionStatus.Paused) return snapshot;
+
+    if (!snapshot.workflowKey) {
+      await this.transitionExecutionToFailed({
+        execution: snapshot,
+        from: snapshot.status,
+        reason: "workflow_key_missing",
+        error: { message: "Execution is missing its durable workflow key." },
+      });
+      return snapshot;
+    }
+
+    const task = this.deps.taskRegistry.find(snapshot.workflowKey);
+    if (!task) {
+      await this.transitionExecutionToFailed({
+        execution: snapshot,
+        from: snapshot.status,
+        reason: "task_not_registered",
+        error: {
+          message: `Task not registered for workflow key: ${snapshot.workflowKey}`,
+        },
+      });
+      return snapshot;
+    }
+
+    let execution = snapshot;
+    if (execution.inputNeedsValidation) {
+      const validated = await this.validateDeferredExecutionInput({
+        execution,
+        task,
+      });
+      if (!validated) {
+        return snapshot;
+      }
+      execution = validated;
+    }
+
+    const admission = await this.workflowAdmission.tryAdmit({
+      task,
+      workflowKey: execution.workflowKey,
+      executionLockState: lockState,
+    });
+    if (admission.kind === "deferred") {
+      await this.workflowAdmission.defer(execution.id, admission.retryAfterMs);
+      return snapshot;
+    }
+
+    try {
+      await this.runExecutionAttempt(
+        execution,
+        task,
+        lockState,
+        admission.assertOwnership,
+      );
+    } finally {
+      await admission.release();
+    }
+    return snapshot;
   }
 
   async runExecutionAttempt(

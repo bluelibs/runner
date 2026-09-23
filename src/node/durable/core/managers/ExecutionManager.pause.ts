@@ -26,7 +26,12 @@ export interface ExecutionPauseDeps {
     executionId: string,
     reason: string,
   ) => Promise<void>;
-  kickoffExecution: (executionId: string) => Promise<void>;
+  /**
+   * Failsafe kickoff (see `kickoffWithFailsafe`): resume must not depend on a
+   * single enqueue landing. A kick that loses the lock race to a still-running
+   * paused attempt is re-driven by that attempt once it releases the lock.
+   */
+  kickoffWithFailsafe: (executionId: string) => Promise<void>;
 }
 
 function isRestorableResumeStatus(status: ExecutionStatus): boolean {
@@ -43,13 +48,20 @@ function isRestorableResumeStatus(status: ExecutionStatus): boolean {
  * was listening (or been lost), and without a re-issue the live attempt
  * would only notice via the slower polling fallback. Other origins never
  * had a live attempt, so there is nothing to re-issue.
+ *
+ * The record is re-read right before aborting: the caller's snapshot may
+ * predate a resume, and aborting then would hit the legitimately resumed
+ * attempt instead of the paused one.
  */
 async function reissueLivePauseIfRunningOrigin(
   deps: ExecutionPauseDeps,
   executionId: string,
-  execution: Execution<unknown, unknown>,
 ): Promise<void> {
-  if (execution.pausedFrom !== ExecutionStatus.Running) {
+  const execution = await deps.store.getExecution(executionId);
+  if (
+    !getPauseState(execution) ||
+    execution?.pausedFrom !== ExecutionStatus.Running
+  ) {
     return;
   }
   deps.abortActiveAttempt(executionId, EXECUTION_PAUSED_ABORT_REASON);
@@ -98,7 +110,7 @@ export async function pauseExecution(
       });
     }
     if (execution.status === ExecutionStatus.Paused) {
-      await reissueLivePauseIfRunningOrigin(deps, executionId, execution);
+      await reissueLivePauseIfRunningOrigin(deps, executionId);
       return;
     }
     if (
@@ -154,7 +166,7 @@ export async function pauseExecution(
     });
   }
   if (getPauseState(latestExecution)) {
-    await reissueLivePauseIfRunningOrigin(deps, executionId, latestExecution);
+    await reissueLivePauseIfRunningOrigin(deps, executionId);
     return;
   }
   if (
@@ -229,7 +241,7 @@ export async function resumeExecution(
       to: restoredStatus,
       reason: "resumed",
     });
-    await deps.kickoffExecution(executionId);
+    await deps.kickoffWithFailsafe(executionId);
     return;
   }
 

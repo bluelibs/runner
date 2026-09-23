@@ -153,7 +153,8 @@ export class ExecutionManager {
         this.cancellation.abortActiveAttempt(executionId, reason),
       publishLivePauseRequested: (executionId, reason) =>
         this.cancellation.publishLivePauseRequested(executionId, reason),
-      kickoffExecution: (executionId) => this.kickoffExecution(executionId),
+      kickoffWithFailsafe: (executionId) =>
+        kickoffWithFailsafe(this.persistenceDeps, executionId),
     };
   }
 
