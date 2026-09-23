@@ -108,12 +108,11 @@ await runtime.dispose();
 
 ### Schemas
 
-- Prefer the explicit schema methods. They name what is being validated, so every codebase reads the same:
+- Each definition validates through its own schema method:
   - task -> `.inputSchema(...)`
-  - resource -> `.configSchema(...)`
+  - resource, tag, middleware -> `.configSchema(...)`
   - event -> `.payloadSchema(...)`
   - error -> `.dataSchema(...)`
-- `.schema()` is a deprecated alias for the slot above (also on tags and middleware -> `.configSchema()`). It still works, but do not use it in new code.
 - Tasks use `.resultSchema()` for output validation.
 - Schema slots accept: raw Match patterns, compiled Match schemas, decorator-backed classes, or any schema object exposing `parse(...)`.
 - Schema resolution prefers `parse(input)` when present. Otherwise Runner compiles raw Match patterns once and reuses the compiled schema.
