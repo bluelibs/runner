@@ -188,7 +188,7 @@ describe("durable: idempotent restart races", () => {
     );
   });
 
-  it("leaves a previously claimed successor alone when a retry loses", async () => {
+  it("returns the previously linked successor when a retry races a resume", async () => {
     const base = new MemoryStore();
     await base.saveExecution(createSource());
     const manager = createManager({
@@ -227,9 +227,7 @@ describe("durable: idempotent restart races", () => {
       racingManager.restartExecution("e-restart-idem", {
         idempotencyKey: "k-retry",
       }),
-    ).rejects.toThrow(
-      'Cannot restart execution "e-restart-idem" with status "pending".',
-    );
+    ).resolves.toBe(first);
     expect((await base.getExecution(first))?.status).toBe(
       ExecutionStatus.Completed,
     );

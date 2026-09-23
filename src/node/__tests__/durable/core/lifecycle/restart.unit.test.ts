@@ -118,7 +118,7 @@ describe("durable: restart execution", () => {
     ExecutionStatus.Failed,
     ExecutionStatus.CompensationFailed,
     ExecutionStatus.Cancelled,
-    ExecutionStatus.ContinuedAsNew,
+    // continued_as_new needs a settled chain: see restart.continuedChain.
   ])("restarts a %s execution", async (status) => {
     const store = new MemoryStore();
     await store.saveExecution(createExecution({ status }));

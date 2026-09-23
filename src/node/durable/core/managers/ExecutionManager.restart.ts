@@ -1,10 +1,6 @@
-import type {
-  ExpectedExecutionStatuses,
-  IDurableStore,
-} from "../interfaces/store";
 import type { RestartExecutionOptions } from "../interfaces/service";
 import type { ITask } from "../../../../types/task";
-import { ExecutionStatus, isExecutionTerminal, type Execution } from "../types";
+import { ExecutionStatus, type Execution } from "../types";
 import { createExecutionId } from "../utils";
 import {
   durableExecutionInvariantError,
@@ -18,6 +14,13 @@ import {
   shouldKickoffExistingIdempotentExecution,
   type ExecutionPersistenceDeps,
 } from "./ExecutionManager.persistence";
+import {
+  assertSourceRestartable,
+  cancelOrphanedRestart,
+  findRestartBlocker,
+  linkRestartedAs,
+  reviveOrphanedRestart,
+} from "./ExecutionManager.restartGuards";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -30,124 +33,136 @@ export interface ExecutionRestartDeps {
   resolveTask: (workflowKey: string) => AnyTask | undefined;
 }
 
-const RESTARTABLE_STATUSES: ExpectedExecutionStatuses = [
-  ExecutionStatus.Paused,
-  ExecutionStatus.Completed,
-  ExecutionStatus.Failed,
-  ExecutionStatus.CompensationFailed,
-  ExecutionStatus.Cancelled,
-  ExecutionStatus.ContinuedAsNew,
-];
-
-const ORPHANED_RESTART_ERROR_MESSAGE =
-  "Restart rejected: source resumed concurrently.";
-
-function isRestartableStatus(status: ExecutionStatus): boolean {
-  return isExecutionTerminal(status) || status === ExecutionStatus.Paused;
-}
-
 /**
- * Links the source to its restart successor, but only while the source is
- * still restartable. A concurrent resume (paused -> active) between the
- * initial guard and this commit rejects the restart instead of silently
- * producing two live runs, and the compare-and-set write never regresses
- * the winner's status the way a blind update would.
+ * Picks the restart input and whether it still needs its boundary check.
+ * Overrides and inputs the source itself never validated (a continuation
+ * that failed `invalid_input`) are validated here when the task is
+ * registered, failing fast before anything is persisted; operator-only
+ * runtimes (whose tasks live on workers) flag them for worker-side
+ * validation instead. Input the source already validated is reused as is.
  */
-async function linkRestartedAs(
-  store: IDurableStore,
-  sourceId: string,
-  restartedId: string,
-): Promise<void> {
-  const fresh = await store.getExecution(sourceId);
-  if (!fresh) {
-    return durableRestartRejectedError.throw({
-      executionId: sourceId,
-      status: "unknown",
-    });
+function resolveRestartInput(
+  deps: ExecutionRestartDeps,
+  source: Execution,
+  options: RestartExecutionOptions | undefined,
+): { input: unknown; inputNeedsValidation: true | undefined } {
+  const overridden = options?.input !== undefined;
+  const input = overridden ? options.input : source.input;
+  if (!overridden && source.inputNeedsValidation !== true) {
+    return { input, inputNeedsValidation: undefined };
   }
-  if (!isRestartableStatus(fresh.status)) {
-    return durableRestartRejectedError.throw({
-      executionId: sourceId,
-      status: fresh.status,
-    });
-  }
-  const linked = await store.saveExecutionIfStatus(
-    {
-      ...fresh,
-      restartedAsExecutionId: restartedId,
-      updatedAt: new Date(),
-    },
-    RESTARTABLE_STATUSES,
+
+  const task = deps.resolveTask(source.workflowKey);
+  if (!task) return { input, inputNeedsValidation: true };
+  ValidationHelper.validateInput(
+    input,
+    task.inputSchema,
+    source.workflowKey,
+    "Task",
   );
-  if (!linked) {
-    const latest = await store.getExecution(sourceId);
-    return durableRestartRejectedError.throw({
-      executionId: sourceId,
-      status: latest?.status ?? fresh.status,
-    });
-  }
+  return { input, inputNeedsValidation: undefined };
 }
 
-/**
- * Best-effort cancellation of a successor that was persisted but must not
- * run because the source link lost its race (e.g. the source resumed
- * first). Without this the orphan would stay `pending` and recovery would
- * run an execution the caller was told was rejected.
- */
-async function cancelOrphanedRestart(
-  store: IDurableStore,
-  successor: Execution,
-): Promise<void> {
-  const current = await store.getExecution(successor.id);
-  if (!current || current.status !== ExecutionStatus.Pending) {
-    return;
-  }
-  await store.saveExecutionIfStatus(
-    {
-      ...current,
-      status: ExecutionStatus.Cancelled,
-      error: { message: ORPHANED_RESTART_ERROR_MESSAGE },
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    },
-    [ExecutionStatus.Pending],
-  );
-}
-
-/** Restores the never-started successor retained by its idempotency mapping. */
-async function reviveOrphanedRestart(
-  store: IDurableStore,
-  execution: Execution,
-): Promise<{ execution: Execution; revived: boolean }> {
-  if (
-    execution.status !== ExecutionStatus.Cancelled ||
-    execution.error?.message !== ORPHANED_RESTART_ERROR_MESSAGE ||
-    execution.cancelRequestedAt !== undefined ||
-    execution.cancelledAt !== undefined
-  ) {
-    return { execution, revived: false };
-  }
-
-  const pendingExecution: Execution = {
-    ...execution,
+function buildRestartedExecution(
+  deps: ExecutionRestartDeps,
+  source: Execution,
+  options: RestartExecutionOptions | undefined,
+): Execution {
+  const now = new Date();
+  return {
+    id: createExecutionId(),
+    workflowKey: source.workflowKey,
+    parentExecutionId: source.parentExecutionId,
+    ...resolveRestartInput(deps, source, options),
     status: ExecutionStatus.Pending,
-    current: undefined,
-    result: undefined,
-    error: undefined,
-    completedAt: undefined,
-    cancelledAt: undefined,
-    cancelRequestedAt: undefined,
-    updatedAt: new Date(),
+    attempt: 1,
+    maxAttempts: deps.persistence.maxAttempts,
+    timeout: source.timeout,
+    restartedFromExecutionId: source.id,
+    createdAt: now,
+    updatedAt: now,
   };
-  const revived = await store.saveExecutionIfStatus(pendingExecution, [
-    ExecutionStatus.Cancelled,
-  ]);
-  if (revived) {
-    return { execution: pendingExecution, revived: true };
-  }
+}
 
-  // A concurrent winner owns audit/kickoff for the shared id.
-  return { execution, revived: false };
+/** Links a freshly persisted successor, or cancels it if the link loses. */
+async function commitRestart(
+  deps: ExecutionRestartDeps,
+  sourceId: string,
+  restarted: Execution,
+): Promise<string> {
+  const store = deps.persistence.store;
+  try {
+    await linkRestartedAs(store, sourceId, restarted.id);
+  } catch (error) {
+    if (durableRestartRejectedError.is(error)) {
+      await cancelOrphanedRestart(store, sourceId, restarted.id);
+    }
+    throw error;
+  }
+  await logCreatedExecution(deps.persistence.auditLogger, restarted);
+  await kickoffWithFailsafe(deps.persistence, restarted.id);
+  return restarted.id;
+}
+
+/**
+ * Returns the successor a repeated key already maps to. It is (re)linked
+ * unless the source already links to it, so a retry after the source was
+ * resumed still returns the restart it reported before; an orphan left by a
+ * lost race is revived once the source is restartable again.
+ */
+async function reuseExistingRestart(
+  deps: ExecutionRestartDeps,
+  sourceId: string,
+  existingId: string,
+): Promise<string> {
+  const store = deps.persistence.store;
+  const existing = await store.getExecution(existingId);
+  if (!existing) {
+    return durableExecutionInvariantError.throw({
+      message: `Idempotency mapping for restart of execution "${sourceId}" points to missing execution "${existingId}".`,
+    });
+  }
+  // Keys are caller-chosen and scoped by workflow, not by source: without
+  // this check a key reused across sources would cross-link two lineages.
+  if (existing.restartedFromExecutionId !== sourceId) {
+    return durableRestartIdempotencyConflictError.throw({
+      sourceExecutionId: sourceId,
+      existingExecutionId: existingId,
+    });
+  }
+  await linkRestartedAs(store, sourceId, existingId);
+  const recovered = await reviveOrphanedRestart(store, existing);
+  if (recovered.revived) {
+    await logCreatedExecution(
+      deps.persistence.auditLogger,
+      recovered.execution,
+    );
+  }
+  if (shouldKickoffExistingIdempotentExecution(recovered.execution.status)) {
+    await kickoffWithFailsafe(deps.persistence, existingId);
+  }
+  return existingId;
+}
+
+async function restartWithIdempotencyKey(
+  deps: ExecutionRestartDeps,
+  source: Execution,
+  restarted: Execution,
+  idempotencyKey: string,
+): Promise<string> {
+  const created =
+    await deps.persistence.store.createExecutionWithIdempotencyKey({
+      execution: restarted,
+      workflowKey: source.workflowKey,
+      idempotencyKey,
+    });
+  if (!created.created) {
+    return await reuseExistingRestart(deps, source.id, created.executionId);
+  }
+  return await commitRestart(deps, source.id, {
+    ...restarted,
+    id: created.executionId,
+  });
 }
 
 /**
@@ -158,8 +173,15 @@ async function reviveOrphanedRestart(
  * recorded both ways (`restartedFromExecutionId` / `restartedAsExecutionId`,
  * the latter last-writer-wins). Rejected for active executions: pause or
  * cancel them first. A source that resumes concurrently is rejected as
- * active rather than restarted alongside the resumed run. An idempotency
- * key dedupes repeated restart calls to one new execution.
+ * active rather than restarted alongside the resumed run.
+ *
+ * A `continued_as_new` source restarts that run from its own input (use the
+ * tip id to restart the latest chapter instead), and only once its chain tip
+ * is terminal or paused, so a restart never runs beside a live chain.
+ *
+ * An idempotency key dedupes repeated restart calls to one new execution;
+ * a retried key returns the restart it already produced even after the
+ * source was resumed.
  */
 export async function restartExecution(
   deps: ExecutionRestartDeps,
@@ -174,132 +196,33 @@ export async function restartExecution(
       status: "unknown",
     });
   }
-  if (!isRestartableStatus(source.status)) {
+  // A blocked source may still own a restart this key produced earlier;
+  // only then is the key looked up before rejecting.
+  const blocker = await findRestartBlocker(store, source);
+  const keyMayMapToPriorRestart =
+    options?.idempotencyKey !== undefined &&
+    source.restartedAsExecutionId !== undefined;
+  if (blocker !== null && !keyMayMapToPriorRestart) {
     return durableRestartRejectedError.throw({
       executionId,
-      status: source.status,
+      status: blocker,
     });
   }
 
-  const input = options?.input !== undefined ? options.input : source.input;
-  // Reused input was validated at the original start; overrides are
-  // validated when the task is registered in this runtime. Operator-only
-  // runtimes (whose tasks live on workers) flag the override for
-  // worker-side validation rather than refuse the restart.
-  const overrideTask =
-    options?.input === undefined
-      ? undefined
-      : deps.resolveTask(source.workflowKey);
-  if (overrideTask) {
-    ValidationHelper.validateInput(
-      input,
-      overrideTask.inputSchema,
-      source.workflowKey,
-      "Task",
-    );
-  }
-
-  const now = new Date();
-  const restarted: Execution = {
-    id: createExecutionId(),
-    workflowKey: source.workflowKey,
-    parentExecutionId: source.parentExecutionId,
-    input,
-    inputNeedsValidation:
-      options?.input !== undefined && overrideTask === undefined
-        ? true
-        : undefined,
-    status: ExecutionStatus.Pending,
-    attempt: 1,
-    maxAttempts: deps.persistence.maxAttempts,
-    timeout: source.timeout,
-    restartedFromExecutionId: source.id,
-    createdAt: now,
-    updatedAt: now,
-  };
-
+  const restarted = buildRestartedExecution(deps, source, options);
   if (options?.idempotencyKey) {
-    const created = await store.createExecutionWithIdempotencyKey({
-      execution: restarted,
-      workflowKey: source.workflowKey,
-      idempotencyKey: options.idempotencyKey,
-    });
-    const effectiveId = created.executionId;
-    const effectiveRestarted =
-      effectiveId === restarted.id
-        ? restarted
-        : { ...restarted, id: effectiveId };
-    if (!created.created) {
-      const existing = await store.getExecution(effectiveId);
-      if (!existing) {
-        return durableExecutionInvariantError.throw({
-          message: `Idempotency mapping for restart of execution "${source.id}" points to missing execution "${effectiveId}".`,
-        });
-      }
-      // Keys are caller-chosen and scoped by workflow, not by source: without
-      // this check a key reused across sources would cross-link two lineages.
-      if (existing.restartedFromExecutionId !== source.id) {
-        return durableRestartIdempotencyConflictError.throw({
-          sourceExecutionId: source.id,
-          existingExecutionId: effectiveId,
-        });
-      }
-      await linkRestartedAs(store, source.id, effectiveId);
-      const recovered = await reviveOrphanedRestart(store, existing);
-      if (recovered.revived) {
-        await logCreatedExecution(
-          deps.persistence.auditLogger,
-          recovered.execution,
-        );
-      }
-      if (
-        shouldKickoffExistingIdempotentExecution(recovered.execution.status)
-      ) {
-        await kickoffWithFailsafe(deps.persistence, effectiveId);
-      }
-      return effectiveId;
-    }
-    try {
-      await linkRestartedAs(store, source.id, effectiveId);
-    } catch (error) {
-      if (durableRestartRejectedError.is(error)) {
-        await cancelOrphanedRestart(store, effectiveRestarted);
-      }
-      throw error;
-    }
-
-    await logCreatedExecution(deps.persistence.auditLogger, effectiveRestarted);
-    await kickoffWithFailsafe(deps.persistence, effectiveId);
-    return effectiveId;
+    return await restartWithIdempotencyKey(
+      deps,
+      source,
+      restarted,
+      options.idempotencyKey,
+    );
   }
 
   // Recheck eligibility right before persisting so a resume that landed
   // after the initial guard rejects before an orphan is created. The link
-  // below still commits conditionally to close the remaining window.
-  const preSave = await store.getExecution(source.id);
-  if (!preSave) {
-    return durableRestartRejectedError.throw({
-      executionId: source.id,
-      status: "unknown",
-    });
-  }
-  if (!isRestartableStatus(preSave.status)) {
-    return durableRestartRejectedError.throw({
-      executionId: source.id,
-      status: preSave.status,
-    });
-  }
-
+  // still commits conditionally to close the remaining window.
+  await assertSourceRestartable(store, source.id);
   await store.saveExecution(restarted);
-  try {
-    await linkRestartedAs(store, source.id, restarted.id);
-  } catch (error) {
-    if (durableRestartRejectedError.is(error)) {
-      await cancelOrphanedRestart(store, restarted);
-    }
-    throw error;
-  }
-  await logCreatedExecution(deps.persistence.auditLogger, restarted);
-  await kickoffWithFailsafe(deps.persistence, restarted.id);
-  return restarted.id;
+  return await commitRestart(deps, source.id, restarted);
 }

@@ -181,7 +181,7 @@ describe("durable: restart/resume races", () => {
     expect(successor?.status).toBe(ExecutionStatus.Cancelled);
   });
 
-  it("reports the last seen status when the source vanishes mid-link", async () => {
+  it("rejects as unknown when the source vanishes mid-link", async () => {
     const base = new MemoryStore();
     await base.saveExecution(createPausedExecution());
     let sourceReads = 0;
@@ -196,7 +196,7 @@ describe("durable: restart/resume races", () => {
     const manager = createManager({ store });
 
     await expect(manager.restartExecution("e-restart-race")).rejects.toThrow(
-      'Cannot restart execution "e-restart-race" with status "paused".',
+      'Cannot restart execution "e-restart-race" with status "unknown".',
     );
     const successor = (await base.listExecutions()).find(
       (execution) => execution.id !== "e-restart-race",
