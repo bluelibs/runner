@@ -112,6 +112,7 @@ describe("durable: pause execution", () => {
         payload: {
           executionId: "e-pause",
           reason: EXECUTION_PAUSED_ABORT_REASON,
+          pausedAtMs: expect.any(Number),
         },
       }),
     );

@@ -250,6 +250,7 @@ export class ExecutionAttemptRunner {
     const attemptCancellation =
       await this.deps.cancellation.registerAttemptCancellation({
         executionId: runningExecution.id,
+        pausedAt: runningExecution.pausedAt,
       });
 
     const context = this.createExecutionContext(

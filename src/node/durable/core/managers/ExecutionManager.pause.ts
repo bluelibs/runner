@@ -11,6 +11,10 @@ import {
   EXECUTION_PAUSED_ABORT_REASON,
   getPauseState,
 } from "./ExecutionManager.cancellation";
+import type {
+  AbortPausedAttempt,
+  ExecutionPauseState,
+} from "./ExecutionManager.pauseControl";
 import { logExecutionStatusChange } from "./ExecutionManager.persistence";
 
 /**
@@ -21,10 +25,10 @@ import { logExecutionStatusChange } from "./ExecutionManager.persistence";
 export interface ExecutionPauseDeps {
   store: IDurableStore;
   auditLogger: AuditLogger;
-  abortActiveAttempt: (executionId: string, reason: string) => void;
+  abortPausedAttempt: AbortPausedAttempt;
   publishLivePauseRequested: (
     executionId: string,
-    reason: string,
+    pause: ExecutionPauseState,
   ) => Promise<void>;
   /**
    * Failsafe kickoff (see `kickoffWithFailsafe`): resume must not depend on a
@@ -40,6 +44,23 @@ function isRestorableResumeStatus(status: ExecutionStatus): boolean {
     status !== ExecutionStatus.Paused &&
     status !== ExecutionStatus.Cancelling
   );
+}
+
+/**
+ * Aborts the live attempt locally and on peers, stamped with the pause so an
+ * attempt that started after this pause was resumed is left alone.
+ */
+async function stopLiveAttemptForPause(
+  deps: ExecutionPauseDeps,
+  executionId: string,
+  pausedAt: Date | undefined,
+): Promise<void> {
+  const pause = {
+    reason: EXECUTION_PAUSED_ABORT_REASON,
+    pausedAtMs: pausedAt?.getTime(),
+  };
+  deps.abortPausedAttempt(executionId, pause);
+  await deps.publishLivePauseRequested(executionId, pause);
 }
 
 /**
@@ -64,11 +85,7 @@ async function reissueLivePauseIfRunningOrigin(
   ) {
     return;
   }
-  deps.abortActiveAttempt(executionId, EXECUTION_PAUSED_ABORT_REASON);
-  await deps.publishLivePauseRequested(
-    executionId,
-    EXECUTION_PAUSED_ABORT_REASON,
-  );
+  await stopLiveAttemptForPause(deps, executionId, execution.pausedAt);
 }
 
 function inferResumeStatus(
@@ -142,11 +159,7 @@ export async function pauseExecution(
     }
 
     if (execution.status === ExecutionStatus.Running) {
-      deps.abortActiveAttempt(executionId, EXECUTION_PAUSED_ABORT_REASON);
-      await deps.publishLivePauseRequested(
-        executionId,
-        EXECUTION_PAUSED_ABORT_REASON,
-      );
+      await stopLiveAttemptForPause(deps, executionId, now);
     }
 
     await logExecutionStatusChange(deps.auditLogger, {

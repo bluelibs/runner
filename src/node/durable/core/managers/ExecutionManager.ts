@@ -149,10 +149,10 @@ export class ExecutionManager {
     this.pauseDeps = {
       store: this.config.store,
       auditLogger: this.auditLogger,
-      abortActiveAttempt: (executionId, reason) =>
-        this.cancellation.abortActiveAttempt(executionId, reason),
-      publishLivePauseRequested: (executionId, reason) =>
-        this.cancellation.publishLivePauseRequested(executionId, reason),
+      abortPausedAttempt: (executionId, pause) =>
+        this.cancellation.abortPausedAttempt(executionId, pause),
+      publishLivePauseRequested: (executionId, pause) =>
+        this.cancellation.publishLivePauseRequested(executionId, pause),
       kickoffWithFailsafe: (executionId) =>
         kickoffWithFailsafe(this.persistenceDeps, executionId),
     };

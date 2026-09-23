@@ -19,7 +19,7 @@ describe("durable: AttemptCancellationController live pause", () => {
     });
 
     await expect(
-      controller.publishLivePauseRequested("e1", "operator pause"),
+      controller.publishLivePauseRequested("e1", { reason: "operator pause" }),
     ).resolves.toBeUndefined();
   });
 });

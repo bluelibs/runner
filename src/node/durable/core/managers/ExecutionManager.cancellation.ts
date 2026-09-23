@@ -2,16 +2,19 @@ import type { BusEvent, BusEventHandler, IEventBus } from "../interfaces/bus";
 import type { IDurableStore } from "../interfaces/store";
 import { ExecutionStatus, type Execution } from "../types";
 import { EXECUTION_PAUSED_ABORT_REASON } from "../pauseInterruption";
+import {
+  type AbortPausedAttempt,
+  type ExecutionPauseState,
+  getPauseState,
+  parsePauseRequestedPayload,
+} from "./ExecutionManager.pauseControl";
 
 export type ExecutionCancellationState = {
   reason: string;
 };
 
-export type ExecutionPauseState = {
-  reason: string;
-};
-
-export { EXECUTION_PAUSED_ABORT_REASON };
+export { EXECUTION_PAUSED_ABORT_REASON, getPauseState };
+export type { ExecutionPauseState };
 
 export const DURABLE_EXECUTION_CONTROL_CHANNEL = "durable:execution-control";
 export const DurableExecutionControlEventType = {
@@ -41,16 +44,6 @@ function parseCancellationRequestedEvent(
   event: BusEvent,
 ): ExecutionControlPayload | null {
   if (event.type !== DurableExecutionControlEventType.CancellationRequested) {
-    return null;
-  }
-
-  return isControlPayloadWithReason(event.payload) ? event.payload : null;
-}
-
-function parsePauseRequestedEvent(
-  event: BusEvent,
-): ExecutionControlPayload | null {
-  if (event.type !== DurableExecutionControlEventType.PauseRequested) {
     return null;
   }
 
@@ -88,32 +81,20 @@ export function getCancellationState(
   };
 }
 
-export function getPauseState(
-  execution: Execution<unknown, unknown> | null,
-): ExecutionPauseState | null {
-  if (!execution || execution.status !== ExecutionStatus.Paused) {
-    return null;
-  }
-
-  return {
-    reason: EXECUTION_PAUSED_ABORT_REASON,
-  };
-}
-
 export async function startLiveExecutionCancellationListener(params: {
   eventBus: IEventBus;
   abortActiveAttempt: (executionId: string, reason: string) => void;
+  abortPausedAttempt: AbortPausedAttempt;
 }): Promise<() => Promise<void>> {
   const handler: BusEventHandler = async (event) => {
     // Pause rides the same live control channel as cancellation: a paused
     // execution aborts its in-flight attempt promptly on every worker, and
-    // the attempt then exits quietly because its outcome CAS no longer matches.
-    const pauseRequested = parsePauseRequestedEvent(event);
-    if (pauseRequested) {
-      params.abortActiveAttempt(
-        pauseRequested.executionId,
-        pauseRequested.reason,
-      );
+    // the attempt then exits quietly as a parked outcome.
+    if (event.type === DurableExecutionControlEventType.PauseRequested) {
+      const pauseRequested = parsePauseRequestedPayload(event.payload);
+      if (pauseRequested) {
+        params.abortPausedAttempt(pauseRequested.executionId, pauseRequested);
+      }
       return;
     }
 
@@ -156,13 +137,14 @@ export async function publishExecutionCancellationRequested(params: {
 export async function publishExecutionPauseRequested(params: {
   eventBus: IEventBus;
   executionId: string;
-  reason: string;
+  pause: ExecutionPauseState;
 }): Promise<void> {
   await params.eventBus.publish(DURABLE_EXECUTION_CONTROL_CHANNEL, {
     type: DurableExecutionControlEventType.PauseRequested,
     payload: {
       executionId: params.executionId,
-      reason: params.reason,
+      reason: params.pause.reason,
+      pausedAtMs: params.pause.pausedAtMs,
     },
     timestamp: new Date(),
   });
@@ -173,6 +155,7 @@ export function startExecutionCancellationPollingFallback(params: {
   controller: AbortController;
   store: IDurableStore;
   abortActiveAttempt: (executionId: string, reason: string) => void;
+  abortPausedAttempt: AbortPausedAttempt;
 }): () => void {
   const intervalMs = 250;
   let stopped = false;
@@ -199,7 +182,7 @@ export function startExecutionCancellationPollingFallback(params: {
 
           const pauseState = getPauseState(execution);
           if (pauseState) {
-            params.abortActiveAttempt(params.executionId, pauseState.reason);
+            params.abortPausedAttempt(params.executionId, pauseState);
           }
         })
         .catch(() => {

@@ -10,6 +10,10 @@ import {
   startExecutionCancellationPollingFallback,
   startLiveExecutionCancellationListener,
 } from "./ExecutionManager.cancellation";
+import {
+  type ExecutionPauseState,
+  shouldPauseAbortAttempt,
+} from "./ExecutionManager.pauseControl";
 
 export interface AttemptCancellationControllerDeps {
   store: IDurableStore;
@@ -32,6 +36,11 @@ export class AttemptCancellationController {
   private readonly activeAttemptControllers = new Map<
     string,
     AbortController
+  >();
+  /** Pause stamp each attempt started from; see `shouldPauseAbortAttempt`. */
+  private readonly attemptStartPauseStamps = new WeakMap<
+    AbortController,
+    number
   >();
   private shutdownInterruptionReason: string | null = null;
   private liveCancellationListenerStop: (() => Promise<void>) | null = null;
@@ -59,6 +68,8 @@ export class AttemptCancellationController {
           eventBus,
           abortActiveAttempt: (executionId, reason) =>
             this.abortActiveAttempt(executionId, reason),
+          abortPausedAttempt: (executionId, pause) =>
+            this.abortPausedAttempt(executionId, pause),
         });
     } catch (error) {
       this.liveCancellationListenerStop = null;
@@ -99,6 +110,21 @@ export class AttemptCancellationController {
     controller.abort(reason);
   }
 
+  abortPausedAttempt(executionId: string, pause: ExecutionPauseState): void {
+    const controller = this.activeAttemptControllers.get(executionId);
+    if (!controller || controller.signal.aborted) return;
+    if (
+      !shouldPauseAbortAttempt({
+        pausedAtMs: pause.pausedAtMs,
+        attemptStartedFromPausedAtMs:
+          this.attemptStartPauseStamps.get(controller),
+      })
+    ) {
+      return;
+    }
+    controller.abort(pause.reason);
+  }
+
   async publishLiveCancellationRequested(
     executionId: string,
     reason: string,
@@ -131,7 +157,7 @@ export class AttemptCancellationController {
 
   async publishLivePauseRequested(
     executionId: string,
-    reason: string,
+    pause: ExecutionPauseState,
   ): Promise<void> {
     const eventBus = this.deps.liveCancellationEventBus;
     if (!eventBus) {
@@ -142,7 +168,7 @@ export class AttemptCancellationController {
       await publishExecutionPauseRequested({
         eventBus,
         executionId,
-        reason,
+        pause,
       });
     } catch (error) {
       try {
@@ -163,12 +189,18 @@ export class AttemptCancellationController {
    * Registers an abort controller for an attempt. When a live listener is active
    * it does a single immediate store recheck (covering a cancellation that
    * landed before registration); otherwise it arms the polling fallback.
+   * `pausedAt` is the execution's pause stamp when the attempt started, so a
+   * late abort for that already-resumed pause spares this attempt.
    */
   async registerAttemptCancellation(params: {
     executionId: string;
+    pausedAt?: Date;
   }): Promise<{ signal: AbortSignal; stop: () => void }> {
     const controller = new AbortController();
     this.activeAttemptControllers.set(params.executionId, controller);
+    if (params.pausedAt) {
+      this.attemptStartPauseStamps.set(controller, params.pausedAt.getTime());
+    }
     let stopWatcher: (() => void) | undefined;
 
     if (this.liveCancellationListenerStop) {
@@ -182,7 +214,7 @@ export class AttemptCancellationController {
         } else {
           const pauseState = getPauseState(execution);
           if (pauseState) {
-            this.abortActiveAttempt(params.executionId, pauseState.reason);
+            this.abortPausedAttempt(params.executionId, pauseState);
           }
         }
       } catch (error) {
@@ -234,6 +266,7 @@ export class AttemptCancellationController {
       controller: params.controller,
       store: this.deps.store,
       abortActiveAttempt: (id, reason) => this.abortActiveAttempt(id, reason),
+      abortPausedAttempt: (id, pause) => this.abortPausedAttempt(id, pause),
     });
   }
 }
