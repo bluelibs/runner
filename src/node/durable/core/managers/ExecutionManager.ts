@@ -38,6 +38,8 @@ import {
   resumeExecution as resumeExecutionFlow,
 } from "./ExecutionManager.pause";
 import { restartExecution as restartExecutionFlow } from "./ExecutionManager.restart";
+import { applyToContinuationTip } from "./ExecutionManager.chainTip";
+import { assertExecutionTuningConfig } from "./ExecutionManager.config";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -50,12 +52,7 @@ export interface ExecutionManagerConfig {
   logger?: Logger;
   audit?: DurableServiceConfig["audit"];
   determinism?: DurableServiceConfig["determinism"];
-  execution?: {
-    maxAttempts?: number;
-    timeout?: number;
-    kickoffFailsafeDelayMs?: number;
-    maxContinuationDepth?: number;
-  };
+  execution?: DurableServiceConfig["execution"];
 }
 
 /**
@@ -85,6 +82,7 @@ export class ExecutionManager {
     private readonly auditLogger: AuditLogger,
     private readonly waitManager: WaitManager,
   ) {
+    assertExecutionTuningConfig(this.config.execution);
     this.eventBus = this.config.eventBus ?? new NoopEventBus();
     const liveCancellationEventBus =
       this.config.eventBus && !(this.config.eventBus instanceof NoopEventBus)
@@ -225,11 +223,15 @@ export class ExecutionManager {
   }
 
   async pauseExecution(executionId: string): Promise<void> {
-    await pauseExecutionFlow(this.pauseDeps, executionId);
+    await applyToContinuationTip(this.config.store, executionId, (tipId) =>
+      pauseExecutionFlow(this.pauseDeps, tipId),
+    );
   }
 
   async resumeExecution(executionId: string): Promise<void> {
-    await resumeExecutionFlow(this.pauseDeps, executionId);
+    await applyToContinuationTip(this.config.store, executionId, (tipId) =>
+      resumeExecutionFlow(this.pauseDeps, tipId),
+    );
   }
 
   async restartExecution(

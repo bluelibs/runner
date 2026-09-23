@@ -27,7 +27,7 @@ export interface ExecutionPersistenceDeps {
   maxAttempts: number;
   /**
    * Bound on continue-as-new hops per lineage. Undefined means the flow
-   * default; zero or less disables continuations.
+   * default; zero disables continuations.
    */
   maxContinuationDepth?: number;
   defaultTimeout?: number;

@@ -228,7 +228,7 @@ await d.continueAsNew(nextInput); // never returns
 await d.continueAsNew(nextInput, { state: fresh }); // skip state carry
 ```
 
-Closes the run as `continued_as_new`, starts a linked successor with fresh steps. State carries by default; waits/signals follow the chain. Finish signal handlers first.
+Closes the run as `continued_as_new`, starts a linked successor with fresh steps. State and queued signals carry by default; waits/signals/cancel/pause/resume follow the chain. Restarting a continued run re-runs it from its own input once the chain tip is no longer active. Finish signal handlers first.
 
 ### setState() / replaceState() / getState()
 

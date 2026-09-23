@@ -390,7 +390,7 @@ Rules:
 
 - Finish in-flight signal handlers first: waits on the old run are abandoned.
 - Workflow state carries to the successor by default; pass `{ state: fresh }` to start clean.
-- Waiters and signals addressed to the old run transparently follow the chain to the live tip.
+- Waiters and signals addressed to the old run transparently follow the chain to the live tip; signals still queued on the old run move to the successor in the same commit.
 
 ### `setState()` / `replaceState()` / `getState()` — Typed Workflow State
 
@@ -761,7 +761,7 @@ if (d.info().stepCount > 500) {
 }
 ```
 
-Pause stops the run from advancing and records the pre-pause status in `pausedFrom`; resume restores it. Timers and signals still land on wall-clock time while paused, but attempts, polling kicks, and recovery skip the run until resume. Restart rejects active runs: only terminal or paused executions restart, and the new run starts fresh (new input optional, no carried steps or state). Restart does not retarget existing `wait(...)` / `waitForExecution(...)` callers: they stay attached to the source execution, so code that wants the rerun must switch to the returned `rerunId`. Continue-as-new links runs both ways (`continuedAsExecutionId` / `continuedFromExecutionId`); waits and signals follow the chain, so callers keep addressing the original id.
+Pause stops the run from advancing and records the pre-pause status in `pausedFrom`; resume restores it. Timers and signals still land on wall-clock time while paused, but attempts, polling kicks, and recovery skip the run until resume. Restart rejects active runs: only terminal or paused executions restart, and the new run starts fresh (new input optional, no carried steps or state). Restart does not retarget existing `wait(...)` / `waitForExecution(...)` callers: they stay attached to the source execution, so code that wants the rerun must switch to the returned `rerunId`. Continue-as-new links runs both ways (`continuedAsExecutionId` / `continuedFromExecutionId`); waits, signals, cancel, pause, and resume follow the chain, so callers keep addressing the original id. Restarting a `continued_as_new` run re-runs that run from its own input (restart the tip id for the latest chapter), and is rejected while the chain tip is still active.
 
 Rules:
 
@@ -769,7 +769,8 @@ Rules:
 - Pausing a live attempt aborts its step `signal`; a step body that already finished keeps its result, but no new step, sleep, emit, wait, or continue-as-new starts until resume. The interrupted attempt does not consume a retry.
 - A racing cancellation wins over both pause and continue-as-new.
 - Restarted runs get `restartedFromExecutionId` / `restartedAsExecutionId` lineage; continued runs get `continuedFromExecutionId` / `continuedAsExecutionId`.
-- Continuation chains are bounded (`execution.maxContinuationDepth`, default 1000); the over-limit run fails with a clear rejection instead of growing forever.
+- Continuation chains are bounded (`execution.maxContinuationDepth`, a non-negative integer, default 1000; `0` disables continuations); the over-limit run fails with a clear rejection instead of growing forever.
+- Restart with an `idempotencyKey` returns the same rerun on retry, even after the source was resumed.
 
 ## Workflow State
 
