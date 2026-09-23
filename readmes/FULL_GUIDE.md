@@ -1095,7 +1095,7 @@ await dispose();
 ### Input and Result Validation
 
 Tasks support schema-based validation for both input and output.
-Use `.inputSchema()` (alias `.schema()`) to validate task input before execution, and `.resultSchema()` to validate the resolved return value.
+Use `.inputSchema()` (the `.schema()` alias is deprecated) to validate task input before execution, and `.resultSchema()` to validate the resolved return value.
 
 ```typescript
 import { Match, r } from "@bluelibs/runner";
@@ -4356,7 +4356,7 @@ For Runner's identity-aware security behavior, prefer the pattern in [`04c-secur
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
 
-You mark tasks with `tags.cron.with({...})` (alias: `resources.cron.tag.with({...})`), and `resources.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
+You mark tasks with `tags.cron.with({...})`, and `resources.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
 
 ```typescript
 import { r } from "@bluelibs/runner";

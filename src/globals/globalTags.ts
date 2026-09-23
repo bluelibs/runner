@@ -32,6 +32,7 @@ const eventLaneHookConfigPattern = Match.ObjectStrict({
 });
 
 const globalTagsBase = {
+  /** @deprecated Internal framework definitions no longer rely on this tag. */
   system: deprecatedSystemTag,
   excludeFromGlobalHooks: defineTag<{
     metadata?: Record<string, any>;
@@ -44,6 +45,7 @@ const globalTagsBase = {
         "Marks events that should not be dispatched to global hooks (on: '*').",
     },
   }),
+  /** @deprecated Use `r.eventLane(...).applyTo(...)` for Event Lane routing instead. Runtime validation rejects this tag. */
   eventLane: defineTag<{
     lane: IEventLaneDefinition;
   }>({
@@ -55,6 +57,7 @@ const globalTagsBase = {
         "Deprecated: use r.eventLane(...).applyTo(...) for Event Lane routing instead of tag-based assignment.",
     },
   }),
+  /** @deprecated Configure relay hook policy in event-lane topology profiles via `consume[].hooks.only` instead. Runtime validation rejects this tag. */
   eventLaneHook: defineTag<{
     lane: IEventLaneDefinition;
   }>({

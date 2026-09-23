@@ -138,6 +138,7 @@ export interface ResourceFluentBuilderBeforeInit<
 
   /**
    * Alias for configSchema. Use this to define the resource configuration validation contract.
+   * @deprecated Use `.configSchema()` instead.
    */
   schema<
     TNewConfig = never,

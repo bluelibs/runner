@@ -269,7 +269,9 @@ export class Serializer {
   }
 
   /**
-   * Alias of `serialize()` to match the historical remote-lane serializer surface.
+   * Tree-mode serialization (JSON-like, type-aware): no `__graph` envelope, shared
+   * references are emitted as copies and circular structures throw. This is not an
+   * alias of `serialize()`, which uses graph mode and preserves identity and cycles.
    */
   public stringify<T>(value: T): string {
     const root = serializeTreeValue(

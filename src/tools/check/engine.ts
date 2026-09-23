@@ -562,7 +562,9 @@ export const Match = Object.freeze({
   Lazy: lazyPattern,
   fromSchema,
   Schema: schemaDecorator,
+  /** @deprecated Use `Match.fromSchema` instead. */
   fromClass: fromSchema,
+  /** @deprecated Use `Match.Schema` instead. */
   Class: schemaDecorator,
   Field: fieldDecorator,
   ArrayOf: arrayOf,

@@ -12,7 +12,7 @@ import type { Logger } from "../../models/Logger";
  * ```ts
  * // Silence stdout and forward every log to an external API
  * const logShipper = r.resource("app.resources.logShipper")
- *   .dependencies({ logger: r.logger })
+ *   .dependencies({ logger: resources.logger })
  *   .init(async ({ logger }) => {
  *     logger.onLog(async (log) => {
  *       await fetch("https://logs.example.com/ingest", {
@@ -47,8 +47,7 @@ import type { Logger } from "../../models/Logger";
  * - Listener errors are caught and printed internally; they will not crash or
  *   halt the runtime.
  *
- * Preferred access: `resources.logger`.
- * Legacy shorthand: `r.logger`.
+ * Access it through `resources.logger`.
  */
 export const loggerResource = defineResource<void, Promise<Logger>>({
   id: "logger",

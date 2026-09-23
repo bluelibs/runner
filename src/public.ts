@@ -54,6 +54,7 @@ import { subtreeOf as subtreeOfFn } from "./tools/subtreeOf";
 import { scope as scopeFn } from "./tools/scope";
 import { isSameDefinition } from "./tools/isSameDefinition";
 import { asyncContexts } from "./asyncContexts";
+import * as legacyErrorsNamespace from "./errors";
 
 ensureSymbolMetadata();
 
@@ -154,8 +155,11 @@ export const r = Object.freeze({
   override: overrideBuilder,
   asyncContext: asyncContextFn,
   error: errorFn,
+  /** @deprecated Use the top-level `subtreeOf` export instead. */
   subtreeOf: subtreeOfFn,
+  /** @deprecated Use the top-level `scope` export instead. */
   scope: scopeFn,
+  /** @deprecated Use the top-level `isSameDefinition` export instead. */
   isSameDefinition,
   middleware: Object.freeze({
     task: taskMiddlewareFn,
@@ -176,10 +180,15 @@ export * from "./globals/types";
  * Built-in Runner error helpers keyed by framework error id.
  */
 export * as errors from "./errors";
-/**
- * Legacy alias for {@link errors}.
- */
-export * as Errors from "./errors";
+// The tag sits on the specifier because TypeScript ignores JSDoc on `export * as`.
+export {
+  /**
+   * Legacy alias for {@link errors}.
+   *
+   * @deprecated Use `errors` instead.
+   */
+  legacyErrorsNamespace as Errors,
+};
 /**
  * Signals cooperative cancellation inside Runner-controlled executions.
  */

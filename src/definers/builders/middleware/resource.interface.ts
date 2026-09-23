@@ -50,6 +50,7 @@ export interface ResourceMiddlewareFluentBuilderBeforeRun<
 
   /**
    * Alias for configSchema. Use this to define the middleware configuration validation contract.
+   * @deprecated Use `.configSchema()` instead.
    */
   schema<
     TNew = never,

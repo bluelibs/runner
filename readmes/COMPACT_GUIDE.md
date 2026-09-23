@@ -108,13 +108,12 @@ await runtime.dispose();
 
 ### Schemas
 
-- `.schema()` is the unified alias:
-  - task -> input schema
-  - resource -> config schema
-  - event -> payload schema
-  - error -> data schema
-- Explicit aliases still exist when they read better:
-  - `.inputSchema(...)`, `.configSchema(...)`, `.payloadSchema(...)`, `.dataSchema(...)`
+- Prefer the explicit schema methods. They name what is being validated, so every codebase reads the same:
+  - task -> `.inputSchema(...)`
+  - resource -> `.configSchema(...)`
+  - event -> `.payloadSchema(...)`
+  - error -> `.dataSchema(...)`
+- `.schema()` is a deprecated alias for the slot above (also on tags and middleware -> `.configSchema()`). It still works, but do not use it in new code.
 - Tasks use `.resultSchema()` for output validation.
 - Schema slots accept: raw Match patterns, compiled Match schemas, decorator-backed classes, or any schema object exposing `parse(...)`.
 - Schema resolution prefers `parse(input)` when present. Otherwise Runner compiles raw Match patterns once and reuses the compiled schema.

@@ -40,10 +40,10 @@ Quick rules of thumb:
 
 Runner enforces compile-time chain phases for `r.task`, `r.hook`, `r.resource`, and middleware builders.
 
-- `task`: after `.run()`, these are locked: `.dependencies()`, `.inputSchema()`/`.schema()`, `.resultSchema()`, `.middleware()`, `.tags()`. `.meta()`, `.throws()`, `.build()` remain valid.
+- `task`: after `.run()`, these are locked: `.dependencies()`, `.inputSchema()` (and its deprecated `.schema()` alias), `.resultSchema()`, `.middleware()`, `.tags()`. `.meta()`, `.throws()`, `.build()` remain valid.
 - `hook`: `.run()` requires `.on(...)` first. After `.run()`, these are locked: `.on()`, `.dependencies()`, `.tags()`. `.build()` requires both `.on()` and `.run()`.
-- `middleware` (`task` and `resource`): after `.run()`, these are locked: `.dependencies()`, `.configSchema()`/`.schema()`, `.tags()`. `.build()` requires `.run()`.
-- `resource`: after `.init()`, these are locked: `.dependencies()`, `.configSchema()`/`.schema()`, `.resultSchema()`, `.middleware()`, `.tags()`, `.context()`. `.init()` stays optional.
+- `middleware` (`task` and `resource`): after `.run()`, these are locked: `.dependencies()`, `.configSchema()` (and its deprecated `.schema()` alias), `.tags()`. `.build()` requires `.run()`.
+- `resource`: after `.init()`, these are locked: `.dependencies()`, `.configSchema()` (and its deprecated `.schema()` alias), `.resultSchema()`, `.middleware()`, `.tags()`, `.context()`. `.init()` stays optional.
 
 Examples:
 

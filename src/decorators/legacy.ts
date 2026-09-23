@@ -19,6 +19,7 @@ type LegacyMatchSurface = Omit<
   Schema: (
     options?: import("../tools/check").MatchSchemaOptions,
   ) => LegacyMatchSchemaDecorator;
+  /** @deprecated Use `Match.Schema` instead. */
   Class: (
     options?: import("../tools/check").MatchSchemaOptions,
   ) => LegacyMatchSchemaDecorator;

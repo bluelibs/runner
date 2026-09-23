@@ -32,6 +32,7 @@ export interface ErrorFluentBuilder<
 
   /**
    * Alias for dataSchema. Use this to define the error data validation contract.
+   * @deprecated Use `.dataSchema()` instead.
    */
   schema<
     TNewData extends DefaultErrorType = never,

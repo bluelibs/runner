@@ -90,6 +90,7 @@ export interface TaskFluentBuilder<
 
   /**
    * Alias for inputSchema. Use this to define the task input validation contract.
+   * @deprecated Use `.inputSchema()` instead.
    */
   schema<
     TNewInput = never,

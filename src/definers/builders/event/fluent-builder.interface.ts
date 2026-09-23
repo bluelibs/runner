@@ -27,6 +27,7 @@ export interface EventFluentBuilder<
 
   /**
    * Alias for payloadSchema. Use this to define the event payload validation contract.
+   * @deprecated Use `.payloadSchema()` instead.
    */
   schema<
     TNew = never,

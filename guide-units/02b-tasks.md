@@ -39,7 +39,7 @@ await dispose();
 ### Input and Result Validation
 
 Tasks support schema-based validation for both input and output.
-Use `.inputSchema()` (alias `.schema()`) to validate task input before execution, and `.resultSchema()` to validate the resolved return value.
+Use `.inputSchema()` (the `.schema()` alias is deprecated) to validate task input before execution, and `.resultSchema()` to validate the resolved return value.
 
 ```typescript
 import { Match, r } from "@bluelibs/runner";

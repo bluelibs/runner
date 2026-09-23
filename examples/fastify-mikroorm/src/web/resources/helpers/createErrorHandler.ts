@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { HTTPError } from "#/web/http-error";
-import { Errors } from "@bluelibs/runner";
+import { errors } from "@bluelibs/runner";
 
 export function createErrorHandler() {
   return (err: Error, _req: FastifyRequest, reply: FastifyReply) => {
@@ -11,7 +11,7 @@ export function createErrorHandler() {
         .send({ error: err.message, details: err.details });
     }
     // Runner validation errors
-    if (Errors.validationError.is(err) || err?.name === "ValidationError") {
+    if (errors.validationError.is(err) || err?.name === "ValidationError") {
       return reply.status(400).send({ error: err.message });
     }
     // Errors with statusCode
