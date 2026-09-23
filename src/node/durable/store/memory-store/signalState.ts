@@ -64,8 +64,9 @@ function assertSignalQueueCapacity(
   executionId: string,
   signalId: string,
   queuedLength: number,
+  incomingCount = 1,
 ): void {
-  if (queuedLength >= MAX_QUEUED_SIGNALS_PER_KEY) {
+  if (queuedLength + incomingCount > MAX_QUEUED_SIGNALS_PER_KEY) {
     return durableSignalBacklogExceededError.throw({
       executionId,
       signalId,
@@ -126,6 +127,44 @@ export async function enqueueQueuedSignalRecord(
     signalState.queued.push(cloneQueuedSignalRecord(record));
     return { result: undefined, changed: true };
   });
+}
+
+/**
+ * Hands every queued signal backlog of a continued run to its successor.
+ * Synchronous on purpose: callers run it inside the same critical section
+ * as the continue-as-new commit, so no buffer can land on the prior run
+ * between the close and the hand-off. Capacity is checked for every key
+ * before anything moves, so an overflow leaves both runs untouched.
+ */
+export function transferQueuedSignalBacklog(
+  runtime: MemoryStoreRuntime,
+  fromExecutionId: string,
+  toExecutionId: string,
+): void {
+  const backlogs = Array.from(
+    runtime.signalStates.get(fromExecutionId)?.values() ?? [],
+  ).filter((signalState) => signalState.queued.length > 0);
+
+  for (const backlog of backlogs) {
+    const targetLength =
+      runtime.signalStates.get(toExecutionId)?.get(backlog.signalId)?.queued
+        .length ?? 0;
+    assertSignalQueueCapacity(
+      toExecutionId,
+      backlog.signalId,
+      targetLength,
+      backlog.queued.length,
+    );
+  }
+
+  for (const backlog of backlogs) {
+    getOrCreateSignalState(
+      runtime,
+      toExecutionId,
+      backlog.signalId,
+    ).queued.push(...backlog.queued);
+    backlog.queued = [];
+  }
 }
 
 export async function consumeQueuedSignalRecord(

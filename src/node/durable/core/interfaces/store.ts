@@ -86,6 +86,11 @@ export interface IDurableStore {
    * pause/cancel that already moved it resolves `false` so the continuation
    * is dropped instead of overwriting the operator's decision.
    *
+   * The same commit must move every queued signal record of the prior run
+   * onto the successor (same signal ids, FIFO order, respecting
+   * `MAX_QUEUED_SIGNALS_PER_KEY`), so no buffered signal is stranded on a
+   * closed run.
+   *
    * Optional for backward compatibility: existing custom stores keep
    * compiling and running without it. Using continue-as-new against a store
    * that lacks this method fails fast with a clear lifecycle error.

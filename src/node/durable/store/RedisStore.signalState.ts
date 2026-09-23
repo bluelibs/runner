@@ -44,6 +44,23 @@ function getSignalIdFromStepResult(result: StepResult): string {
   });
 }
 
+/**
+ * Lua's cjson encodes an emptied list as `{}`, so a drained queue or a state
+ * created inside a script reads back as an object; restore the array shape
+ * callers rely on when iterating.
+ */
+function parseSignalState(
+  runtime: RedisStoreRuntime,
+  payload: string,
+): DurableSignalState {
+  const state = runtime.serializer.parse(payload) as DurableSignalState;
+  return {
+    ...state,
+    queued: Array.isArray(state.queued) ? state.queued : [],
+    history: Array.isArray(state.history) ? state.history : [],
+  };
+}
+
 export async function getSignalState(
   runtime: RedisStoreRuntime,
   executionId: string,
@@ -52,7 +69,7 @@ export async function getSignalState(
   const data = runtime.parseRedisString(
     await runtime.redis.get(runtime.signalKey(executionId, signalId)),
   );
-  return data ? (runtime.serializer.parse(data) as DurableSignalState) : null;
+  return data ? parseSignalState(runtime, data) : null;
 }
 
 export async function listSignalStates(
@@ -74,7 +91,7 @@ export async function listSignalStates(
   return results
     .map((entry) => runtime.parseRedisString(entry?.[1]))
     .filter((payload): payload is string => payload !== null)
-    .map((payload) => runtime.serializer.parse(payload) as DurableSignalState)
+    .map((payload) => parseSignalState(runtime, payload))
     .sort((left, right) => left.signalId.localeCompare(right.signalId));
 }
 

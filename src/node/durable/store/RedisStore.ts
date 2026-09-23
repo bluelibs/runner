@@ -26,6 +26,7 @@ import {
   type RedisStoreConfig,
 } from "./RedisStore.runtime";
 import * as executionStateOps from "./RedisStore.executionState";
+import * as continuationOps from "./RedisStore.continuation";
 import * as executionViewOps from "./RedisStore.executionViews";
 import * as signalStateOps from "./RedisStore.signalState";
 import * as executionWaiterOps from "./RedisStore.executionWaiters";
@@ -121,10 +122,7 @@ export class RedisStore implements IDurableStore {
     priorExecution: Execution;
     successorExecution: Execution;
   }): Promise<boolean> {
-    return await executionStateOps.createContinuedExecution(
-      this.runtime,
-      params,
-    );
+    return await continuationOps.createContinuedExecution(this.runtime, params);
   }
 
   async getWorkflowState<TState = unknown>(

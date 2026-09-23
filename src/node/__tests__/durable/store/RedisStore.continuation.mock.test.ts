@@ -52,17 +52,19 @@ describe("durable: RedisStore continuation (mock)", () => {
 
     expect(redisMock.eval).toHaveBeenCalledTimes(1);
     const args = redisMock.eval.mock.calls[0] as unknown[];
-    // Script, key count, and 7 keys precede ARGV[1].
+    // Script, key count, and 9 fixed keys (no signal keys) precede ARGV[1].
+    expect(args[1]).toBe(9);
     // Prior payload and id, then prior flags: continued_as_new is inactive.
-    expect(args[9]).toContain('"status":"continued_as_new"');
-    expect(args[10]).toBe("root");
-    expect(args[11]).toBe("0");
+    expect(args[11]).toContain('"status":"continued_as_new"');
+    expect(args[12]).toBe("root");
+    expect(args[13]).toBe("0");
     // Successor payload and id, then successor flags: pending is active.
-    expect(args[13]).toContain('"status":"pending"');
-    expect(args[14]).toBe("tip");
-    expect(args[15]).toBe("1");
-    // The commit is conditional on the prior run still running.
-    expect(args[args.length - 1]).toBe(ExecutionStatus.Running);
+    expect(args[15]).toContain('"status":"pending"');
+    expect(args[16]).toBe("tip");
+    expect(args[17]).toBe("1");
+    // The commit is conditional on the prior run still running, and on the
+    // scanned signal-key set (empty here) still being complete.
+    expect(args.slice(-2)).toEqual([ExecutionStatus.Running, "0"]);
   });
 
   it("drops the commit when the prior run is no longer running", async () => {
