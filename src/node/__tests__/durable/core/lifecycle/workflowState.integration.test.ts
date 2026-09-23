@@ -24,7 +24,7 @@ describe("durable: workflow state (integration)", () => {
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
-        await ctx.setState<CounterState>({ page: 1 });
+        await ctx.replaceState<CounterState>({ page: 1, total: 0 });
         await ctx.sleep(20, { stepId: "nap" });
         await ctx.setState<CounterState>({ total: 10 });
         return await ctx.getState<CounterState>();
@@ -51,6 +51,53 @@ describe("durable: workflow state (integration)", () => {
     await runtime.dispose();
   });
 
+  it("keeps the documented read-modify-write replay-safe across sleeps", async () => {
+    const store = new MemoryStore();
+    const durable = durableResource.fork("durable-tests-state-docs");
+    const durableRegistration = durable.with({
+      store,
+      eventBus: new MemoryEventBus(),
+      polling: { interval: 5 },
+    });
+
+    const task = r
+      .task("durable-test-state-docs")
+      .dependencies({ durable })
+      .run(async (_input: undefined, { durable }) => {
+        const d = durable.use();
+        const current = (await d.getState<CounterState>()) ?? {
+          page: 0,
+          total: 0,
+        };
+        await d.replaceState<CounterState>({
+          ...current,
+          page: current.page + 1,
+        });
+        await d.sleep(10, { stepId: "first-nap" });
+        await d.sleep(10, { stepId: "second-nap" });
+        return await d.getState<CounterState>();
+      })
+      .build();
+
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
+    const runtime = await run(app, { logs: { printThreshold: null } });
+    const service = runtime.getResourceValue(durable);
+
+    const executionId = await service.start(task, undefined);
+    await expect(
+      service.wait(executionId, { timeout: 5_000, waitPollIntervalMs: 5 }),
+    ).resolves.toEqual({ page: 1, total: 0 });
+    await expect(service.getState(executionId)).resolves.toEqual({
+      page: 1,
+      total: 0,
+    });
+
+    await runtime.dispose();
+  });
+
   it("chains pause, resume, continueAsNew, wait-following, and restart with carried and fresh state", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
@@ -68,14 +115,8 @@ describe("durable: workflow state (integration)", () => {
       .dependencies({ durable })
       .run(async (input: { chapter: number }, { durable }) => {
         const ctx = durable.use();
-        // State writes re-execute on replay (sleep/pause resume re-runs the
-        // prefix), so derivations must be idempotent: guard the append.
         const prior = (await ctx.getState<ScenarioState>())?.chapters ?? [];
-        const next = {
-          chapters: prior.includes(input.chapter)
-            ? prior
-            : [...prior, input.chapter],
-        };
+        const next = { chapters: [...prior, input.chapter] };
         await ctx.replaceState<ScenarioState>(next);
         if (input.chapter === 0) {
           await ctx.sleep(1_000, { stepId: "settle" });

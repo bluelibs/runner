@@ -1,4 +1,5 @@
 import type { IDurableContext } from "../../../../node/durable/core/interfaces/context";
+import type { IDurableStateContext } from "../../../../node/durable";
 import type { IDurableResource } from "../../../../node/durable/core/interfaces/resource";
 import type { IDurableService } from "../../../../node/durable/core/interfaces/service";
 import type { IDurableStore } from "../../../../node/durable/core/interfaces/store";
@@ -21,8 +22,10 @@ const backToFull: IDurableStore = legacyStore;
 void backToFull;
 
 async function checkStateGenerics(ctx: IDurableContext): Promise<void> {
-  await ctx.setState<{ count: number }>({ count: 1 });
-  await ctx.replaceState<{ count: number }>({ count: 2 });
+  await ctx.replaceState<{ count: number }>({ count: 1 });
+  await ctx.setState<{ count: number }>({ count: 2 });
+  const stateSurface: IDurableStateContext = ctx;
+  void stateSurface;
 
   const state = await ctx.getState<{ count: number }>();
   const narrowed: { count: number } | undefined = state;

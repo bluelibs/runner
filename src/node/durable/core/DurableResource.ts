@@ -224,8 +224,9 @@ export class DurableResource implements IDurableResource {
   }
 
   /**
-   * Reads the workflow-owned typed state for one execution.
-   * Resolves `undefined` until the workflow first sets state.
+   * Reads the live workflow-owned typed state for one execution.
+   * Resolves `undefined` until the workflow first sets state; throws when the
+   * execution does not exist.
    */
   getState<T>(executionId: string): Promise<T | undefined> {
     return this.service.getState<T>(executionId);

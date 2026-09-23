@@ -988,7 +988,7 @@ export const durableWorkflowStateInvalidError = error<
       `Invalid workflow state for execution "${executionId}": ${reason}.`,
   )
   .remediation(
-    "Pass a serializable object patch to setState, or a serializable value to replaceState.",
+    "Initialize state with replaceState, then pass plain-object patches to setState; replaceState accepts any serializable value.",
   )
   .build();
 

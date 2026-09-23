@@ -1,9 +1,14 @@
 import type { IDurableStore } from "../interfaces/store";
-import { isRecord } from "../utils";
-import { durableLifecycleUnsupportedStoreCapabilityError } from "../../../../errors";
+import type { IStepBuilder } from "../interfaces/context";
+import { isPlainObject } from "../../../../tools/typeChecks";
+import { DurableExecutionError } from "../utils";
+import {
+  durableLifecycleUnsupportedStoreCapabilityError,
+  durableWorkflowStateInvalidError,
+} from "../../../../errors";
 
 /**
- * Reads the workflow-owned typed state for one execution.
+ * Reads the live workflow-owned state record for one execution.
  * Resolves `undefined` until the workflow first sets state.
  */
 export async function readDurableState<T>(
@@ -20,23 +25,55 @@ export async function readDurableState<T>(
 }
 
 /**
- * Shallow-merges a patch into the current state. Records merge key-wise;
- * anything else (including empty current state) resolves to the patch, so a
- * merge can never silently drop values into an unspreadable shape.
+ * Operator-side read of the live state record. A missing execution throws
+ * instead of resolving `undefined`, which would be indistinguishable from an
+ * execution that simply has not set state yet (e.g. a mistyped id).
  */
-export function mergeDurableStatePatch<T>(
-  current: unknown,
-  patch: Partial<T>,
-): T {
-  if (isRecord(current) && isRecord(patch)) {
-    return { ...current, ...patch } as T;
+export async function readExistingExecutionState<T>(
+  store: IDurableStore,
+  executionId: string,
+): Promise<T | undefined> {
+  if (!(await store.getExecution(executionId))) {
+    throw new DurableExecutionError(
+      `Execution ${executionId} not found`,
+      executionId,
+      "unknown",
+      0,
+    );
   }
-  return patch as T;
+  return await readDurableState<T>(store, executionId);
 }
 
 /**
- * Persists the workflow-owned typed state record for one execution,
- * replacing any previous record (last-write-wins).
+ * Shallow-merges a patch into the current state. Both sides must be plain
+ * objects: spreading arrays or primitives would silently reshape the record
+ * (e.g. `[1, 2]` into `{ "0": 1, "1": 2 }`), and patching empty state would
+ * store a partial value typed as the full state.
+ */
+export function mergeDurableStatePatch(
+  executionId: string,
+  current: unknown,
+  patch: unknown,
+): Record<string, unknown> {
+  if (!isPlainObject(patch)) {
+    return durableWorkflowStateInvalidError.throw({
+      executionId,
+      reason: "setState patch must be a plain object",
+    });
+  }
+  if (!isPlainObject(current)) {
+    return durableWorkflowStateInvalidError.throw({
+      executionId,
+      reason:
+        "setState needs existing object state; initialize it with replaceState first",
+    });
+  }
+  return { ...current, ...patch };
+}
+
+/**
+ * Persists the workflow-owned state record for one execution, replacing any
+ * previous record.
  */
 export async function writeDurableState(
   store: IDurableStore,
@@ -53,4 +90,60 @@ export async function writeDurableState(
     state,
     updatedAt: new Date(),
   });
+}
+
+export type DurableStateOperations = {
+  get: <T>() => Promise<T | undefined>;
+  patch: (patch: unknown) => Promise<void>;
+  replace: (next: unknown) => Promise<void>;
+};
+
+/**
+ * Builds replay-safe state operations for one attempt. Every read and write
+ * is memoized as an internal step keyed by call order, so replay returns the
+ * historical read and skips already-applied writes instead of re-running them
+ * against the latest record. Reads and writes use separate counters so a read
+ * can never resolve to a write's cached (void) result.
+ */
+export function createDurableStateOperations(params: {
+  store: IDurableStore;
+  executionId: string;
+  assertCanWrite: () => Promise<void>;
+  assertUniqueStepId: (stepId: string) => void;
+  internalStep: <T>(stepId: string) => IStepBuilder<T>;
+}): DurableStateOperations {
+  const { store, executionId } = params;
+  let readIndex = 0;
+  let writeIndex = 0;
+
+  const nextStepId = (kind: "read" | "write"): string => {
+    const index = kind === "read" ? readIndex++ : writeIndex++;
+    const stepId = `__state:${kind}:${index}`;
+    params.assertUniqueStepId(stepId);
+    return stepId;
+  };
+
+  const write = async (resolveNext: () => Promise<unknown>): Promise<void> => {
+    // Internal steps tolerate cancellation teardown; state writes must not.
+    await params.assertCanWrite();
+    await params.internalStep<void>(nextStepId("write")).up(async () => {
+      await writeDurableState(store, executionId, await resolveNext());
+    });
+  };
+
+  return {
+    get: async <T>() =>
+      await params
+        .internalStep<T | undefined>(nextStepId("read"))
+        .up(async () => await readDurableState<T>(store, executionId)),
+    patch: async (patch) =>
+      await write(async () =>
+        mergeDurableStatePatch(
+          executionId,
+          await readDurableState<unknown>(store, executionId),
+          patch,
+        ),
+      ),
+    replace: async (next) => await write(async () => next),
+  };
 }

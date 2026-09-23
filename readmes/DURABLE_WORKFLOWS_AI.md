@@ -233,12 +233,12 @@ Closes the run as `continued_as_new`, starts a linked successor with fresh steps
 ### setState() / replaceState() / getState()
 
 ```ts
-await d.setState<Counter>({ page: 2 }); // merge
-await d.replaceState<Counter>({ page: 0, total: 0 }); // wholesale
+await d.replaceState<Counter>({ page: 0, total: 0 }); // wholesale; initializes
+await d.setState<Counter>({ page: 2 }); // merge; throws unless state is a plain object
 const state = await d.getState<Counter>(); // Counter | undefined
 ```
 
-One typed record per execution. Writes re-execute on replay: keep derivations idempotent.
+One typed record per execution. Calls are memoized by call order: replay returns historical reads and skips applied writes.
 
 ### info()
 
@@ -289,7 +289,7 @@ await durableRuntime.resumeExecution(executionId);
 const rerunId = await durableRuntime.restartExecution(executionId);
 const rerunId = await durableRuntime.restartExecution(executionId, { input: next });
 
-// Typed state read (undefined until first set)
+// Typed live state read (undefined until first set; throws for unknown id)
 const state = await durableRuntime.getState<Counter>(executionId);
 ```
 

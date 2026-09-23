@@ -370,8 +370,9 @@ export interface IDurableService {
   ): Promise<string>;
 
   /**
-   * Reads the workflow-owned typed state for an execution.
-   * Resolves `undefined` until the workflow first sets state.
+   * Reads the live workflow-owned typed state for an execution.
+   * Resolves `undefined` until the workflow first sets state; throws when the
+   * execution does not exist.
    */
   getState<T>(executionId: string): Promise<T | undefined>;
 

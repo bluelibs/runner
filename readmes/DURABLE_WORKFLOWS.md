@@ -395,12 +395,12 @@ Rules:
 ### `setState()` / `replaceState()` / `getState()` — Typed Workflow State
 
 ```ts
-await d.setState<Counter>({ page: 2 }); // shallow merge
-await d.replaceState<Counter>({ page: 0, total: 0 }); // wholesale
+await d.replaceState<Counter>({ page: 0, total: 0 }); // wholesale; initializes state
+await d.setState<Counter>({ page: 2 }); // shallow merge into existing state
 const state = await d.getState<Counter>(); // Counter | undefined
 ```
 
-Each execution owns one state record. `getState()` resolves `undefined` until first set, so pair it with a module-level default. Replay re-executes writes last-write-wins, so derivations must be idempotent (guard read-modify-write appends).
+Each execution owns one state record. `getState()` resolves `undefined` until first set, so pair it with a module-level default. `setState()` only patches existing plain-object state and throws otherwise, so initialize with `replaceState()` first. Every call is memoized like a step (keyed by call order): on replay, reads return the value they saw originally and applied writes are skipped, so read-modify-write is replay-safe.
 
 ### `info()` — Attempt Info
 
@@ -451,7 +451,7 @@ await durable.resumeExecution(executionId);
 const rerunId = await durable.restartExecution(executionId);
 const rerunId = await durable.restartExecution(executionId, { input: next });
 
-// Read typed workflow state (undefined until first set)
+// Read live typed workflow state (undefined until first set; throws for unknown id)
 const state = await durable.getState<Counter>(executionId);
 ```
 
@@ -779,12 +779,14 @@ Workflows that need more than step results keep one typed record per execution:
 type Counter = { page: number; total: number };
 
 const current = (await d.getState<Counter>()) ?? { page: 0, total: 0 };
-await d.setState<Counter>({ page: current.page + 1 });
+await d.replaceState<Counter>({ ...current, page: current.page + 1 });
+await d.sleep(60_000, { stepId: "cooldown" });
+// Replay after the sleep sees the historical read: page stays 1.
 ```
 
 Operators read the same record id-addressed via `durable.getState<Counter>(executionId)`, and break-glass tooling sees it in `operator.getExecutionDetail()`. The payload-free `DurableExecutionState` projection stays lean and excludes it.
 
-State carries across continue-as-new (override with `{ state }`) and never carries across restart. Because replay re-executes writes, derivations must be idempotent: a guarded append converges, a blind read-append accumulates once per replay.
+State carries across continue-as-new (override with `{ state }`) and never carries across restart. State calls are memoized by call order, like implicit-id `sleep()`/`emit()`, so keep their order stable across deploys for in-flight executions. Operator `getState(executionId)` reads the live record and throws for unknown executions.
 
 ---
 

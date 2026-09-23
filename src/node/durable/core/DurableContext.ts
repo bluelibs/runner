@@ -34,9 +34,8 @@ import type { DurableExecutionCurrentWorkflowMeta } from "./types";
 import { ExecutionStatus } from "./types";
 import { createDurableContextAudit } from "./durable-context/DurableContext.audit";
 import {
-  mergeDurableStatePatch,
-  readDurableState,
-  writeDurableState,
+  createDurableStateOperations,
+  type DurableStateOperations,
 } from "./durable-context/state";
 import {
   createDurableContextDeterminism,
@@ -91,6 +90,7 @@ export class DurableContext implements IDurableContext {
   private readonly compensations: DurableCompensation[] = [];
 
   private readonly audit: DurableContextAudit;
+  private readonly state: DurableStateOperations;
   private readonly determinism: DurableContextDeterminism;
   private readonly auditEnabled: boolean;
   private readonly auditEmitter: DurableAuditEmitter | null;
@@ -169,6 +169,14 @@ export class DurableContext implements IDurableContext {
       warnedKinds: this.implicitInternalStepIdsWarned,
       seenStepIds: this.seenStepIds,
       warn: console.warn,
+    });
+
+    this.state = createDurableStateOperations({
+      store: this.store,
+      executionId: this.executionId,
+      assertCanWrite: async () => await this.assertCanContinue(),
+      assertUniqueStepId: this.determinism.assertUniqueStepId,
+      internalStep: (stepId) => this.internalStep(stepId),
     });
   }
 
@@ -332,25 +340,15 @@ export class DurableContext implements IDurableContext {
   }
 
   async setState<T>(patch: Partial<T>): Promise<void> {
-    await this.assertCanContinue();
-    const current = await readDurableState<T>(this.store, this.executionId);
-    await writeDurableState(
-      this.store,
-      this.executionId,
-      mergeDurableStatePatch(current, patch),
-    );
+    await this.state.patch(patch);
   }
 
   async replaceState<T>(next: T): Promise<void> {
-    await this.assertCanContinue();
-    await writeDurableState(this.store, this.executionId, next);
+    await this.state.replace(next);
   }
 
   async getState<T>(): Promise<T | undefined> {
-    // Reads stay available during cancellation teardown: they cannot mutate,
-    // so only stale-attempt lock ownership is enforced.
-    this.assertLockOwnership();
-    return await readDurableState<T>(this.store, this.executionId);
+    return await this.state.get<T>();
   }
 
   info(): DurableInfo {

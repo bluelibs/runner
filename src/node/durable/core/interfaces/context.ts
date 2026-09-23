@@ -1,3 +1,4 @@
+import type { IDurableStateContext } from "./context.state";
 import type { IEventDefinition } from "../../../../types/event";
 import type { AnyTask } from "../../../../types/task";
 import type {
@@ -126,7 +127,7 @@ export interface IStepBuilder<T> extends PromiseLike<T> {
   down(fn: (result: T) => Promise<void>): this;
 }
 
-export interface IDurableContext {
+export interface IDurableContext extends IDurableStateContext {
   readonly executionId: string;
   readonly attempt: number;
 
@@ -270,23 +271,6 @@ export interface IDurableContext {
     nextInput: TInput,
     options?: ContinueAsNewOptions,
   ): Promise<never>;
-
-  /**
-   * Merges a patch into the workflow-owned typed state record.
-   * Replay converges via last-write-wins on the single per-execution record.
-   */
-  setState<T>(patch: Partial<T>): Promise<void>;
-
-  /**
-   * Replaces the workflow-owned typed state record wholesale.
-   */
-  replaceState<T>(next: T): Promise<void>;
-
-  /**
-   * Reads the workflow-owned typed state.
-   * Resolves `undefined` until the workflow first sets state.
-   */
-  getState<T>(): Promise<T | undefined>;
 
   /**
    * Returns in-memory info about the current attempt.

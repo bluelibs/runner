@@ -60,7 +60,9 @@ describe("durable: lifecycle contract (U0)", () => {
     await expect(service.restartExecution("e1")).rejects.toThrow(
       'Cannot restart execution "e1" with status "unknown".',
     );
-    await expect(service.getState("e1")).resolves.toBeUndefined();
+    await expect(service.getState("e1")).rejects.toThrow(
+      "Execution e1 not found",
+    );
   });
 
   it("exposes the lifecycle context surface (U4 implements the remaining behavior)", async () => {
@@ -69,14 +71,15 @@ describe("durable: lifecycle contract (U0)", () => {
     await expect(ctx.continueAsNew({})).rejects.toThrow(
       'Cannot continue execution "lifecycle-contract" as new: execution does not exist.',
     );
-    await expect(ctx.setState({ page: 1 })).resolves.toBeUndefined();
+    await expect(ctx.replaceState({ page: 1 })).resolves.toBeUndefined();
     await expect(ctx.getState()).resolves.toEqual({ page: 1 });
-    await expect(ctx.replaceState({ page: 2 })).resolves.toBeUndefined();
+    await expect(ctx.setState({ page: 2 })).resolves.toBeUndefined();
     await expect(ctx.getState()).resolves.toEqual({ page: 2 });
+    // State operations are memoized as internal steps, so they are counted.
     expect(ctx.info()).toEqual({
       executionId: "lifecycle-contract",
       attempt: 1,
-      stepCount: 0,
+      stepCount: 4,
     });
   });
 
