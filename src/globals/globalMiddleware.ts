@@ -62,7 +62,9 @@ const timeoutResourceMiddlewareAlias = createMiddlewareAlias(
 );
 
 type GlobalMiddlewares = {
+  /** @deprecated Use `middleware.task.requireContext` instead. */
   requireContext: typeof requireContextTaskMiddleware;
+  /** @deprecated Use `middleware.task.identityChecker` instead. */
   identityChecker: typeof identityCheckerTaskMiddleware;
   task: {
     requireContext: typeof requireContextTaskMiddleware;

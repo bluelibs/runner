@@ -133,7 +133,7 @@ import { r } from "@bluelibs/runner";
 // Infrastructure: database connection
 const databaseResource = r
   .resource("app.resources.database")
-  .schema({ connectionString: String })
+  .configSchema({ connectionString: String })
   .init(async ({ connectionString }) => {
     const client = new DatabaseClient(connectionString);
     await client.connect();

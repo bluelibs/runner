@@ -35,6 +35,7 @@ export interface TagFluentBuilder<
 
   /**
    * Alias for configSchema. Use this to define the tag configuration validation contract.
+   * @deprecated Use `.configSchema()` instead.
    */
   schema<
     TNewConfig = never,

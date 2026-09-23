@@ -1095,7 +1095,7 @@ await dispose();
 ### Input and Result Validation
 
 Tasks support schema-based validation for both input and output.
-Use `.inputSchema()` (alias `.schema()`) to validate task input before execution, and `.resultSchema()` to validate the resolved return value.
+Use `.inputSchema()` to validate task input before execution, and `.resultSchema()` to validate the resolved return value.
 
 ```typescript
 import { Match, r } from "@bluelibs/runner";
@@ -4356,7 +4356,7 @@ For Runner's identity-aware security behavior, prefer the pattern in [`04c-secur
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
 
-You mark tasks with `tags.cron.with({...})` (alias: `resources.cron.tag.with({...})`), and `resources.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
+You mark tasks with `tags.cron.with({...})`, and `resources.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -5284,7 +5284,6 @@ Rule of thumb:
 - Match-native helpers and built-in tokens also expose `.parse()`, `.test()`, and `.toJSONSchema()` directly.
 - `check(value, pattern, { errorPolicy: "all" })` aggregates all validation issues instead of fail-fast at first mismatch.
 - `Match.WithErrorPolicy(pattern, "all")` stores the same aggregate behavior as the default for that Match-native pattern.
-- `throwAllErrors` still works as a deprecated alias for `errorPolicy`.
 - Pattern matching is depth-capped: past 1000 nesting levels it aborts with `errors.checkMaxDepthExceededError` instead of overflowing the call stack. Tune it with `check(value, pattern, { maxDepth })`, `Match.compile(pattern, { maxDepth })`, or `Match.test(value, pattern, { maxDepth })`; `Infinity` disables the cap.
 - Recursive and forward patterns are supported via `Match.Lazy(...)`.
 - Class-backed recursive graphs are supported with `Match.Schema()` + `Match.fromSchema(...)`.
