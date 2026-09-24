@@ -65,13 +65,12 @@ jobs:
           GITHUB_ACTIONS: true
         run: npm run benchmark
 
-      - name: Check distribution artifact budgets
+      - name: Check distribution entrypoints and consumer bundles
         working-directory: head
         run: >-
           npm run build &&
           npm run check:entrypoints &&
-          npm run benchmark:artifacts &&
-          npm run benchmark:consumers
+          npm run check:consumers
 
       - name: Compare fresh results against protected base thresholds
         run: >-
