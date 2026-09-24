@@ -11,6 +11,7 @@ import type {
   Schedule,
   StepResult,
   Timer,
+  WorkflowState,
 } from "../core/types";
 import type { DurableAuditEntry } from "../core/audit";
 
@@ -167,6 +168,7 @@ export class PersistentMemoryStore extends MemoryStore {
         parsed,
         "executionWaiters",
       ),
+      workflowStates: readArrayField<WorkflowState>(parsed, "workflowStates"),
       auditEntries: readArrayField<DurableAuditEntry>(parsed, "auditEntries"),
       timers: readArrayField<Timer>(parsed, "timers"),
       schedules: readArrayField<Schedule>(parsed, "schedules"),

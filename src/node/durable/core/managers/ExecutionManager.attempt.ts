@@ -7,13 +7,18 @@ import type {
 import type { ITask } from "../../../../types/task";
 import { ExecutionStatus, type Execution } from "../types";
 import { DurableContext } from "../DurableContext";
-import { SuspensionSignal } from "../interfaces/context";
+import {
+  ContinuationSignal,
+  SuspensionSignal,
+  type ContinueAsNewOptions,
+} from "../interfaces/context";
 import { getDeclaredDurableWorkflowSignalIds } from "../../tags/durableWorkflow.tag";
 import { isTimeoutExceededError, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 import type { ExecutionLockState } from "./ExecutionManager.locking";
 import type { ExecutionCancellationState } from "./ExecutionManager.cancellation";
 import { isDurableShutdownInterruptionError } from "../shutdownInterruption";
+import { isDurablePauseInterruptionError } from "../pauseInterruption";
 
 export type ExecutionAttemptGuards = {
   assertLockOwnership: () => void;
@@ -224,6 +229,12 @@ export async function handleExecutionAttemptError(params: {
     error: ExecutionErrorInfo;
     canPersistOutcome?: () => Promise<boolean>;
   }) => Promise<void>;
+  continueAsNew: (p: {
+    runningExecution: Execution<unknown, unknown>;
+    nextInput: unknown;
+    options?: ContinueAsNewOptions;
+    canPersistOutcome?: () => Promise<boolean>;
+  }) => Promise<void>;
 }): Promise<void> {
   if (
     params.error === params.executionLockState.lossError ||
@@ -251,6 +262,24 @@ export async function handleExecutionAttemptError(params: {
     return;
   }
 
+  if (params.error instanceof ContinuationSignal) {
+    if (cancellationState) {
+      await params.transitionToCancelled({
+        execution: params.runningExecution,
+        reason: cancellationState.reason,
+        canPersistOutcome: params.guards.canPersistOutcome,
+      });
+      return;
+    }
+    await params.continueAsNew({
+      runningExecution: params.runningExecution,
+      nextInput: params.error.nextInput,
+      options: params.error.options,
+      canPersistOutcome: params.guards.canPersistOutcome,
+    });
+    return;
+  }
+
   if (isCompensationFailure(params.error)) {
     return;
   }
@@ -264,11 +293,15 @@ export async function handleExecutionAttemptError(params: {
     return;
   }
 
+  // Shutdown and pause both park the attempt rather than fail it: no retry
+  // is consumed and the record keeps its status. A paused attempt that lost
+  // the race with a quick resume is re-driven once its lock is released.
   if (
     isDurableShutdownInterruptionError(
       params.error,
       params.getShutdownInterruptionReason(),
-    )
+    ) ||
+    isDurablePauseInterruptionError(params.error)
   ) {
     return;
   }

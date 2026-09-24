@@ -62,6 +62,7 @@ describe("durable: RedisStore signal edges", () => {
       "durable:steps:e1",
       "manual-step",
       expect.any(String),
+      expect.any(String),
     );
   });
 

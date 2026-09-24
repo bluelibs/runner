@@ -16,6 +16,7 @@ import type {
   Schedule,
   StepResult,
   Timer,
+  WorkflowState,
 } from "../core/types";
 import { TimerStatus } from "../core/types";
 import * as executionStateOps from "./memory-store/executionState";
@@ -27,6 +28,7 @@ import * as signalStateOps from "./memory-store/signalState";
 import * as signalWaiterOps from "./memory-store/signalWaiters";
 import * as snapshotOps from "./memory-store/snapshot";
 import * as timerOps from "./memory-store/timers";
+import * as workflowStateOps from "./memory-store/workflowState";
 import type { MemoryStoreSnapshot } from "./memory-store/types";
 import { toDurableExecutionState } from "../core/executionIndex";
 
@@ -203,6 +205,29 @@ export class MemoryStore implements IDurableStore {
     updates: Partial<Execution>,
   ): Promise<void> {
     await executionStateOps.updateExecution(this.runtime, id, updates);
+  }
+
+  async createContinuedExecution(params: {
+    priorExecution: Execution;
+    successorExecution: Execution;
+  }): Promise<boolean> {
+    return await executionStateOps.createContinuedExecution(
+      this.runtime,
+      params,
+    );
+  }
+
+  async getWorkflowState<TState = unknown>(
+    executionId: string,
+  ): Promise<WorkflowState<TState> | null> {
+    return await workflowStateOps.getWorkflowState<TState>(
+      this.runtime,
+      executionId,
+    );
+  }
+
+  async saveWorkflowState(state: WorkflowState): Promise<void> {
+    await workflowStateOps.saveWorkflowState(this.runtime, state);
   }
 
   async listIncompleteExecutions(): Promise<Execution[]> {
@@ -430,6 +455,7 @@ export class MemoryStore implements IDurableStore {
     stepId: string;
     stepResult: StepResult;
     timerId?: string;
+    waitTargetExecutionId?: string;
   }): Promise<boolean> {
     return await executionWaiterOps.commitExecutionWaiterCompletion(
       this.runtime,

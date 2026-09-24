@@ -12,10 +12,12 @@ export type StudioExecutionStatus =
   | "cancelling"
   | "retrying"
   | "sleeping"
+  | "paused"
   | "completed"
   | "compensation_failed"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "continued_as_new";
 
 /** Visual node kinds rendered on the execution timeline. */
 export type StudioNodeKind =
@@ -105,6 +107,14 @@ export interface StudioExecutionSummary {
   position: string | null;
   /** Direct parent execution when this run was started by another workflow. */
   parentExecutionId?: string;
+  /** Forward link when this run was continued as a new execution. */
+  continuedAsExecutionId?: string;
+  /** Source execution when this run was created via continue-as-new. */
+  continuedFromExecutionId?: string;
+  /** Forward link to the run created by restarting this one. */
+  restartedAsExecutionId?: string;
+  /** Source execution when this run was created via restart. */
+  restartedFromExecutionId?: string;
 }
 
 /** A JSON-safe persisted step result. */
@@ -159,6 +169,16 @@ export interface StudioExecutionDetail {
   id: string;
   /** Direct parent execution when this run was started by another workflow. */
   parentExecutionId?: string;
+  /** Forward link when this run was continued as a new execution. */
+  continuedAsExecutionId?: string;
+  /** Source execution when this run was created via continue-as-new. */
+  continuedFromExecutionId?: string;
+  /** Forward link to the run created by restarting this one. */
+  restartedAsExecutionId?: string;
+  /** Source execution when this run was created via restart. */
+  restartedFromExecutionId?: string;
+  /** Status the execution held when it was paused; set only while paused. */
+  pausedFrom?: StudioExecutionStatus;
   workflowKey: string;
   workflowTitle: string;
   status: StudioExecutionStatus;
@@ -176,6 +196,8 @@ export interface StudioExecutionDetail {
   steps: StudioStepResult[];
   audit: StudioAuditEntry[];
   signals: StudioSignalJournal[];
+  /** Workflow-owned typed state; null until the workflow first sets state. */
+  state: { state: unknown; updatedAt: string } | null;
   relations: {
     parent: StudioExecutionSummary | null;
     children: StudioExecutionSummary[];

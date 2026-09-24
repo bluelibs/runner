@@ -38,6 +38,9 @@ new capture set.
 | `18-workflow-scroll.png` | large workflow catalog | Progressive workflow discovery and navigation |
 | `19-live-100k-history.png` | live HTTP API, scale fixtures | 100,000 stored executions, paged history, bounded cache and virtualized rows |
 | `20-live-100k-oldest.png` | live HTTP API, exact-ID search | Finds the oldest execution without downloading the intervening history |
+| `21-lifecycle-paused.png` | `?demo=1&select=demo_ord_paused` | Paused order with Resume/Restart actions and its payment wait intact |
+| `22-continued-lineage.png` | continued + Tree click | Continue-as-new lineage links from the closed run to its live tip |
+| `23-workflow-state.png` | paused + Data click | Workflow-owned typed state viewer with its update time |
 
 Drop `demo=1` from any link for the equivalent view against the live runtime
 (`npm start` → http://localhost:4317).

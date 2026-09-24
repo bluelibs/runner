@@ -69,6 +69,7 @@ export async function commitExecutionWaiterCompletion(
     stepId: string;
     stepResult: StepResult;
     timerId?: string;
+    waitTargetExecutionId?: string;
   },
 ): Promise<boolean> {
   return await runtime.withExecutionWaiterMutation(() => {
@@ -86,9 +87,13 @@ export async function commitExecutionWaiterCompletion(
     }
 
     const waitState = parseExecutionWaitState(currentStep.result);
+    const stepTargetAccepted =
+      waitState?.targetExecutionId === params.targetExecutionId ||
+      (params.waitTargetExecutionId !== undefined &&
+        waitState?.targetExecutionId === params.waitTargetExecutionId);
     if (
-      waitState?.state !== "waiting" ||
-      waitState.targetExecutionId !== params.targetExecutionId
+      (waitState?.state !== "waiting" && waitState?.state !== "continued") ||
+      !stepTargetAccepted
     ) {
       return { result: false, changed: false };
     }

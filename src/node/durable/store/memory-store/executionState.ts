@@ -2,6 +2,7 @@ import type { ExpectedExecutionStatuses } from "../../core/interfaces/store";
 import { ExecutionStatus, type Execution } from "../../core/types";
 import { cloneExecution } from "./shared";
 import type { MemoryStoreRuntime } from "./runtime";
+import { transferQueuedSignalBacklog } from "./signalState";
 
 function getIdempotencyMapKey(
   workflowKey: string,
@@ -39,6 +40,38 @@ export async function saveExecution(
 ): Promise<void> {
   runtime.executions.set(execution.id, cloneExecution(execution));
   await runtime.persistDurableMutation();
+}
+
+export async function createContinuedExecution(
+  runtime: MemoryStoreRuntime,
+  params: {
+    priorExecution: Execution;
+    successorExecution: Execution;
+  },
+): Promise<boolean> {
+  // Runs under the signal-state permit so the status check, the close,
+  // and the backlog hand-off commit as one unit against signal buffering.
+  return await runtime.withSignalStateMutation(() => {
+    const current = runtime.executions.get(params.priorExecution.id);
+    if (!current || current.status !== ExecutionStatus.Running) {
+      return { result: false, changed: false };
+    }
+
+    transferQueuedSignalBacklog(
+      runtime,
+      params.priorExecution.id,
+      params.successorExecution.id,
+    );
+    runtime.executions.set(
+      params.priorExecution.id,
+      cloneExecution(params.priorExecution),
+    );
+    runtime.executions.set(
+      params.successorExecution.id,
+      cloneExecution(params.successorExecution),
+    );
+    return { result: true, changed: true };
+  });
 }
 
 export async function saveExecutionIfStatus(
@@ -93,7 +126,8 @@ export async function listIncompleteExecutions(
         execution.status !== ExecutionStatus.Completed &&
         execution.status !== ExecutionStatus.Failed &&
         execution.status !== ExecutionStatus.CompensationFailed &&
-        execution.status !== ExecutionStatus.Cancelled,
+        execution.status !== ExecutionStatus.Cancelled &&
+        execution.status !== ExecutionStatus.ContinuedAsNew,
     )
     .map(cloneExecution);
 }

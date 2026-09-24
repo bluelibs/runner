@@ -138,9 +138,12 @@
       "writeInputFileToPath"
     ],
     "advanced": [
+      "ContinuationSignal",
       "CronParser",
       "DurableAuditEntryKind",
       "ExecutionStatus",
+      "MAX_QUEUED_SIGNALS_PER_KEY",
+      "MAX_SIGNAL_HISTORY_PER_KEY",
       "ScheduleStatus",
       "ScheduleType",
       "SuspensionSignal",

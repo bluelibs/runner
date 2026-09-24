@@ -117,7 +117,8 @@ export function isTerminalStatus(status: Execution["status"]): boolean {
     status === "completed" ||
     status === "failed" ||
     status === "cancelled" ||
-    status === "compensation_failed"
+    status === "compensation_failed" ||
+    status === "continued_as_new"
   );
 }
 
@@ -245,7 +246,9 @@ export function describePosition(
   }
   if (execution.status === "completed") return "Completed";
   if (execution.status === "cancelled") return "Cancelled";
+  if (execution.status === "continued_as_new") return "Continued as new";
   if (execution.status === "compensation_failed") return "Compensation failed";
+  if (execution.status === "paused") return "Paused";
   if (current) {
     switch (current.kind) {
       case "step":

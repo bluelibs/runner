@@ -137,6 +137,30 @@ void (() => {
         });
       void noUnionAllowed;
 
+      type PageState = { page: number; total: number };
+      // Patching requires initialized state, so full T is honest on reads.
+      await ctx.replaceState<PageState>({ page: 0, total: 0 });
+      await ctx.setState<PageState>({ page: 1 });
+      const pageState = await ctx.getState<PageState>();
+      const statePage: number | undefined = pageState?.page;
+      const stateTotal: number | undefined = pageState?.total;
+      void statePage;
+      void stateTotal;
+
+      // @ts-expect-error patches must match the state shape
+      await ctx.setState<PageState>({ page: "one" });
+      // @ts-expect-error replacements must be complete
+      await ctx.replaceState<PageState>({ page: 2 });
+
+      const attemptInfo = ctx.info();
+      const infoAttempt: number = attemptInfo.attempt;
+      const infoSteps: number = attemptInfo.stepCount;
+      void infoAttempt;
+      void infoSteps;
+
+      const neverReturns: never = await ctx.continueAsNew({ hops: 1 });
+      void neverReturns;
+
       return childResult;
     })
     .build();

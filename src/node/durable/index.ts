@@ -4,6 +4,7 @@ export * from "./core/audit";
 export * from "./core/interfaces/service";
 export * from "./core/interfaces/store";
 export * from "./core/interfaces/context";
+export * from "./core/interfaces/context.state";
 export * from "./core/interfaces/bus";
 export * from "./core/interfaces/queue";
 export * from "./core/DurableResource";

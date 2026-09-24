@@ -1,5 +1,7 @@
 import type { IEventBus } from "./interfaces/bus";
 import type {
+  ContinueAsNewOptions,
+  DurableInfo,
   DurableStepRunContext,
   EmitOptions,
   IDurableContext,
@@ -13,6 +15,8 @@ import type {
   WorkflowOptions,
 } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
+import type { DurableStateOptions } from "./interfaces/context.state";
+import { ContinuationSignal } from "./interfaces/context";
 import { StepBuilder } from "./StepBuilder";
 import {
   createStepCurrent,
@@ -31,7 +35,12 @@ import type { DurableExecutionCurrentWorkflowMeta } from "./types";
 import { ExecutionStatus } from "./types";
 import { createDurableContextAudit } from "./durable-context/DurableContext.audit";
 import {
+  createDurableStateOperations,
+  type DurableStateOperations,
+} from "./durable-context/state";
+import {
   createDurableContextDeterminism,
+  type ImplicitInternalStepIdKind,
   type ImplicitInternalStepIdsPolicy,
 } from "./durable-context/DurableContext.determinism";
 import type { DurableContextDeterminism } from "./durable-context/DurableContext.determinism";
@@ -46,11 +55,14 @@ import { sleepDurably } from "./durable-context/DurableContext.sleep";
 import { waitForExecutionDurably } from "./durable-context/DurableContext.waitForExecution";
 import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSignal";
 import { switchDurably } from "./durable-context/DurableContext.switch";
+import { assertFiniteDurationMs } from "./utils";
 import {
   durableContextCancelledError,
+  durableContinueAsNewRejectedError,
   durableExecutionInvariantError,
 } from "../../../errors";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
+import { throwDurablePauseInterruption } from "./pauseInterruption";
 
 /**
  * Per-execution workflow toolkit used by durable tasks.
@@ -70,9 +82,8 @@ export class DurableContext implements IDurableContext {
   private readonly emitIndexes = new Map<string, number>();
   private noteIndex = 0;
 
-  private readonly implicitInternalStepIdsWarned = new Set<
-    "sleep" | "emit" | "waitForSignal"
-  >();
+  private readonly implicitInternalStepIdsWarned =
+    new Set<ImplicitInternalStepIdKind>();
 
   // Track user and internal steps seen in this execution context instance
   private readonly seenStepIds = new Set<string>();
@@ -80,6 +91,7 @@ export class DurableContext implements IDurableContext {
   private readonly compensations: DurableCompensation[] = [];
 
   private readonly audit: DurableContextAudit;
+  private readonly state: DurableStateOperations;
   private readonly determinism: DurableContextDeterminism;
   private readonly auditEnabled: boolean;
   private readonly auditEmitter: DurableAuditEmitter | null;
@@ -159,35 +171,47 @@ export class DurableContext implements IDurableContext {
       seenStepIds: this.seenStepIds,
       warn: console.warn,
     });
+
+    this.state = createDurableStateOperations({
+      store: this.store,
+      executionId: this.executionId,
+      assertCanWrite: async () => await this.assertCanContinue(),
+      assertUniqueStepId: this.determinism.assertUniqueStepId,
+      assertOrWarnImplicitInternalStepId:
+        this.determinism.assertOrWarnImplicitInternalStepId,
+      internalStep: (stepId) => this.internalStep(stepId),
+    });
   }
 
-  private async assertNotCancelled(): Promise<void> {
-    const exec = await this.store.getExecution(this.executionId);
-    if (exec?.status === ExecutionStatus.Cancelled) {
-      durableContextCancelledError.throw({
-        message: exec.error?.message || "Execution cancelled",
-      });
-    }
-  }
-
+  /**
+   * Gate every durable operation must pass before it starts. Pause rejects
+   * with the pause interruption so an attempt that ignores its abort signal
+   * still cannot run further steps; `allowPaused` exists only for persisting
+   * the result of a step body that had already finished when the pause
+   * landed, which avoids repeating its side effect on resume.
+   */
   private async assertCanContinue(
-    options: { allowCancellationRequested?: boolean } = {},
+    options: {
+      allowCancellationRequested?: boolean;
+      allowPaused?: boolean;
+    } = {},
   ): Promise<void> {
     this.assertLockOwnership();
-    await this.assertNotCancelled();
-
-    if (options.allowCancellationRequested) {
-      return;
-    }
-
     const exec = await this.store.getExecution(this.executionId);
-    if (
+    const cancellationRequested =
       exec?.status === ExecutionStatus.Cancelling ||
-      exec?.cancelRequestedAt !== undefined
+      exec?.cancelRequestedAt !== undefined;
+    if (
+      exec?.status === ExecutionStatus.Cancelled ||
+      (cancellationRequested && !options.allowCancellationRequested)
     ) {
       durableContextCancelledError.throw({
-        message: exec.error?.message || "Execution cancelled",
+        message: exec?.error?.message || "Execution cancelled",
       });
+    }
+
+    if (exec?.status === ExecutionStatus.Paused && !options.allowPaused) {
+      throwDurablePauseInterruption();
     }
   }
 
@@ -215,8 +239,7 @@ export class DurableContext implements IDurableContext {
     };
   }
 
-  step<T>(stepId: string): IStepBuilder<T>;
-  step<T>(stepId: DurableStepId<T>): IStepBuilder<T>;
+  step<T>(stepId: string | DurableStepId<T>): IStepBuilder<T>;
   step<T>(
     stepId: string | DurableStepId<T>,
     fn: (context: DurableStepRunContext) => Promise<T>,
@@ -260,6 +283,11 @@ export class DurableContext implements IDurableContext {
       executionId: this.executionId,
       assertCanContinue: async () =>
         await this.assertCanContinue({ allowCancellationRequested }),
+      assertCanPersistResult: async () =>
+        await this.assertCanContinue({
+          allowCancellationRequested,
+          allowPaused: true,
+        }),
       appendAuditEntry: this.audit.append,
       setCurrent: async () =>
         await setExecutionCurrent(
@@ -295,7 +323,49 @@ export class DurableContext implements IDurableContext {
     });
   }
 
+  async continueAsNew<TInput>(
+    nextInput: TInput,
+    options?: ContinueAsNewOptions,
+  ): Promise<never> {
+    await this.assertCanContinue();
+    const execution = await this.store.getExecution(this.executionId);
+    if (!execution || execution.status !== ExecutionStatus.Running) {
+      return durableContinueAsNewRejectedError.throw({
+        executionId: this.executionId,
+        reason: execution
+          ? `execution is ${execution.status}`
+          : "execution does not exist",
+      });
+    }
+
+    throw new ContinuationSignal(nextInput, options);
+  }
+
+  async setState<T extends object>(
+    patch: Partial<T> & Record<string, unknown>,
+    options?: DurableStateOptions,
+  ): Promise<void> {
+    await this.state.patch(patch, options);
+  }
+
+  async replaceState<T>(next: T, options?: DurableStateOptions): Promise<void> {
+    await this.state.replace(next, options);
+  }
+
+  async getState<T>(options?: DurableStateOptions): Promise<T | undefined> {
+    return await this.state.get<T>(options);
+  }
+
+  info(): DurableInfo {
+    return {
+      executionId: this.executionId,
+      attempt: this.attempt,
+      stepCount: this.seenStepIds.size,
+    };
+  }
+
   async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
+    assertFiniteDurationMs("sleep duration", durationMs);
     return await sleepDurably({
       store: this.store,
       executionId: this.executionId,
@@ -365,6 +435,7 @@ export class DurableContext implements IDurableContext {
         message: `Signal '${signal.id}' is not declared in durableWorkflow.signals for this workflow.`,
       });
     }
+    assertFiniteDurationMs("signal timeout", options?.timeoutMs);
 
     return await waitForSignalDurably({
       store: this.store,
@@ -401,6 +472,7 @@ export class DurableContext implements IDurableContext {
     executionId: string,
     options?: WaitForExecutionOptions,
   ): Promise<any> {
+    assertFiniteDurationMs("execution-wait timeout", options?.timeoutMs);
     return await waitForExecutionDurably<ResolveTaskOutput<TTask>>({
       store: this.store,
       executionId: this.executionId,

@@ -5,6 +5,7 @@ import type {
 } from "../core/types";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
 import { createRedisSignalState } from "./RedisStore.signalState";
+import { encodeSignalRecord } from "./RedisStore.signalRecordCodec";
 
 export async function upsertSignalWaiter(
   runtime: RedisStoreRuntime,
@@ -103,15 +104,12 @@ export async function commitSignalDelivery(
       if not okRecord then
         return "__error__:Invalid durable signal record payload"
       end
-      local okCompletedStep, completedStep = pcall(cjson.decode, ARGV[3])
-      if not okCompletedStep then
-        return "__error__:Invalid signal delivery step result payload"
-      end
 
       table.insert(state.history, record)
       redis.call("set", KEYS[1], cjson.encode(state))
       redis.call("sadd", KEYS[8], ARGV[2])
-      redis.call("hset", KEYS[2], ARGV[1], cjson.encode(completedStep))
+      -- Stored verbatim: a cjson round-trip would rewrite the user payload.
+      redis.call("hset", KEYS[2], ARGV[1], ARGV[3])
       redis.call("zrem", KEYS[3], member)
       redis.call("hdel", KEYS[4], member)
       redis.call("hdel", KEYS[5], ARGV[1])
@@ -138,7 +136,7 @@ export async function commitSignalDelivery(
     runtime.serializer.stringify(
       createRedisSignalState(params.executionId, params.signalId),
     ),
-    runtime.serializer.stringify(params.signalRecord),
+    encodeSignalRecord(runtime, params.signalRecord),
     params.timerId ?? "",
   );
   runtime.assertEvalResultNotError(result);

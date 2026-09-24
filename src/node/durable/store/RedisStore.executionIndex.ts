@@ -16,11 +16,15 @@ import type { RedisStoreRuntime } from "./RedisStore.runtime";
 export function writeExecutionIndexScript(
   metadataKey: string,
   statesKey: string,
+  positions: { idArg?: string; indexArg?: string; stateArg?: string } = {},
 ): string {
+  const idArg = positions.idArg ?? "ARGV[2]";
+  const indexArg = positions.indexArg ?? "ARGV[6]";
+  const stateArg = positions.stateArg ?? "ARGV[7]";
   return `
-    local nextIndex = cjson.decode(ARGV[6])
-    local previous = redis.call("hget", ${metadataKey}, ARGV[2])
-    if previous ~= ARGV[6] then
+    local nextIndex = cjson.decode(${indexArg})
+    local previous = redis.call("hget", ${metadataKey}, ${idArg})
+    if previous ~= ${indexArg} then
       if previous then
         local oldIndex = cjson.decode(previous)
         for _, partition in ipairs(oldIndex.partitions) do
@@ -31,9 +35,9 @@ export function writeExecutionIndexScript(
       for _, partition in ipairs(nextIndex.partitions) do
         redis.call("zadd", partition, 0, nextIndex.member)
       end
-      redis.call("hset", ${metadataKey}, ARGV[2], ARGV[6])
+      redis.call("hset", ${metadataKey}, ${idArg}, ${indexArg})
     end
-    redis.call("hset", ${statesKey}, nextIndex.member, ARGV[7])
+    redis.call("hset", ${statesKey}, nextIndex.member, ${stateArg})
   `;
 }
 

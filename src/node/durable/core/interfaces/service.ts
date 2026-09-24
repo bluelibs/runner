@@ -188,6 +188,14 @@ export interface DurableServiceConfig {
      * via the poller. Default: 10000 (10s). Set to 0 to disable.
      */
     kickoffFailsafeDelayMs?: number;
+    /**
+     * Maximum continue-as-new hops per lineage. Traversals walk the chain
+     * hop by hop, so this bounds both runaway growth and worst-case
+     * traversal cost. Must be a non-negative integer (validated at
+     * construction). Default: 1000. Zero disables continuations (the
+     * over-limit run fails with a clear rejection instead).
+     */
+    maxContinuationDepth?: number;
   };
   schedules?: ScheduleConfig[];
   tasks?: Array<ITask<any, Promise<any>, any, any, any, any>>;
@@ -216,6 +224,27 @@ export interface ExecuteOptions {
 export interface WaitOptions {
   timeout?: number;
   waitPollIntervalMs?: number;
+}
+
+/**
+ * Options for restarting a terminal or paused execution.
+ */
+export interface RestartExecutionOptions {
+  /**
+   * Optional fresh idempotency key for the restart call itself, so repeated
+   * restart calls with the same key dedupe to one new execution. Keys are
+   * scoped by workflow, not by source: reusing one key across different
+   * sources is rejected as a conflict instead of cross-linking lineages.
+   */
+  idempotencyKey?: string;
+  /**
+   * Optional input override for the restarted run. When omitted, the source
+   * execution input is reused. Workflow state is never carried: restart
+   * always starts from input; use continue-as-new to carry state. Overrides
+   * issued where the task is unknown are validated by the first worker that
+   * runs the restarted execution instead.
+   */
+  input?: unknown;
 }
 
 export interface StartAndWaitOptions extends ExecuteOptions {
@@ -312,9 +341,46 @@ export interface IDurableService {
    * so the active step can observe its AbortSignal; live propagation uses the
    * durable event bus when configured, with polling fallback for runtimes that
    * do not provide one. Waiters unblock once the attempt exits and the execution
-   * becomes terminal `cancelled`.
+   * becomes terminal `cancelled`. A `continued_as_new` id cancels its live
+   * chain tip.
    */
   cancelExecution(executionId: string, reason?: string): Promise<void>;
+
+  /**
+   * Pauses a non-terminal execution so timers and signals stop being
+   * processed until it is resumed. Pause is wall-clock: timers keep their
+   * `fireAt`, and resume re-kicks the execution to let replay sort it out.
+   * Rejected for terminal and `cancelling` executions. A `continued_as_new`
+   * id pauses its live chain tip.
+   */
+  pauseExecution(executionId: string): Promise<void>;
+
+  /**
+   * Resumes a paused execution from its pause point with no lost signals.
+   * Rejected for executions that are not paused. A `continued_as_new` id
+   * resumes its chain tip.
+   */
+  resumeExecution(executionId: string): Promise<void>;
+
+  /**
+   * Restarts a terminal or paused execution as a fresh run and returns the
+   * new execution id. Restart re-runs from (optionally overridden) input
+   * with fresh steps and no carried state. Rejected for active executions:
+   * pause or cancel them first. A `continued_as_new` execution re-runs from
+   * its own input and is rejected while its chain tip is still active. A
+   * repeated idempotency key returns the restart it already produced.
+   */
+  restartExecution(
+    executionId: string,
+    options?: RestartExecutionOptions,
+  ): Promise<string>;
+
+  /**
+   * Reads the live workflow-owned typed state for an execution.
+   * Resolves `undefined` until the workflow first sets state; throws when the
+   * execution does not exist.
+   */
+  getState<T>(executionId: string): Promise<T | undefined>;
 
   wait<TResult>(executionId: string, options?: WaitOptions): Promise<TResult>;
 

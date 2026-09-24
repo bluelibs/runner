@@ -53,23 +53,17 @@ evolves. Every execution-context sample measures both orders to avoid consistent
 second, warmer code path. Every tracked metric fails CI on a regression beyond its configured
 threshold. Missing, non-numeric, or non-finite measurements fail the comparison.
 
-## Distribution Artifact Budgets
+## Distribution Checks
 
-Built ESM artifacts have explicit byte budgets in
-[`config/benchmarks/artifact-budgets.json`](../config/benchmarks/artifact-budgets.json).
-Representative minified, tree-shaken browser-core and Node-durable consumers are budgeted
-separately in
-[`config/benchmarks/consumer-bundle-budgets.json`](../config/benchmarks/consumer-bundle-budgets.json).
+QA and CI verify that built entrypoints import successfully and that representative
+browser-core and Node-durable consumers bundle successfully. Bundle sizes have no byte limits.
 Run both checks after building:
 
 ```bash
 npm run build
-npm run benchmark:artifacts
-npm run benchmark:consumers
+npm run check:entrypoints
+npm run check:consumers
 ```
-
-The budgets are regression guards, not size targets. Raise one only when a reviewed change
-intentionally increases the public distribution.
 
 ## Comparing Results
 

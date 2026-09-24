@@ -6,6 +6,7 @@ import type {
   DurableServiceConfig,
   ExecuteOptions,
   ITaskExecutor,
+  RestartExecutionOptions,
   StartAndWaitOptions,
 } from "../interfaces/service";
 import type { ITask } from "../../../../types/task";
@@ -31,6 +32,14 @@ import {
   cancelExecution as cancelExecutionFlow,
   failExecutionDeliveryExhausted as failExecutionDeliveryExhaustedFlow,
 } from "./ExecutionManager.terminal";
+import {
+  type ExecutionPauseDeps,
+  pauseExecution as pauseExecutionFlow,
+  resumeExecution as resumeExecutionFlow,
+} from "./ExecutionManager.pause";
+import { restartExecution as restartExecutionFlow } from "./ExecutionManager.restart";
+import { applyToContinuationTip } from "./ExecutionManager.chainTip";
+import { assertExecutionTuningConfig } from "./ExecutionManager.config";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -43,11 +52,7 @@ export interface ExecutionManagerConfig {
   logger?: Logger;
   audit?: DurableServiceConfig["audit"];
   determinism?: DurableServiceConfig["determinism"];
-  execution?: {
-    maxAttempts?: number;
-    timeout?: number;
-    kickoffFailsafeDelayMs?: number;
-  };
+  execution?: DurableServiceConfig["execution"];
 }
 
 /**
@@ -69,6 +74,7 @@ export class ExecutionManager {
   readonly attemptRunner: ExecutionAttemptRunner;
   private readonly persistenceDeps: ExecutionPersistenceDeps;
   private readonly terminalDeps: ExecutionTerminalDeps;
+  private readonly pauseDeps: ExecutionPauseDeps;
 
   constructor(
     private readonly config: ExecutionManagerConfig,
@@ -76,6 +82,7 @@ export class ExecutionManager {
     private readonly auditLogger: AuditLogger,
     private readonly waitManager: WaitManager,
   ) {
+    assertExecutionTuningConfig(this.config.execution);
     this.eventBus = this.config.eventBus ?? new NoopEventBus();
     const liveCancellationEventBus =
       this.config.eventBus && !(this.config.eventBus instanceof NoopEventBus)
@@ -96,6 +103,19 @@ export class ExecutionManager {
       liveCancellationEventBus,
     });
 
+    this.persistenceDeps = {
+      store: this.config.store,
+      queue: this.config.queue,
+      auditLogger: this.auditLogger,
+      getTaskWorkflowKey: (task) => this.getTaskWorkflowKey(task),
+      maxAttempts: this.config.execution?.maxAttempts ?? 3,
+      maxContinuationDepth: this.config.execution?.maxContinuationDepth,
+      defaultTimeout: this.config.execution?.timeout,
+      kickoffFailsafeDelayMs:
+        this.config.execution?.kickoffFailsafeDelayMs ?? 10_000,
+      kickoffExecution: (executionId) => this.kickoffExecution(executionId),
+    };
+
     this.attemptRunner = new ExecutionAttemptRunner({
       store: this.config.store,
       eventBus: this.eventBus,
@@ -111,19 +131,8 @@ export class ExecutionManager {
         this.start(task, input, options),
       getTaskWorkflowKey: (task) => this.getTaskWorkflowKey(task),
       assertTaskExecutorConfigured: () => this.assertTaskExecutorConfigured(),
+      persistence: this.persistenceDeps,
     });
-
-    this.persistenceDeps = {
-      store: this.config.store,
-      queue: this.config.queue,
-      auditLogger: this.auditLogger,
-      getTaskWorkflowKey: (task) => this.getTaskWorkflowKey(task),
-      maxAttempts: this.config.execution?.maxAttempts ?? 3,
-      defaultTimeout: this.config.execution?.timeout,
-      kickoffFailsafeDelayMs:
-        this.config.execution?.kickoffFailsafeDelayMs ?? 10_000,
-      kickoffExecution: (executionId) => this.kickoffExecution(executionId),
-    };
 
     this.terminalDeps = {
       store: this.config.store,
@@ -133,6 +142,17 @@ export class ExecutionManager {
       publishLiveCancellationRequested: (executionId, reason) =>
         this.cancellation.publishLiveCancellationRequested(executionId, reason),
       notifyFinished: (execution) => this.notifyExecutionFinished(execution),
+    };
+
+    this.pauseDeps = {
+      store: this.config.store,
+      auditLogger: this.auditLogger,
+      abortPausedAttempt: (executionId, pause) =>
+        this.cancellation.abortPausedAttempt(executionId, pause),
+      publishLivePauseRequested: (executionId, pause) =>
+        this.cancellation.publishLivePauseRequested(executionId, pause),
+      kickoffWithFailsafe: (executionId) =>
+        kickoffWithFailsafe(this.persistenceDeps, executionId),
     };
   }
 
@@ -200,6 +220,32 @@ export class ExecutionManager {
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
     await cancelExecutionFlow(this.terminalDeps, executionId, reason);
+  }
+
+  async pauseExecution(executionId: string): Promise<void> {
+    await applyToContinuationTip(this.config.store, executionId, (tipId) =>
+      pauseExecutionFlow(this.pauseDeps, tipId),
+    );
+  }
+
+  async resumeExecution(executionId: string): Promise<void> {
+    await applyToContinuationTip(this.config.store, executionId, (tipId) =>
+      resumeExecutionFlow(this.pauseDeps, tipId),
+    );
+  }
+
+  async restartExecution(
+    executionId: string,
+    options?: RestartExecutionOptions,
+  ): Promise<string> {
+    return await restartExecutionFlow(
+      {
+        persistence: this.persistenceDeps,
+        resolveTask: (workflowKey) => this.taskRegistry.find(workflowKey),
+      },
+      executionId,
+      options,
+    );
   }
 
   async processExecution(executionId: string): Promise<void> {

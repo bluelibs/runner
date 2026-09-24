@@ -13,7 +13,8 @@ function isActiveExecutionStatus(status: ExecutionStatus): boolean {
     status !== ExecutionStatus.Completed &&
     status !== ExecutionStatus.Failed &&
     status !== ExecutionStatus.CompensationFailed &&
-    status !== ExecutionStatus.Cancelled
+    status !== ExecutionStatus.Cancelled &&
+    status !== ExecutionStatus.ContinuedAsNew
   );
 }
 
@@ -44,7 +45,7 @@ function saveExecutionScript(): string {
   `;
 }
 
-function statusFlags(status: ExecutionStatus): {
+export function statusFlags(status: ExecutionStatus): {
   isActive: "1" | "0";
   isStuck: "1" | "0";
 } {
