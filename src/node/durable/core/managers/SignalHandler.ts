@@ -159,10 +159,11 @@ export class SignalHandler {
   /**
    * Re-delivers records left queued on a run that continued after they were
    * buffered. Only the signal that raced the commit can strand records (later
-   * signals see the continuation under the lock and follow it), and a closed
-   * run never consumes its queue, so each record is delivered along the chain
-   * first and only then dropped from the closed run: a crash in between
-   * re-delivers rather than loses it.
+   * signals see the continuation under the lock and follow it). Each record is
+   * delivered along the chain before it is dropped from the closed run, so a
+   * failure mid-way leaves it parked there instead of deleting it. This is
+   * not crash-safe: nothing retries the hand-off, so a record parked by a
+   * crash stays undelivered on the closed run (visible in its signal state).
    */
   private async rehomeStrandedSignals(
     closedExecutionId: string,
