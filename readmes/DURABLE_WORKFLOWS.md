@@ -389,7 +389,7 @@ Atomically closes the current run as `continued_as_new` and starts a linked succ
 Rules:
 
 - Finish in-flight signal handlers first: waits on the old run are abandoned.
-- Workflow state carries to the successor by default; pass `{ state: fresh }` to start clean.
+- Workflow state carries to the successor when `state` is omitted; pass `{ state: fresh }` to replace it or `{ state: undefined }` to start without state.
 - Waiters and signals addressed to the old run transparently follow the chain to the live tip; signals still queued on the old run move to the successor in the same commit.
 
 ### `setState()` / `replaceState()` / `getState()` — Typed Workflow State
@@ -400,7 +400,7 @@ await d.setState<Counter>({ page: 2 }); // shallow merge into existing state
 const state = await d.getState<Counter>(); // Counter | undefined
 ```
 
-Each execution owns one state record. `getState()` resolves `undefined` until first set, so pair it with a module-level default. `setState()` only patches existing plain-object state and throws otherwise, so initialize with `replaceState()` first. Every call is memoized like a step (keyed by call order): on replay, reads return the value they saw originally and applied writes are skipped, so read-modify-write is replay-safe.
+Each execution owns one state record. `getState()` resolves `undefined` until first set, so pair it with a module-level default. `setState()` only patches existing plain-object state and throws otherwise, so initialize with `replaceState()` first. Every call is a persisted internal step (keyed by call order, or by `{ stepId }` when passed), so it counts toward `stepCount` and history: on replay, reads return the value they saw originally and applied writes are skipped, so read-modify-write is replay-safe.
 
 ### `info()` — Attempt Info
 
@@ -449,7 +449,7 @@ await durable.resumeExecution(executionId);
 
 // Restart a finished (or paused) run as a fresh linked execution
 const rerunId = await durable.restartExecution(executionId);
-const rerunId = await durable.restartExecution(executionId, { input: next });
+const rerunWithInputId = await durable.restartExecution(executionId, { input: next });
 
 // Read live typed workflow state (undefined until first set; throws for unknown id)
 const state = await durable.getState<Counter>(executionId);
@@ -787,7 +787,7 @@ await d.sleep(60_000, { stepId: "cooldown" });
 
 Operators read the same record id-addressed via `durable.getState<Counter>(executionId)`, and break-glass tooling sees it in `operator.getExecutionDetail()`. The payload-free `DurableExecutionState` projection stays lean and excludes it.
 
-State carries across continue-as-new (override with `{ state }`) and never carries across restart. State calls are memoized by call order, like implicit-id `sleep()`/`emit()`, so keep their order stable across deploys for in-flight executions. Operator `getState(executionId)` reads the live record and throws for unknown executions.
+State carries across continue-as-new (override with `{ state }`) and never carries across restart. State calls are memoized by call order, like implicit-id `sleep()`/`emit()` (and checked by the same `implicitInternalStepIds` policy), so keep their order stable across deploys or pass `{ stepId }`. Operator `getState(executionId)` reads the live record and throws for unknown executions.
 
 ---
 

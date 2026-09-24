@@ -239,8 +239,7 @@ export class DurableContext implements IDurableContext {
     };
   }
 
-  step<T>(stepId: string): IStepBuilder<T>;
-  step<T>(stepId: DurableStepId<T>): IStepBuilder<T>;
+  step<T>(stepId: string | DurableStepId<T>): IStepBuilder<T>;
   step<T>(
     stepId: string | DurableStepId<T>,
     fn: (context: DurableStepRunContext) => Promise<T>,

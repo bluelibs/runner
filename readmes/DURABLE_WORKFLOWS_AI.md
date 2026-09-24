@@ -225,7 +225,8 @@ Audit collection is disabled by default. `note()` is a no-op while disabled and 
 
 ```ts
 await d.continueAsNew(nextInput); // never returns
-await d.continueAsNew(nextInput, { state: fresh }); // skip state carry
+await d.continueAsNew(nextInput, { state: fresh }); // replace carried state
+await d.continueAsNew(nextInput, { state: undefined }); // start without state
 ```
 
 Closes the run as `continued_as_new`, starts a linked successor with fresh steps. State and queued signals carry by default; waits/signals/cancel/pause/resume follow the chain. Restarting a continued run re-runs it from its own input once the chain tip is no longer active. Finish signal handlers first.
@@ -238,7 +239,7 @@ await d.setState<Counter>({ page: 2 }); // merge; throws unless state is a plain
 const state = await d.getState<Counter>(); // Counter | undefined
 ```
 
-One typed record per execution. Calls are memoized by call order: replay returns historical reads and skips applied writes.
+One typed record per execution. Each call is a persisted internal step (counts toward `stepCount`), keyed by call order or `{ stepId }`: replay returns historical reads and skips applied writes.
 
 ### info()
 
@@ -287,7 +288,7 @@ await durableRuntime.resumeExecution(executionId);
 
 // Restart terminal/paused run fresh (new id, optional new input)
 const rerunId = await durableRuntime.restartExecution(executionId);
-const rerunId = await durableRuntime.restartExecution(executionId, { input: next });
+const rerunWithInputId = await durableRuntime.restartExecution(executionId, { input: next });
 
 // Typed live state read (undefined until first set; throws for unknown id)
 const state = await durableRuntime.getState<Counter>(executionId);

@@ -28,9 +28,7 @@ export interface SleepOptions {
   stepId?: string;
 }
 
-/**
- * Options for waitForSignal operations.
- */
+/** Options for waitForSignal operations. */
 export interface SignalOptions {
   /** Timeout in milliseconds. If provided, the wait may resolve as `{ kind: "timeout" }`. */
   timeoutMs?: number;
@@ -55,9 +53,7 @@ export interface WaitForExecutionOptions {
   stepId?: string;
 }
 
-/**
- * Options for emit operations.
- */
+/** Options for emit operations. */
 export interface EmitOptions {
   /** Explicit step ID for replay stability. If not provided, an auto-indexed ID is used. */
   stepId?: string;
@@ -80,28 +76,26 @@ export interface WorkflowOptions {
 }
 
 /**
- * In-memory info about the current durable attempt.
- *
- * `stepCount` counts durable steps recorded so far in this attempt, so
- * workflows can chapter long histories with `continueAsNew` before they
- * grow unbounded.
+ * In-memory info about the current durable attempt, e.g. to chapter long
+ * histories with `continueAsNew` before they grow unbounded.
  */
 export interface DurableInfo {
   /** Canonical id of the running execution. */
   executionId: string;
   /** 1-based attempt number of the running execution. */
   attempt: number;
-  /** Durable calls observed so far in this attempt. */
+  /**
+   * Durable calls observed so far in this attempt, including internal ones
+   * such as every `getState`/`setState`/`replaceState`, sleep, and emit.
+   */
   stepCount: number;
 }
 
-/**
- * Options for `continueAsNew`.
- */
+/** Options for `continueAsNew`. */
 export interface ContinueAsNewOptions<TState = unknown> {
   /**
-   * Replacement for the carried workflow state in the successor execution.
-   * Omit to carry the current state; the step cache, signal buffers, and
+   * Successor's workflow state. Omit the key to carry the current state;
+   * pass `undefined` to start without state. Steps, signal buffers, and
    * waiters are never carried either way.
    */
   state?: TState;
@@ -131,23 +125,17 @@ export interface IDurableContext extends IDurableStateContext {
   readonly executionId: string;
   readonly attempt: number;
 
-  step<T>(stepId: string): IStepBuilder<T>;
-  step<T>(stepId: DurableStepId<T>): IStepBuilder<T>;
+  /**
+   * Memoized save point: runs `fn` once and returns its persisted result on
+   * replay. Without `fn`, returns a builder for `.up()` / `.down()` sagas.
+   */
+  step<T>(stepId: string | DurableStepId<T>): IStepBuilder<T>;
   step<T>(
-    stepId: string,
+    stepId: string | DurableStepId<T>,
     fn: (context: DurableStepRunContext) => Promise<T>,
   ): Promise<T>;
   step<T>(
-    stepId: DurableStepId<T>,
-    fn: (context: DurableStepRunContext) => Promise<T>,
-  ): Promise<T>;
-  step<T>(
-    stepId: string,
-    options: StepOptions,
-    fn: (context: DurableStepRunContext) => Promise<T>,
-  ): Promise<T>;
-  step<T>(
-    stepId: DurableStepId<T>,
+    stepId: string | DurableStepId<T>,
     options: StepOptions,
     fn: (context: DurableStepRunContext) => Promise<T>,
   ): Promise<T>;
@@ -206,9 +194,8 @@ export interface IDurableContext extends IDurableStateContext {
    * - `timeoutMs` changes the return type to a timeout union
    * - if the parent is already suspended, child completion can still resume the
    *   wait during durable cooldown/drain before final disposal closes adapters
-   *
-   * Use `options.stepId` to keep the wait stable across refactors. When omitted,
-   * the waited execution id is used to derive a deterministic internal step id.
+   * - `options.stepId` keeps the wait stable across refactors (default: derived
+   *   from the waited execution id)
    */
   waitForExecution<TTask extends AnyTask>(
     task: TTask,
@@ -255,6 +242,7 @@ export interface IDurableContext extends IDurableStateContext {
     fallbackBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
   ): Promise<TResult>;
 
+  /** Runs registered `.down()` compensations in reverse order. */
   rollback(): Promise<void>;
 
   /**
@@ -279,14 +267,9 @@ export interface IDurableContext extends IDurableStateContext {
 }
 
 /**
- * Internal control-flow signal used to suspend a durable execution without failing it.
- *
- * `DurableContext` throws this error to indicate "pause here and resume later":
- * - `"sleep"`: durable sleep timer was scheduled
- * - `"yield"`: waiting for a signal (or signal-timeout timer) to complete
- *
- * `ExecutionManager` treats this as a normal suspension and will not mark the execution
- * as failed; instead it schedules a resume via timers/queue depending on configuration.
+ * Internal control-flow signal: "suspend here and resume later" (after a
+ * sleep timer, signal, or timeout). The execution manager treats it as a
+ * normal suspension, not a failure, and schedules the resume.
  */
 export class SuspensionSignal extends Error {
   constructor(public readonly reason: "sleep" | "yield" | "timeout") {
@@ -296,15 +279,9 @@ export class SuspensionSignal extends Error {
 }
 
 /**
- * Internal control-flow signal used to continue a durable execution as new.
- *
- * `DurableContext.continueAsNew()` throws this error to indicate "close this
- * run and start a successor": the execution manager atomically marks the old
- * run `continued_as_new` and creates/kicks the successor with the carried
- * input (and, unless overridden, the carried workflow state).
- *
- * Like `SuspensionSignal`, this bypasses step retries: it is control flow,
- * not a failure.
+ * Internal control-flow signal thrown by `continueAsNew()`: the execution
+ * manager atomically closes this run as `continued_as_new` and starts the
+ * successor. Like `SuspensionSignal`, it bypasses step retries.
  */
 export class ContinuationSignal extends Error {
   constructor(

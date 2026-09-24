@@ -227,9 +227,10 @@ export interface StepResult<T = unknown> {
 /**
  * Workflow-owned typed state record for one durable execution.
  *
- * There is at most one record per execution id; replay converges via
- * last-write-wins because replay re-executes the deterministic prefix.
- * The record is carried across continue-as-new and never carried on restart.
+ * There is at most one record per execution id. Every write is a memoized
+ * step, so replay skips writes that were already applied and never rolls the
+ * record back to an earlier value. The record is carried across
+ * continue-as-new and never carried on restart.
  * Deliberately not named `ExecutionState`, which is taken by the dashboard
  * projection (`DurableExecutionState`).
  */
@@ -238,7 +239,7 @@ export interface WorkflowState<TState = unknown> {
   executionId: string;
   /** Workflow-owned typed value. */
   state: TState;
-  /** Last write time (last-write-wins on this record). */
+  /** Time of the last write. */
   updatedAt: Date;
 }
 
