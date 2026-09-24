@@ -11,6 +11,7 @@ import {
 } from "../../../../durable/core/types";
 import { EXECUTION_PAUSED_ABORT_REASON } from "../../../../durable/core/pauseInterruption";
 import { cancellationError } from "../../../../../errors";
+import { runtimeShutdownAbortReason } from "../../../../../tools/runtimeShutdownAbortReason";
 
 function createExecution(overrides: Partial<Execution> = {}): Execution {
   return {
@@ -161,4 +162,31 @@ describe("durable: step control flow", () => {
       ExecutionStatus.Running,
     );
   });
+
+  it.each([
+    ["cancellation", ExecutionStatus.Cancelling, "stop"],
+    ["runtime shutdown", ExecutionStatus.Running, runtimeShutdownAbortReason],
+  ])(
+    "still runs rollback and teardown reads after a %s abort",
+    async (_label, status, abortReason) => {
+      const controller = new AbortController();
+      const { ctx, store } = await createContext(
+        createExecution(),
+        controller.signal,
+      );
+      const compensate = jest.fn(async () => {});
+      await ctx
+        .step("reserve")
+        .up(async () => "reserved")
+        .down(compensate);
+      await store.updateExecution("e-control", { status });
+      controller.abort(abortReason);
+
+      await expect(ctx.rollback()).resolves.toBeUndefined();
+      await expect(ctx.getState()).resolves.toBeUndefined();
+
+      expect(compensate).toHaveBeenCalledTimes(1);
+      expect((await store.getExecution("e-control"))?.status).toBe(status);
+    },
+  );
 });

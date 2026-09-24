@@ -12,7 +12,11 @@ import { ExecutionStatus, isExecutionTerminal } from "../types";
 import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { createCancellationErrorFromSignal } from "../../../../tools/abortSignals";
-import { isDurablePauseInterruptionError } from "../pauseInterruption";
+import {
+  EXECUTION_PAUSED_ABORT_REASON,
+  isDurablePauseInterruptionError,
+  throwDurablePauseInterruption,
+} from "../pauseInterruption";
 
 export type DurableCompensation = {
   stepId: string;
@@ -84,13 +88,11 @@ export async function executeDurableStep<T>(params: {
   const startedAt = Date.now();
 
   const executeWithRetry = async (): Promise<T> => {
-    // An aborted attempt must not start new side effects, even when the
-    // store gate raced ahead of the abort (e.g. pause then quick resume).
-    if (params.signal.aborted) {
-      throw createCancellationErrorFromSignal(
-        params.signal,
-        `Durable step '${params.stepId}' cancelled`,
-      );
+    // A paused attempt must not start new side effects, even when the store
+    // gate raced ahead of the abort (pause then quick resume). Other aborts
+    // (cancel, shutdown) must still let saga teardown such as rollback run.
+    if (params.signal.reason === EXECUTION_PAUSED_ABORT_REASON) {
+      throwDurablePauseInterruption();
     }
 
     try {
