@@ -146,10 +146,14 @@ export async function continueExecutionAsNew(params: {
   };
 
   // Carry state before the atomic commit: the save is an idempotent upsert,
-  // so a commit failure only orphans a state record, never loses one.
+  // so a commit failure only orphans a state record, never loses one. A
+  // present `state` key (even `undefined`) overrides; only omitting it carries.
   const carried: CarriedState =
-    params.options?.state !== undefined
-      ? { present: true, value: params.options.state }
+    params.options && "state" in params.options
+      ? {
+          present: params.options.state !== undefined,
+          value: params.options.state,
+        }
       : await readCarriedState(store, latest.id);
   if (carried.present) {
     if (!store.saveWorkflowState) {

@@ -247,7 +247,10 @@ describe("durable: continueExecutionAsNew", () => {
     ).resolves.toMatchObject({ state: { page: 1 } });
   });
 
-  it("prefers an explicit state override over the carried state", async () => {
+  it.each([
+    ["an explicit override", { page: 9 }, { state: { page: 9 } }],
+    ["no state for an explicit undefined", undefined, null],
+  ])("starts the successor with %s", async (_label, state, expected) => {
     const store = new MemoryStore();
     await store.saveExecution(runningExecution());
     await store.saveWorkflowState({
@@ -262,14 +265,17 @@ describe("durable: continueExecutionAsNew", () => {
       deps,
       runningExecution: runningExecution(),
       nextInput: {},
-      options: { state: { page: 9 } },
+      options: { state },
       ...callbacks,
     });
 
     const prior = await store.getExecution("root");
-    await expect(
-      store.getWorkflowState(prior?.continuedAsExecutionId ?? ""),
-    ).resolves.toMatchObject({ state: { page: 9 } });
+    const successorState = await store.getWorkflowState(
+      prior?.continuedAsExecutionId ?? "",
+    );
+    expect(successorState).toEqual(
+      expected === null ? null : expect.objectContaining(expected),
+    );
   });
 
   it("proceeds without carry when the store has no workflow state", async () => {
