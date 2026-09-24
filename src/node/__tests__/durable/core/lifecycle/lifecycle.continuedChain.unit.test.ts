@@ -3,6 +3,7 @@ import {
   type Execution,
 } from "../../../../durable/core/types";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
+import { genericError } from "../../../../../errors";
 import { createBareStore } from "../../helpers/DurableService.unit.helpers";
 import {
   createLifecycleManager,
@@ -119,6 +120,27 @@ describe("durable: lifecycle operations follow the continuation chain", () => {
 
     expect((await base.getExecution("next"))?.status).toBe(
       ExecutionStatus.Paused,
+    );
+  });
+
+  it("rethrows store failures instead of following the chain", async () => {
+    const base = new MemoryStore();
+    await seedChain(base, {});
+    let rootReads = 0;
+    const store = createBareStore(base, {
+      getExecution: async (id) => {
+        if (id === "root" && ++rootReads === 1) {
+          return genericError.throw({ message: "store-down" });
+        }
+        return base.getExecution(id);
+      },
+    });
+
+    await expect(
+      createLifecycleManager({ store }).pauseExecution("root"),
+    ).rejects.toThrow("store-down");
+    expect((await base.getExecution("tip"))?.status).toBe(
+      ExecutionStatus.Sleeping,
     );
   });
 

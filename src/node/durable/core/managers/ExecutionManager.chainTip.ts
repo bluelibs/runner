@@ -1,25 +1,10 @@
 import type { IDurableStore } from "../interfaces/store";
 import { ExecutionStatus } from "../types";
 import { followContinuedExecutionChain } from "../continuedChain";
-
-/**
- * Resolves the live successor of a run that has continued, or null when the
- * run has not continued (or carries no forward link, in which case the
- * caller's original rejection is the right answer).
- */
-async function findContinuedSuccessorId(
-  store: IDurableStore,
-  executionId: string,
-): Promise<string | null> {
-  const latest = await store.getExecution(executionId);
-  if (
-    latest?.status !== ExecutionStatus.ContinuedAsNew ||
-    !latest.continuedAsExecutionId
-  ) {
-    return null;
-  }
-  return (await followContinuedExecutionChain(store, latest)).id;
-}
+import {
+  durablePauseRejectedError,
+  durableResumeRejectedError,
+} from "../../../../errors";
 
 /**
  * Applies pause/resume to the live tip of a continuation chain, so callers
@@ -36,15 +21,25 @@ export async function applyToContinuationTip(
   let targetExecutionId = executionId;
   for (;;) {
     try {
-      await operation(targetExecutionId);
-      return;
+      return await operation(targetExecutionId);
     } catch (error) {
-      const successorId = await findContinuedSuccessorId(
-        store,
-        targetExecutionId,
-      );
-      if (successorId === null) throw error;
-      targetExecutionId = successorId;
+      // Only a rejection can mean "this run continued"; anything else (a
+      // store outage) must surface rather than be retried on another chapter.
+      const rejected =
+        durablePauseRejectedError.is(error) ||
+        durableResumeRejectedError.is(error);
+      const latest = rejected
+        ? await store.getExecution(targetExecutionId)
+        : null;
+      // Without a forward link the original rejection is the right answer.
+      if (
+        latest?.status !== ExecutionStatus.ContinuedAsNew ||
+        !latest.continuedAsExecutionId
+      ) {
+        throw error;
+      }
+      targetExecutionId = (await followContinuedExecutionChain(store, latest))
+        .id;
     }
   }
 }
