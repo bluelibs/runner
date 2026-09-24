@@ -15,6 +15,7 @@ import type {
   WorkflowOptions,
 } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
+import type { DurableStateOptions } from "./interfaces/context.state";
 import { ContinuationSignal } from "./interfaces/context";
 import { StepBuilder } from "./StepBuilder";
 import {
@@ -39,6 +40,7 @@ import {
 } from "./durable-context/state";
 import {
   createDurableContextDeterminism,
+  type ImplicitInternalStepIdKind,
   type ImplicitInternalStepIdsPolicy,
 } from "./durable-context/DurableContext.determinism";
 import type { DurableContextDeterminism } from "./durable-context/DurableContext.determinism";
@@ -80,9 +82,8 @@ export class DurableContext implements IDurableContext {
   private readonly emitIndexes = new Map<string, number>();
   private noteIndex = 0;
 
-  private readonly implicitInternalStepIdsWarned = new Set<
-    "sleep" | "emit" | "waitForSignal"
-  >();
+  private readonly implicitInternalStepIdsWarned =
+    new Set<ImplicitInternalStepIdKind>();
 
   // Track user and internal steps seen in this execution context instance
   private readonly seenStepIds = new Set<string>();
@@ -176,6 +177,8 @@ export class DurableContext implements IDurableContext {
       executionId: this.executionId,
       assertCanWrite: async () => await this.assertCanContinue(),
       assertUniqueStepId: this.determinism.assertUniqueStepId,
+      assertOrWarnImplicitInternalStepId:
+        this.determinism.assertOrWarnImplicitInternalStepId,
       internalStep: (stepId) => this.internalStep(stepId),
     });
   }
@@ -339,16 +342,19 @@ export class DurableContext implements IDurableContext {
     throw new ContinuationSignal(nextInput, options);
   }
 
-  async setState<T>(patch: Partial<T>): Promise<void> {
-    await this.state.patch(patch);
+  async setState<T extends object>(
+    patch: Partial<T> & Record<string, unknown>,
+    options?: DurableStateOptions,
+  ): Promise<void> {
+    await this.state.patch(patch, options);
   }
 
-  async replaceState<T>(next: T): Promise<void> {
-    await this.state.replace(next);
+  async replaceState<T>(next: T, options?: DurableStateOptions): Promise<void> {
+    await this.state.replace(next, options);
   }
 
-  async getState<T>(): Promise<T | undefined> {
-    return await this.state.get<T>();
+  async getState<T>(options?: DurableStateOptions): Promise<T | undefined> {
+    return await this.state.get<T>(options);
   }
 
   info(): DurableInfo {

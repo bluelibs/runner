@@ -24,6 +24,18 @@ void backToFull;
 async function checkStateGenerics(ctx: IDurableContext): Promise<void> {
   await ctx.replaceState<{ count: number }>({ count: 1 });
   await ctx.setState<{ count: number }>({ count: 2 });
+  interface InterfaceState {
+    count: number;
+  }
+  await ctx.setState<InterfaceState>({ count: 2 }, { stepId: "bump" });
+  // @ts-expect-error setState only merges plain-object patches
+  await ctx.setState<number>(2);
+  // @ts-expect-error arrays are not mergeable state
+  await ctx.setState([2]);
+  // @ts-expect-error null is not a mergeable patch
+  await ctx.setState(null);
+  await ctx.replaceState(5, { stepId: "init" });
+  await ctx.getState<number>({ stepId: "read" });
   const stateSurface: IDurableStateContext = ctx;
   void stateSurface;
 

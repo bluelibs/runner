@@ -94,7 +94,8 @@ describe("durable: DurableContext workflow state", () => {
     const ctx = createContext(new MemoryStore());
 
     await ctx.replaceState<CounterState>({ page: 0, total: 0 });
-    await expect(ctx.setState<typeof patch>(patch)).rejects.toThrow(
+    // @ts-expect-error untyped (JS) callers still hit the runtime guard
+    await expect(ctx.setState(patch)).rejects.toThrow(
       "setState patch must be a plain object",
     );
   });
