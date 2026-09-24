@@ -12,6 +12,11 @@ import {
   durableSignalBacklogExceededError,
 } from "../../../errors";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
+import {
+  decodeSignalRecord,
+  encodeSignalRecord,
+  splitAroundPayloadSlot,
+} from "./RedisStore.signalRecordCodec";
 
 export const createRedisSignalState = (
   executionId: string,
@@ -54,11 +59,26 @@ function parseSignalState(
   payload: string,
 ): DurableSignalState {
   const state = runtime.serializer.parse(payload) as DurableSignalState;
+  const decodeAll = (records: DurableSignalRecord[]) =>
+    Array.isArray(records)
+      ? records.map((record) => decodeSignalRecord(runtime, record))
+      : [];
   return {
     ...state,
-    queued: Array.isArray(state.queued) ? state.queued : [],
-    history: Array.isArray(state.history) ? state.history : [],
+    queued: decodeAll(state.queued),
+    history: decodeAll(state.history),
   };
+}
+
+function parseSignalRecord(
+  runtime: RedisStoreRuntime,
+  outcome: unknown,
+): DurableSignalRecord | null {
+  runtime.assertEvalResultNotError(outcome);
+  const payload = runtime.parseRedisString(outcome);
+  return payload
+    ? decodeSignalRecord(runtime, runtime.serializer.parse(payload))
+    : null;
 }
 
 export async function getSignalState(
@@ -102,7 +122,6 @@ async function mutateSignalState(params: {
   record: DurableSignalRecord | DurableQueuedSignalRecord;
   mutateHistory: boolean;
   mutateQueue: boolean;
-  invalidPayloadMessage: string;
 }): Promise<void> {
   const script = `
     local current = redis.call("get", KEYS[1])
@@ -112,7 +131,7 @@ async function mutateSignalState(params: {
     end
     local okRecord, record = pcall(cjson.decode, ARGV[2])
     if not okRecord then
-      return "__error__:${params.invalidPayloadMessage}"
+      return "__error__:Invalid durable signal record payload"
     end
     ${
       params.mutateQueue
@@ -139,7 +158,7 @@ async function mutateSignalState(params: {
     params.runtime.serializer.stringify(
       createRedisSignalState(params.executionId, params.signalId),
     ),
-    params.runtime.serializer.stringify(params.record),
+    encodeSignalRecord(params.runtime, params.record),
     params.signalId,
   );
   if (outcome === "__backlog_full__") {
@@ -165,7 +184,6 @@ export async function appendSignalRecord(
     record,
     mutateHistory: true,
     mutateQueue: false,
-    invalidPayloadMessage: "Invalid durable signal record payload",
   });
 }
 
@@ -182,7 +200,6 @@ export async function bufferSignalRecord(
     record,
     mutateHistory: true,
     mutateQueue: true,
-    invalidPayloadMessage: "Invalid durable queued signal payload",
   });
 }
 
@@ -199,7 +216,6 @@ export async function enqueueQueuedSignalRecord(
     record,
     mutateHistory: false,
     mutateQueue: true,
-    invalidPayloadMessage: "Invalid durable queued signal payload",
   });
 }
 
@@ -228,16 +244,14 @@ export async function consumeQueuedSignalRecord(
     return cjson.encode(record)
   `;
 
-  const outcome = await runtime.redis.eval(
-    script,
-    1,
-    runtime.signalKey(executionId, signalId),
+  return parseSignalRecord(
+    runtime,
+    await runtime.redis.eval(
+      script,
+      1,
+      runtime.signalKey(executionId, signalId),
+    ),
   );
-  runtime.assertEvalResultNotError(outcome);
-  const payload = runtime.parseRedisString(outcome);
-  return payload
-    ? (runtime.serializer.parse(payload) as DurableSignalRecord)
-    : null;
 }
 
 export async function consumeBufferedSignalForStep(
@@ -261,30 +275,21 @@ export async function consumeBufferedSignalForStep(
     end
 
     redis.call("set", KEYS[1], cjson.encode(state))
-    local okStepResult, stepResult = pcall(cjson.decode, ARGV[2])
-    if not okStepResult or type(stepResult) ~= "table" then
-      return "__error__:Invalid buffered signal step result payload"
-    end
-    if type(stepResult.result) ~= "table" then
-      return "__error__:Invalid buffered signal completion state"
-    end
-
-    stepResult.result.payload = record.payload
-    redis.call("hset", KEYS[2], ARGV[1], cjson.encode(stepResult))
+    -- Legacy records hold a decoded payload; newer ones keep it serialized.
+    local payload = record.encodedPayload or cjson.encode(record.payload)
+    redis.call("hset", KEYS[2], ARGV[1], ARGV[2] .. payload .. ARGV[3])
     return cjson.encode(record)
   `;
 
-  const outcome = await runtime.redis.eval(
-    script,
-    2,
-    runtime.signalKey(stepResult.executionId, signalId),
-    runtime.stepBucketKey(stepResult.executionId),
-    stepResult.stepId,
-    runtime.serializer.stringify(stepResult),
+  return parseSignalRecord(
+    runtime,
+    await runtime.redis.eval(
+      script,
+      2,
+      runtime.signalKey(stepResult.executionId, signalId),
+      runtime.stepBucketKey(stepResult.executionId),
+      stepResult.stepId,
+      ...splitAroundPayloadSlot(runtime, stepResult),
+    ),
   );
-  runtime.assertEvalResultNotError(outcome);
-  const payload = runtime.parseRedisString(outcome);
-  return payload
-    ? (runtime.serializer.parse(payload) as DurableSignalRecord)
-    : null;
 }

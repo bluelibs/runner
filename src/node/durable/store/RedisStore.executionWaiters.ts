@@ -65,12 +65,8 @@ export async function commitExecutionWaiterCompletion(
         return 0
       end
 
-      local okCompletedStep, completedStep = pcall(cjson.decode, ARGV[4])
-      if not okCompletedStep then
-        return "__error__:Invalid execution waiter completion payload"
-      end
-
-      redis.call("hset", KEYS[2], ARGV[2], cjson.encode(completedStep))
+      -- Stored verbatim: a cjson round-trip would rewrite the child's result.
+      redis.call("hset", KEYS[2], ARGV[2], ARGV[4])
       redis.call("hdel", KEYS[1], waiterField)
 
       if ARGV[5] ~= "" then
@@ -92,7 +88,6 @@ export async function commitExecutionWaiterCompletion(
     params.timerId ?? "",
     params.waitTargetExecutionId ?? "",
   );
-  runtime.assertEvalResultNotError(result);
   return Number(result) === 1;
 }
 

@@ -69,6 +69,7 @@ describe("durable: RedisStore signal waiters (mock)", () => {
         arg4?: unknown,
         arg5?: unknown,
         arg6?: unknown,
+        arg7?: unknown,
       ) => {
         const script = String(scriptUnknown);
         const signalKey = String(signalKeyUnknown);
@@ -93,12 +94,12 @@ describe("durable: RedisStore signal waiters (mock)", () => {
           return "OK";
         }
 
-        if (!script.includes("stepResult.result.payload = record.payload")) {
+        if (!script.includes("ARGV[2] .. payload .. ARGV[3]")) {
           return 1;
         }
 
         const state = serializer.parse(redisState.get(signalKey)!) as {
-          queued: Array<{ payload: unknown }>;
+          queued: Array<{ payload?: unknown; encodedPayload?: string }>;
           history: unknown[];
         };
         const record = state.queued.shift() ?? null;
@@ -107,13 +108,11 @@ describe("durable: RedisStore signal waiters (mock)", () => {
           return null;
         }
 
-        const stepResult = serializer.parse(String(arg6)) as {
-          result: Record<string, unknown>;
-        };
-        stepResult.result.payload = record.payload;
+        const payload =
+          record.encodedPayload ?? serializer.stringify(record.payload);
         stepResults.set(
           `${String(arg4)}:${String(arg5)}`,
-          serializer.stringify(stepResult),
+          `${String(arg6)}${payload}${String(arg7)}`,
         );
         return serializer.stringify(record);
       },
@@ -152,6 +151,11 @@ describe("durable: RedisStore signal waiters (mock)", () => {
         completedAt: new Date(),
       }),
     ).resolves.toEqual(expect.objectContaining({ payload: { paidAt: 8 } }));
+    await expect(store.getStepResult("e1", "__signal:paid")).resolves.toEqual(
+      expect.objectContaining({
+        result: { state: "completed", payload: { paidAt: 8 } },
+      }),
+    );
 
     redisState.set(
       "durable:signal:e1:paid",
@@ -193,16 +197,17 @@ describe("durable: RedisStore signal waiters (mock)", () => {
         arg4?: unknown,
         arg5?: unknown,
         arg6?: unknown,
+        arg7?: unknown,
       ) => {
         const script = String(scriptUnknown);
         const signalKey = String(signalKeyUnknown);
 
-        if (!script.includes("stepResult.result.payload = record.payload")) {
+        if (!script.includes("ARGV[2] .. payload .. ARGV[3]")) {
           return 1;
         }
 
         const state = serializer.parse(redisState.get(signalKey)!) as {
-          queued: Array<{ payload: unknown }>;
+          queued: Array<{ payload?: unknown; encodedPayload?: string }>;
           history: unknown[];
         };
         const record = state.queued.shift() ?? null;
@@ -211,13 +216,11 @@ describe("durable: RedisStore signal waiters (mock)", () => {
           return null;
         }
 
-        const stepResult = serializer.parse(String(arg6)) as {
-          result: Record<string, unknown>;
-        };
-        stepResult.result.payload = record.payload;
+        const payload =
+          record.encodedPayload ?? serializer.stringify(record.payload);
         stepResults.set(
           `${String(arg4)}:${String(arg5)}`,
-          serializer.stringify(stepResult),
+          `${String(arg6)}${payload}${String(arg7)}`,
         );
         return serializer.stringify(record);
       },
