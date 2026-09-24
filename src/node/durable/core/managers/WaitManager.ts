@@ -18,7 +18,8 @@ export interface WaitConfig {
  * Waits for an execution to reach a terminal state and returns/throws accordingly.
  *
  * Strategy:
- * - if an event bus is configured, subscribe to `execution:<executionId>` for low-latency completion
+ * - if an event bus is configured, subscribe to `execution:<executionId>` for low-latency completion,
+ *   and to each continuation tip's channel as the chain grows
  * - otherwise (or on bus issues) fall back to polling the store
  *
  * The durable store remains the source of truth; this manager is purely a convenience layer
@@ -61,7 +62,7 @@ export class WaitManager {
     };
 
     const check = async (): Promise<
-      { done: false } | { done: true; value: TResult }
+      { done: false; tipId: string } | { done: true; value: TResult }
     > => {
       // Follow the continuation chain so waiting on a continued run resolves
       // with the live tip's outcome instead of stalling on a closed run.
@@ -135,7 +136,7 @@ export class WaitManager {
           );
         }
 
-        return { done: false };
+        return { done: false, tipId: currentId };
       }
     };
 
@@ -159,23 +160,48 @@ export class WaitManager {
         let pollTimer: ReturnType<typeof setTimeout> | null = null;
         let done = false;
         let skipEventBusSubscription = false;
+        const channels = new Set([channel]);
+        const subscribedEvent: BusEvent = {
+          type: "subscribed",
+          payload: null,
+          timestamp: new Date(),
+        };
 
         const handler = async (_event: BusEvent) => {
           try {
             const result = await check();
             if (result.done) {
               await finalize({ ok: true, value: result.value });
+              return;
             }
+            await followTip(result.tipId);
           } catch (err) {
             await finalize({ ok: false, error: err });
           }
         };
 
-        const safeUnsubscribe = async (): Promise<void> => {
+        // A continued run finishes on its tip, which publishes on its own
+        // channel, so the waiter listens there too once the chain moves.
+        const followTip = async (tipId: string): Promise<void> => {
+          const tipChannel = `execution:${tipId}`;
+          if (done || channels.has(tipChannel)) return;
+          channels.add(tipChannel);
           try {
-            await eventBus.unsubscribe(channel, handler);
+            await eventBus.subscribe(tipChannel, handler);
           } catch {
-            // ignore
+            return; // Polling still covers the tip.
+          }
+          // The tip may have finished before the subscription was live.
+          await handler(subscribedEvent);
+        };
+
+        const safeUnsubscribe = async (): Promise<void> => {
+          for (const subscribed of channels) {
+            try {
+              await eventBus.unsubscribe(subscribed, handler);
+            } catch {
+              // ignore
+            }
           }
         };
 
@@ -203,16 +229,7 @@ export class WaitManager {
 
         // Preflight store check before wiring timers/subscriptions.
         // This reduces race windows and keeps timeout metadata checks consistent.
-        void (async () => {
-          try {
-            const result = await check();
-            if (result.done) {
-              await finalize({ ok: true, value: result.value });
-            }
-          } catch (err) {
-            await finalize({ ok: false, error: err });
-          }
-        })();
+        void handler(subscribedEvent);
 
         if (timeoutMs !== undefined) {
           const elapsedMs = Date.now() - startedAt;
@@ -277,11 +294,7 @@ export class WaitManager {
             if (done) {
               return;
             }
-            await handler({
-              type: "subscribed",
-              payload: null,
-              timestamp: new Date(),
-            });
+            await handler(subscribedEvent);
             if (done) {
               return;
             }
@@ -305,7 +318,9 @@ export class WaitManager {
   }
 
   private async pollUntilFinished<TResult>(params: {
-    check: () => Promise<{ done: false } | { done: true; value: TResult }>;
+    check: () => Promise<
+      { done: false; tipId: string } | { done: true; value: TResult }
+    >;
     throwIfTimedOut: () => Promise<void>;
     pollEveryMs: number;
   }): Promise<TResult> {
