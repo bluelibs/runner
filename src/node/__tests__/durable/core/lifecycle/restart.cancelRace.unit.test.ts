@@ -96,6 +96,8 @@ describe("durable: restart link convergence", () => {
         "src",
       ),
     ).rejects.toThrow('to execution "src" after 5 attempts');
+    const orphan = (await base.listExecutions()).find((e) => e.id !== "src");
+    expect(orphan?.status).toBe(ExecutionStatus.Cancelled);
   });
 
   it("never sweeps a successor the source links to before the sweep", async () => {

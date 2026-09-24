@@ -7,7 +7,7 @@ import {
 } from "../../../../errors";
 
 const ORPHANED_RESTART_ERROR_MESSAGE =
-  "Restart rejected: source resumed concurrently.";
+  "Restart rejected: linking it to its source failed.";
 // Each retry means the source status changed between read and write while
 // staying restartable (e.g. paused -> cancelled); a few rounds converge.
 const MAX_LINK_ATTEMPTS = 5;
@@ -34,7 +34,8 @@ export async function findRestartBlocker(
     : `${source.status} (chain tip ${tip.id} is ${tip.status})`;
 }
 
-async function requireRestartable(
+/** Throws the restart rejection when `source` is missing or blocked. */
+export async function requireRestartable(
   store: IDurableStore,
   sourceId: string,
   source: Execution | null,
@@ -53,18 +54,6 @@ async function requireRestartable(
     });
   }
   return source;
-}
-
-/** Re-reads the source and throws the restart rejection when it is blocked. */
-export async function assertSourceRestartable(
-  store: IDurableStore,
-  sourceId: string,
-): Promise<Execution> {
-  return await requireRestartable(
-    store,
-    sourceId,
-    await store.getExecution(sourceId),
-  );
 }
 
 /**
@@ -98,11 +87,11 @@ export async function linkRestartedAs(
 }
 
 /**
- * Best-effort cancellation of a successor that was persisted but must not
- * run because the source link lost its race (e.g. the source resumed
- * first). Without this the orphan would stay `pending` and recovery would
- * run an execution the caller was told was rejected. A successor the source
- * already links to was handed out by another caller and is left alone.
+ * Cancels a successor that was persisted but must not run because linking it
+ * to its source failed (lost a race, or the write itself failed). Without
+ * this the orphan would stay `pending` and recovery would run an execution
+ * the caller was told failed. A successor the source already links to was
+ * handed out by another caller and is left alone.
  */
 export async function cancelOrphanedRestart(
   store: IDurableStore,

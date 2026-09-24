@@ -235,7 +235,7 @@ describe("durable: restart/resume races", () => {
     expect(successor?.error).toBeUndefined();
   });
 
-  it("rethrows link store failures without cancelling the successor", async () => {
+  it("cancels the orphan and rethrows when the link write fails", async () => {
     const base = new MemoryStore();
     await base.saveExecution(
       createPausedExecution({ status: ExecutionStatus.Completed }),
@@ -256,6 +256,21 @@ describe("durable: restart/resume races", () => {
     const successor = (await base.listExecutions()).find(
       (execution) => execution.id !== "e-restart-race",
     );
-    expect(successor?.status).toBe(ExecutionStatus.Pending);
+    expect(successor?.status).toBe(ExecutionStatus.Cancelled);
+  });
+
+  it("keeps the link error when cancelling the orphan fails too", async () => {
+    const base = new MemoryStore();
+    await base.saveExecution(
+      createPausedExecution({ status: ExecutionStatus.Completed }),
+    );
+    const store = createBareStore(base, {
+      saveExecutionIfStatus: async () =>
+        genericError.throw({ message: "store-down" }),
+    });
+
+    await expect(
+      createManager({ store }).restartExecution("e-restart-race"),
+    ).rejects.toThrow("store-down");
   });
 });

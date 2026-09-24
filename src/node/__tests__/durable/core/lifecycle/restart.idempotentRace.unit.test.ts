@@ -158,7 +158,7 @@ describe("durable: idempotent restart races", () => {
       pausedAt: undefined,
       pausedFrom: undefined,
       restartedFromExecutionId: "e-restart-idem",
-      error: { message: "Restart rejected: source resumed concurrently." },
+      error: { message: "Restart rejected: linking it to its source failed." },
       completedAt: new Date(),
     };
     await base.createExecutionWithIdempotencyKey({
@@ -236,28 +236,36 @@ describe("durable: idempotent restart races", () => {
     ).toBe(first);
   });
 
-  it("rethrows link store failures without cancelling the claimed successor", async () => {
+  it("cancels the claimed orphan on a link failure and revives it on retry", async () => {
     const base = new MemoryStore();
     await base.saveExecution(
       createSource({ status: ExecutionStatus.Completed }),
     );
+    let linkStoreDown = true;
     const store = createBareStore(base, {
       saveExecutionIfStatus: async (execution, expected) => {
-        if (execution.restartedAsExecutionId) {
+        if (linkStoreDown && execution.restartedAsExecutionId) {
           throw genericError.new({ message: "link-store-down" });
         }
         return base.saveExecutionIfStatus(execution, expected);
       },
     });
-    const manager = createManager({ store });
+    const manager = createManager({
+      store,
+      taskExecutor: fixedExecutor("revived"),
+    });
+    const restart = () =>
+      manager.restartExecution("e-restart-idem", { idempotencyKey: "k2" });
 
-    await expect(
-      manager.restartExecution("e-restart-idem", { idempotencyKey: "k2" }),
-    ).rejects.toThrow("link-store-down");
-    const successor = (await base.listExecutions()).find(
+    await expect(restart()).rejects.toThrow("link-store-down");
+    const orphan = (await base.listExecutions()).find(
       (execution) => execution.id !== "e-restart-idem",
     );
-    expect(successor?.status).toBe(ExecutionStatus.Pending);
+    expect(orphan?.status).toBe(ExecutionStatus.Cancelled);
+
+    linkStoreDown = false;
+    await expect(restart()).resolves.toBe(orphan?.id);
+    expect((await base.getExecution(orphan!.id))?.result).toBe("revived");
   });
 
   it("follows the store-returned id when it differs from the minted one", async () => {

@@ -15,10 +15,10 @@ import {
   type ExecutionPersistenceDeps,
 } from "./ExecutionManager.persistence";
 import {
-  assertSourceRestartable,
   cancelOrphanedRestart,
   findRestartBlocker,
   linkRestartedAs,
+  requireRestartable,
   reviveOrphanedRestart,
 } from "./ExecutionManager.restartGuards";
 
@@ -94,9 +94,12 @@ async function commitRestart(
   try {
     await linkRestartedAs(store, sourceId, restarted.id);
   } catch (error) {
-    if (durableRestartRejectedError.is(error)) {
-      await cancelOrphanedRestart(store, sourceId, restarted.id);
-    }
+    // The caller is told this restart failed, whatever broke the link, so
+    // recovery must never run the orphan later. A failed cleanup must not
+    // mask the cause.
+    await cancelOrphanedRestart(store, sourceId, restarted.id).catch(
+      () => undefined,
+    );
     throw error;
   }
   await logCreatedExecution(deps.persistence.auditLogger, restarted);
@@ -222,7 +225,11 @@ export async function restartExecution(
   // Recheck eligibility right before persisting so a resume that landed
   // after the initial guard rejects before an orphan is created. The link
   // still commits conditionally to close the remaining window.
-  await assertSourceRestartable(store, source.id);
+  await requireRestartable(
+    store,
+    source.id,
+    await store.getExecution(source.id),
+  );
   await store.saveExecution(restarted);
   return await commitRestart(deps, source.id, restarted);
 }
