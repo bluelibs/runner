@@ -6,6 +6,13 @@ import {
   durableContinueAsNewRejectedError,
   durableLifecycleUnsupportedStoreCapabilityError,
 } from "../../../../errors";
+import { readLatestAttemptSnapshot } from "./ExecutionManager.transitionState";
+import {
+  kickoffWithFailsafe,
+  logCreatedExecution,
+  type ExecutionPersistenceDeps,
+} from "./ExecutionManager.persistence";
+import type { IDurableStore } from "../interfaces/store";
 
 /**
  * Default bound on continue-as-new hops per lineage. Traversals (waits,
@@ -14,13 +21,6 @@ import {
  * of growing forever. Override with `execution.maxContinuationDepth`.
  */
 export const DEFAULT_MAX_CONTINUATION_DEPTH = 1000;
-import { readLatestAttemptSnapshot } from "./ExecutionManager.transitionState";
-import {
-  kickoffWithFailsafe,
-  logCreatedExecution,
-  type ExecutionPersistenceDeps,
-} from "./ExecutionManager.persistence";
-import type { IDurableStore } from "../interfaces/store";
 
 /**
  * Shared dependencies for the continue-as-new flow, which atomically closes
@@ -195,9 +195,13 @@ export async function continueExecutionAsNew(params: {
     reason: "continued_as_new",
   });
   await logCreatedExecution(params.deps.persistence.auditLogger, successor);
-  await params.deps.notifyFinished(closedPrior);
-  // Move waiters onto the persisted successor before kickoff. In queue mode
-  // an enqueue failure must not strand waiters forever on the now-terminal
-  // prior run; in direct mode a parent can safely register on the pending tip.
-  await kickoffWithFailsafe(params.deps.persistence, successor.id);
+  // Move waiters onto the persisted successor before kickoff, so an enqueue
+  // failure cannot strand them on the now-terminal prior run. The successor
+  // is committed, so it is kicked even when the hand-off throws (else it
+  // would sit pending until recovery); the hand-off error still surfaces.
+  try {
+    await params.deps.notifyFinished(closedPrior);
+  } finally {
+    await kickoffWithFailsafe(params.deps.persistence, successor.id);
+  }
 }
