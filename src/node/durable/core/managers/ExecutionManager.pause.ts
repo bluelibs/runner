@@ -141,10 +141,15 @@ export async function pauseExecution(
     }
 
     const now = new Date();
+    // The stamp identifies this pause to live attempts, so it must differ
+    // from the previous one even when re-pausing within the same millisecond.
+    const pausedAt = new Date(
+      Math.max(now.getTime(), (execution.pausedAt?.getTime() ?? 0) + 1),
+    );
     const pausedExecution: Execution = {
       ...execution,
       status: ExecutionStatus.Paused,
-      pausedAt: now,
+      pausedAt,
       pausedFrom: execution.status,
       updatedAt: now,
     };
@@ -159,7 +164,7 @@ export async function pauseExecution(
     }
 
     if (execution.status === ExecutionStatus.Running) {
-      await stopLiveAttemptForPause(deps, executionId, now);
+      await stopLiveAttemptForPause(deps, executionId, pausedAt);
     }
 
     await logExecutionStatusChange(deps.auditLogger, {

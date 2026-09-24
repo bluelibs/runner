@@ -125,6 +125,27 @@ describe("durable: pause aborts only hit attempts started before the pause", () 
     await manager.stopLiveCancellationListener();
   });
 
+  it("never reuses the previous pause stamp, even within one millisecond", async () => {
+    const store = new MemoryStore();
+    // A resumed run keeps its last stamp; one at or ahead of "now" stands in
+    // for a re-pause landing in the same millisecond (or a skewed clock).
+    const previousStamp = new Date(Date.now() + 60_000);
+    await store.saveExecution(
+      createExecution({
+        status: ExecutionStatus.Running,
+        pausedFrom: undefined,
+        pausedAt: previousStamp,
+      }),
+    );
+
+    await createManager(store).pauseExecution("e-epoch");
+
+    const repaused = await store.getExecution("e-epoch");
+    expect(repaused?.pausedAt!.getTime()).toBeGreaterThan(
+      previousStamp.getTime(),
+    );
+  });
+
   it("spares a resumed attempt in the polling fallback", async () => {
     const store = new MemoryStore();
     await store.saveExecution(createExecution());
