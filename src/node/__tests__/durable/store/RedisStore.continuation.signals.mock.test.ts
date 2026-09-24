@@ -75,6 +75,22 @@ describe("durable: RedisStore continuation signal backlog (mock)", () => {
     ]);
   });
 
+  it("dedupes SSCAN members so the cardinality check can match", async () => {
+    const { redisMock } = harness;
+    // SSCAN may return a member more than once across cursor pages.
+    redisMock.sscan
+      .mockResolvedValueOnce(["7", ["paid"]])
+      .mockResolvedValueOnce(["0", ["paid"]]);
+    redisMock.eval.mockResolvedValueOnce(1);
+
+    await expect(continueRoot()).resolves.toBe(true);
+
+    expect((redisMock.eval.mock.calls[0] as unknown[]).slice(-2)).toEqual([
+      "1",
+      "paid",
+    ]);
+  });
+
   it("fails fast when the signal key set keeps changing", async () => {
     const { redisMock } = harness;
     redisMock.eval.mockResolvedValue("__signal_set_changed__");
