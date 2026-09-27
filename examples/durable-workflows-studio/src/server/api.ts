@@ -30,6 +30,7 @@ import type {
 import { getWorkflow, WORKFLOWS } from "../workflows/catalog.js";
 import { workflowPage, type WorkflowQuery } from "../shared/workflowPage.js";
 import { toExecutionSummary } from "./executionSummary.js";
+import { getContinuationTipStatus } from "./continuationTip.js";
 import {
   incidentInputSchema,
   incidentResponse,
@@ -489,6 +490,10 @@ export async function getExecutionDetail(
     children.map((child) => toSummary(handles, child)),
   );
   const parentSummary = parent ? await toSummary(handles, parent) : null;
+  const continuedChainTipStatus =
+    execution.status === "continued_as_new"
+      ? await getContinuationTipStatus(handles, execution)
+      : undefined;
   const detail: StudioExecutionDetail = {
     id: execution.id,
     ...(execution.parentExecutionId
@@ -496,6 +501,7 @@ export async function getExecutionDetail(
       : {}),
     ...lineageOf(execution),
     ...(execution.pausedFrom ? { pausedFrom: execution.pausedFrom } : {}),
+    ...(continuedChainTipStatus ? { continuedChainTipStatus } : {}),
     workflowKey: execution.workflowKey,
     workflowTitle: workflow.title,
     status: execution.status,
@@ -765,7 +771,14 @@ export async function resumeExecution(
       `Only paused executions can be resumed (now ${execution.status}).`,
     );
   }
-  await handles.durable.resumeExecution(id);
+  try {
+    await handles.durable.resumeExecution(id);
+  } catch (error) {
+    if (errors.durableResumeRejectedError.is(error)) {
+      return conflict(error.message);
+    }
+    throw error;
+  }
   await appendOperatorNote(handles, execution, "Operator resumed execution", {
     resumedFrom: execution.pausedFrom ?? "paused",
   });
@@ -806,10 +819,18 @@ export async function restartExecution(
   }
   const restartInput = readRestartInput(execution, body);
   if ("status" in restartInput) return restartInput;
-  const executionId = await handles.durable.restartExecution(
-    id,
-    "input" in restartInput ? { input: restartInput.input } : undefined,
-  );
+  let executionId: string;
+  try {
+    executionId = await handles.durable.restartExecution(
+      id,
+      "input" in restartInput ? { input: restartInput.input } : undefined,
+    );
+  } catch (error) {
+    if (errors.durableRestartRejectedError.is(error)) {
+      return conflict(error.message);
+    }
+    throw error;
+  }
   await appendOperatorNote(handles, execution, "Operator restarted execution", {
     restartedAsExecutionId: executionId,
   });

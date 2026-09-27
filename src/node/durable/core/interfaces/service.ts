@@ -239,7 +239,8 @@ export interface RestartExecutionOptions {
   idempotencyKey?: string;
   /**
    * Optional input override for the restarted run. When omitted, the source
-   * execution input is reused. Workflow state is never carried: restart
+   * execution input is reused. Pass `{ input: undefined }` to explicitly
+   * restart without input. Workflow state is never carried: restart
    * always starts from input; use continue-as-new to carry state. Overrides
    * issued where the task is unknown are validated by the first worker that
    * runs the restarted execution instead.
@@ -347,9 +348,9 @@ export interface IDurableService {
   cancelExecution(executionId: string, reason?: string): Promise<void>;
 
   /**
-   * Pauses a non-terminal execution so timers and signals stop being
-   * processed until it is resumed. Pause is wall-clock: timers keep their
-   * `fireAt`, and resume re-kicks the execution to let replay sort it out.
+   * Pauses a non-terminal execution so it stops advancing until resumed.
+   * Timers keep their `fireAt` and signals may settle persisted wait state;
+   * resume re-kicks the execution to let replay sort it out.
    * Rejected for terminal and `cancelling` executions. A `continued_as_new`
    * id pauses its live chain tip.
    */
@@ -357,8 +358,9 @@ export interface IDurableService {
 
   /**
    * Resumes a paused execution from its pause point with no lost signals.
-   * Rejected for executions that are not paused. A `continued_as_new` id
-   * resumes its chain tip.
+   * Rejected for executions that are not paused or whose continuation
+   * ancestor has already been restarted. A `continued_as_new` id resumes
+   * its chain tip.
    */
   resumeExecution(executionId: string): Promise<void>;
 

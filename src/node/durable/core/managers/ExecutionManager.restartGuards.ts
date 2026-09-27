@@ -3,8 +3,10 @@ import { ExecutionStatus, isExecutionTerminal, type Execution } from "../types";
 import { followContinuedExecutionChain } from "../continuedChain";
 import {
   durableExecutionInvariantError,
+  durableLifecycleUnsupportedStoreCapabilityError,
   durableRestartRejectedError,
 } from "../../../../errors";
+import { withExecutionLifecycleLock } from "./ExecutionManager.lifecycleLock";
 
 const ORPHANED_RESTART_ERROR_MESSAGE =
   "Restart rejected: linking it to its source failed.";
@@ -73,10 +75,58 @@ export async function linkRestartedAs(
     const current = await store.getExecution(sourceId);
     if (current?.restartedAsExecutionId === restartedId) return;
 
-    const fresh = await requireRestartable(store, sourceId, current);
-    const linked = await store.saveExecutionIfStatus(
-      { ...fresh, restartedAsExecutionId: restartedId, updatedAt: new Date() },
-      [fresh.status],
+    if (current?.status === ExecutionStatus.ContinuedAsNew) {
+      // The source stays terminal while its tip resumes, so a CAS on the
+      // source alone cannot fence that race. Both paths lock the tip here.
+      if (!store.acquireLock || !store.releaseLock) {
+        return durableLifecycleUnsupportedStoreCapabilityError.throw({
+          operation: "restart-continued-execution-lock",
+        });
+      }
+      const tip = await followContinuedExecutionChain(store, current);
+      const linked = await withExecutionLifecycleLock(
+        store,
+        tip.id,
+        async () => {
+          const fresh = await requireRestartable(
+            store,
+            sourceId,
+            await store.getExecution(sourceId),
+          );
+          const lockedTip = await followContinuedExecutionChain(store, fresh);
+          if (lockedTip.id !== tip.id) return false;
+          return await store.saveExecutionIfStatus(
+            {
+              ...fresh,
+              restartedAsExecutionId: restartedId,
+              updatedAt: new Date(),
+            },
+            [fresh.status],
+          );
+        },
+      );
+      if (linked) return;
+      continue;
+    }
+
+    const linked = await withExecutionLifecycleLock(
+      store,
+      sourceId,
+      async () => {
+        const fresh = await requireRestartable(
+          store,
+          sourceId,
+          await store.getExecution(sourceId),
+        );
+        return await store.saveExecutionIfStatus(
+          {
+            ...fresh,
+            restartedAsExecutionId: restartedId,
+            updatedAt: new Date(),
+          },
+          [fresh.status],
+        );
+      },
     );
     if (linked) return;
   }

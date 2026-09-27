@@ -543,6 +543,40 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
     return sim;
   }
 
+  function continuationTipStatus(source: Simulation): StudioExecutionStatus {
+    const seen = new Set<string>();
+    let current = source;
+    while (current.detail.status === "continued_as_new") {
+      const nextId = current.detail.continuedAsExecutionId;
+      if (seen.has(current.detail.id) || !nextId) {
+        throw new ApiError(500, `Invalid continuation chain at execution '${current.detail.id}'.`);
+      }
+      seen.add(current.detail.id);
+      current = requireSim(nextId);
+    }
+    return current.detail.status;
+  }
+
+  function detailOf(sim: Simulation): StudioExecutionDetail {
+    return sim.detail.status === "continued_as_new"
+      ? { ...sim.detail, continuedChainTipStatus: continuationTipStatus(sim) }
+      : sim.detail;
+  }
+
+  function hasRestartedAncestor(sim: Simulation): boolean {
+    const seen = new Set<string>();
+    let current = sim;
+    while (current.detail.continuedFromExecutionId) {
+      if (seen.has(current.detail.id)) {
+        throw new ApiError(500, `Invalid continuation ancestry at execution '${current.detail.id}'.`);
+      }
+      seen.add(current.detail.id);
+      current = requireSim(current.detail.continuedFromExecutionId);
+      if (current.detail.restartedAsExecutionId) return true;
+    }
+    return false;
+  }
+
   // Seed: a completed order, a failed chaos run, and a live incident parked
   // on its approval wait. A fresh onboarding starts itself for live motion.
   const order = DEMO_WORKFLOWS[0]!;
@@ -1161,7 +1195,7 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
     },
     getExecution: async (id) => {
       requireUnlocked();
-      return requireSim(id).detail;
+      return detailOf(requireSim(id));
     },
     startExecution: async (workflow, input) => {
       requireUnlocked();
@@ -1274,6 +1308,9 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
           `Only paused executions can be resumed (now ${sim.detail.status}).`,
         );
       }
+      if (hasRestartedAncestor(sim)) {
+        throw new ApiError(409, `Cannot resume execution '${id}' after an ancestor restarted.`);
+      }
       const { pausedFrom, ...rest } = sim.detail;
       sim.detail = rest;
       setStatus(sim, pausedFrom ?? "running");
@@ -1295,6 +1332,15 @@ export function createDemoApi(options: { locked?: boolean } = {}): StudioApi {
           409,
           `Only terminal or paused executions can be restarted (now ${sim.detail.status}); pause or cancel it first.`,
         );
+      }
+      if (sim.detail.status === "continued_as_new") {
+        const tipStatus = continuationTipStatus(sim);
+        if (isLiveStatus(tipStatus) && tipStatus !== "paused") {
+          throw new ApiError(
+            409,
+            `Cannot restart execution '${id}' while its continuation tip is ${tipStatus}.`,
+          );
+        }
       }
       sequence += 1;
       const nextId = `demo_${sequence.toString(36)}_${Date.now().toString(36)}`;

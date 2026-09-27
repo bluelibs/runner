@@ -400,7 +400,7 @@ await d.setState<Counter>({ page: 2 }); // shallow merge into existing state
 const state = await d.getState<Counter>(); // Counter | undefined
 ```
 
-Each execution owns one state record. `getState()` resolves `undefined` until first set, so pair it with a module-level default. `setState()` only patches existing plain-object state and throws otherwise, so initialize with `replaceState()` first. Every call is a persisted internal step (keyed by call order, or by `{ stepId }` when passed), so it counts toward `stepCount` and history: on replay, reads return the value they saw originally and applied writes are skipped, so read-modify-write is replay-safe.
+Each execution owns one state record. `getState()` resolves `undefined` until first set; create a fresh default for that execution or initialize with `replaceState()`. `setState()` only patches existing plain-object state and throws otherwise. Every call is a persisted internal step (keyed by call order, or by `{ stepId }` when passed), so it counts toward `stepCount` and history: on replay, reads return the value they saw originally and applied writes are skipped, so read-modify-write is replay-safe.
 
 ### `info()` — Attempt Info
 
@@ -761,7 +761,7 @@ if (d.info().stepCount > 500) {
 }
 ```
 
-Pause stops the run from advancing and records the pre-pause status in `pausedFrom`; resume restores it. Timers and signals still land on wall-clock time while paused, but attempts, polling kicks, and recovery skip the run until resume. Restart rejects active runs: only terminal or paused executions restart, and the new run starts fresh (new input optional, no carried steps or state). Restart does not retarget existing `wait(...)` / `waitForExecution(...)` callers: they stay attached to the source execution, so code that wants the rerun must switch to the returned `rerunId`. Continue-as-new links runs both ways (`continuedAsExecutionId` / `continuedFromExecutionId`); waits, signals, cancel, pause, and resume follow the chain, so callers keep addressing the original id. Restarting a `continued_as_new` run re-runs that run from its own input (restart the tip id for the latest chapter), and is rejected while the chain tip is still active.
+Pause stops the run from advancing and records the pre-pause status in `pausedFrom`; resume restores it. Timers and signals still land on wall-clock time while paused, but attempts, polling kicks, and recovery skip the run until resume. Restart rejects active runs: only terminal or paused executions restart, and the new run starts fresh (new input optional, no carried steps or state). Omit `input` to reuse the source input; `{ input: undefined }` explicitly starts without input. Restart does not retarget existing `wait(...)` / `waitForExecution(...)` callers: they stay attached to the source execution, so code that wants the rerun must switch to the returned `rerunId`. Continue-as-new links runs both ways (`continuedAsExecutionId` / `continuedFromExecutionId`); waits, signals, cancel, pause, and resume follow the chain, so callers keep addressing the original id. Restarting a `continued_as_new` run re-runs that run from its own input (restart the tip id for the latest chapter), and is rejected while the chain tip is still active. Once a continuation ancestor is restarted, resume of its paused tip is rejected.
 
 Rules:
 
@@ -770,7 +770,8 @@ Rules:
 - A racing cancellation wins over both pause and continue-as-new.
 - Restarted runs get `restartedFromExecutionId` / `restartedAsExecutionId` lineage; continued runs get `continuedFromExecutionId` / `continuedAsExecutionId`.
 - Continuation chains are bounded (`execution.maxContinuationDepth`, a non-negative integer, default 1000; `0` disables continuations); the over-limit run fails with a clear rejection instead of growing forever.
-- Restart with an `idempotencyKey` returns the same rerun on retry, even after the source was resumed.
+- Restart with an `idempotencyKey` returns the same rerun on retry once linked.
+- Restarting a continued run requires store `acquireLock` and `releaseLock` support to coordinate with a concurrent resume of the chain tip.
 
 ## Workflow State
 
@@ -1441,6 +1442,7 @@ interface IEventBus {
 type ExecutionStatus =
   | "pending"
   | "running"
+  | "cancelling"
   | "retrying"
   | "sleeping"
   | "paused"

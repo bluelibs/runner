@@ -229,7 +229,7 @@ await d.continueAsNew(nextInput, { state: fresh }); // replace carried state
 await d.continueAsNew(nextInput, { state: undefined }); // start without state
 ```
 
-Closes the run as `continued_as_new`, starts a linked successor with fresh steps. State and queued signals carry by default; waits/signals/cancel/pause/resume follow the chain. Restarting a continued run re-runs it from its own input once the chain tip is no longer active. Finish signal handlers first.
+Closes the run as `continued_as_new`, starts a linked successor with fresh steps. State and queued signals carry by default; waits/signals/cancel/pause/resume follow the chain. Restarting a continued run re-runs it from its own input once the chain tip is no longer active and requires store lock support. Its paused tip cannot then resume. Finish signal handlers first.
 
 ### setState() / replaceState() / getState()
 
@@ -289,6 +289,7 @@ await durableRuntime.resumeExecution(executionId);
 // Restart terminal/paused run fresh (new id, optional new input)
 const rerunId = await durableRuntime.restartExecution(executionId);
 const rerunWithInputId = await durableRuntime.restartExecution(executionId, { input: next });
+// { input: undefined } explicitly clears input; omitting input reuses the source input.
 
 // Typed live state read (undefined until first set; throws for unknown id)
 const state = await durableRuntime.getState<Counter>(executionId);
@@ -656,6 +657,7 @@ Avoid `__` and `rollback:` prefixes — reserved for internals.
 type ExecutionStatus =
   | "pending"
   | "running"
+  | "cancelling"
   | "retrying"
   | "sleeping"
   | "paused"

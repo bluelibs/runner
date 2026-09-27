@@ -179,6 +179,8 @@ export interface StudioExecutionDetail {
   restartedFromExecutionId?: string;
   /** Status the execution held when it was paused; set only while paused. */
   pausedFrom?: StudioExecutionStatus;
+  /** Current continuation tip status, when this execution continued as new. */
+  continuedChainTipStatus?: StudioExecutionStatus;
   workflowKey: string;
   workflowTitle: string;
   status: StudioExecutionStatus;

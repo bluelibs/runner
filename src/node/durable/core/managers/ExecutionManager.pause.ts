@@ -16,6 +16,8 @@ import type {
   ExecutionPauseState,
 } from "./ExecutionManager.pauseControl";
 import { logExecutionStatusChange } from "./ExecutionManager.persistence";
+import { withExecutionLifecycleLock } from "./ExecutionManager.lifecycleLock";
+import { requireUnrestartedLineage } from "./ExecutionManager.resumeGuards";
 
 /**
  * Shared dependencies for the pause/resume flows, which park a live execution
@@ -197,7 +199,7 @@ export async function pauseExecution(
     });
   }
 
-  durableExecutionInvariantError.throw({
+  return durableExecutionInvariantError.throw({
     message: `Failed to pause durable execution '${executionId}' after ${maxAttempts} attempts due to concurrent state changes.`,
   });
 }
@@ -212,6 +214,25 @@ export async function resumeExecution(
   deps: ExecutionPauseDeps,
   executionId: string,
 ): Promise<void> {
+  const resumed = await withExecutionLifecycleLock(
+    deps.store,
+    executionId,
+    async () => await restorePausedExecution(deps, executionId),
+  );
+
+  await logExecutionStatusChange(deps.auditLogger, {
+    execution: resumed.execution,
+    from: ExecutionStatus.Paused,
+    to: resumed.restoredStatus,
+    reason: "resumed",
+  });
+  await deps.kickoffWithFailsafe(executionId);
+}
+
+async function restorePausedExecution(
+  deps: ExecutionPauseDeps,
+  executionId: string,
+): Promise<{ execution: Execution; restoredStatus: ExecutionStatus }> {
   const maxAttempts = 10;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -228,6 +249,7 @@ export async function resumeExecution(
         status: execution.status,
       });
     }
+    await requireUnrestartedLineage(deps.store, execution);
 
     // Pause only ever stashes a live status, but a tampered or migrated
     // record could carry a terminal (or otherwise unrestorable) value;
@@ -253,14 +275,7 @@ export async function resumeExecution(
       continue;
     }
 
-    await logExecutionStatusChange(deps.auditLogger, {
-      execution,
-      from: ExecutionStatus.Paused,
-      to: restoredStatus,
-      reason: "resumed",
-    });
-    await deps.kickoffWithFailsafe(executionId);
-    return;
+    return { execution, restoredStatus };
   }
 
   const latestExecution = await deps.store.getExecution(executionId);
@@ -277,7 +292,7 @@ export async function resumeExecution(
     });
   }
 
-  durableExecutionInvariantError.throw({
+  return durableExecutionInvariantError.throw({
     message: `Failed to resume durable execution '${executionId}' after ${maxAttempts} attempts due to concurrent state changes.`,
   });
 }

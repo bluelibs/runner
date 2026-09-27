@@ -69,7 +69,12 @@ export function ExecutionDetail({
     detail.status === "failed" ||
     detail.status === "cancelled" ||
     detail.status === "compensation_failed";
-  const canRestart = !live || paused;
+  const canRestart =
+    (!live || paused) &&
+    (detail.status !== "continued_as_new" ||
+      (detail.continuedChainTipStatus !== undefined &&
+        (!isLiveStatus(detail.continuedChainTipStatus) ||
+          detail.continuedChainTipStatus === "paused")));
   const waitingSignals = detail.timeline.filter(
     (node) => node.state === "waiting" && node.wait?.signalId,
   );
@@ -136,7 +141,7 @@ export function ExecutionDetail({
               Retry
             </button>
           ) : null}
-          {live && !paused ? (
+          {live && !paused && detail.status !== "cancelling" ? (
             <button type="button" className="btn ghost" onClick={onPause}>
               Pause
             </button>

@@ -101,6 +101,53 @@ describe("durable: restart of a continued chain", () => {
     ).toBeUndefined();
   });
 
+  it("serializes a concurrent tip resume behind the restart link", async () => {
+    const store = new MemoryStore();
+    await seedChain(store, ExecutionStatus.Paused);
+    const manager = createLifecycleManager({ store });
+    const originalSave = store.saveExecutionIfStatus.bind(store);
+    let resumeResult: Promise<unknown> | undefined;
+    jest
+      .spyOn(store, "saveExecutionIfStatus")
+      .mockImplementation(async (execution, statuses) => {
+        if (execution.id === "root" && execution.restartedAsExecutionId) {
+          resumeResult = manager.resumeExecution("tip").then(
+            () => null,
+            (error: unknown) => error,
+          );
+        }
+        return originalSave(execution, statuses);
+      });
+
+    const restartedId = await manager.restartExecution("root");
+    expect(resumeResult).toBeDefined();
+    await expect(resumeResult).resolves.toThrow("restarted lineage");
+    expect((await store.getExecution("tip"))?.status).toBe(
+      ExecutionStatus.Paused,
+    );
+    expect((await store.getExecution("root"))?.restartedAsExecutionId).toBe(
+      restartedId,
+    );
+  });
+
+  it("rejects resume after an ancestor restart linked the paused tip", async () => {
+    const store = new MemoryStore();
+    await seedChain(store, ExecutionStatus.Paused);
+    const manager = createLifecycleManager({ store });
+
+    const restartedId = await manager.restartExecution("root");
+
+    await expect(manager.resumeExecution("tip")).rejects.toThrow(
+      "restarted lineage",
+    );
+    expect((await store.getExecution("tip"))?.status).toBe(
+      ExecutionStatus.Paused,
+    );
+    expect((await store.getExecution("root"))?.restartedAsExecutionId).toBe(
+      restartedId,
+    );
+  });
+
   it("fails fast on a broken chain", async () => {
     const store = new MemoryStore();
     await store.saveExecution(

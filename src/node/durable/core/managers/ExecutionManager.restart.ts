@@ -46,7 +46,7 @@ function resolveRestartInput(
   source: Execution,
   options: RestartExecutionOptions | undefined,
 ): { input: unknown; inputNeedsValidation: true | undefined } {
-  const overridden = options?.input !== undefined;
+  const overridden = options !== undefined && "input" in options;
   const input = overridden ? options.input : source.input;
   if (!overridden && source.inputNeedsValidation !== true) {
     return { input, inputNeedsValidation: undefined };
@@ -109,9 +109,9 @@ async function commitRestart(
 
 /**
  * Returns the successor a repeated key already maps to. It is (re)linked
- * unless the source already links to it, so a retry after the source was
- * resumed still returns the restart it reported before; an orphan left by a
- * lost race is revived once the source is restartable again.
+ * unless the source already links to it, so a retry returns the restart it
+ * reported before; an orphan left by a lost race is revived once the source
+ * is restartable again.
  */
 async function reuseExistingRestart(
   deps: ExecutionRestartDeps,

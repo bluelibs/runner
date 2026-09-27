@@ -80,7 +80,7 @@ export interface WorkflowOptions {
  * histories with `continueAsNew` before they grow unbounded.
  */
 export interface DurableInfo {
-  /** Canonical id of the running execution. */
+  /** Persisted id of the current execution run. */
   executionId: string;
   /** 1-based attempt number of the running execution. */
   attempt: number;
