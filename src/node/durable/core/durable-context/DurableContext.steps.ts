@@ -1,6 +1,6 @@
 import type { DurableAuditEntryInput } from "../audit";
 import { DurableAuditEntryKind, isDurableInternalStepId } from "../audit";
-import { SuspensionSignal } from "../interfaces/context";
+import { ContinuationSignal, SuspensionSignal } from "../interfaces/context";
 import type {
   DurableStepRunContext,
   IStepBuilder,
@@ -8,15 +8,31 @@ import type {
 } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { clearExecutionCurrent } from "../current";
-import { ExecutionStatus } from "../types";
+import { ExecutionStatus, isExecutionTerminal } from "../types";
 import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { createCancellationErrorFromSignal } from "../../../../tools/abortSignals";
+import {
+  EXECUTION_PAUSED_ABORT_REASON,
+  isDurablePauseInterruptionError,
+  throwDurablePauseInterruption,
+} from "../pauseInterruption";
 
 export type DurableCompensation = {
   stepId: string;
   action: () => Promise<void>;
 };
+
+/**
+ * Suspension and continue-as-new are control flow rather than failures: a
+ * retry would re-run the step body and duplicate its side effects, and a
+ * rollback must let them through instead of recording a compensation failure.
+ */
+function isControlFlowSignal(error: unknown): boolean {
+  return (
+    error instanceof SuspensionSignal || error instanceof ContinuationSignal
+  );
+}
 
 function registerCompensation<T>(
   compensations: DurableCompensation[],
@@ -34,6 +50,8 @@ export async function executeDurableStep<T>(params: {
   store: IDurableStore;
   executionId: string;
   assertCanContinue: () => Promise<void>;
+  /** Gate before saving a finished body's result; tolerates a pause. */
+  assertCanPersistResult: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
   setCurrent: () => Promise<void>;
   stepId: string;
@@ -70,6 +88,13 @@ export async function executeDurableStep<T>(params: {
   const startedAt = Date.now();
 
   const executeWithRetry = async (): Promise<T> => {
+    // A paused attempt must not start new side effects, even when the store
+    // gate raced ahead of the abort (pause then quick resume). Other aborts
+    // (cancel, shutdown) must still let saga teardown such as rollback run.
+    if (params.signal.reason === EXECUTION_PAUSED_ABORT_REASON) {
+      throwDurablePauseInterruption();
+    }
+
     try {
       const context: DurableStepRunContext = { signal: params.signal };
       if (params.options.timeout) {
@@ -81,6 +106,10 @@ export async function executeDurableStep<T>(params: {
       }
       return await params.upFn(context);
     } catch (error) {
+      if (isControlFlowSignal(error)) {
+        throw error;
+      }
+
       if (params.signal.aborted) {
         throw createCancellationErrorFromSignal(
           params.signal,
@@ -107,7 +136,7 @@ export async function executeDurableStep<T>(params: {
   const result = await executeWithRetry();
   const durationMs = Date.now() - startedAt;
 
-  await params.assertCanContinue();
+  await params.assertCanPersistResult();
 
   await params.store.saveStepResult({
     executionId: params.executionId,
@@ -137,6 +166,38 @@ export async function executeDurableStep<T>(params: {
   return result;
 }
 
+async function persistCompensationFailure(params: {
+  store: IDurableStore;
+  executionId: string;
+  error: { message: string; stack?: string };
+}): Promise<void> {
+  const current = await params.store.getExecution(params.executionId);
+  if (!current) {
+    return;
+  }
+  // Never resurrect a terminal run or un-park a paused one: the operator's
+  // terminal/park decision stands while the compensation error still
+  // propagates to the caller.
+  if (
+    isExecutionTerminal(current.status) ||
+    current.status === ExecutionStatus.Paused
+  ) {
+    return;
+  }
+  // Compare-and-set so a pause/cancel that commits first is never
+  // overwritten; a lost race simply leaves the winner's status in place.
+  await params.store.saveExecutionIfStatus(
+    {
+      ...current,
+      status: ExecutionStatus.CompensationFailed,
+      current: undefined,
+      error: params.error,
+      updatedAt: new Date(),
+    },
+    [current.status],
+  );
+}
+
 export async function rollbackDurableCompensations(params: {
   store: IDurableStore;
   executionId: string;
@@ -158,18 +219,21 @@ export async function rollbackDurableCompensations(params: {
         });
     }
   } catch (error) {
-    if (error instanceof SuspensionSignal) throw error;
+    // A pause interruption parks the rollback so resume can finish it; it
+    // is not a compensation failure.
+    if (isControlFlowSignal(error) || isDurablePauseInterruptionError(error)) {
+      throw error;
+    }
 
     const errorInfo = {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     };
 
-    await params.store.updateExecution(params.executionId, {
-      status: ExecutionStatus.CompensationFailed,
-      current: undefined,
+    await persistCompensationFailure({
+      store: params.store,
+      executionId: params.executionId,
       error: errorInfo,
-      updatedAt: new Date(),
     });
 
     durableExecutionInvariantError.throw({

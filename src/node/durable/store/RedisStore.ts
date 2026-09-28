@@ -10,6 +10,7 @@ import type {
   Schedule,
   StepResult,
   Timer,
+  WorkflowState,
 } from "../core/types";
 import type {
   ExpectedExecutionStatuses,
@@ -25,6 +26,7 @@ import {
   type RedisStoreConfig,
 } from "./RedisStore.runtime";
 import * as executionStateOps from "./RedisStore.executionState";
+import * as continuationOps from "./RedisStore.continuation";
 import * as executionViewOps from "./RedisStore.executionViews";
 import * as signalStateOps from "./RedisStore.signalState";
 import * as executionWaiterOps from "./RedisStore.executionWaiters";
@@ -32,6 +34,7 @@ import * as signalWaiterOps from "./RedisStore.signalWaiters";
 import * as timerOps from "./RedisStore.timers";
 import * as schedulingOps from "./RedisStore.scheduling";
 import * as executionIndexOps from "./RedisStore.executionIndex";
+import * as workflowStateOps from "./RedisStore.workflowState";
 
 export type { RedisClient, RedisPipeline, RedisStoreConfig };
 
@@ -113,6 +116,26 @@ export class RedisStore implements IDurableStore {
     updates: Partial<Execution>,
   ): Promise<void> {
     await executionStateOps.updateExecution(this.runtime, id, updates);
+  }
+
+  async createContinuedExecution(params: {
+    priorExecution: Execution;
+    successorExecution: Execution;
+  }): Promise<boolean> {
+    return await continuationOps.createContinuedExecution(this.runtime, params);
+  }
+
+  async getWorkflowState<TState = unknown>(
+    executionId: string,
+  ): Promise<WorkflowState<TState> | null> {
+    return await workflowStateOps.getWorkflowState<TState>(
+      this.runtime,
+      executionId,
+    );
+  }
+
+  async saveWorkflowState(state: WorkflowState): Promise<void> {
+    await workflowStateOps.saveWorkflowState(this.runtime, state);
   }
 
   async listIncompleteExecutions(): Promise<Execution[]> {
@@ -335,6 +358,7 @@ export class RedisStore implements IDurableStore {
     stepId: string;
     stepResult: StepResult;
     timerId?: string;
+    waitTargetExecutionId?: string;
   }): Promise<boolean> {
     return await executionWaiterOps.commitExecutionWaiterCompletion(
       this.runtime,

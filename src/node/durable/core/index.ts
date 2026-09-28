@@ -3,6 +3,7 @@ export * from "./interfaces/bus";
 export * from "./interfaces/queue";
 export * from "./interfaces/store";
 export * from "./interfaces/context";
+export * from "./interfaces/context.state";
 export * from "./interfaces/service";
 export * from "./CronParser";
 export * from "./DurableContext";

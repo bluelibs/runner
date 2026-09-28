@@ -34,6 +34,7 @@ export async function commitExecutionWaiterCompletion(
     stepId: string;
     stepResult: StepResult;
     timerId?: string;
+    waitTargetExecutionId?: string;
   },
 ): Promise<boolean> {
   const result = await runtime.redis.eval(
@@ -53,19 +54,19 @@ export async function commitExecutionWaiterCompletion(
       if not okStep or type(step) ~= "table" or type(step.result) ~= "table" then
         return 0
       end
-      if step.result.state ~= "waiting" then
+      if step.result.state ~= "waiting" and step.result.state ~= "continued" then
         return 0
       end
-      if step.result.targetExecutionId ~= ARGV[3] then
+      local stepTargetAccepted = step.result.targetExecutionId == ARGV[3]
+      if not stepTargetAccepted and ARGV[6] ~= "" then
+        stepTargetAccepted = step.result.targetExecutionId == ARGV[6]
+      end
+      if not stepTargetAccepted then
         return 0
       end
 
-      local okCompletedStep, completedStep = pcall(cjson.decode, ARGV[4])
-      if not okCompletedStep then
-        return "__error__:Invalid execution waiter completion payload"
-      end
-
-      redis.call("hset", KEYS[2], ARGV[2], cjson.encode(completedStep))
+      -- Stored verbatim: a cjson round-trip would rewrite the child's result.
+      redis.call("hset", KEYS[2], ARGV[2], ARGV[4])
       redis.call("hdel", KEYS[1], waiterField)
 
       if ARGV[5] ~= "" then
@@ -85,8 +86,8 @@ export async function commitExecutionWaiterCompletion(
     params.targetExecutionId,
     runtime.serializer.stringify(params.stepResult),
     params.timerId ?? "",
+    params.waitTargetExecutionId ?? "",
   );
-  runtime.assertEvalResultNotError(result);
   return Number(result) === 1;
 }
 

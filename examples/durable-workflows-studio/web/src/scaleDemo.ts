@@ -112,6 +112,7 @@ function buildDetail({
     steps: [],
     audit: [],
     signals: [],
+    state: null,
     relations: { parent: null, children: [] },
   };
 }

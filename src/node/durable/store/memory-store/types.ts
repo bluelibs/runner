@@ -6,6 +6,7 @@ import type {
   Schedule,
   StepResult,
   Timer,
+  WorkflowState,
 } from "../../core/types";
 import type { DurableAuditEntry } from "../../core/audit";
 
@@ -23,6 +24,7 @@ export interface MemoryStoreSnapshot {
   signalStates: DurableSignalState[];
   signalWaiters: DurableSignalWaiter[];
   executionWaiters: DurableExecutionWaiter[];
+  workflowStates: WorkflowState[];
   auditEntries: DurableAuditEntry[];
   timers: Timer[];
   schedules: Schedule[];

@@ -201,6 +201,10 @@ export async function handleSignalTimeoutTimer(params: {
   }
 }
 
+type ExecutionWaitTimeoutOutcome =
+  | { kind: "done"; handled: boolean }
+  | { kind: "follow"; follow: string };
+
 export async function handleExecutionWaitTimeoutTimer(params: {
   store: IDurableStore;
   timer: Timer;
@@ -219,69 +223,128 @@ export async function handleExecutionWaitTimeoutTimer(params: {
   );
   const currentWaitState = parseExecutionWaitState(currentWaitStep?.result);
   if (
-    currentWaitState?.state !== "waiting" ||
+    (currentWaitState?.state !== "waiting" &&
+      currentWaitState?.state !== "continued") ||
     !currentWaitState.targetExecutionId
   ) {
     return false;
   }
 
-  return await withExecutionWaitLock({
-    store: params.store,
-    targetExecutionId: currentWaitState.targetExecutionId,
-    fn: async () => {
-      const existing = await params.store.getStepResult(
-        params.timer.executionId!,
-        params.timer.stepId!,
-      );
-      const state = parseExecutionWaitState(existing?.result);
-      if (state?.state !== "waiting") {
-        return false;
-      }
-      if (state.timerId !== undefined && state.timerId !== params.timer.id) {
-        return false;
-      }
-
-      // The timeout timer can fire after the target already reached a terminal
-      // state but before its waiter notification landed — e.g. a worker crash
-      // in the window between persisting the target's terminal status and
-      // resolving its waiters leaves this parent parked until the timer fires.
-      // Resolving against the actual terminal target instead of timing out
-      // avoids a spurious timeout for a child that genuinely completed. We hold
-      // the same execution-wait lock the normal completion path takes, so this
-      // read and the resolution are race-safe against resolveExecutionWaiters.
-      const target = await params.store.getExecution(state.targetExecutionId);
-      const result =
-        target && isExecutionWaitTerminal(target)
-          ? createExecutionWaitCompletionState(target)
-          : {
-              state: "timed_out" as const,
-              targetExecutionId: state.targetExecutionId,
-            };
-
-      await params.store.deleteExecutionWaiter(
-        state.targetExecutionId,
-        params.timer.executionId!,
-        params.timer.stepId!,
-      );
-
-      await params.store.saveStepResult({
-        executionId: params.timer.executionId!,
-        stepId: params.timer.stepId!,
-        result,
-        completedAt: new Date(),
+  // Follow the continuation chain hop by hop under each hop's own wait lock,
+  // so the timeout resolves against the live tip race-free against both
+  // waiter registration and completion on that tip.
+  let tipExecutionId = currentWaitState.targetExecutionId;
+  const visited = new Set<string>();
+  for (;;) {
+    if (visited.has(tipExecutionId)) {
+      return durableExecutionInvariantError.throw({
+        message: `Continuation chain for execution '${currentWaitState.targetExecutionId}' is cyclic at '${tipExecutionId}'.`,
       });
-      await clearExecutionCurrentIfSuspendedOnStep(
-        params.store,
-        params.timer.executionId!,
-        {
-          stepId: params.timer.stepId!,
-          kinds: ["waitForExecution"],
-        },
-      );
+    }
+    visited.add(tipExecutionId);
 
-      return true;
-    },
+    const outcome = await withExecutionWaitLock<ExecutionWaitTimeoutOutcome>({
+      store: params.store,
+      targetExecutionId: tipExecutionId,
+      fn: async () => {
+        const existing = await params.store.getStepResult(
+          params.timer.executionId!,
+          params.timer.stepId!,
+        );
+        const state = parseExecutionWaitState(existing?.result);
+        if (state?.state !== "waiting" && state?.state !== "continued") {
+          return { kind: "done", handled: false };
+        }
+        if (state.timerId !== undefined && state.timerId !== params.timer.id) {
+          return { kind: "done", handled: false };
+        }
+
+        const tip = await params.store.getExecution(tipExecutionId);
+        if (tip?.status === ExecutionStatus.ContinuedAsNew) {
+          if (!tip.continuedAsExecutionId) {
+            // Broken link: the waited-on run is unrecoverably gone, so the
+            // wait genuinely times out instead of error-looping the timer.
+            await resolveWaitTimeout({
+              store: params.store,
+              executionId: params.timer.executionId!,
+              stepId: params.timer.stepId!,
+              tipExecutionId,
+              targetExecutionId: state.targetExecutionId,
+              tip: null,
+            });
+            return { kind: "done", handled: true };
+          }
+          return { kind: "follow", follow: tip.continuedAsExecutionId };
+        }
+
+        await resolveWaitTimeout({
+          store: params.store,
+          executionId: params.timer.executionId!,
+          stepId: params.timer.stepId!,
+          tipExecutionId,
+          targetExecutionId: state.targetExecutionId,
+          tip,
+        });
+        return { kind: "done", handled: true };
+      },
+    });
+
+    if (outcome.kind === "done") {
+      return outcome.handled;
+    }
+    tipExecutionId = outcome.follow;
+  }
+}
+
+/**
+ * Resolves one execution-wait timeout against the tip: a wait-terminal tip
+ * completes the wait (avoiding a spurious timeout for a target that genuinely
+ * finished), anything else — including a missing tip — times out.
+ */
+async function resolveWaitTimeout(params: {
+  store: IDurableStore;
+  executionId: string;
+  stepId: string;
+  tipExecutionId: string;
+  targetExecutionId: string;
+  tip: Execution | null;
+}): Promise<void> {
+  // The timeout timer can fire after the target already reached a terminal
+  // state but before its waiter notification landed — e.g. a worker crash
+  // in the window between persisting the target's terminal status and
+  // resolving its waiters leaves this parent parked until the timer fires.
+  // Resolving against the actual terminal target instead of timing out
+  // avoids a spurious timeout for a child that genuinely completed. We hold
+  // the same execution-wait lock the normal completion path takes, so this
+  // read and the resolution are race-safe against resolveExecutionWaiters.
+  const result =
+    params.tip && isExecutionWaitTerminal(params.tip)
+      ? createExecutionWaitCompletionState(params.tip, params.targetExecutionId)
+      : {
+          state: "timed_out" as const,
+          targetExecutionId: params.targetExecutionId,
+        };
+
+  await params.store.deleteExecutionWaiter(
+    params.tipExecutionId,
+    params.executionId,
+    params.stepId,
+  );
+
+  await params.store.saveStepResult({
+    executionId: params.executionId,
+    stepId: params.stepId,
+    result,
+    completedAt: new Date(),
   });
+  await clearExecutionCurrentIfSuspendedOnStep(
+    params.store,
+    params.executionId,
+    {
+      stepId: params.stepId,
+      kinds: ["waitForExecution"],
+    },
+  );
 }
 
 export async function persistTaskTimerExecution(params: {

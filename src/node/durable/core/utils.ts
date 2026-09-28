@@ -3,6 +3,7 @@ import * as crypto from "node:crypto";
 import { RunnerError } from "../../../definers/defineError";
 import {
   durableExecutionError,
+  durableExecutionInvariantError,
   genericError,
   RunnerErrorId,
 } from "../../../errors";
@@ -17,6 +18,24 @@ export function sleepMs(ms: number): Promise<void> {
     const timer = setTimeout(resolve, ms);
     timer.unref();
   });
+}
+
+/**
+ * Rejects non-finite wait durations at the trust boundary. A `NaN` duration
+ * would otherwise persist an Invalid-Date timer that never fires (or spin a
+ * poll loop), parking the execution until its attempt timeout instead of
+ * failing fast on the programming error. Negative values are allowed and
+ * keep their natural already-elapsed semantics.
+ */
+export function assertFiniteDurationMs(label: string, value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return durableExecutionInvariantError.throw({
+      message: `Invalid ${label}: expected a finite number of milliseconds.`,
+    });
+  }
 }
 
 const timeoutExceededSymbol = Symbol("runner.timeoutExceeded");
@@ -158,6 +177,15 @@ export function parseExecutionWaitState(value: unknown):
       state: "timed_out";
       targetExecutionId: string;
     }
+  | {
+      state: "continued";
+      targetExecutionId: string;
+      continuedAsExecutionId: string;
+      workflowKey: string;
+      timeoutMs?: number;
+      timerId?: string;
+      timeoutAtMs?: number;
+    }
   | null {
   if (!isRecord(value)) return null;
   if (typeof value.targetExecutionId !== "string") return null;
@@ -223,6 +251,37 @@ export function parseExecutionWaitState(value: unknown):
 
   if (state === "timed_out") {
     return { state, targetExecutionId };
+  }
+
+  if (state === "continued") {
+    if (
+      typeof value.continuedAsExecutionId !== "string" ||
+      typeof value.workflowKey !== "string"
+    ) {
+      return null;
+    }
+
+    const timeoutMs = value.timeoutMs;
+    const timeoutAtMs = value.timeoutAtMs;
+    const timerId = value.timerId;
+    if (typeof timeoutAtMs === "number" && typeof timerId === "string") {
+      return {
+        state,
+        targetExecutionId,
+        continuedAsExecutionId: value.continuedAsExecutionId,
+        workflowKey: value.workflowKey,
+        timeoutMs: typeof timeoutMs === "number" ? timeoutMs : undefined,
+        timeoutAtMs,
+        timerId,
+      };
+    }
+    return {
+      state,
+      targetExecutionId,
+      continuedAsExecutionId: value.continuedAsExecutionId,
+      workflowKey: value.workflowKey,
+      timeoutMs: typeof timeoutMs === "number" ? timeoutMs : undefined,
+    };
   }
 
   return null;

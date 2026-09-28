@@ -14,6 +14,7 @@ import {
   cloneSignalWaiter,
   cloneStepResult,
   cloneTimer,
+  cloneWorkflowState,
 } from "./shared";
 import type { MemoryStoreRuntime } from "./runtime";
 import type { MemoryStoreSnapshot } from "./types";
@@ -120,6 +121,9 @@ export function exportSnapshot(
     executionWaiters: Array.from(runtime.executionWaiters.values()).flatMap(
       (waiters) => Array.from(waiters.values()).map(cloneExecutionWaiter),
     ),
+    workflowStates: Array.from(runtime.workflowStates.values()).map(
+      cloneWorkflowState,
+    ),
     auditEntries: Array.from(runtime.auditEntries.values()).flatMap((entries) =>
       entries.map(cloneAuditEntry),
     ),
@@ -145,6 +149,14 @@ export function restoreSnapshot(
   runtime.signalStates = restoreSignalStates(snapshot);
   runtime.signalWaiters = restoreSignalWaiters(snapshot);
   runtime.executionWaiters = restoreExecutionWaiters(snapshot);
+  // Snapshots written before workflow state existed have no workflowStates
+  // field; they restore to "no state" rather than failing to load.
+  runtime.workflowStates = new Map(
+    (snapshot.workflowStates ?? []).map((record) => [
+      record.executionId,
+      cloneWorkflowState(record),
+    ]),
+  );
   runtime.auditEntries = restoreAuditEntries(snapshot);
   runtime.timers = new Map(
     snapshot.timers.map((timer) => [timer.id, cloneTimer(timer)]),

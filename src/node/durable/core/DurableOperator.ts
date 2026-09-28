@@ -1,7 +1,11 @@
 import { IDurableStore } from "./interfaces/store";
 import { DurableSignalState, Execution } from "./types";
 import type { DurableAuditEntry } from "./audit";
-import type { DurableExecutionState, ExecutionStatus } from "./types";
+import type {
+  DurableExecutionState,
+  ExecutionStatus,
+  WorkflowState,
+} from "./types";
 import type { StepResult } from "./types";
 import type { ListExecutionsOptions } from "./interfaces/store";
 import { encodeExecutionCursor, type ExecutionCursor } from "./executionCursor";
@@ -100,23 +104,31 @@ export class DurableOperator {
   }
 
   /**
-   * Reads one execution together with its persisted step results and audit trail.
+   * Reads one execution together with its persisted step results, audit
+   * trail, and workflow-owned typed state record.
    *
    * This raw operator path remains useful for dashboards, CLIs, and recovery
    * tooling that need execution detail without binding to a typed task repository.
+   * Break-glass sees everything: unlike the payload-free `DurableExecutionState`
+   * projection, the state record is included here. Stores without workflow
+   * state resolve `state` to `null`.
    */
   async getExecutionDetail(executionId: string): Promise<{
     execution: Execution | null;
     steps: StepResult[];
     audit: DurableAuditEntry[];
+    state: WorkflowState | null;
   }> {
     const execution = await this.store.getExecution(executionId);
     const steps = await this.store.listStepResults(executionId);
     const audit = this.store.listAuditEntries
       ? await this.store.listAuditEntries(executionId)
       : [];
+    const state = this.store.getWorkflowState
+      ? await this.store.getWorkflowState(executionId)
+      : null;
 
-    return { execution, steps, audit };
+    return { execution, steps, audit, state };
   }
 
   /**

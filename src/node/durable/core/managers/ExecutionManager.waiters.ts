@@ -1,16 +1,47 @@
 import type { IDurableStore } from "../interfaces/store";
 import type { Execution } from "../types";
-import { TimerStatus, TimerType } from "../types";
+import { ExecutionStatus, TimerStatus, TimerType } from "../types";
 import type { Logger } from "../../../../models/Logger";
 import { clearExecutionCurrentIfSuspendedOnStep } from "../current";
 import { withExecutionWaitLock } from "../executionWaiters";
-import { createExecutionWaitCompletionState } from "../executionWaitState";
+import {
+  createExecutionWaitCompletionState,
+  createExecutionWaitContinuedState,
+} from "../executionWaitState";
+import { parseExecutionWaitState } from "../utils";
 import { commitDurableWaitCompletion } from "../waiterCore";
 
 export type ResolvedExecutionWaiter = {
   executionId: string;
   stepId: string;
 };
+
+/**
+ * Builds the follow marker for one waiter of a continued-as-new run. The
+ * waited-on root and the timeout triple are read back from the waiting step
+ * so the deadline survives the hop; when the step is missing or unreadable
+ * the marker degrades to the current hop and replay validation reports the
+ * corruption at the authoritative reader instead of here.
+ */
+function createContinuedWaitMarker(params: {
+  execution: Execution;
+  waitingState: ReturnType<typeof parseExecutionWaitState>;
+}): ReturnType<typeof createExecutionWaitContinuedState> {
+  const timeout =
+    params.waitingState?.state === "waiting" ||
+    params.waitingState?.state === "continued"
+      ? params.waitingState
+      : undefined;
+
+  return createExecutionWaitContinuedState({
+    continuedExecution: params.execution,
+    targetExecutionId:
+      params.waitingState?.targetExecutionId ?? params.execution.id,
+    timeoutMs: timeout?.timeoutMs,
+    timeoutAtMs: timeout?.timeoutAtMs,
+    timerId: timeout?.timerId,
+  });
+}
 
 export async function resolveExecutionWaiters(params: {
   store: IDurableStore;
@@ -30,10 +61,28 @@ export async function resolveExecutionWaiters(params: {
       );
 
       for (const waiter of waiters) {
+        // Read under the same wait lock the commit takes, so the accepted
+        // step target cannot change between this read and the atomic commit.
+        // Followed waits keep the waited-on root in the step while the waiter
+        // is registered on the tip, hence the separate accepted target.
+        const waitingStep = await params.store.getStepResult(
+          waiter.executionId,
+          waiter.stepId,
+        );
+        const waitingState = parseExecutionWaitState(waitingStep?.result);
         const stepResult = {
           executionId: waiter.executionId,
           stepId: waiter.stepId,
-          result: createExecutionWaitCompletionState(params.execution),
+          result:
+            params.execution.status === ExecutionStatus.ContinuedAsNew
+              ? createContinuedWaitMarker({
+                  execution: params.execution,
+                  waitingState,
+                })
+              : createExecutionWaitCompletionState(
+                  params.execution,
+                  waitingState?.targetExecutionId ?? params.execution.id,
+                ),
           completedAt: new Date(),
         };
 
@@ -49,6 +98,7 @@ export async function resolveExecutionWaiters(params: {
                   stepId: waiter.stepId,
                   stepResult,
                   timerId: waiter.timerId,
+                  waitTargetExecutionId: waitingState?.targetExecutionId,
                 })
             : undefined,
           onFallbackCommitted: async () => {

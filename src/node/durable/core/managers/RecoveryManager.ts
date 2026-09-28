@@ -234,6 +234,12 @@ export class RecoveryManager {
     const pendingTimerTypes =
       pendingTimerTypesByExecutionId.get(execution.id) ?? new Set<TimerType>();
 
+    if (execution.status === ExecutionStatus.Paused) {
+      // Paused executions are intentionally parked by an operator; only an
+      // explicit resume may drive them again.
+      return { kind: "skip", reason: "not_recoverable" };
+    }
+
     if (execution.status === ExecutionStatus.Cancelling) {
       // "Recover" here means "reconcile an orphaned incomplete execution",
       // not "resume running user code". Once cancellation has been requested,

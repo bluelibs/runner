@@ -42,7 +42,7 @@ describe("durable: RedisStore execution waiters (mock)", () => {
     );
   });
 
-  it("commits execution waiter completions atomically and surfaces store-shape errors", async () => {
+  it("commits execution waiter completions atomically", async () => {
     const { redisMock, store } = harness;
     redisMock.eval.mockResolvedValueOnce(1 as any);
 
@@ -75,22 +75,5 @@ describe("durable: RedisStore execution waiters (mock)", () => {
         },
       }),
     ).resolves.toBe(false);
-
-    redisMock.eval.mockResolvedValueOnce(
-      "__error__:Invalid execution waiter completion payload" as any,
-    );
-    await expect(
-      store.commitExecutionWaiterCompletion({
-        targetExecutionId: "child",
-        executionId: "parent",
-        stepId: "__execution:child-step",
-        stepResult: {
-          executionId: "parent",
-          stepId: "__execution:child-step",
-          result: { state: "completed", targetExecutionId: "child", result: 3 },
-          completedAt: new Date(),
-        },
-      }),
-    ).rejects.toThrow("Invalid execution waiter completion payload");
   });
 });

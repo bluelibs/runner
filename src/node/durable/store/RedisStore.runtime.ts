@@ -97,19 +97,19 @@ export class RedisStoreRuntime {
     return parsed as [string, string[]];
   }
 
+  /** SSCAN may repeat members across pages, so results are deduped. */
   async scanSetMembers(setKey: string): Promise<string[]> {
-    const members: string[] = [];
+    const members = new Set<string>();
     let cursor = "0";
     do {
-      const parsed = this.expectScanResponse(
+      const [nextCursor, scannedMembers] = this.expectScanResponse(
         await this.redis.sscan(setKey, cursor, "COUNT", 100),
         "SSCAN",
       );
-      const [newCursor, scannedMembers] = parsed;
-      cursor = newCursor;
-      members.push(...scannedMembers);
+      cursor = nextCursor;
+      scannedMembers.forEach((member) => members.add(member));
     } while (cursor !== "0");
-    return members;
+    return [...members];
   }
 
   allExecutionsKey(): string {
@@ -180,6 +180,10 @@ export class RedisStoreRuntime {
 
   executionKey(executionId: string): string {
     return this.k(`exec:${executionId}`);
+  }
+
+  workflowStateKey(executionId: string): string {
+    return this.k(`workflow_state:${executionId}`);
   }
 
   idempotencyKey(workflowKey: string, idempotencyKey: string): string {

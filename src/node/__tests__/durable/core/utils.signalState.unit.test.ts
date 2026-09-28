@@ -130,6 +130,89 @@ describe("durable: signal state utils", () => {
     ).toBeNull();
   });
 
+  it("parses continued follow markers and rejects malformed ones", () => {
+    expect(
+      parseExecutionWaitState({
+        state: "continued",
+        targetExecutionId: "child",
+        continuedAsExecutionId: "tip",
+        workflowKey: "child-task",
+        timeoutMs: 1000,
+        timeoutAtMs: 2000,
+        timerId: "execution_timeout:parent:__execution:child",
+      }),
+    ).toEqual({
+      state: "continued",
+      targetExecutionId: "child",
+      continuedAsExecutionId: "tip",
+      workflowKey: "child-task",
+      timeoutMs: 1000,
+      timeoutAtMs: 2000,
+      timerId: "execution_timeout:parent:__execution:child",
+    });
+    expect(
+      parseExecutionWaitState({
+        state: "continued",
+        targetExecutionId: "child",
+        continuedAsExecutionId: "tip",
+        workflowKey: "child-task",
+      }),
+    ).toEqual({
+      state: "continued",
+      targetExecutionId: "child",
+      continuedAsExecutionId: "tip",
+      workflowKey: "child-task",
+      timeoutMs: undefined,
+    });
+    expect(
+      parseExecutionWaitState({
+        state: "continued",
+        targetExecutionId: "child",
+        continuedAsExecutionId: "tip",
+        workflowKey: "child-task",
+        timeoutAtMs: 2000,
+        timerId: "execution_timeout:parent:__execution:child",
+      }),
+    ).toEqual({
+      state: "continued",
+      targetExecutionId: "child",
+      continuedAsExecutionId: "tip",
+      workflowKey: "child-task",
+      timeoutMs: undefined,
+      timeoutAtMs: 2000,
+      timerId: "execution_timeout:parent:__execution:child",
+    });
+    expect(
+      parseExecutionWaitState({
+        state: "continued",
+        targetExecutionId: "child",
+        continuedAsExecutionId: "tip",
+        workflowKey: "child-task",
+        timeoutMs: 1000,
+      }),
+    ).toEqual({
+      state: "continued",
+      targetExecutionId: "child",
+      continuedAsExecutionId: "tip",
+      workflowKey: "child-task",
+      timeoutMs: 1000,
+    });
+    expect(
+      parseExecutionWaitState({
+        state: "continued",
+        targetExecutionId: "child",
+        workflowKey: "child-task",
+      }),
+    ).toBeNull();
+    expect(
+      parseExecutionWaitState({
+        state: "continued",
+        targetExecutionId: "child",
+        continuedAsExecutionId: "tip",
+      }),
+    ).toBeNull();
+  });
+
   it("persists stable signal ids only for non-canonical step ids", () => {
     expect(shouldPersistStableSignalId("__signal:paid", "paid")).toBe(false);
     expect(shouldPersistStableSignalId("__signal:paid:1", "paid")).toBe(false);

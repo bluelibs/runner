@@ -51,9 +51,11 @@ test("terminal statuses match the engine lifecycle", () => {
   assert.equal(isTerminalStatus("failed"), true);
   assert.equal(isTerminalStatus("cancelled"), true);
   assert.equal(isTerminalStatus("compensation_failed"), true);
+  assert.equal(isTerminalStatus("continued_as_new"), true);
   assert.equal(isTerminalStatus("running"), false);
   assert.equal(isTerminalStatus("sleeping"), false);
   assert.equal(isTerminalStatus("pending"), false);
+  assert.equal(isTerminalStatus("paused"), false);
 });
 
 test("live signal wait surfaces waiting state with countdown metadata", () => {
@@ -228,6 +230,17 @@ test("position lines describe every suspension kind", () => {
       [],
     ),
     "Cancelled",
+  );
+  assert.equal(
+    describePosition(
+      execution({ status: "continued_as_new", current: undefined }),
+      [],
+    ),
+    "Continued as new",
+  );
+  assert.equal(
+    describePosition(execution({ status: "paused", current: undefined }), []),
+    "Paused",
   );
   assert.equal(
     describePosition(

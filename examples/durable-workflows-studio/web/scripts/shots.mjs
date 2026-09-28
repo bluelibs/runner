@@ -237,6 +237,18 @@ try {
     await sleep(8000);
     await page.screenshot({ path: join(shotsDir, "09-incident-resolved.png") });
     console.log("saved 09-incident-resolved.png");
+
+    await shot("21-lifecycle-paused.png", "?demo=1&select=demo_ord_paused");
+    await shotAfterClick(
+      "22-continued-lineage.png",
+      "?demo=1&select=demo_ord_continued",
+      /Tree/,
+    );
+    await shotAfterClick(
+      "23-workflow-state.png",
+      "?demo=1&select=demo_ord_paused",
+      /^Data$/,
+    );
   }
   await captureScaleShots(page, shotsDir);
 } finally {

@@ -13,7 +13,8 @@ function isActiveExecutionStatus(status: ExecutionStatus): boolean {
     status !== ExecutionStatus.Completed &&
     status !== ExecutionStatus.Failed &&
     status !== ExecutionStatus.CompensationFailed &&
-    status !== ExecutionStatus.Cancelled
+    status !== ExecutionStatus.Cancelled &&
+    status !== ExecutionStatus.ContinuedAsNew
   );
 }
 
@@ -44,14 +45,18 @@ function saveExecutionScript(): string {
   `;
 }
 
-function statusFlags(status: ExecutionStatus): {
-  isActive: "1" | "0";
-  isStuck: "1" | "0";
+export function statusFlags(status: ExecutionStatus): {
+  isActive: boolean;
+  isStuck: boolean;
 } {
   return {
-    isActive: isActiveExecutionStatus(status) ? "1" : "0",
-    isStuck: status === ExecutionStatus.CompensationFailed ? "1" : "0",
+    isActive: isActiveExecutionStatus(status),
+    isStuck: status === ExecutionStatus.CompensationFailed,
   };
+}
+
+export function toRedisFlag(value: boolean): "1" | "0" {
+  return value ? "1" : "0";
 }
 
 async function loadExecutionsFromSet(
@@ -124,8 +129,8 @@ export async function createExecutionWithIdempotencyKey(
     runtime.k("execution_index_states"),
     runtime.serializer.stringify(params.execution),
     params.execution.id,
-    isActive,
-    isStuck,
+    toRedisFlag(isActive),
+    toRedisFlag(isStuck),
     "",
     ...executionIndexArgs(runtime, params.execution),
   );
@@ -160,8 +165,8 @@ export async function saveExecution(
     runtime.k("execution_index_states"),
     runtime.serializer.stringify(execution),
     execution.id,
-    isActive,
-    isStuck,
+    toRedisFlag(isActive),
+    toRedisFlag(isStuck),
     "",
     ...executionIndexArgs(runtime, execution),
   );
@@ -215,8 +220,8 @@ export async function saveExecutionIfStatus(
     runtime.k("execution_index_states"),
     runtime.serializer.stringify(execution),
     execution.id,
-    isActive,
-    isStuck,
+    toRedisFlag(isActive),
+    toRedisFlag(isStuck),
     runtime.serializer.stringify(expectedStatuses),
     ...executionIndexArgs(runtime, execution),
   );

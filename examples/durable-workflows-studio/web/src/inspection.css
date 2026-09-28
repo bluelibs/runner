@@ -153,6 +153,42 @@
   width: 100%;
 }
 
+.lineage-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.lineage-links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lineage-link {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.lineage-link:hover {
+  border-color: var(--border-strong);
+}
+
+.lineage-link code {
+  font-size: 12px;
+}
+
 .signal-totals {
   display: flex;
   gap: 12px;

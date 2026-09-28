@@ -1,5 +1,11 @@
 import { durableDeterminismViolationError } from "../../../../errors";
-export type ImplicitInternalStepIdKind = "sleep" | "emit" | "waitForSignal";
+export type ImplicitInternalStepIdKind =
+  | "sleep"
+  | "emit"
+  | "waitForSignal"
+  | "getState"
+  | "setState"
+  | "replaceState";
 export type ImplicitInternalStepIdsPolicy = "allow" | "warn" | "error";
 
 export type DurableContextDeterminism = {

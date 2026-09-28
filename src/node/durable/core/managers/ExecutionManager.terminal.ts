@@ -3,6 +3,7 @@ import type { AuditLogger } from "./AuditLogger";
 import { ExecutionStatus, isExecutionTerminal, type Execution } from "../types";
 import { sleepMs } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
+import { followContinuedExecutionChain } from "../continuedChain";
 import { resolveCancellationReason } from "./ExecutionManager.cancellation";
 import { logExecutionStatusChange } from "./ExecutionManager.persistence";
 
@@ -23,21 +24,38 @@ export interface ExecutionTerminalDeps {
 }
 
 /**
- * Cancels an execution. A `Running` execution is moved to `Cancelling` (so its
- * active attempt can stop cooperatively and broadcast a live cancellation),
- * while any other non-terminal state is finalised straight to `Cancelled`.
- * Retries on optimistic-concurrency conflicts and throws if it cannot converge.
+ * Reads the cancel target, forwarding a continued run to its live chain tip:
+ * callers keep addressing the original id (as waits and signals do), and a
+ * tip that continues mid-cancel is followed on the next retry.
+ */
+async function readCancelTarget(
+  store: IDurableStore,
+  executionId: string,
+): Promise<Execution | null> {
+  const execution = await store.getExecution(executionId);
+  if (execution?.status !== ExecutionStatus.ContinuedAsNew) return execution;
+  return await followContinuedExecutionChain(store, execution);
+}
+
+/**
+ * Cancels an execution (the live chain tip, for a continued run). A `Running`
+ * execution is moved to `Cancelling` (so its active attempt can stop
+ * cooperatively and broadcast a live cancellation), while any other
+ * non-terminal state is finalised straight to `Cancelled`. Retries on
+ * optimistic-concurrency conflicts and throws if it cannot converge.
  */
 export async function cancelExecution(
   deps: ExecutionTerminalDeps,
-  executionId: string,
+  addressedExecutionId: string,
   reason?: string,
 ): Promise<void> {
   const maxAttempts = 10;
+  let executionId = addressedExecutionId;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const execution = await deps.store.getExecution(executionId);
+    const execution = await readCancelTarget(deps.store, executionId);
     if (!execution) return;
+    executionId = execution.id;
     if (isExecutionTerminal(execution.status)) return;
     if (execution.status === ExecutionStatus.Cancelling) {
       // A prior cancel already moved this execution to Cancelling, but its

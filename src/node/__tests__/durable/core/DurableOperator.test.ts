@@ -174,6 +174,7 @@ describe("durable: DurableOperator", () => {
       audit: [
         expect.objectContaining({ kind: "note", message: "hello detail" }),
       ],
+      state: null,
     });
   });
 
@@ -204,6 +205,37 @@ describe("durable: DurableOperator", () => {
       execution: expect.objectContaining({ id: "e-no-audit" }),
       steps: [expect.objectContaining({ stepId: "step-1" })],
       audit: [],
+      state: null,
     });
+  });
+
+  it("includes the workflow-owned state record in execution detail", async () => {
+    const store = new MemoryStore();
+    const operator = new DurableOperator(store);
+
+    await store.saveExecution({
+      id: "e-state",
+      workflowKey: "orders",
+      input: undefined,
+      status: "running",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveWorkflowState({
+      executionId: "e-state",
+      state: { page: 3 },
+      updatedAt: new Date(),
+    });
+
+    await expect(operator.getExecutionDetail("e-state")).resolves.toEqual(
+      expect.objectContaining({
+        state: expect.objectContaining({
+          executionId: "e-state",
+          state: { page: 3 },
+        }),
+      }),
+    );
   });
 });

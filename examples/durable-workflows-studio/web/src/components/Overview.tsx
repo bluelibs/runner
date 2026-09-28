@@ -19,6 +19,7 @@ const FILTERS: Array<{ id: DashboardStatusFilter; label: string }> = [
   { id: "all", label: "All" },
   { id: "live", label: "Live" },
   { id: "sleeping", label: "Waiting" },
+  { id: "paused", label: "Paused" },
   { id: "failed", label: "Failed" },
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },

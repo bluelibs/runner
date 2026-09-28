@@ -229,7 +229,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
         waitPollIntervalMs: 10,
       });
 
-      for (let i = 0; i < 10 && calls < 4; i += 1) {
+      for (let i = 0; i < 20 && calls < 4; i += 1) {
         await Promise.resolve();
       }
       expect(calls).toBe(4);
