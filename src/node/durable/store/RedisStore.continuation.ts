@@ -12,7 +12,7 @@ import {
   executionIndexArgs,
   writeExecutionIndexScript,
 } from "./RedisStore.executionIndex";
-import { statusFlags } from "./RedisStore.executionState";
+import { statusFlags, toRedisFlag } from "./RedisStore.executionState";
 
 const SIGNAL_SET_CHANGED = "__signal_set_changed__";
 const BACKLOG_FULL_PREFIX = "__backlog_full__:";
@@ -167,12 +167,12 @@ async function evalCreateContinuedExecution(
     ...signalKeys,
     runtime.serializer.stringify(prior),
     prior.id,
-    priorFlags.isActive,
-    priorFlags.isStuck,
+    toRedisFlag(priorFlags.isActive),
+    toRedisFlag(priorFlags.isStuck),
     runtime.serializer.stringify(successor),
     successor.id,
-    successorFlags.isActive,
-    successorFlags.isStuck,
+    toRedisFlag(successorFlags.isActive),
+    toRedisFlag(successorFlags.isStuck),
     ...executionIndexArgs(runtime, prior),
     ...executionIndexArgs(runtime, successor),
     ExecutionStatus.Running,
