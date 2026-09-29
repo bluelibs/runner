@@ -5,6 +5,7 @@ import {
 
 function fixture() {
   const redis: jest.Mocked<ResilienceRedisClient> = {
+    connect: jest.fn().mockResolvedValue(undefined),
     eval: jest.fn(),
     ping: jest.fn(),
     disconnect: jest.fn(),

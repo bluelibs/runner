@@ -10,6 +10,7 @@ const config = { namespace: "test", redis: "redis://example" };
 
 function client(): jest.Mocked<ResilienceRedisClient> {
   return {
+    connect: jest.fn().mockResolvedValue(undefined),
     eval: jest.fn(),
     ping: jest.fn().mockResolvedValue("PONG"),
     disconnect: jest.fn(),
@@ -41,7 +42,17 @@ describe("Redis resilience resource", () => {
       maxRetriesPerRequest: 0,
       commandTimeout: 5000,
     });
-    expect((options?.retryStrategy as () => null)()).toBeNull();
+    expect((options?.retryStrategy as (attempt: number) => number)(1)).toBe(
+      100,
+    );
+    expect((options?.retryStrategy as (attempt: number) => number)(100)).toBe(
+      2000,
+    );
+    expect(options).toMatchObject({
+      lazyConnect: true,
+      enableOfflineQueue: false,
+      autoResendUnfulfilledCommands: false,
+    });
     await one.dispose();
     await two.dispose();
     expect(first.disconnect).toHaveBeenCalledTimes(1);
@@ -57,11 +68,39 @@ describe("Redis resilience resource", () => {
     expect(redis.disconnect).toHaveBeenCalledTimes(1);
   });
 
-  it.each([null, 42, {}, { eval() {} }, { eval() {}, ping() {} }])(
-    "rejects an incompatible optional client export: %p",
-    async (value) => {
-      createClient.mockReturnValue(value);
-      await expect(run(app())).rejects.toThrow();
+  it.each([0, -1, 1.5, Infinity, NaN, 2_147_483_648, "1000"])(
+    "rejects unsupported leases: %p",
+    (leaseMs) => {
+      expect(() =>
+        resources.resilience.with({ ...config, leaseMs: leaseMs as number }),
+      ).toThrow();
     },
   );
+
+  it("accepts the largest supported timer duration", () => {
+    expect(() =>
+      resources.resilience.with({ ...config, leaseMs: 2_147_483_647 }),
+    ).not.toThrow();
+  });
+
+  it("closes the connection if connect fails", async () => {
+    const redis = client();
+    redis.connect.mockRejectedValue(new Error("connect failed"));
+    createClient.mockReturnValue(redis);
+    await expect(run(app())).rejects.toThrow("connect failed");
+    expect(redis.disconnect).toHaveBeenCalled();
+    expect(redis.ping).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    42,
+    {},
+    { connect() {} },
+    { connect() {}, eval() {} },
+    { connect() {}, eval() {}, ping() {} },
+  ])("rejects an incompatible optional client export: %p", async (value) => {
+    createClient.mockReturnValue(value);
+    await expect(run(app())).rejects.toThrow();
+  });
 });

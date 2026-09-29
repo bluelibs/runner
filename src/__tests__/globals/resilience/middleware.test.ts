@@ -70,7 +70,11 @@ describe("optional resilience middleware integration", () => {
         runtime.runTask(task, undefined, { journal: executionJournal }),
       ).resolves.toBe("ok");
       expect(shared.rateLimit).toHaveBeenCalledWith(
-        "app.tasks.limited",
+        JSON.stringify([
+          "app.tasks.limited",
+          "runner.middleware.task.rateLimit",
+          0,
+        ]),
         expect.any(String),
         2,
         1000,
@@ -113,14 +117,22 @@ describe("optional resilience middleware integration", () => {
     try {
       await expect(runtime.runTask(task)).resolves.toBe("ok");
       expect(shared.settleCircuit).toHaveBeenLastCalledWith(
-        "app.tasks.circuit",
+        JSON.stringify([
+          "app.tasks.circuit",
+          "runner.middleware.task.circuitBreaker",
+          0,
+        ]),
         expect.any(Object),
         true,
       );
       handler.mockRejectedValueOnce(new Error("failed"));
       await expect(runtime.runTask(task)).rejects.toThrow("failed");
       expect(shared.settleCircuit).toHaveBeenLastCalledWith(
-        "app.tasks.circuit",
+        JSON.stringify([
+          "app.tasks.circuit",
+          "runner.middleware.task.circuitBreaker",
+          0,
+        ]),
         expect.any(Object),
         false,
       );
@@ -174,7 +186,14 @@ describe("optional resilience middleware integration", () => {
       await runtime.runTask(grouped);
       expect(
         JSON.parse(shared.withPermit.mock.calls[0][0]).slice(0, 2),
-      ).toEqual(["task", "app.tasks.limited"]);
+      ).toEqual([
+        "task",
+        JSON.stringify([
+          "app.tasks.limited",
+          "runner.middleware.task.concurrency",
+          0,
+        ]),
+      ]);
       expect(
         JSON.parse(shared.withPermit.mock.calls[1][0]).slice(0, 2),
       ).toEqual(["shared", "payments"]);

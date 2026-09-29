@@ -12,7 +12,15 @@ export const resilienceResource = defineResource<
   configSchema: {
     namespace: Match.NonEmptyString,
     redis: Match.NonEmptyString,
-    leaseMs: Match.Optional(Match.PositiveInteger),
+    leaseMs: Match.Optional(
+      Match.Where(
+        (value: unknown): value is number =>
+          typeof value === "number" &&
+          Number.isInteger(value) &&
+          value > 0 &&
+          value <= 2_147_483_647,
+      ),
+    ),
   },
   init: async () =>
     resilienceError.throw({

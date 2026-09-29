@@ -1,3 +1,4 @@
+import { getMiddlewareApplicationIdentity } from "../../models/middleware/applicationIdentity";
 import {
   assertConcurrencyConfig,
   concurrencyConfigPattern,
@@ -86,10 +87,11 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
     identityContext: identityContextResource,
   },
   async run(
-    { task, next, journal },
+    execution,
     { state, identityContext },
     config: ConcurrencyMiddlewareConfig,
   ) {
+    const { task, next, journal } = execution;
     assertConcurrencyConfig(config);
 
     const resolvedKey = resolveConcurrencyKey(
@@ -114,7 +116,8 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
       }
       const key = JSON.stringify([
         resolvedKey === undefined ? "task" : "shared",
-        resolvedKey ?? task.definition.id,
+        resolvedKey ??
+          getMiddlewareApplicationIdentity(execution, task.definition.id),
         identityNamespace,
       ]);
       const controller = getOrCreateTaskAbortController(journal);

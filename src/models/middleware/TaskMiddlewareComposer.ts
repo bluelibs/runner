@@ -1,3 +1,4 @@
+import { bindMiddlewareApplication } from "./applicationIdentity";
 import { ITask, DependencyMapType } from "../../defs";
 import { Store } from "../store/Store";
 import { InterceptorRegistry } from "./InterceptorRegistry";
@@ -337,10 +338,20 @@ export class TaskMiddlewareComposer {
 
     const canonicalTaskDefinition = this.toCanonicalDefinition(task);
 
+    const occurrences = new Map<string, number>();
+    const applications = middlewares.map((middleware) => {
+      const id = this.store.findIdByDefinition(middleware);
+      const occurrence = occurrences.get(id) ?? 0;
+      occurrences.set(id, occurrence + 1);
+      return {
+        middleware,
+        identity: JSON.stringify([canonicalTaskDefinition.id, id, occurrence]),
+      };
+    });
     return composeReverseLayers(
       runner,
-      middlewares,
-      (nextFunction, middleware) => {
+      applications,
+      (nextFunction, { middleware, identity }) => {
         const middlewareId = this.store.findIdByDefinition(middleware);
         const storeMiddleware = this.store.taskMiddlewares.get(middlewareId)!;
         const middlewareSource = runtimeSource.taskMiddleware(middlewareId);
@@ -355,19 +366,22 @@ export class TaskMiddlewareComposer {
             () =>
               runWithRuntimeCallSource(middlewareSource, () =>
                 storeMiddleware.middleware.run(
-                  {
-                    task: {
-                      definition: canonicalTaskDefinition,
-                      input,
+                  bindMiddlewareApplication(
+                    {
+                      task: {
+                        definition: canonicalTaskDefinition,
+                        input,
+                      },
+                      next: (...args: [TInput?]) =>
+                        nextFunction(
+                          args.length > 0 ? (args[0] as TInput) : input,
+                          journal,
+                          source,
+                        ),
+                      journal,
                     },
-                    next: (...args: [TInput?]) =>
-                      nextFunction(
-                        args.length > 0 ? (args[0] as TInput) : input,
-                        journal,
-                        source,
-                      ),
-                    journal,
-                  },
+                    identity,
+                  ),
                   storeMiddleware.computedDependencies,
                   middleware.config,
                 ),

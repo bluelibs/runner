@@ -9,6 +9,7 @@ const clientSchema = Match.compile(
     if (value === null || typeof value !== "object") return false;
     const client = value as Partial<ResilienceRedisClient>;
     return (
+      typeof client.connect === "function" &&
       typeof client.eval === "function" &&
       typeof client.ping === "function" &&
       typeof client.disconnect === "function"
@@ -24,12 +25,16 @@ export const resilienceResource: typeof reference = Object.freeze({
     const client = clientSchema.parse(
       createIORedisClient(config.redis, {
         maxRetriesPerRequest: 0,
-        retryStrategy: () => null,
+        retryStrategy: (attempt: number) => Math.min(attempt * 100, 2000),
+        lazyConnect: true,
+        enableOfflineQueue: false,
+        autoResendUnfulfilledCommands: false,
         commandTimeout: 5000,
         connectTimeout: 5000,
       }),
     );
     try {
+      await client.connect();
       await client.ping();
       return new RedisResilience(client, config);
     } catch (error) {

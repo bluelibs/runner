@@ -1,3 +1,4 @@
+import { getMiddlewareApplicationIdentity } from "../../models/middleware/applicationIdentity";
 import { taskMiddlewareBuilder } from "../../definers/builders/middleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { RunnerError } from "../../definers/defineError";
@@ -109,10 +110,11 @@ export const rateLimitTaskMiddleware = taskMiddlewareBuilder("rateLimit")
   })
   .run(
     async (
-      { task, next, journal },
+      execution,
       { state, identityContext },
       config: RateLimitMiddlewareConfig,
     ) => {
+      const { task, next, journal } = execution;
       rateLimitRuntimeConfigSchema.parse(config);
 
       const storageTaskId = task.definition.id;
@@ -134,7 +136,7 @@ export const rateLimitTaskMiddleware = taskMiddlewareBuilder("rateLimit")
       );
       if (state.resilience) {
         const admission = await state.resilience.rateLimit(
-          storageTaskId,
+          getMiddlewareApplicationIdentity(execution, storageTaskId),
           key,
           config.max,
           config.windowMs,

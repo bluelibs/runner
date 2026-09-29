@@ -20,6 +20,8 @@ export interface ResilienceRedisClient {
     count: number,
     ...args: (string | number)[]
   ): Promise<unknown>;
+  /** Open the owned connection before issuing commands. */
+  connect(): Promise<void>;
   /** Verify connection readiness during resource initialization. */
   ping(): Promise<unknown>;
   /** Close the owned connection immediately, including after a failed connection. */

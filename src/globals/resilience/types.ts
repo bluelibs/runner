@@ -5,7 +5,7 @@ export interface ResilienceConfig {
   namespace: string;
   /** Redis connection URL. The resource owns and closes its connection. */
   redis: string;
-  /** Permit and half-open probe lease duration in milliseconds. Default: 30000. */
+  /** Permit and half-open probe lease duration in milliseconds. Positive integer up to 2147483647; default: 30000. */
   leaseMs?: number;
 }
 
