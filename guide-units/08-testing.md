@@ -105,7 +105,7 @@ Runner also detects this mode from `NODE_ENV=pre-prod`. Like `dev` and `prod`, i
 
 **Test mode lets the test harness have the final say.** If the harness and a resource below it both override the same target, the harness wins. More generally, the outermost declaration wins: the one closest to the top of the registration tree. **Declaring the same target twice on one resource still throws, even in tests.** Losing replacements never initialize.
 
-Sibling resource overrides work independently in **every mode**. For example, `billing` and `support` can each replace `mailer`; neither override affects the other's subtree. See the [override rules at a glance](./02-resources.md#overrides).
+Resource overrides on the app passed to `run(app)` reach every consumer, including Runner’s built-ins. Overrides on nested resources apply only to their registration subtree. Sibling resource overrides work independently in **every mode**. For example, `billing` and `support` can each replace `mailer`; neither override affects the other's subtree. See the [override rules at a glance](./02-resources.md#overrides).
 
 ### Full Integration Testing (Full Pipeline)
 

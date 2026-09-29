@@ -496,7 +496,7 @@ export class Store {
   }
 
   public processOverrides() {
-    this.overrideManager.processOverrides();
+    this.overrideManager.processOverrides(this.root?.resource.id);
     this.registry.clearHookTargetResolutionCache();
     this.validator.runSanityChecks();
   }

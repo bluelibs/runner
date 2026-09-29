@@ -480,22 +480,23 @@ Both ship with Runner—no external dependencies.
 
 ## Semaphore
 
-Imagine this: Your API has a rate limit of 100 requests/second, but 1,000 users are hammering it at once. Without controls, you get 429 errors. Or your database pool has 20 connections, but you're firing off 100 queries simultaneously—they queue up, time out, and crash your app.
+`Semaphore` limits simultaneous operations within one process. Use it to protect
+connection pools or bound in-flight requests. For a requests-per-second quota,
+use rate-limit middleware instead.
 
-**The problem**: You need to limit how many operations run concurrently, but JavaScript's async nature makes it hard to enforce.
-
-**The naive solution**: Use a simple counter and `Promise.all` with manual tracking. But this is error-prone—it's easy to forget to release a permit, leading to deadlocks.
-
-**The better solution**: Use a Semaphore, a concurrency primitive that automatically manages permits.
+`new Semaphore(limit)` owns local permits and a FIFO waiting list. Even with
+Redis resilience registered, an explicitly supplied `Semaphore` stays local.
+For shared permits across processes, use `resilience.semaphore(...)` from the
+injected resilience resource, as shown below.
 
 ### When to Use Semaphore
 
 | Use case                   | Why Semaphore helps                        |
 | -------------------------- | ------------------------------------------ |
-| API rate limiting          | Prevents 429 errors by throttling requests |
+| API concurrency            | Caps simultaneous requests                |
 | Database connection pools  | Keeps you within pool size limits          |
 | Heavy CPU tasks            | Prevents memory/CPU exhaustion             |
-| Third-party service limits | Respects external service quotas           |
+| Third-party service limits | Respects simultaneous-request limits       |
 
 ### Basic Semaphore Usage
 
@@ -513,7 +514,67 @@ const users = await dbSemaphore.withPermit(async () => {
 
 **Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
 
+### Distributed Reservations with Resilience
+
+In Node, a registered resilience resource can create reusable distributed semaphore
+handles. The resource owns Redis and shuts down its handles; handles do not need
+separate disposal.
+
+```ts
+import { r, resources, run } from "@bluelibs/runner/node";
+
+const providerSlots = r
+  .resource("providerSlots")
+  .dependencies({ resilience: resources.resilience })
+  .init(async (_config, { resilience }) =>
+    resilience.semaphore({ key: "payment-provider", limit: 5, maxQueue: 20 }),
+  )
+  .build();
+
+const app = r.resource("app").register([
+  resources.resilience.with({
+    namespace: "payments:production",
+    redis: "redis://localhost:6379",
+  }),
+  providerSlots,
+]).build();
+
+const runtime = await run(app);
+try {
+  const slots = runtime.getResourceValue(providerSlots);
+  const result = await slots.withPermit(async (signal) => {
+    signal.throwIfAborted();
+    // Pass this signal to the provider request so it can stop on lease loss.
+    return "completed";
+  });
+  console.log(result);
+} finally {
+  await runtime.dispose();
+}
+```
+
+- `key` and `limit` are required. Handles share permits with unscoped distributed
+  `concurrency` middleware using the same key, limit, and resilience namespace.
+  Handles do not implicitly read identity context; use explicit keys for partitions.
+- Optional `maxQueue` and `waitTimeoutMs` have the same admission semantics as
+  concurrency middleware: both default to unlimited; zero disables waiting.
+  Waiting counts are shared by handles and middleware for the same pool within
+  each runtime. The running permit limit is shared across replicas.
+- `withPermit(callback, { signal })` accepts caller cancellation. The callback's
+  signal also reports resource shutdown and lost permit ownership. Running work
+  must observe it; leases cannot stop external side effects by themselves.
+- A handle snapshots its configuration and delegates acquisition, renewal, and
+  release to the existing resilience backend. Redis errors propagate.
+
+This is a reservation mechanism, not a durable queue. `limit: 1` serializes permit
+ownership but does not guarantee global FIFO, persist waiting work, resume it, or
+redeliver it after a crash. Runner's RabbitMQ queues and durable workflows handle
+job delivery and recovery.
+
 ### Manual Acquire/Release
+
+The following methods belong to local `Semaphore` instances. Distributed handles
+expose only `withPermit`.
 
 When you need more control:
 
@@ -794,3 +855,17 @@ q.on("start", ({ taskId }) => console.log(`task ${taskId} started`));
 await q.run(async () => "ok");
 await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
+
+## Local Runtime Shell (Node)
+
+Register `resources.shell.with({ socketPath })` and attach a terminal with `connectShell({ socketPath })`, both from `@bluelibs/runner/node`. The optional resource exposes a local Unix socket inside an owner-only directory, with no HTTP or TCP listener. Its JavaScript REPL supports `await`, persistent session variables, completion, and Up/Down history against the live container.
+
+Omit `socketPath` to use `runner.sock` in the startup working directory (which must still be owner-only). Stale owned sockets are reclaimed; live listeners and non-socket files cause startup to fail.
+
+Opt into a read-only connection with `connectShell({ socketPath, readOnly: true })`. Resources can depend on `resources.shell` and check `shell.isReadOnly()` inside write operations; the mode follows this container’s async execution scope. Resources must enforce the policy themselves.
+
+For remote access, run the connector on the application host through `ssh -t`. See [Runtime Shell](../readmes/RUNTIME_SHELL.md) for complete setup, SSH examples, and execution boundaries.
+
+For one-shot commands without a TTY, `await runShell({ socketPath, command: "await runtime.getHealth()", readOnly: true })` returns `{ success, output }`. The connector example exposes this as `--run`.
+
+The connector auto-detects terminal editing independently of the app’s `TERM`. Use `.tasks`, `.resources`, and `.status` for discovery; opt into reconnect history with `connectShell({ socketPath, historyFile })` inside an owner-only directory. History is in memory by default.

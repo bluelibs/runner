@@ -221,7 +221,7 @@ Runner ships with built-in middleware for common reliability, admission-control,
 | Middleware      | Config                                     | Notes                                                                                 |
 | --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------- |
 | cache           | `{ ttl, max, ttlAutopurge, keyBuilder }`   | backed by `resources.cache`; `keyBuilder` may return a string or `{ cacheKey, refs }` |
-| concurrency     | `{ limit, key?, semaphore? }`              | limits in-flight executions                                                           |
+| concurrency     | `{ limit, key?, keyBuilder?, maxQueue?, waitTimeoutMs?, semaphore? }`              | limits in-flight executions                                                           |
 | circuitBreaker  | `{ failureThreshold, resetTimeout }`       | opens after failures, then fails fast                                                 |
 | debounce        | `{ ms, keyBuilder?, maxKeys? }`            | waits for inactivity, then runs once with the latest input for that key               |
 | throttle        | `{ ms, keyBuilder?, maxKeys? }`            | runs immediately, then suppresses burst calls until the window ends                   |
@@ -245,6 +245,119 @@ Recommended ordering:
 - rate-limit for admission control such as "max 50 calls per second"
 - concurrency for in-flight control
 - cache for idempotent reads
+
+### Shared Redis Resilience
+
+By default, rate limiting, circuit breaking, and concurrency control keep isolated
+in-memory state in each runtime. In Node, register `resources.resilience` to make
+all three use shared Redis state automatically unless a middleware selects local coordination:
+
+```ts
+import { r, run, resources, middleware } from "@bluelibs/runner/node";
+
+const charge = r
+  .task("charge")
+  .middleware([
+    middleware.task.rateLimit.with({ max: 100, windowMs: 60_000 }),
+    middleware.task.concurrency.with({ limit: 10 }),
+    middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
+  ])
+  .run(async () => "charged")
+  .build();
+
+const app = r
+  .resource("payments")
+  .register([
+    resources.resilience.with({
+      namespace: "payments:production",
+      redis: "redis://localhost:6379",
+    }),
+    charge,
+  ])
+  .build();
+
+const runtime = await run(app);
+try {
+  await runtime.runTask(charge);
+} finally {
+  await runtime.dispose();
+}
+```
+
+The optional `ioredis` dependency must be installed. Registration opens one
+connection owned by the resilience resource. Omitting this registration opens no
+Redis connection and preserves the existing in-memory behavior. Supporting
+middleware state resources resolve resilience through an optional dependency;
+register the public resource itself, not a fork, for automatic adoption.
+
+Each of these three middleware accepts an optional `coordination` setting:
+
+| Setting | Behavior |
+| --- | --- |
+| Omitted | Uses registered resilience; otherwise memory |
+| `"local"` | Always uses memory within this runtime |
+| `"distributed"` | Requires registered resilience; missing registration fails at startup |
+
+For example, the `charge` task above can keep its concurrency cap local while
+sharing its rate limit across replicas by changing those two entries to:
+
+```ts
+middleware.task.rateLimit.with({
+  max: 100, windowMs: 60_000, coordination: "distributed",
+}),
+middleware.task.concurrency.with({ limit: 10, coordination: "local" }),
+```
+
+The local cap protects each worker's capacity; the distributed rate limit protects
+the shared provider allowance. Coordination is selected per middleware application,
+including subtree policies. `"local"` is an explicit choice, never an automatic
+fallback after a Redis error.
+
+Matching Redis database, `namespace`, canonical task id, canonical middleware id,
+and occurrence of that middleware share a policy across replicas. Stacked
+middleware applications keep separate state, so per-second and per-minute rate
+limits can compose. Keep graph ids and the order of repeated middleware consistent
+between replicas. Different namespaces or task ids remain independent.
+`rateLimit.keyBuilder` and identity scoping partition each application's budget.
+`maxKeys` bounds live rate-limit partitions per application across the namespace.
+Concurrency's explicit `key` or resolved `keyBuilder` shares permits across tasks,
+still partitioned by identity scope. Without either, each middleware application
+on a task has its own shared permit pool.
+JavaScript config-object reuse does not create cross-task Redis groups. Explicit
+`Semaphore` instances imply local coordination, even when resilience is registered.
+Combining `semaphore` with `coordination: "distributed"` fails at startup.
+For imperative distributed reservations, the injected resource exposes
+`resilience.semaphore({ key, limit, maxQueue?, waitTimeoutMs? })`. Its
+`withPermit(async (signal) => ..., { signal? })` uses the same pool as unscoped
+distributed concurrency middleware with that key. These handles are not local
+`Semaphore` instances and are not passed to the middleware's `semaphore` option.
+See [Distributed Reservations with Resilience](#distributed-reservations-with-resilience).
+
+Redis performs admission and transitions atomically using its own clock. Conflicting
+parameters for an existing policy fail instead of silently creating separate
+budgets. Rate-limit and permit records expire after inactivity; circuit state is
+retained, including its policy parameters. Use a new namespace when deliberately
+changing a retained circuit policy. Runtime disposal does not clear shared state.
+
+`leaseMs` optionally controls concurrency permits and half-open circuit probes
+(default: 30,000 milliseconds; positive integer up to 2,147,483,647).
+Permits renew while work runs. Ownership loss
+aborts the task cooperatively and rejects its invocation; an abandoned permit
+expires so another replica can proceed. This is not fencing of external side
+effects: work that ignores cancellation can outlive its permit. Permit waiters
+poll for availability and do not promise global FIFO ordering. Half-open probes
+must complete within `leaseMs`; an expired probe cannot update the circuit, and
+another call may claim a fresh probe.
+
+Redis startup and command failures propagate; there is no automatic fallback to
+local limits. The owned client uses bounded connection/command waits (five seconds)
+and reconnects with backoff after connection loss. Calls while disconnected fail
+immediately; commands are neither queued offline nor automatically replayed.
+Future calls resume using shared state once the connection is ready.
+
+This opt-in applies only to `rateLimit`, `circuitBreaker`, and `concurrency`.
+Retry, timeout, fallback, debounce, throttle, caching, ordinary queues, and durable
+workflow admission retain their existing behavior and configuration.
 
 ### Caching
 
@@ -571,11 +684,61 @@ const heavyTask = r
   .build();
 ```
 
-**Key benefits:**
+Add bounded waiting and a dynamic pool name when one task talks to several providers:
 
-- **Resource protection**: Prevent connection pool exhaustion.
-- **Queueing**: Automatically queues excess requests instead of failing.
-- **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
+```typescript
+import { Match, middleware, r } from "@bluelibs/runner";
+
+const providerInput = Match.compile({ provider: String });
+const callProvider = r
+  .task("callProvider")
+  .inputSchema(providerInput)
+  .middleware([
+    middleware.task.concurrency.with({
+      limit: 5,
+      maxQueue: 20,
+      waitTimeoutMs: 1_000,
+      keyBuilder: (_taskId, input) =>
+        `provider:${providerInput.parse(input).provider}`,
+      identityScope: { tenant: true, required: true },
+    }),
+  ])
+  .run(async (input) => {
+    // At most 5 calls run per provider and tenant.
+    return input.provider;
+  })
+  .build();
+```
+
+`keyBuilder(canonicalTaskId, input)` must return a non-empty string. Its result
+names a shared pool, just like `key`: two tasks returning the same name share the
+limit. Use either `key` or `keyBuilder`, with `limit`. Identity scoping is applied
+after resolving the name, so tenants remain separate. An explicit `semaphore`
+cannot be combined with `limit`, `key`, or `keyBuilder`.
+
+| Option | Omitted | Explicit value |
+| --- | --- | --- |
+| `maxQueue` | Unlimited waiting calls | Non-negative integer; `0` rejects when all permits are occupied |
+| `waitTimeoutMs` | Unlimited acquisition time | Milliseconds waiting for a permit; `0` makes one immediate attempt |
+
+`maxQueue` counts waiting calls, excluding running calls, per resolved pool **per
+runtime**. With Redis resilience, running permits are shared globally while each
+runtime bounds its own waiting queue. Redis waiters poll for availability; there
+is no global FIFO guarantee. Calls still in their initial Redis admission request
+have not entered the waiting queue.
+
+Saturation throws `errors.middlewareConcurrencyQueueFullError`; an acquisition
+deadline throws `errors.middlewareConcurrencyWaitTimeoutError`. If both options
+are `0`, saturation takes precedence when the pool is busy. The deadline stops
+when a permit is acquired and does not limit execution time. Caller cancellation
+removes waiting calls promptly and reclaims their queue capacity. Configure the
+separate `timeout` middleware when execution also needs a deadline.
+
+Without Redis, reusing one middleware config shares its semaphore within the
+runtime. An explicit `key` or `keyBuilder` also shares across distinct configs.
+With Redis, use a named pool to share across tasks; config-object identity is not
+a distributed identity. Queue options can also accompany a local explicit
+`semaphore`.
 
 ### Circuit Breaker
 

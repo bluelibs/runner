@@ -387,9 +387,10 @@ export interface ResourceFluentBuilderBeforeInit<
   >;
 
   /**
-   * Applies replacements here and in this resource's registration subtree.
-   * Sibling subtrees may choose different resource replacements. Task, hook, and
-   * middleware targets must be registered here or below. Declaring one target twice
+   * Resource replacements apply to this registration subtree; on the app passed
+   * to run(), they reach every consumer, including built-ins. Sibling subtrees
+   * may choose different resource replacements. Task, hook, and middleware targets
+   * must be registered here or below. Declaring one target twice
    * on this resource always throws. Parent/descendant overrides throw outside test
    * mode; in test mode, the declaration closest to the top of the tree wins.
    */
@@ -591,9 +592,10 @@ export interface ResourceFluentBuilderAfterInit<
     TMiddleware
   >;
   /**
-   * Applies replacements here and in this resource's registration subtree.
-   * Sibling subtrees may choose different resource replacements. Task, hook, and
-   * middleware targets must be registered here or below. Declaring one target twice
+   * Resource replacements apply to this registration subtree; on the app passed
+   * to run(), they reach every consumer, including built-ins. Sibling subtrees
+   * may choose different resource replacements. Task, hook, and middleware targets
+   * must be registered here or below. Declaring one target twice
    * on this resource always throws. Parent/descendant overrides throw outside test
    * mode; in test mode, the declaration closest to the top of the tree wins.
    */

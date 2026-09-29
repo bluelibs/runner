@@ -41,7 +41,6 @@ export class ScopedResourceOverrides {
   }
 
   compile(): void {
-    if (this.plans.size === 0) return;
     for (const [targetId, plan] of this.plans) {
       const winner = this.select(plan, targetId);
       const entry = this.registry.resources.get(targetId)!;

@@ -337,7 +337,7 @@ describe("Concurrency Middleware", () => {
       async init(_, { task, state }) {
         await task();
         trackedSemaphore = state.semaphoresByKey.get(
-          `__global__:${key}`,
+          JSON.stringify(["__global__", key]),
         )?.semaphore;
       },
     });

@@ -438,7 +438,7 @@ Built-in resilience middleware:
 Config surfaces:
 
 - `cache.with({ ttl, max, ttlAutopurge, keyBuilder, identityScope })`
-- `concurrency.with({ limit, key?, semaphore? })`
+- `concurrency.with({ limit, key?, keyBuilder?, maxQueue?, waitTimeoutMs?, semaphore? })`
 - `circuitBreaker.with({ failureThreshold, resetTimeout })`
 - `debounce.with({ ms, keyBuilder?, maxKeys? })`
 - `throttle.with({ ms, keyBuilder?, maxKeys? })`
@@ -457,6 +457,10 @@ Operational notes:
 - Call `cache.invalidateKeys(key | key[], options?)` to delete cached entries by concrete storage key, or opt into identity scoping for the provided base key.
 - Call `cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
+- `rateLimit`, `circuitBreaker`, and `concurrency` accept `coordination?: "local" | "distributed"`: omitted adopts registered resilience or memory; local always uses memory; distributed requires resilience at startup. Explicit concurrency `semaphore` implies local and cannot combine with distributed.
+- Node: register `resources.resilience.with({ namespace, redis: redisUrl, leaseMs? })` to share rate-limit, circuit-breaker, and concurrency state through Redis. Omit it for isolated in-memory defaults. Policies use canonical task/middleware ids and occurrence, keeping stacked applications separate; concurrency `key` / `keyBuilder` explicitly shares across tasks. Redis errors propagate without local fallback or command replay; connections recover automatically; permits renew and abort cooperatively on lease loss. Other middleware and durable admission are unchanged.
+- The injected Node resilience resource exposes `semaphore({ key, limit, maxQueue?, waitTimeoutMs? })`: reusable `withPermit(async (signal) => ..., { signal? })` handles share unscoped keyed concurrency pools. Resource-owned renewable reservations only: no persisted jobs, resume, redelivery, or global FIFO; use RabbitMQ/durable workflows for those needs. `new Semaphore()` remains local.
+- Concurrency: `keyBuilder(canonicalTaskId, input)` returns a non-empty shared pool name before identity scoping; mutually exclusive with `key`. `maxQueue` bounds waiters per pool per runtime (`0` rejects saturation); `waitTimeoutMs` bounds acquisition (`0` tries once). Both default to unlimited. Cancellation frees waiting capacity. Saturation and timeout throw `middlewareConcurrencyQueueFullError` and `middlewareConcurrencyWaitTimeoutError`.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `debounce`, `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast on non-serializable input. `rateLimit` defaults to `canonicalTaskId` (shared quota per task). The `canonicalTaskId` is the full runtime id, so sibling resources with the same local id don't share state by accident.
 - See [Security](#security) for `identityScope` and identity-aware partitioning.
@@ -615,7 +619,7 @@ Overrides:
 
 - Use `r.override(base, fn)` when you need to replace behavior while preserving the original id.
 - For resources only, `r.override(resource, { context, init, ready, cooldown, dispose })` also supported. Object-form inherits unspecified hooks from base and may add new stages.
-- `.overrides([...])` applies replacements at startup. For resources, attaching it to `billing` affects `billing` and everything registered under it. Where you create `r.override(...)` does not set its scope.
+- `.overrides([...])` applies replacements at startup. Resource overrides on the app passed to `run(app)` reach every consumer, including built-ins. On a nested resource such as `billing`, they affect only its registration subtree. Where you create `r.override(...)` does not set its scope.
 - Sibling subtrees can replace the same resource independently in every mode. Each gets its own instance and lifecycle context, using the original config.
 - Outside `test`, an override is the final choice for its subtree. Another override for the same target on a parent, a descendant, or the same resource makes startup throw.
 - In `test`, the outermost declaration wins (closest to the top of the registration tree). Declaring the same target twice on one resource throws in every mode. Losing replacements never initialize; parent and child overrides are not merged.
@@ -868,3 +872,15 @@ Prefer feature-driven folders and naming by Runner item type:
 
 - **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` to model durable progress while the store remains the source of truth and queue/pubsub or polling wakes work back up. Lifecycle: `pauseExecution`/`resumeExecution`, `restartExecution` (terminal/paused only, fresh run; existing waiters stay on the source id), `d.continueAsNew(input)` (atomic chaptering; waits/signals follow the chain). State: `d.setState`/`d.replaceState`/`d.getState` (one typed record per run; keep derivations idempotent), read externally via `durable.getState(id)`. See [Durable Workflows](./DURABLE_WORKFLOWS.md).
 - **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async and queue-based; in `network` mode, RPC Lanes provide sync request/response with binding-level transport retries for lane-routed, non-served calls. Only lane-assigned work is rerouted. See [Remote Lanes](./REMOTE_LANES.md).
+
+## Local Runtime Shell (Node)
+
+Opt in with `resources.shell.with({ socketPath })` from `@bluelibs/runner/node`, using an absolute Unix socket path in an existing owner-only directory. A separate script calls `await connectShell({ socketPath })` to attach to the live container with JavaScript `await`, session variables, completion, and arrow-key history. For remote use, run that connector via `ssh -t`; no web listener is needed. See [Runtime Shell](RUNTIME_SHELL.md).
+
+Omit `socketPath` to use `runner.sock` in the startup working directory (which must still be owner-only). Stale owned sockets are reclaimed; live listeners and non-socket files cause startup to fail.
+
+Opt into a read-only connection with `connectShell({ socketPath, readOnly: true })`. Resources can depend on `resources.shell` and check `shell.isReadOnly()` inside write operations; the mode follows this container’s async execution scope. Resources must enforce the policy themselves.
+
+For one-shot commands without a TTY, `await runShell({ socketPath, command: "await runtime.getHealth()", readOnly: true })` returns `{ success, output }`. The connector example exposes this as `--run`.
+
+The connector auto-detects terminal editing independently of the app’s `TERM`. Use `.tasks`, `.resources`, and `.status` for discovery; opt into reconnect history with `connectShell({ socketPath, historyFile })` inside an owner-only directory. History is in memory by default.

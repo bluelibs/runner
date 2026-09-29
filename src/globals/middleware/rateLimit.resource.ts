@@ -1,3 +1,5 @@
+import { resilienceResource } from "../resilience/resource";
+import type { Resilience } from "../resilience/types";
 import { defineResource } from "../../definers/defineResource";
 import {
   deriveKeyedStateCleanupInterval,
@@ -16,6 +18,8 @@ export interface RateLimitState {
  * Internal resource state used by the built-in rate-limit middleware.
  */
 export interface RateLimitResourceState {
+  /** Shared backend when Redis resilience is explicitly registered. */
+  resilience?: Resilience;
   states: WeakMap<RateLimitResourceConfig, Map<string, RateLimitState>>;
   trackedStates: Map<RateLimitResourceConfig, Map<string, RateLimitState>>;
   disposeCleanupTimer: () => void;
@@ -61,11 +65,14 @@ export const rateLimitResource = defineResource({
     description:
       "Stores keyed fixed-window counters and cleanup timers for the built-in rate-limit middleware.",
   },
-  dependencies: { timers: timersResource },
+  dependencies: {
+    timers: timersResource,
+    resilience: resilienceResource.optional(),
+  },
   context: (): RateLimitResourceContext => ({}),
   init: async (
     _config,
-    { timers }: { timers: ITimers },
+    { timers, resilience }: { timers: ITimers; resilience?: Resilience },
     context: RateLimitResourceContext,
   ): Promise<RateLimitResourceState> => {
     const trackedStates = new Map<
@@ -89,6 +96,7 @@ export const rateLimitResource = defineResource({
     };
 
     const resourceState: RateLimitResourceState = {
+      resilience,
       states,
       trackedStates,
       disposeCleanupTimer: () => {

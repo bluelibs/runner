@@ -160,7 +160,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark task execution with middleware", async () => {
-    const iterations = 1000;
+    const iterations = 10_000;
     const middlewareCount = 5;
 
     const middlewares = Array.from({ length: middlewareCount }, (_, idx) =>
@@ -187,7 +187,8 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const { dispose, runTask } = await run(app);
 
-    await runTask(task, 1);
+    // Warm the same execution path before timing steady-state throughput.
+    for (let i = 0; i < 2000; i++) await runTask(task, i);
 
     const start = performance.now();
     for (let i = 0; i < iterations; i++) {
@@ -218,7 +219,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark init-time task execution with middleware", async () => {
-    const iterations = 1000;
+    const iterations = 10_000;
     const middlewareCount = 5;
 
     const middlewares = Array.from({ length: middlewareCount }, (_, idx) =>
@@ -239,7 +240,8 @@ describe("Comprehensive Performance Benchmarks", () => {
       register: [...middlewares, task],
       dependencies: { task },
       async init(_, { task }) {
-        await task(1);
+        // Init-time execution has a distinct path and needs its own warmup.
+        for (let i = 0; i < 2000; i++) await task(i);
 
         const start = performance.now();
         for (let i = 0; i < iterations; i++) {
@@ -305,7 +307,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark event emission and handling", async () => {
-    const iterations = 500;
+    const iterations = 10_000;
     let eventHandlerCallCount = 0;
 
     const testEvent = defineEvent<{ value: number }>({
@@ -338,7 +340,8 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const { dispose, runTask } = await run(app);
 
-    await runTask(emitterTask, 1);
+    // Warm event dispatch and hook execution before measuring throughput.
+    for (let i = 0; i < 2000; i++) await runTask(emitterTask, i);
     eventHandlerCallCount = 0;
 
     const start = performance.now();
@@ -365,7 +368,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark init-time event emission and handling", async () => {
-    const iterations = 500;
+    const iterations = 10_000;
     let eventHandlerCallCount = 0;
 
     const testEvent = defineEvent<{ value: number }>({
@@ -395,7 +398,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       register: [testEvent, eventHandler, emitterTask],
       dependencies: { emitterTask },
       async init(_, { emitterTask }) {
-        await emitterTask(1);
+        for (let i = 0; i < 2000; i++) await emitterTask(i);
         eventHandlerCallCount = 0;
 
         const start = performance.now();
@@ -513,7 +516,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       const { dispose, runTask } = await run(app);
 
       // Prime JIT and middleware paths without warming the measured keys.
-      for (let index = 0; index < 100; index++) {
+      for (let index = 0; index < 1000; index++) {
         await runTask(expensiveTask, -index - 1);
       }
 

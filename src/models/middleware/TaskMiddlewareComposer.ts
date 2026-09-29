@@ -1,3 +1,4 @@
+import { scopeMiddlewareApplication } from "./applicationIdentity";
 import { ITask, DependencyMapType } from "../../defs";
 import { Store } from "../store/Store";
 import { InterceptorRegistry } from "./InterceptorRegistry";
@@ -337,6 +338,7 @@ export class TaskMiddlewareComposer {
 
     const canonicalTaskDefinition = this.toCanonicalDefinition(task);
 
+    const occurrences = new Map<string, number>();
     return composeReverseLayers(
       runner,
       middlewares,
@@ -344,6 +346,12 @@ export class TaskMiddlewareComposer {
         const middlewareId = this.store.findIdByDefinition(middleware);
         const storeMiddleware = this.store.taskMiddlewares.get(middlewareId)!;
         const middlewareSource = runtimeSource.taskMiddleware(middlewareId);
+        const scopedMiddleware = scopeMiddlewareApplication(
+          storeMiddleware.middleware,
+          canonicalTaskDefinition.id,
+          middlewareId,
+          occurrences,
+        );
 
         const baseMiddlewareRunner = async (
           input: TInput,
@@ -354,7 +362,7 @@ export class TaskMiddlewareComposer {
             middlewareSource,
             () =>
               runWithRuntimeCallSource(middlewareSource, () =>
-                storeMiddleware.middleware.run(
+                scopedMiddleware.run(
                   {
                     task: {
                       definition: canonicalTaskDefinition,

@@ -8,6 +8,7 @@ import {
 import { FRAMEWORK_SYSTEM_RESOURCE_ID } from "./createSyntheticFrameworkRoot";
 import { storeDefinitionOverride } from "./overrides/storeDefinitionOverride";
 import { ScopedResourceOverrides } from "./overrides/ScopedResourceOverrides";
+import { replaceResourceBehavior } from "./overrides/resourceInstances";
 import { throwAccessViolation } from "./visibility-tracker/throwAccessViolation";
 import {
   toSupportedOverride,
@@ -240,7 +241,8 @@ export class OverrideManager {
     });
   }
 
-  processOverrides() {
+  /** Applies validated declarations; rootResourceId is the canonical app id. @internal */
+  processOverrides(rootResourceId?: string) {
     if (this.overrides.size === 0) return;
 
     // Validate all targets exist before writing any overrides.
@@ -254,34 +256,45 @@ export class OverrideManager {
       }
     }
 
-    const resourceOverrides = new ScopedResourceOverrides(
-      this.registry,
-      (instanceId, targetId, source, override) => {
-        this.overrides.set(instanceId, override);
-        this.overrideWinnerSources.set(instanceId, source);
-        (this.overrideBaseIds ??= new Map()).set(instanceId, targetId);
-      },
-    );
+    let resourceOverrides: ScopedResourceOverrides | undefined;
     for (const [targetId, override] of [...this.overrides.entries()]) {
       if (utils.isResource(override)) {
         const candidates = this.overrideCandidatesByTarget.get(targetId);
         if (candidates) {
+          const resourceCandidates = candidates.filter(
+            (candidate): candidate is { source: string; override: IResource } =>
+              utils.isResource(candidate.override),
+          );
+          // App-root declarations keep their original runtime-wide reach.
+          const rootCandidate = resourceCandidates.find(
+            ({ source }) => source === rootResourceId,
+          );
+          if (rootCandidate) {
+            const entry = this.registry.resources.get(targetId)!;
+            entry.resource = replaceResourceBehavior(
+              entry.resource,
+              rootCandidate.override,
+            );
+            this.overrides.set(targetId, rootCandidate.override);
+            this.overrideWinnerSources.set(targetId, rootCandidate.source);
+            continue;
+          }
           this.overrides.delete(targetId);
           this.overrideWinnerSources.delete(targetId);
-          resourceOverrides.add(
-            targetId,
-            candidates.filter(
-              (
-                candidate,
-              ): candidate is { source: string; override: IResource } =>
-                utils.isResource(candidate.override),
-            ),
+          resourceOverrides ??= new ScopedResourceOverrides(
+            this.registry,
+            (instanceId, baseId, source, replacement) => {
+              this.overrides.set(instanceId, replacement);
+              this.overrideWinnerSources.set(instanceId, source);
+              (this.overrideBaseIds ??= new Map()).set(instanceId, baseId);
+            },
           );
+          resourceOverrides.add(targetId, resourceCandidates);
           continue;
         }
       }
       storeDefinitionOverride(this.registry, targetId, override);
     }
-    resourceOverrides.compile();
+    resourceOverrides?.compile();
   }
 }

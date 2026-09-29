@@ -703,7 +703,10 @@ const dbResource = r
 
 Use `r.override(base, fn)` when you need to replace a component's behavior while keeping the same `id` — common in integration testing or when swapping out a library.
 
-For a **resource override**, where you attach `.overrides([...])` sets its scope. Put it on `billing`, and it applies to dependencies in `billing` and everything registered under it. A sibling such as `support` can choose a different replacement for the same resource. Consumers outside those subtrees keep the original.
+For a **resource override**, where you attach `.overrides([...])` sets its scope:
+
+- On the app passed to `run(app)`: replace the resource everywhere it is used, including Runner’s built-in resources and middleware.
+- On a resource inside that app, such as `billing`: replace it only for `billing` and everything registered under it. A sibling such as `support` can choose a different replacement. Consumers outside those subtrees keep the original.
 
 **Outside `test` mode, treat an override as the final choice for its subtree.** Another override for the same target on a parent, a descendant, or the same resource makes startup throw. Siblings are allowed because neither choice reaches into the other's subtree.
 
@@ -856,7 +859,7 @@ await runtime.dispose();
 
 `sendInvoice` gets the billing mailer; `sendReminder` gets the support mailer. If `app` also declared a mailer override, startup would throw outside `test`. In `test`, the app's override would replace both choices.
 
-**Instances and lifecycle:** each winning subtree shares one replacement instance. Each instance inherits the original config and has its own context and lifecycle, from initialization through disposal. A losing override never creates an instance. Lifecycle patches inherit omitted hooks from the base passed to `r.override(...)`; parent and child overrides are not merged together. The base resource's child registrations and subtree policies are not copied into each replacement.
+**Instances and lifecycle:** an app-root override uses the single registered instance. Each winning nested subtree shares its own replacement instance. Each instance inherits the original config and has its own context and lifecycle, from initialization through disposal. A losing override never creates an instance. Lifecycle patches inherit omitted hooks from the base passed to `r.override(...)`; parent and child overrides are not merged together. The base resource's child registrations and subtree policies are not copied into each replacement.
 
 **Calls between subtrees:** where a task or service is registered determines its dependencies. If a billing task calls `sendReminder`, that task still uses the support mailer. A shared service registered outside billing keeps its own dependencies, even when billing calls it.
 
