@@ -88,6 +88,25 @@ describeUnix("connectShell", () => {
     await runtime.dispose();
     await connected;
     expect(input.isRaw).toBe(true);
+    expect(input.readableFlowing).toBe(true);
+  });
+
+  it("does not drain previously unread input after disconnecting", async () => {
+    const { runtime, socketPath } = await boot();
+    expect(input.readableFlowing).toBeNull();
+    try {
+      const ready = readUntil(output, "runner> ");
+      const connected = connectShell({ socketPath, input, output });
+      await ready;
+      input.write(".exit\n");
+      await connected;
+      input.write("next consumer's input");
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(input.readableFlowing).not.toBe(true);
+      expect(input.read().toString()).toBe("next consumer's input");
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it("disconnects on terminal EOF", async () => {

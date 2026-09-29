@@ -10,6 +10,7 @@ export function attachShellTerminal(
   return new Promise<void>((resolve, reject) => {
     const wasRaw = input.isRaw ?? false;
     const wasPaused = input.isPaused();
+    const wasFlowing = input.readableFlowing;
     let attached = false;
     let failure: Error | undefined;
     const disconnect = () => socket.destroy();
@@ -32,6 +33,7 @@ export function attachShellTerminal(
           failure ??= terminalError(error);
         }
         if (wasPaused) input.pause();
+        else if (wasFlowing === true) input.resume();
       }
       if (failure) reject(failure);
       else resolve();
