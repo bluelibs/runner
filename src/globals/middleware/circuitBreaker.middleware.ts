@@ -1,4 +1,7 @@
-import { getMiddlewareApplicationIdentity } from "../../models/middleware/applicationIdentity";
+import {
+  getMiddlewareApplicationIdentity,
+  requireMiddlewareApplicationIdentity,
+} from "../../models/middleware/applicationIdentity";
 import { resilienceResource } from "../resilience/resource";
 import { runSharedCircuit } from "../resilience/circuit";
 import { defineResource } from "../../definers/defineResource";
@@ -220,3 +223,5 @@ export const circuitBreakerMiddleware = taskMiddlewareBuilder("circuitBreaker")
     }
   })
   .build();
+
+requireMiddlewareApplicationIdentity(circuitBreakerMiddleware);

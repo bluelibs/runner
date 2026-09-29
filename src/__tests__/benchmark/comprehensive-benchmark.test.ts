@@ -93,7 +93,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark basic task execution", async () => {
-    const iterations = 1000;
+    const iterations = 10_000;
     const task = defineTask({
       id: "benchmark-basic-task",
       run: async (n: number) => n * 2,
@@ -110,7 +110,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       const { dispose, runTask } = await run(app);
 
       // Extended warm-up for more stable results
-      for (let w = 0; w < BENCHMARK_CONFIG.warmupRuns * 100; w++) {
+      for (let w = 0; w < BENCHMARK_CONFIG.warmupRuns * 1000; w++) {
         await runTask(task, w);
       }
 
@@ -160,7 +160,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark task execution with middleware", async () => {
-    const iterations = 1000;
+    const iterations = 10_000;
     const middlewareCount = 5;
 
     const middlewares = Array.from({ length: middlewareCount }, (_, idx) =>
@@ -187,7 +187,8 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const { dispose, runTask } = await run(app);
 
-    await runTask(task, 1);
+    // Warm the same execution path before timing steady-state throughput.
+    for (let i = 0; i < 2000; i++) await runTask(task, i);
 
     const start = performance.now();
     for (let i = 0; i < iterations; i++) {
@@ -218,7 +219,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark init-time task execution with middleware", async () => {
-    const iterations = 1000;
+    const iterations = 10_000;
     const middlewareCount = 5;
 
     const middlewares = Array.from({ length: middlewareCount }, (_, idx) =>
@@ -239,7 +240,8 @@ describe("Comprehensive Performance Benchmarks", () => {
       register: [...middlewares, task],
       dependencies: { task },
       async init(_, { task }) {
-        await task(1);
+        // Init-time execution has a distinct path and needs its own warmup.
+        for (let i = 0; i < 2000; i++) await task(i);
 
         const start = performance.now();
         for (let i = 0; i < iterations; i++) {
@@ -489,7 +491,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
   it("should benchmark built-in cache middleware performance", async () => {
     const iterations = 500;
-    const cacheHitIterations = 500;
+    const cacheHitIterations = 5000;
 
     const expensiveTask = defineTask({
       id: "benchmark-cache-expensive",
@@ -513,7 +515,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       const { dispose, runTask } = await run(app);
 
       // Prime JIT and middleware paths without warming the measured keys.
-      for (let index = 0; index < 100; index++) {
+      for (let index = 0; index < 1000; index++) {
         await runTask(expensiveTask, -index - 1);
       }
 

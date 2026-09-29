@@ -1,4 +1,7 @@
-import { getMiddlewareApplicationIdentity } from "../../models/middleware/applicationIdentity";
+import {
+  getMiddlewareApplicationIdentity,
+  requireMiddlewareApplicationIdentity,
+} from "../../models/middleware/applicationIdentity";
 import {
   assertConcurrencyConfig,
   concurrencyConfigPattern,
@@ -183,3 +186,5 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
     }
   },
 });
+
+requireMiddlewareApplicationIdentity(concurrencyTaskMiddleware);

@@ -1,4 +1,7 @@
-import { getMiddlewareApplicationIdentity } from "../../models/middleware/applicationIdentity";
+import {
+  getMiddlewareApplicationIdentity,
+  requireMiddlewareApplicationIdentity,
+} from "../../models/middleware/applicationIdentity";
 import { taskMiddlewareBuilder } from "../../definers/builders/middleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { RunnerError } from "../../definers/defineError";
@@ -235,3 +238,5 @@ export type {
   RateLimitState,
 } from "./rateLimit.resource";
 export { rateLimitResource } from "./rateLimit.resource";
+
+requireMiddlewareApplicationIdentity(rateLimitTaskMiddleware);
