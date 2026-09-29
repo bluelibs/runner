@@ -794,3 +794,9 @@ q.on("start", ({ taskId }) => console.log(`task ${taskId} started`));
 await q.run(async () => "ok");
 await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
+
+## Local Runtime Shell (Node)
+
+Register `resources.shell.with({ socketPath })` and attach a terminal with `connectShell({ socketPath })`, both from `@bluelibs/runner/node`. The optional resource exposes a local Unix socket inside an owner-only directory, with no HTTP or TCP listener. Its JavaScript REPL supports `await`, persistent session variables, completion, and Up/Down history against the live container.
+
+For remote access, run the connector on the application host through `ssh -t`. See [Runtime Shell](../readmes/RUNTIME_SHELL.md) for complete setup, SSH examples, and execution boundaries.

@@ -110,6 +110,7 @@
       "RedisStore",
       "StepBuilder",
       "computeRpcLaneAllowList",
+      "connectShell",
       "createDurableAuditEntryId",
       "createDurableRunnerAuditEmitter",
       "createDurableStepId",

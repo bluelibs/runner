@@ -1,0 +1,94 @@
+# Runtime Shell
+
+Register `resources.shell` to inspect and operate a running Runner app from a terminal. `connectShell()` attaches to that container over a Unix domain socket. It does not start another app or open an HTTP or TCP listener.
+
+This is an opt-in Node.js 22+ administrative resource for Linux and macOS. Register it only when you want trusted local operators to execute JavaScript with the application's privileges. Windows named pipes are not supported.
+
+## Register The Shell
+
+Use a private directory owned by the application's OS user. Create it before booting the app; the resource rejects missing directories, group/other permissions, and a symlink as the immediate parent.
+
+```ts
+import { mkdir } from "node:fs/promises";
+import { r, resources, run } from "@bluelibs/runner/node";
+
+await mkdir("/run/my-app", { mode: 0o700, recursive: true });
+
+const app = r
+  .resource("app")
+  .register([
+    resources.shell.with({ socketPath: "/run/my-app/runner.sock" }),
+  ])
+  .build();
+
+await run(app);
+```
+
+For a service deployment, provision `/run/my-app` with mode `0700` and the service user's ownership instead of creating it in application code. Use a separate socket path for each container or replica. Paths must be absolute, at most 103 UTF-8 bytes, and contain no NUL character.
+
+The shell starts listening during its resource's `ready` lifecycle. During cooldown it disconnects clients and closes the listener. Disposal also closes it, including startup rollback. Node removes the socket on a normal close; the private directory remains. Existing socket paths are never removed to make room for a listener. If a process crashes and leaves a stale socket, verify the old process is gone before removing it.
+
+## Connect From A Script
+
+Create `shell.mjs` next to your application:
+
+```js
+import { connectShell } from "@bluelibs/runner/node";
+
+await connectShell({ socketPath: "/run/my-app/runner.sock" });
+```
+
+Run it from another terminal:
+
+```sh
+node shell.mjs
+```
+
+A TypeScript connector can use the same code in `shell.ts`, executed with your project's TypeScript runner. Both terminal input and output must be TTY streams. The connector restores the input's original raw mode when the connection closes and does not close your terminal streams.
+
+## Work With The Live App
+
+The shell binds `runtime` to the same container-scoped handle returned by `run(app)`. The prompt identifies the app's root id and process id. For the [runnable counter example](../examples/local-shell/README.md):
+
+```js
+await runtime.runTask("app.tasks.increment", { amount: 2 })
+const counter = runtime.getResourceValue("app.counter")
+counter.value
+await runtime.getHealth()
+```
+
+Use canonical ids: the resource is `app.counter`; the task is `app.tasks.increment`. Runtime access checks still apply to these methods. Task calls use Runner's normal validation, middleware, and execution pipeline. Calling a resource's methods directly does not run task middleware. No tenant or user context is inferred from the SSH user.
+
+The evaluator is [Node's native JavaScript REPL](https://nodejs.org/docs/latest-v22.x/api/repl.html), including its top-level `await` semantics. Input is JavaScript, even when the connector script is TypeScript. Session variables survive between commands and are private to that connection; resources remain shared with the live app. Disconnecting discards session variables.
+
+`Date`, `Map`, `Set`, and `RegExp` use application-side constructors so instances created with `new` pass class schemas. For a `RegExp` class schema, use `new RegExp(...)`; regular-expression literals retain the REPL VM's prototype.
+
+| Input | Behavior |
+| --- | --- |
+| Up / Down | Navigate this session's command history |
+| Tab | Native JavaScript completion |
+| An incomplete expression | Continue input over multiple lines |
+| `.editor` | Enter multiline editor mode; Ctrl+D submits |
+| `.clear` | Reset session variables and rebind `runtime` |
+| `.help` | Show Node REPL commands |
+| `.exit` or Ctrl+D at an empty prompt | Disconnect without disposing the app |
+
+History is not persisted to disk. Native line editing follows the application process's `TERM` setting. If your service starts with `TERM=dumb`, launch it with `TERM=xterm-256color` to enable arrow keys and completion.
+
+## Connect Through SSH
+
+Keep the listener local. Use SSH to run the connector on the same machine, under the OS user that owns the socket directory:
+
+```sh
+ssh -t app@server 'cd /srv/my-app && node shell.mjs'
+```
+
+`-t` allocates a terminal, so history, completion, and line editing work. There is no Runner network port to forward. SSH authenticates the remote session; filesystem permissions restrict access to the socket.
+
+For multiple replicas, select the host/container and socket explicitly. Session state belongs to one process and does not move between replicas.
+
+## Execution Boundaries
+
+This shell has real application authority. The REPL context separates session variables; it is not a security sandbox. Commands can mutate resources, access Node APIs, or terminate the process. Use `.exit` to leave the shell, not `process.exit()`.
+
+There is no generic dry-run or rollback mode. Disconnecting or resetting a session does not undo changes or reliably cancel work already started. A synchronous infinite loop can block the app's event loop, and a pending promise can keep a command waiting. Use task-specific cancellation and dry-run contracts where needed, or attach to a separate app with test resources.
