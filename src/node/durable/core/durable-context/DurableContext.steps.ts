@@ -1,13 +1,10 @@
-import {
-  acquireStepAdmission,
-  parseStepConcurrency,
-} from "../managers/StepAdmissionController";
+import { parseStepConcurrency } from "../managers/StepAdmissionController";
 import {
   createExecutionLockState,
   type ExecutionLockState,
 } from "../managers/ExecutionManager.locking";
 import type { StoreAdmission } from "../managers/StoreAdmissionController";
-import { runAdmittedStepCallback } from "./DurableContext.stepCallback";
+import { runDurableStepAttempts } from "./DurableContext.stepAttempt";
 import type { DurableAuditEntryInput } from "../audit";
 import { DurableAuditEntryKind, isDurableInternalStepId } from "../audit";
 import { ContinuationSignal, SuspensionSignal } from "../interfaces/context";
@@ -19,14 +16,8 @@ import type {
 import type { IDurableStore } from "../interfaces/store";
 import { clearExecutionCurrent } from "../current";
 import { ExecutionStatus, isExecutionTerminal } from "../types";
-import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
-import { createCancellationErrorFromSignal } from "../../../../tools/abortSignals";
-import {
-  EXECUTION_PAUSED_ABORT_REASON,
-  isDurablePauseInterruptionError,
-  throwDurablePauseInterruption,
-} from "../pauseInterruption";
+import { isDurablePauseInterruptionError } from "../pauseInterruption";
 
 export type DurableCompensation = {
   stepId: string;
@@ -59,6 +50,7 @@ function registerCompensation<T>(
 export async function executeDurableStep<T>(params: {
   store: IDurableStore;
   executionId: string;
+  workflowAttempt: number;
   assertCanContinue: () => Promise<void>;
   /** Gate before saving a finished body's result; tolerates a pause. */
   assertCanPersistResult: () => Promise<void>;
@@ -100,83 +92,16 @@ export async function executeDurableStep<T>(params: {
 
   const lockState = params.executionLockState ?? createExecutionLockState();
   let admission: Extract<StoreAdmission, { kind: "admitted" }> | undefined;
-  let attempts = 0;
-  const maxRetries = params.options.retries ?? 0;
   const startedAt = Date.now();
 
-  const executeWithRetry = async (): Promise<T> => {
-    // A paused attempt must not start new side effects, even when the store
-    // gate raced ahead of the abort (pause then quick resume). Other aborts
-    // (cancel, shutdown) must still let saga teardown such as rollback run.
-    if (params.signal.reason === EXECUTION_PAUSED_ABORT_REASON) {
-      throwDurablePauseInterruption();
-    }
-
-    if (concurrency !== undefined) {
-      admission = await acquireStepAdmission({
-        store: params.store,
-        executionId: params.executionId,
-        stepId: params.stepId,
-        policy: concurrency,
-        lockState,
-        signal: params.signal,
-      });
-    }
-
-    try {
-      if (admission) {
-        return await runAdmittedStepCallback({
-          ...params,
-          lockState,
-          deferRelease: () => {
-            admission = undefined;
-          },
-          release: admission.release,
-          stopRenewal: admission.stopRenewal,
-        });
-      }
-      const context: DurableStepRunContext = { signal: params.signal };
-      if (params.options.timeout) {
-        return await withTimeout(
-          params.upFn(context),
-          params.options.timeout,
-          `Step ${params.stepId} timed out`,
-        );
-      }
-      return await params.upFn(context);
-    } catch (error) {
-      await admission?.release();
-      admission = undefined;
-      if (lockState.lost) throw error;
-      if (isControlFlowSignal(error)) {
-        throw error;
-      }
-
-      if (params.signal.aborted) {
-        throw createCancellationErrorFromSignal(
-          params.signal,
-          `Durable step '${params.stepId}' cancelled`,
-        );
-      }
-
-      if (isTimeoutExceededError(error)) {
-        throw error;
-      }
-
-      if (attempts < maxRetries) {
-        attempts += 1;
-        await params.assertCanContinue();
-        const delay = Math.pow(2, attempts) * 100;
-        await sleepMs(delay);
-        await params.assertCanContinue();
-        return executeWithRetry();
-      }
-      throw error;
-    }
-  };
-
   try {
-    const result = await executeWithRetry();
+    const outcome = await runDurableStepAttempts({
+      ...params,
+      concurrency,
+      lockState,
+    });
+    admission = outcome.admission;
+    const result = outcome.result;
     const durationMs = Date.now() - startedAt;
 
     await params.assertCanPersistResult();

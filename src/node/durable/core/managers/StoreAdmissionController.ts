@@ -16,6 +16,10 @@ export type StoreAdmission =
       kind: "admitted";
       assertOwnership: () => Promise<void>;
       release: () => Promise<void>;
+      /** Refuses callback entry after a numeric lease's conservative deadline. */
+      assertActive?: () => void;
+      /** Exclusive end of the fixed window that granted this allowance. */
+      expiresAt?: number;
       /** Stops renewing a numeric permit without freeing capacity before settlement. */
       stopRenewal?: () => void;
     }
@@ -127,6 +131,7 @@ export class StoreAdmissionController {
         },
         release: () => lease.release(),
         stopRenewal: lease.stopRenewal,
+        assertActive: lease.assertActive,
       };
     }
 
@@ -142,27 +147,35 @@ export class StoreAdmissionController {
 
     const now = Date.now();
     const windowStart = Math.floor(now / policy.windowMs) * policy.windowMs;
-    const retryAfterMs = Math.max(1, windowStart + policy.windowMs - now);
+    const windowEnd = windowStart + policy.windowMs;
 
     for (let slot = 0; slot < policy.max; slot += 1) {
       const resource = this.getSlotResource(`rate:${windowStart}`, key, slot);
       const lockId = await this.acquireSlot(
         resource,
-        retryAfterMs,
+        Math.max(1, windowEnd - Date.now()),
         signal,
         false,
       );
+      if (Date.now() >= windowEnd) {
+        // A delayed grant belongs to the old window, never to a new callback start.
+        return { kind: "deferred", retryAfterMs: 1 };
+      }
       if (lockId !== null) {
         // Rate slots intentionally expire with the fixed window and are not released.
         return {
           kind: "admitted",
           assertOwnership: async () => {},
           release: async () => {},
+          expiresAt: windowEnd,
         };
       }
     }
 
-    return { kind: "deferred", retryAfterMs };
+    return {
+      kind: "deferred",
+      retryAfterMs: Math.max(1, windowEnd - Date.now()),
+    };
   }
 
   private async acquireSlot(

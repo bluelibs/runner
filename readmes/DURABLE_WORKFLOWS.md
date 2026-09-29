@@ -687,14 +687,15 @@ handling is reused from the resilience module.
 - `{ windowMs: 60_000, max: 100 }` caps callback starts per fixed window. Add
   `key` to share that rate limit across selected steps.
 - Completed steps replay their cached result without acquiring a permit or
-  consuming a window allowance. Each live callback retry acquires again.
+  consuming a window allowance. Each live callback retry acquires again, and
+  suspension preserves the callback retry budget for the same workflow attempt.
 - When capacity is full, Runner saves a retry timer and suspends the attempt,
   releasing its workflow-level concurrency permit. Enable polling in at least
   one worker sharing the store so blocked executions resume.
 - Numeric permits are renewed while the callback runs and ownership is checked
   before persisting its result. Pass the callback's `signal` to external work:
-  cancellation, timeout, and lease loss signal the callback to stop. If a callback
-  ignores cancellation or timeout, renewal stops and its permit stays held until
+  cancellation, timeout, and ownership loss signal the callback to stop. If a callback
+  ignores the interruption, renewal stops and its permit stays held until
   it settles or the lease expires. A lost lease cannot authorize a result write.
 - Fixed-window allowances remain consumed until the window expires, including
   failed callback attempts.

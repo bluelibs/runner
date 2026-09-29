@@ -16,6 +16,7 @@ export async function stepFixture(
     store?: MemoryStore;
     executionId?: string;
     workflowKey?: string;
+    attempt?: number;
     contextOptions?: ConstructorParameters<typeof DurableContext>[4];
   } = {},
 ) {
@@ -26,7 +27,7 @@ export async function stepFixture(
     workflowKey: options.workflowKey ?? "orders.v1",
     input: undefined,
     status: ExecutionStatus.Running,
-    attempt: 1,
+    attempt: options.attempt ?? 1,
     maxAttempts: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -36,7 +37,7 @@ export async function stepFixture(
       store,
       new MemoryEventBus(),
       executionId,
-      1,
+      options.attempt ?? 1,
       options.contextOptions,
     );
   return { store, ctx: context(), replay: context, executionId };

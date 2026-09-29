@@ -284,6 +284,7 @@ export class DurableContext implements IDurableContext {
     allowCancellationRequested = false,
   ): Promise<T> {
     return await executeDurableStep({
+      workflowAttempt: this.attempt,
       store: this.store,
       executionId: this.executionId,
       assertCanContinue: async () =>

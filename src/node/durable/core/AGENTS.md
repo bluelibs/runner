@@ -35,7 +35,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Followed execution waits distinguish the requested root from the current continuation tip.
 - Pause, shutdown interruption, business failure, and cancellation are distinct outcomes.
   Parking an attempt must not silently consume a retry or turn it into workflow failure.
-- Step saturation saves a retry timer and releases workflow admission; canceled callbacks stop renewal and retain numeric capacity until settlement or lease expiry.
+- Step saturation saves a retry timer and releases workflow admission; interrupted callbacks stop renewal and retain numeric capacity until settlement or lease expiry, including execution-lock loss.
+- `durable-context/DurableContext.stepAttempt.ts` journals step retry consumption by workflow attempt so concurrency replay preserves its budget. Obsolete fixed-window grants defer, and callback entry checks expiry synchronously before user code.
 - Renew and check ownership around long-running work; do not commit after a lease is lost.
 - Retain compatibility with optional store methods: unsupported requested features fail clearly.
 - Runtime admission, polling timers, cancellation listeners, workers, and async context belong to this service instance.

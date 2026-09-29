@@ -28,6 +28,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Test Contracts
 
+- Step concurrency tests cover obsolete window responses, callback settlement after ownership loss, and retry budgets restored by another worker.
 - Test the public behavior and failure outcomes; use targeted internal tests for races and ownership.
 - Keep each `run(app)` isolated; dispose runtimes/backends, remove temporary files, and close sockets.
 - Preserve canonical runtime addressing versus durable persistence/delivery identities in fixtures.

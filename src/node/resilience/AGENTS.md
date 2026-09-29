@@ -29,7 +29,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Semaphore handles own configuration; the backend owns permits, waiters, and shutdown.
 - Cancellation returns promptly even when Redis acquisition stalls; release any late grant.
 - Acquired permits have conservative local deadlines, renewal, and final ownership verification.
-- Lease loss or stalled renewal aborts work cooperatively and prevents a successful owned result.
+- Lease loss or stalled renewal aborts work cooperatively and prevents a successful owned result. Token-fenced cleanup does not wait for a stalled renewal response.
 - Circuit settlement carries the admission generation so stale outcomes cannot corrupt newer state.
 - Disposal aborts permit ownership, settles tracked work, then disconnects the owned client.
 - Resource init validates/connects/pings the client and disconnects it if startup fails.

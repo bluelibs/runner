@@ -12,7 +12,7 @@ export interface RenewableLease {
   fail(error: Error): void;
   /** Stops renewal while leaving the backend token to settle or expire. */
   stopRenewal(): void;
-  /** Stops renewal, waits for pending renewal, and releases the backend token. */
+  /** Stops renewal and releases the backend token without waiting for renewal responses. */
   release(): Promise<void>;
 }
 
@@ -55,7 +55,7 @@ export function createRenewableLease(options: {
   const expire = () => fail(options.errors.lost());
   deadline = setTimeout(expire, remaining());
   deadline.unref?.();
-  const renewal = (async () => {
+  void (async () => {
     try {
       while (!heartbeat.signal.aborted) {
         await abortableDelay(
@@ -111,7 +111,7 @@ export function createRenewableLease(options: {
     },
     async release() {
       stopRenewal();
-      await renewal;
+      // Renewal is token-fenced: a late request cannot resurrect a released lease.
       clearTimeout(deadline);
       await options.release();
     },

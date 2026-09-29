@@ -29,6 +29,12 @@ export function parseStepConcurrency(
   return typeof validated === "number" ? validated : { ...validated };
 }
 
+/** An owned step admission that checks expiry in the same microtask as callback entry. */
+export type StepAdmission = Extract<StoreAdmission, { kind: "admitted" }> & {
+  /** Starts the callback synchronously or parks an allowance from an expired window. */
+  run<T>(callback: () => Promise<T>): Promise<T>;
+};
+
 /** Acquires a step lease or durably parks the current workflow attempt. */
 export async function acquireStepAdmission(params: {
   store: IDurableStore;
@@ -37,7 +43,7 @@ export async function acquireStepAdmission(params: {
   policy: DurableStepConcurrency;
   lockState: ExecutionLockState;
   signal: AbortSignal;
-}): Promise<Extract<StoreAdmission, { kind: "admitted" }>> {
+}): Promise<StepAdmission> {
   let key: string;
   const sharedKey =
     typeof params.policy === "number" ? undefined : params.policy.key;
@@ -79,9 +85,24 @@ export async function acquireStepAdmission(params: {
     throw error;
   }
 
-  if (admission.kind === "deferred") {
-    await controller.defer(params.executionId, admission.retryAfterMs);
+  const suspend = async (retryAfterMs: number): Promise<never> => {
+    await controller.defer(params.executionId, retryAfterMs);
     throw new SuspensionSignal("step-concurrency");
-  }
-  return admission;
+  };
+  if (admission.kind === "deferred")
+    return await suspend(admission.retryAfterMs);
+  const acquired = admission;
+  return {
+    ...acquired,
+    run: (callback) => {
+      acquired.assertActive?.();
+      if (
+        acquired.expiresAt !== undefined &&
+        Date.now() >= acquired.expiresAt
+      ) {
+        return suspend(1);
+      }
+      return callback();
+    },
+  };
 }

@@ -81,4 +81,27 @@ describe("shared renewable lease", () => {
     expect(jest.getTimerCount()).toBe(0);
     await lease.release();
   });
+  it("releases before a stalled renewal responds and ignores its late success", async () => {
+    const { lease, renew, release } = fixture();
+    let respond!: (renewed: boolean) => void;
+    renew.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          respond = resolve;
+        }),
+    );
+    await jest.advanceTimersByTimeAsync(30);
+    await jest.advanceTimersByTimeAsync(60);
+    const cleanup = lease.release();
+    await jest.advanceTimersByTimeAsync(0);
+    try {
+      expect(release).toHaveBeenCalledTimes(1);
+    } finally {
+      respond(true);
+      await cleanup;
+    }
+    await jest.advanceTimersByTimeAsync(100);
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(0);
+  });
 });

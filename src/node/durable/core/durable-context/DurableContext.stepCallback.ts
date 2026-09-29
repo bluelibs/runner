@@ -76,7 +76,7 @@ export async function runAdmittedStepCallback<T>(params: {
     if (isTimeoutExceededError(error) || params.lockState.lost) {
       controller.abort(error);
     }
-    if (liveCallback && !callbackSettled && !params.lockState.lost) {
+    if (liveCallback && !callbackSettled) {
       // Retain capacity until settlement or lease expiry, without orphaning renewal timers.
       params.stopRenewal?.();
       params.deferRelease();
