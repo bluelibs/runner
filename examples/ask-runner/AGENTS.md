@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> **Keep This Guide Current:** If you make changes within this directory, update this `AGENTS.md` in the same change whenever responsibilities, entry points, contracts, or test guidance change. Keep it concise and accurate; do not make artificial edits when the guidance still holds.
+
 This file explains the intent and current architecture of `examples/ask-runner`.
 
 ## Purpose

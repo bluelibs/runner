@@ -1,64 +1,41 @@
-# Runner Architecture & Agent Guidelines
+# Source Architecture
 
-> **Self-Updating Rule**: If you (an AI agent) read this document, ensure you update any changes to reflect the current state of the architecture and **always keep it minimal**.
+> **Keep This Guide Current:** If you make changes within this directory, update this `AGENTS.md` in the same change whenever responsibilities, entry points, contracts, or test guidance change. Keep it concise and accurate; do not make artificial edits when the guidance still holds.
 
-## App Architecture Guidelines
+## Start Here
 
-Runner is a strongly typed application composition framework built around explicit contracts. It operates as a graph of definitions rather than a set of loosely connected modules.
+Runner describes a typed graph first and executes it only after `run(app)`. Builders define contracts; the store compiles ownership and registration; runtime services enforce visibility, validation, lifecycle, and execution. Each run creates its own services.
 
-- **Explicit Contracts**: Architecture is enforced at runtime. Dependency injection is explicit and validation is first-class.
-- **Composition**: The runtime is composed of definitions (Resources, Tasks, Events, Hooks, Middleware).
-- **Lifecycle**: Strict startup and shutdown phases. Startup (`init` -> `ready`) executes in forward dependency order. Shutdown (`cooldown` -> `dispose`) executes in reverse dependency order.
-- **Fail-Fast**: The framework enforces boundary, schema, and dependency cycle validation immediately upon initialization.
-- **Platform Agnostic**: Multi-platform support is embedded in the core design via platform adapters (`node`, `browser`, `universal`). Node-specific features (Async Context, Durable Workflows) are strictly isolated.
-- **Isolation Boundaries**: Nested resources create strict ownership boundaries (e.g., `billing.tasks.charge`). Tests run in highly isolated environments to prevent state bleeding.
-- **Fluent Builders**: Builders snapshot metadata containers before freezing definitions on `.build()`, and forward task context (journal, source, signal) to task implementations.
-- **Runtime Admission Controller**: Features native `pause()`, `resume()`, and `recoverWhen()` to halt ingress dynamically while allowing active executions to drain.
-- **Runtime Mode**: `run()` accepts mode string literals or existing enum members; resolved runtime modes retain the `RunnerMode` type.
+- `index.ts` exports the portable surface through `public.ts`, `defs.ts`, and `public-types.ts`.
+- `public.ts` assembles `r`, built-in namespaces, and runtime exports; `define.ts` exposes definition factories.
+- `run.ts` wires services, registers the graph, processes overrides, validates it, initializes resources, locks registries, runs readiness, and returns `RunResult`.
+- [Node entry points](node/AGENTS.md) extend the portable surface. Package export conditions select the Node entry for Node consumers; browser, edge, and universal builds must remain portable.
 
-## Repository & Folder Structure
+## Module Map
 
-- `/src/`: Core universal code that limits environmental dependencies to a strict abstraction boundary (`IPlatformAdapter`). It can successfully run in browsers, edge workers, and Node environments.
-  - `/src/definers/`: Developer experience boundaries. Houses the `r.*` fluent builders (e.g., `defineTask.ts`, `defineResource.ts`, `defineEvent.ts`). Contains the complex generic accumulation logic that yields definition objects (`.build()`).
-    - `/src/definers/builders/`: Modular fluent builder state chains. Contains subdirectories (`task/`, `resource/`, `event/`) split into `.interface.ts` (API contract), `fluent-builder.ts` (immutable state machine logic), and merge configurations designed to ensure type safety.
-  - `/src/models/`: The internal engine and execution behaviors.
-    - `/src/models/middleware/`: Composes "onion-style" layers (`TaskMiddlewareComposer`, `ResourceMiddlewareComposer`, interceptors) _before_ executions.
-    - `/src/models/event/`: The `EmissionExecutor` and `ListenerRegistry` that handles sequential/parallel routing, reporting batches, and complex transaction rollbacks _during_ runtime.
-    - `/src/models/runtime/`: Contains the `LifecycleAdmissionController` (phase states: Running -> Paused -> CoolingDown -> Discarding) and `RuntimeRecoveryController` logic.
-    - `/src/models/dependency-processor/`: The graph topologically resolving topological DAGs.
-    - `/src/models/store/store-registry/`: Tag aggregators and internal flat map access mechanisms indexing definition schemas.
-    - `ExecutionContextStore.ts`: Context tracing and causal chain storage.
-  - `/src/types/`: Centralized contract repositories defining `IResourceDefinition`, `ITaskDefinition`, symbol identities, and complex Type-level generic restrictions.
-  - `/src/globals/`: Built-in native primitives available out of the box. Separated into `middleware/` (cache, circuitBreaker, etc.), `resources/` (eventManager, logger, store, etc.), and standalone `cron/`. Exposed via unified root files `globalMiddleware.ts` and `globalResources.ts`.
-  - `/src/platform/adapters/`: Runtime-specific handlers yielding standard `IPlatformAdapter` behaviors. Build-time toggling (`__TARGET__`) sets standard process vs DOM lifecycles (`node.ts`, `browser.ts`, `edge.ts`, and fallback `universal-generic.ts`).
-  - `/src/node/`: **Strictly Node-only code.** Houses deep backend functionalities:
-    - `/src/node/resilience/`: Opt-in Redis coordination for rate limits, circuit breakers, and concurrency; portable optional dependency contracts live in `/src/globals/resilience/`. Task middleware composition assigns stable application identities to separate stacked distributed policies.
-    - `/src/node/durable/`: Split natively between `core/` (engine orchestrator), `store/` (state persistence for memory vs redis), `bus/` (pub-sub coordination), and `queue/` (execution limits distribution).
-    - `/src/node/rpc-lanes/` & `/src/node/event-lanes/`: Network layer isolation resolving topology bindings parsing configuration against networking implementations (e.g., Network Transports vs RabbitMQ queues or transparent proxying).
-    - `/src/node/exposure/`: Full independent external HTTP stack (`exposureServer.ts`, `router.ts`, `requestHandlers.ts`) for mapping runtime task ingress controls logic safely via JSON/Multipart body limits.
-  - `/src/__tests__/`: Core isolation boundaries mirroring the main module paths. All tests ensure 100% rigid code coverage. Look here for examples of any architecture mechanism.
-- `/readmes/` and `/guide-units/`: Source repositories for the dynamic modular documentation which compiles directly into full markdown files. Note: `FULL_GUIDE.md` is an auto-generated artifact—do not edit manually.
+- [Definitions](definers/AGENTS.md): raw factories, fluent builders, snapshots, schemas, and local-ID validation.
+- [Types](types/AGENTS.md): public contracts, generics, dependency inference, and identity symbols.
+- [Runtime models](models/AGENTS.md): store, dependency processor, task/event execution, middleware, visibility, logging, and inspection.
+- [Built-ins](globals/AGENTS.md): resources, events, tags, task/resource middleware, cron, and resilience contracts.
+- [Tools](tools/AGENTS.md): bootstrap/shutdown coordination, IDs, scopes, and [runtime validation](tools/check/AGENTS.md).
+- [Errors](errors/AGENTS.md): typed framework failures and stable error identifiers.
+- [Platform](platform/AGENTS.md): environment capabilities and adapters.
+- [Serialization](serializer/AGENTS.md): tree/graph encoding, type registry, validation, and hydration.
+- [Portable remote lanes](remote-lanes/AGENTS.md): fetch transport and retry policy; Node lanes and exposure live under `node/`.
+- [Business context](async-contexts/AGENTS.md): built-in identity context; separate from execution tracing.
+- [Decorators](decorators/AGENTS.md): standard/legacy validation and serialization metadata entry points.
+- [Runtime support](runtime/AGENTS.md): active-run bookkeeping for cleanup and decorator metadata initialization; admission controllers live in `models/runtime/`.
+- [Tests](__tests__/AGENTS.md): mirrored behavior suites, type contracts, platform/security checks, and benchmarks.
 
-## Inner Processing Architecture
+## Contracts To Preserve
 
-- **Task Execution Pipeline (Onion Model)**: Tasks execute through a dynamically composed middleware chain handled by `TaskMiddlewareComposer`. The layers resolve from outermost to innermost: Global Middleware → Resource Middleware → Local Task Middleware → Validation Phase (`ValidationHelper`) → Task `.run()`.
-- **Resilience Coordination**: Rate limit, circuit breaker, and concurrency select local memory or registered Redis per application; explicit distributed requirements are validated for task and subtree attachments at startup. Reusable resilience semaphore handles share unscoped keyed concurrency pools and the same permit lifecycle.
-- **Dependency Map Resolution**: Topologically sorted during container boot. Evaluated lazily or eagerly depending on the config. Cyclic dependencies trigger fail-fast validation prior to ingress opening.
-- **Event Emission & Rollbacks**: `EventManager` handles hook batches. It executes same-priority hooks concurrently (if `.parallel(true)`). For `.transactional(true)` events, it enforces sequential execution and automatically invokes returned async undo closures in reverse order upon failure.
-- **Context Storage & Tracing (`AsyncLocalStorage`)**: In Node.js environments, `ExecutionContextStore` automatically propagates runtime contexts across async boundaries. This tracks the execution frame stack, handles correlation IDs, and allows the `ExecutionJournal` to remain transparently available without polluting dependency signatures.
-- **Metadata & Global Store**: The framework compiles the entire tree of definitions into a flattened internal registry (`Store`). Lineage-aware IDs (canonical IDs) are constructed dynamically by inspecting resource parenting.
-- **Platform Adapters Interface**: Core logic abstracts runtime interactions (e.g., timers, event listeners, process environments) behind an `IPlatformAdapter`. It dynamically swaps implementations (`node.ts`, `browser.ts`, `universal.ts`) at build time to maintain universal core integrity while leveraging deep Node primitives where applicable.
+- `run(app)` instances must remain isolated, including middleware state, listeners, tracing, and teardown. Process-wide hooks coordinate cleanup rather than owning app services.
+- User definitions have local IDs. Ownership compilation creates canonical IDs; stateful indexes use storage identities. Never shorten an internal ID to a leaf/display name.
+- Built definitions carry stable lineage identity. Two equal strings do not establish equality between independently built definitions.
+- Keep Node dependencies behind platform adapters or within `node/`; check both exports and consumer bundles when changing that boundary.
+- Preserve startup validation, registry locking, lazy initialization, source-aware admission, and cleanup on bootstrap failure. Read the controllers before changing shutdown phase behavior.
+- Public surfaces, including indirectly exported types, require JSDoc. Update source docs and `readmes/COMPACT_GUIDE.md` minimally when the public core story changes; advanced Node topics have dedicated guides.
 
-## Glossary of Terms
+## Validation
 
-- **Resource**: A singleton object with a defined lifecycle (`init`, `ready`, `cooldown`, `dispose`). It models shared services, state, and acts as the main composition unit.
-- **Task**: A typed business action with support for Dependency Injection (DI), middleware chains, and input/output validation (`ValidationHelper`).
-- **Event**: A typed signal for decoupling producers from listeners. Supports fail-fast or aggregate error collection.
-- **Hook**: A reaction/listener to an Event. Supports execution priority (`order`), concurrent execution (`parallel`), and reversible flows (`transactional`).
-- **Middleware**: A wrapper around a Task or Resource used to enforce cross-cutting concerns. Built-ins include caching, rate-limiting, and resilience (circuit-breaking, retries).
-- **Tag**: Metadata (`ITag`) attached to definitions for framework-wide discovery and policy enforcement.
-- **Error**: A dynamically typed framework-aware error helper (`RunnerError`) carrying HTTP codes, safe serialization, and remediation formatting.
-- **Journal (`ExecutionJournal`)**: Typed state scoped to a single task execution, shared between middleware and the task runtime.
-- **Runtime**: The bootstrapped graph initialized via `run(app)`, returning an API to execute tasks, emit events, and manage lifecycle.
-- **RPC Retries**: Network lane bindings retry transport failures while preserving communicator receivers and caller cancellation. Raw streams and multipart Node-file uploads make a single attempt because their sources may be consumed.
-- **Durable Workflow** (Node Only): Pausable, deterministic, resumable task execution using `step()` and `waitForSignal()`. Workflow admission uses store-backed concurrency leases or fixed-window rate slots scoped by the persisted workflow key; outcome writes verify execution and concurrency lease ownership.
+From the repository root, use `npm run test -- <searchKey>` while iterating on a behavior, then `npm run qa` for code changes. Pure documentation changes do not need QA. Tests live in `__tests__/` and `node/__tests__/`; dispose runtimes and preserve the 100% coverage contract without exclusions.

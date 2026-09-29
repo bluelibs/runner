@@ -1,3 +1,24 @@
+# Repository Working Guide
+
+## Keep Module Guides Current
+
+If you make changes within a directory, review its nearest `AGENTS.md` and update it in the same change to reflect any affected responsibilities, entry points, contracts, or test guidance. Update parent guides too when module boundaries or repository navigation change. Keep these documents concise and accurate; do not add artificial edits when the guidance remains unchanged.
+
+Read this guide first, then the guides along the path to the files you change. A child guide adds module context; repository-wide rules still apply. Put guides at meaningful module boundaries, not in every small folder. Describe verified architecture, the few files to read first, invariants, and where to validate changes. Avoid exhaustive file inventories and speculative future work.
+
+## Repository Map
+
+Runner turns typed definitions into an isolated runtime. Read [the compact guide](readmes/COMPACT_GUIDE.md) for the public mental model, then follow the relevant module guide:
+
+- [Source architecture](src/AGENTS.md): public entry points, definition graph, runtime services, and platform boundaries.
+- [Examples](examples/AGENTS.md): separate consumer apps, local package dependencies, and app-specific checks.
+- [Guide units](guide-units/AGENTS.md) and [topic docs](readmes/AGENTS.md): authored documentation and composition rules.
+- [Scripts](scripts/AGENTS.md) and [configuration](config/AGENTS.md): build, coverage, packaging, and compatibility checks.
+- [CI](.github/AGENTS.md): workflow responsibilities and live infrastructure checks.
+- [Published skill](skills/AGENTS.md): reference links, snippets, and npm packaging.
+
+The working style is contract-first: agree on interfaces, define acceptance criteria, then implement the smallest readable change. Runtime state belongs to each `run(app)`; definition identity and canonical runtime addressing must remain distinct.
+
 ## General Principles
 
 - Be passionate about what you do, be precise, thoughtful and clear.
