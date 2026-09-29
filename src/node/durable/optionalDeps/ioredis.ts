@@ -39,7 +39,11 @@ function getRedisConstructor(): RedisConstructor {
   }
 }
 
-export function createIORedisClient(url?: string): unknown {
+export function createIORedisClient(
+  url?: string,
+  options?: Record<string, unknown>,
+): unknown {
   const Redis = getRedisConstructor();
+  if (options) return url ? new Redis(url, options) : new Redis(options);
   return url ? new Redis(url) : new Redis();
 }

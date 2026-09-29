@@ -1,39 +1,35 @@
+import { sharedConcurrencyKey } from "../resilience/concurrencyKey";
+import {
+  getMiddlewareApplicationIdentity,
+  requireMiddlewareApplicationIdentity,
+} from "../../models/middleware/applicationIdentity";
+import {
+  assertConcurrencyConfig,
+  concurrencyConfigPattern,
+  resolveConcurrencyKey,
+  type ConcurrencyMiddlewareConfig,
+} from "./concurrency/config";
+import { withMemoryPermit } from "./concurrency/memory";
+import {
+  middlewareConcurrencyQueueFullError,
+  middlewareConcurrencyWaitTimeoutError,
+} from "./concurrency/errors";
+import { resilienceResource } from "../resilience/resource";
+import {
+  getOrCreateTaskAbortController,
+  getTaskAbortSignalLink,
+} from "../../models/runtime/taskCancellation";
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { Semaphore } from "../../models/Semaphore";
-import {
-  middlewareConcurrencyConflictError,
-  validationError,
-} from "../../errors";
+import { middlewareConcurrencyConflictError } from "../../errors";
 import { IDENTITY_SCOPE_SEPARATOR } from "../../async-contexts/identity.constants";
-import { Match } from "../../tools/check";
-import type { ValidationSchemaInput } from "../../types/utilities";
-import {
-  getIdentityNamespace,
-  identityScopePattern,
-  type IdentityScopedMiddlewareConfig,
-} from "./identityScope.shared";
+import { getIdentityNamespace } from "./identityScope.shared";
 import { globalTags } from "../globalTags";
 import { identityContextResource } from "../resources/identityContext.resource";
 
-export interface ConcurrencyMiddlewareConfig extends IdentityScopedMiddlewareConfig {
-  /**
-   * Maximum number of concurrent executions.
-   * If provided, a Semaphore will be created and shared for this config object.
-   */
-  limit?: number;
-
-  /**
-   * Optional key to identify a shared semaphore.
-   * If provided, the semaphore will be shared across all tasks using the same key.
-   */
-  key?: string;
-
-  /**
-   * An existing Semaphore instance to use.
-   */
-  semaphore?: Semaphore;
-}
+export type { ConcurrencyMiddlewareConfig } from "./concurrency/config";
+export type { ConcurrencyWaitOptions } from "./concurrency/wait";
 
 export interface ConcurrencyState {
   semaphoresByConfig: WeakMap<
@@ -44,57 +40,6 @@ export interface ConcurrencyState {
   semaphores: Set<Semaphore>;
 }
 
-const concurrencyConfigPattern: ValidationSchemaInput<ConcurrencyMiddlewareConfig> =
-  Match.ObjectIncluding({
-    limit: Match.Optional(Match.PositiveInteger),
-    key: Match.Optional(Match.NonEmptyString),
-    semaphore: Match.Optional(Semaphore),
-    identityScope: identityScopePattern,
-  });
-
-function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
-  const hasSemaphore = config.semaphore !== undefined;
-  const hasLimit = config.limit !== undefined;
-  const hasKey = config.key !== undefined;
-
-  if (hasSemaphore && (hasLimit || hasKey)) {
-    validationError.throw({
-      subject: "Middleware config",
-      id: "concurrency",
-      originalError:
-        "Concurrency middleware config is ambiguous. Use either { semaphore } or { limit, key? }, not both.",
-    });
-  }
-
-  if (hasKey && !hasLimit) {
-    validationError.throw({
-      subject: "Middleware config",
-      id: "concurrency",
-      originalError: 'Concurrency middleware config "key" requires "limit".',
-    });
-  }
-
-  if (
-    config.key !== undefined &&
-    config.key.includes(IDENTITY_SCOPE_SEPARATOR)
-  ) {
-    validationError.throw({
-      subject: "Middleware config",
-      id: "concurrency",
-      originalError: `Concurrency middleware config "key" cannot contain "${IDENTITY_SCOPE_SEPARATOR}" because it is used as the separator in shared identity-scoped keys.`,
-    });
-  }
-
-  if (!hasSemaphore && !hasLimit) {
-    validationError.throw({
-      subject: "Middleware config",
-      id: "concurrency",
-      originalError:
-        'Concurrency middleware requires either "limit" or "semaphore".',
-    });
-  }
-}
-
 export const concurrencyResource = defineResource({
   id: "concurrency",
   meta: {
@@ -102,7 +47,9 @@ export const concurrencyResource = defineResource({
     description:
       "Tracks shared semaphores for the built-in concurrency middleware, including keyed and identity-scoped partitions.",
   },
-  init: async () => ({
+  dependencies: { resilience: resilienceResource.optional() },
+  init: async (_config, { resilience }) => ({
+    resilience,
     semaphoresByConfig: new WeakMap<
       ConcurrencyMiddlewareConfig,
       Map<string, Semaphore>
@@ -130,33 +77,67 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
     description:
       "Limits concurrent task executions with semaphores, supporting shared keys and optional identity scoping.",
   },
-  throws: [middlewareConcurrencyConflictError],
+  throws: [
+    middlewareConcurrencyConflictError,
+    middlewareConcurrencyQueueFullError,
+    middlewareConcurrencyWaitTimeoutError,
+  ],
   configSchema: concurrencyConfigPattern,
   dependencies: {
     state: concurrencyResource,
     identityContext: identityContextResource,
   },
   async run(
-    { task, next },
+    execution,
     { state, identityContext },
     config: ConcurrencyMiddlewareConfig,
   ) {
+    const { task, next, journal } = execution;
     assertConcurrencyConfig(config);
 
+    const resolvedKey = resolveConcurrencyKey(
+      config,
+      task.definition.id,
+      task.input,
+    );
     let semaphore = config.semaphore;
     const identityNamespace = getIdentityNamespace(
       config.identityScope,
       identityContext?.tryUse,
     );
 
+    if (config.coordination !== "local" && !semaphore && state.resilience) {
+      const key =
+        resolvedKey === undefined
+          ? JSON.stringify([
+              "task",
+              getMiddlewareApplicationIdentity(execution, task.definition.id),
+              identityNamespace,
+            ])
+          : sharedConcurrencyKey(resolvedKey, identityNamespace);
+      const controller = getOrCreateTaskAbortController(journal);
+      const link = getTaskAbortSignalLink(journal);
+      try {
+        return await state.resilience.withPermit(
+          key,
+          config.limit!,
+          link.signal,
+          (reason) => controller.abort(reason),
+          () => next(task.input),
+          config,
+        );
+      } finally {
+        link.cleanup();
+      }
+    }
     if (!semaphore && config.limit !== undefined) {
-      if (config.key !== undefined) {
-        const scopedKey = `${identityNamespace}${IDENTITY_SCOPE_SEPARATOR}${config.key}`;
+      if (resolvedKey !== undefined) {
+        const scopedKey = JSON.stringify([identityNamespace, resolvedKey]);
         const existing = state.semaphoresByKey.get(scopedKey);
         if (existing) {
           if (existing.limit !== config.limit) {
             middlewareConcurrencyConflictError.throw({
-              key: scopedKey,
+              key: `${identityNamespace}${IDENTITY_SCOPE_SEPARATOR}${resolvedKey}`,
               existingLimit: existing.limit,
               attemptedLimit: config.limit,
             });
@@ -186,6 +167,16 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
       }
     }
 
-    return semaphore!.withPermit(() => next(task?.input));
+    getOrCreateTaskAbortController(journal);
+    const link = getTaskAbortSignalLink(journal);
+    try {
+      return await withMemoryPermit(semaphore!, config, link.signal, () =>
+        next(task.input),
+      );
+    } finally {
+      link.cleanup();
+    }
   },
 });
+
+requireMiddlewareApplicationIdentity(concurrencyTaskMiddleware);

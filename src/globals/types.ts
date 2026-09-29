@@ -22,6 +22,7 @@ export type {
 } from "./middleware/circuitBreaker.middleware";
 export type {
   ConcurrencyMiddlewareConfig,
+  ConcurrencyWaitOptions,
   ConcurrencyState,
 } from "./middleware/concurrency.middleware";
 export type { FallbackMiddlewareConfig } from "./middleware/fallback.middleware";
@@ -40,3 +41,8 @@ export type {
 export type { IdentityScopeConfig } from "./middleware/identityScope.shared";
 export type { TimeoutMiddlewareConfig } from "./middleware/timeout.middleware";
 export type { TimeoutError } from "./middleware/timeout.middleware";
+
+export type {
+  MiddlewareCoordination,
+  CoordinationConfig,
+} from "./resilience/coordination";

@@ -1,3 +1,11 @@
+import {
+  coordinationPattern,
+  type CoordinationConfig,
+} from "../resilience/coordination";
+import {
+  getMiddlewareApplicationIdentity,
+  requireMiddlewareApplicationIdentity,
+} from "../../models/middleware/applicationIdentity";
 import { taskMiddlewareBuilder } from "../../definers/builders/middleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { RunnerError } from "../../definers/defineError";
@@ -27,7 +35,8 @@ import {
 import { globalTags } from "../globalTags";
 import { identityContextResource } from "../resources/identityContext.resource";
 
-export interface RateLimitMiddlewareConfig extends IdentityScopedMiddlewareConfig {
+export interface RateLimitMiddlewareConfig
+  extends IdentityScopedMiddlewareConfig, CoordinationConfig {
   /**
    * Time window in milliseconds
    */
@@ -55,6 +64,7 @@ const positiveNonZeroIntegerPattern = Match.Where(
 );
 
 const rateLimitConfigPattern = Match.ObjectIncluding({
+  coordination: coordinationPattern,
   windowMs: positiveNonZeroIntegerPattern,
   max: positiveNonZeroIntegerPattern,
   keyBuilder: Match.Optional(Function),
@@ -109,10 +119,11 @@ export const rateLimitTaskMiddleware = taskMiddlewareBuilder("rateLimit")
   })
   .run(
     async (
-      { task, next, journal },
+      execution,
       { state, identityContext },
       config: RateLimitMiddlewareConfig,
     ) => {
+      const { task, next, journal } = execution;
       rateLimitRuntimeConfigSchema.parse(config);
 
       const storageTaskId = task.definition.id;
@@ -132,6 +143,34 @@ export const rateLimitTaskMiddleware = taskMiddlewareBuilder("rateLimit")
         config.identityScope,
         identityContext?.tryUse,
       );
+      if (config.coordination !== "local" && state.resilience) {
+        const admission = await state.resilience.rateLimit(
+          getMiddlewareApplicationIdentity(execution, storageTaskId),
+          key,
+          config.max,
+          config.windowMs,
+          config.maxKeys,
+        );
+        journal.set(
+          rateLimitTaskMiddleware.journalKeys.remaining,
+          admission.remaining,
+          { override: true },
+        );
+        journal.set(
+          rateLimitTaskMiddleware.journalKeys.resetTime,
+          admission.resetTime,
+          { override: true },
+        );
+        journal.set(rateLimitTaskMiddleware.journalKeys.limit, config.max, {
+          override: true,
+        });
+        if (!admission.allowed) {
+          middlewareRateLimitExceededError.throw({
+            message: `Rate limit exceeded. Try again after ${new Date(admission.resetTime).toISOString()}`,
+          });
+        }
+        return await next(task.input);
+      }
       const now = Date.now();
       let keyedStates = state.states.get(config);
       const hadKeyedStates = keyedStates !== undefined;
@@ -205,3 +244,5 @@ export type {
   RateLimitState,
 } from "./rateLimit.resource";
 export { rateLimitResource } from "./rateLimit.resource";
+
+requireMiddlewareApplicationIdentity(rateLimitTaskMiddleware);
