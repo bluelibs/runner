@@ -18,8 +18,8 @@ export interface ShellOutput extends Writable {
 
 /** Configuration for the optional, local-only runtime shell. */
 export interface ShellConfig {
-  /** Absolute Unix socket path inside an existing owner-only directory (0700). */
-  socketPath: string;
+  /** Absolute Unix socket path in an owner-only directory; defaults to runner.sock in process.cwd() when started. */
+  socketPath?: string;
   /** Require read-only sessions on the server; opt in to one on the connector. Defaults to false. */
   readOnly?: boolean;
 }

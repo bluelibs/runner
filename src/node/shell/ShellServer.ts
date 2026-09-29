@@ -7,6 +7,7 @@ import { assertPrivateSocketDirectory } from "./socketPath";
 import { startShellCommand } from "./commandSession";
 import { startShellSession } from "./session";
 import { shellError } from "./errors";
+import { reclaimStaleSocket } from "./staleSocket";
 
 /** Lifecycle-owned local shell listener for one Runner container. */
 export class ShellServer {
@@ -70,7 +71,7 @@ export class ShellServer {
     return this.#executionScope.getStore() === true;
   }
 
-  /** Opens the socket. Existing paths are never deleted or taken over. */
+  /** Opens the socket, reclaiming an owned stale socket left by a crashed process. */
   async listen(): Promise<void> {
     if (this.closing) {
       throw shellError.new({
@@ -82,14 +83,19 @@ export class ShellServer {
 
   private async openListener(): Promise<void> {
     await assertPrivateSocketDirectory(this.socketPath);
-    await new Promise<void>((resolve, reject) => {
-      const onError = (error: Error) => reject(error);
-      this.server.once("error", onError);
-      this.server.listen(this.socketPath, () => {
-        this.server.removeListener("error", onError);
-        resolve();
+    const release = await reclaimStaleSocket(this.socketPath);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: Error) => reject(error);
+        this.server.once("error", onError);
+        this.server.listen(this.socketPath, () => {
+          this.server.removeListener("error", onError);
+          resolve();
+        });
       });
-    });
+    } finally {
+      await release();
+    }
   }
 
   /** Disconnects sessions and closes the owned socket; safe to call again. */

@@ -1,6 +1,7 @@
 import { resource } from "../../definers/builders/resource";
 import { runtimeResource } from "../../globals/resources/runtime.resource";
 import { Match } from "../../tools/check";
+import { defaultShellSocketPath } from "./socketPath";
 import { ShellServer } from "./ShellServer";
 import type { ShellConfig } from "./types";
 
@@ -12,12 +13,12 @@ export const shellResource = resource<ShellConfig>("shell")
       "Interactive local Unix socket access to this container's live runtime.",
   })
   .configSchema({
-    socketPath: Match.NonEmptyString,
+    socketPath: Match.Optional(Match.NonEmptyString),
     readOnly: Match.Optional(Boolean),
   })
   .dependencies({ runtime: runtimeResource })
   .init(
-    async ({ socketPath, readOnly }, { runtime }) =>
+    async ({ socketPath = defaultShellSocketPath(), readOnly }, { runtime }) =>
       new ShellServer(socketPath, runtime, readOnly),
   )
   .ready(async (shell) => shell.listen())

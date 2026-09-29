@@ -72,3 +72,5 @@ Only SSH crosses the network. The connector reaches a local Unix socket; Runner 
 The application uses an owner-only directory under the OS temporary directory. The connector and app must resolve the same path. Production applications should choose a stable private directory and use its absolute socket path in both scripts.
 
 See [Runtime Shell](../../readmes/RUNTIME_SHELL.md) for lifecycle, access, and evaluation details.
+
+The example uses an explicit private directory so it works from a shared checkout. In an owner-only working directory, you can instead register `resources.shell` without `.with(...)`, call `connectShell()` without options, or call `runShell({ command: "42" })`. Both sides default to `runner.sock` in their own current directory. Start the SSH connector from the same app directory. Stale sockets are reclaimed automatically; live listeners and non-socket paths are preserved and cause startup to fail.

@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { createConnection } from "node:net";
 import { check, Match } from "../../tools/check";
 import { negotiateShellConnection } from "./protocol";
-import { assertSocketPath } from "./socketPath";
+import { assertSocketPath, defaultShellSocketPath } from "./socketPath";
 import type { RunShellOptions, ShellCommandResult } from "./types";
 
 const resultSchema = Match.compile(
@@ -13,7 +13,7 @@ const resultSchema = Match.compile(
 
 /** Evaluates one JavaScript command in the live app without a terminal, then disconnects. */
 export async function runShell({
-  socketPath,
+  socketPath = defaultShellSocketPath(),
   command,
   readOnly = false,
 }: RunShellOptions): Promise<ShellCommandResult> {

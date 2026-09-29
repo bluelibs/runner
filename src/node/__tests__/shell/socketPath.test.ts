@@ -90,9 +90,7 @@ describeUnix("shell socket ownership", () => {
     const second = new ShellServer(socketPath, runtime);
     await first.listen();
     try {
-      await expect(second.listen()).rejects.toMatchObject({
-        code: "EADDRINUSE",
-      });
+      await expect(second.listen()).rejects.toThrow("already in use");
       await second.close();
     } finally {
       await first.close();

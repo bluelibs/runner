@@ -4,7 +4,7 @@ import { createConnection } from "node:net";
 import { check, Match } from "../../tools/check";
 import { shellError } from "./errors";
 import { negotiateShellConnection } from "./protocol";
-import { assertSocketPath } from "./socketPath";
+import { assertSocketPath, defaultShellSocketPath } from "./socketPath";
 import { attachShellTerminal } from "./terminal";
 import type { ConnectShellOptions } from "./types";
 
@@ -13,13 +13,13 @@ import type { ConnectShellOptions } from "./types";
  * Negotiates read-only access before forwarding input. Use SSH with `-t` remotely.
  */
 export async function connectShell({
-  socketPath,
+  socketPath = defaultShellSocketPath(),
   readOnly = false,
   terminal = "auto",
   historyFile,
   input = process.stdin,
   output = process.stdout,
-}: ConnectShellOptions): Promise<void> {
+}: ConnectShellOptions = {}): Promise<void> {
   assertSocketPath(socketPath);
   check(readOnly, Boolean);
   check(terminal, Match.OneOf("auto", "interactive", "basic"));

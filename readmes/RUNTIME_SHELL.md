@@ -6,7 +6,23 @@ This is an opt-in Node.js 22+ administrative resource for Linux and macOS. Regis
 
 ## Register The Shell
 
-Use a private directory owned by the application's OS user. Create it before booting the app; the resource rejects missing directories, group/other permissions, and a symlink as the immediate parent.
+Register the resource without configuration to use `runner.sock` in `process.cwd()` when the resource starts:
+
+```ts
+import { connectShell, r, resources, run, runShell } from "@bluelibs/runner/node";
+
+const app = r.resource("app").register([resources.shell]).build();
+await run(app);
+
+// From a connector launched in that same directory:
+await connectShell();
+// Or, without a terminal:
+await runShell({ command: "await runtime.getHealth()" });
+```
+
+The resource captures that absolute path at startup; later working-directory changes do not move the listener. Connectors resolve their own current directory when called, so SSH into the application's directory or pass an explicit `socketPath`. The working directory must satisfy the same private-directory rules as a custom path. A typical shared checkout with mode `0755` is rejected; the shell never changes directory permissions automatically.
+
+For an explicit path, use a private directory owned by the application's OS user. Create it before booting the app; the resource rejects missing directories, group/other permissions, and a symlink as the immediate parent.
 
 ```ts
 import { mkdir } from "node:fs/promises";
@@ -26,7 +42,9 @@ await run(app);
 
 For a service deployment, provision `/run/my-app` with mode `0700` and the service user's ownership instead of creating it in application code. Use a separate socket path for each container or replica. Paths must be absolute, at most 103 UTF-8 bytes, and contain no NUL character.
 
-The shell starts listening during its resource's `ready` lifecycle. During cooldown it disconnects clients and closes the listener. Disposal also closes it, including startup rollback. Node removes the socket on a normal close; the private directory remains. Existing socket paths are never removed to make room for a listener. If a process crashes and leaves a stale socket, verify the old process is gone before removing it.
+The shell starts listening during its resource's `ready` lifecycle. During cooldown it disconnects clients and closes the listener. Disposal also closes it, including startup rollback. Node removes the socket on a normal close; the private directory remains. Startup fails if the directory cannot be written or the socket cannot be bound. An existing socket owned by the app user is reclaimed only when a connection probe confirms its listener is gone. Live listeners, regular files, symlinks, and sockets owned by another user are never overtaken. Permission errors and uncertain probe results also fail startup without deleting the path.
+
+Recovery uses a temporary `<socketPath>.reclaim` directory to prevent concurrent restarts from removing each other's sockets. It is removed once startup finishes. If a process crashes during recovery itself, later startup fails with `EEXIST`; verify no recovery is running before removing that marker. A live takeover is deliberately not performed: an older process could later remove the replacement socket during shutdown.
 
 ## Connect From A Script
 

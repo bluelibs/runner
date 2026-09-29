@@ -1,6 +1,11 @@
 import { lstat } from "node:fs/promises";
-import { dirname, isAbsolute } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { shellError } from "./errors";
+
+/** Resolves the default at startup, rather than when the module is imported. */
+export function defaultShellSocketPath(): string {
+  return join(process.cwd(), "runner.sock");
+}
 
 export function assertSocketPath(socketPath: string): void {
   if (process.platform === "win32") {
