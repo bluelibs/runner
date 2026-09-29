@@ -22,11 +22,11 @@ export function getAccessViolation(
   consumerId: string,
   channel: IsolationChannel,
 ): AccessViolation | null {
-  if (state.scopedResources.size > 0) {
+  const scopedResources = state.scopedResources;
+  if (scopedResources) {
     // Scope compilation changes storage identities, not the user's isolation selectors.
-    targetId = state.scopedResources.get(targetId)?.targetId ?? targetId;
-    consumerId =
-      state.scopedResources.get(consumerId)?.consumerId ?? consumerId;
+    targetId = scopedResources.get(targetId)?.targetId ?? targetId;
+    consumerId = scopedResources.get(consumerId)?.consumerId ?? consumerId;
   }
   return (
     findVisibilityViolation(state, targetId, consumerId) ??

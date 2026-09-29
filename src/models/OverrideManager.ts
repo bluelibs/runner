@@ -44,8 +44,8 @@ export class OverrideManager {
     string,
     OverrideCandidate[]
   >();
-  private readonly overrideBaseIds = new Map<string, string>();
   private readonly overrideWinnerSources = new Map<string, string>();
+  private overrideBaseIds: Map<string, string> | undefined;
 
   constructor(private readonly registry: StoreRegistry) {}
 
@@ -61,7 +61,7 @@ export class OverrideManager {
     const baseReference = getOverrideTargetReference(winner);
 
     return {
-      baseCanonicalId: this.overrideBaseIds.get(targetId) ?? targetId,
+      baseCanonicalId: this.overrideBaseIds?.get(targetId) ?? targetId,
       baseSourceId: baseReference.id,
       winnerSourceId: winner.id,
       declaredByResourceId,
@@ -259,7 +259,7 @@ export class OverrideManager {
       (instanceId, targetId, source, override) => {
         this.overrides.set(instanceId, override);
         this.overrideWinnerSources.set(instanceId, source);
-        this.overrideBaseIds.set(instanceId, targetId);
+        (this.overrideBaseIds ??= new Map()).set(instanceId, targetId);
       },
     );
     for (const [targetId, override] of [...this.overrides.entries()]) {

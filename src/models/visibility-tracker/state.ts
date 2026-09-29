@@ -9,7 +9,6 @@ import type { CompiledIsolationPolicy } from "./contracts";
 import { compileIsolationPolicy } from "./policyCompiler";
 
 export type VisibilityTrackerState = {
-  scopedResources: Map<string, { targetId: string; consumerId: string }>;
   ownership: Map<string, string>;
   exportSets: Map<string, Set<string>>;
   subtrees: Map<string, Set<string>>;
@@ -17,11 +16,13 @@ export type VisibilityTrackerState = {
   isolationPolicies: Map<string, CompiledIsolationPolicy>;
   definitionTagIds: Map<string, Set<string>>;
   itemTypes: Map<string, ItemType>;
+  scopedResources:
+    | Map<string, { targetId: string; consumerId: string }>
+    | undefined;
 };
 
 export function createVisibilityTrackerState(): VisibilityTrackerState {
   return {
-    scopedResources: new Map(),
     ownership: new Map<string, string>(),
     exportSets: new Map<string, Set<string>>(),
     subtrees: new Map<string, Set<string>>(),
@@ -29,6 +30,7 @@ export function createVisibilityTrackerState(): VisibilityTrackerState {
     isolationPolicies: new Map<string, CompiledIsolationPolicy>(),
     definitionTagIds: new Map<string, Set<string>>(),
     itemTypes: new Map<string, ItemType>(),
+    scopedResources: undefined,
   };
 }
 

@@ -49,7 +49,10 @@ export class VisibilityTracker {
     targetId: string,
     consumerId: string,
   ): void {
-    this.state.scopedResources.set(instanceId, { targetId, consumerId });
+    (this.state.scopedResources ??= new Map()).set(instanceId, {
+      targetId,
+      consumerId,
+    });
   }
 
   /**
