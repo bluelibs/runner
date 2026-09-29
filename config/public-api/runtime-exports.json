@@ -111,6 +111,7 @@
       "StepBuilder",
       "computeRpcLaneAllowList",
       "connectShell",
+      "runShell",
       "createDurableAuditEntryId",
       "createDurableRunnerAuditEmitter",
       "createDurableStepId",

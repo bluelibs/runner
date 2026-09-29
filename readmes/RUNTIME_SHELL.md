@@ -90,6 +90,44 @@ ssh -t app@server 'cd /srv/my-app && node shell.mjs'
 
 For multiple replicas, select the host/container and socket explicitly. Session state belongs to one process and does not move between replicas.
 
+## Run One Command
+
+Use `runShell()` for scripts and SSH commands that should print a result and exit. It connects to the same registered resource and does not require a TTY or `TERM` configuration:
+
+```js
+import { parseArgs } from "node:util";
+import { connectShell, runShell } from "@bluelibs/runner/node";
+
+const { values } = parseArgs({ options: {
+  run: { type: "string" },
+  "read-only": { type: "boolean", default: false },
+} });
+const options = {
+  socketPath: "/run/my-app/runner.sock",
+  readOnly: values["read-only"],
+};
+if (values.run !== undefined) {
+  const result = await runShell({ ...options, command: values.run });
+  process.stdout.write(result.output);
+  process.exitCode = result.success ? 0 : 1;
+} else {
+  await connectShell(options);
+}
+```
+
+Save this as `shell.mjs`, then run it locally or through SSH:
+
+```sh
+node shell.mjs --read-only --run 'await runtime.getHealth()'
+ssh app@server 'cd /srv/my-app && node shell.mjs --read-only --run "await runtime.getHealth()"'
+```
+
+SSH runs the connector on the app host; no port forwarding is required. Interactive sessions still use `ssh -t`, while one-shot commands work without `-t` and can redirect their output to a file.
+
+`command` is one JavaScript evaluation, including native top-level `await`, declarations, and multiline source. Output combines `console.log`, `console.error`, and the final value in order, with no banner or prompt. An `undefined` final value adds no output. Results are buffered until evaluation finishes. Logging performed by existing application resources keeps its normal destinations; the connector captures the shell’s console, not the whole process. Each command gets fresh session variables while sharing the live app's resources.
+
+Failures reported by the native REPL return `{ success: false, output }`; connection and protocol failures reject the promise. Reject promises with `Error` objects: Node’s native evaluator can treat an awaited rejection with a falsy reason, such as `Promise.reject(null)`, as successful evaluation. The script above exits with status 1 on evaluation failure, which SSH propagates to the caller. Dot commands such as `.exit` are interactive-only. The JSON-encoded connection request, including source, is limited to 64 KiB. Disconnecting does not cancel arbitrary JavaScript already running; awaiting an unresolved promise can keep a command pending.
+
 ## Opt Into Read-Only Access
 
 Choose the mode when connecting:

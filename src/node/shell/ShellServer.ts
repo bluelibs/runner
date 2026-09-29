@@ -4,6 +4,7 @@ import { acceptsShellCommands } from "./sessionScope";
 import { createServer, type Server, type Socket } from "node:net";
 import type { RunResult } from "../../models/RunResult";
 import { assertPrivateSocketDirectory } from "./socketPath";
+import { startShellCommand } from "./commandSession";
 import { startShellSession } from "./session";
 
 /** Lifecycle-owned local shell listener for one Runner container. */
@@ -29,12 +30,22 @@ export class ShellServer {
         return;
       }
       void acceptShellConnection(socket, requireReadOnly).then(
-        (readOnly) => {
+        ({ readOnly, run }) => {
           if (!acceptsShellCommands(runtime)) {
             socket.destroy();
             return;
           }
-          startShellSession(socket, runtime, this.#executionScope, readOnly);
+          if (run !== undefined) {
+            startShellCommand(
+              socket,
+              runtime,
+              this.#executionScope,
+              readOnly,
+              run,
+            );
+          } else {
+            startShellSession(socket, runtime, this.#executionScope, readOnly);
+          }
         },
         () => socket.destroy(),
       );

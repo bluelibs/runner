@@ -29,6 +29,15 @@ await runtime.getHealth()
 
 Variables survive between commands. Press Up/Down for session history, Tab for completion, and use `.exit` to disconnect while leaving the app running. Commands operate on live application state.
 
+## Run One Command
+
+```sh
+node examples/local-shell/shell.mjs --read-only --run 'await runtime.getHealth()'
+ssh app@server 'cd /srv/my-app && node examples/local-shell/shell.mjs --read-only --run "await runtime.getHealth()"'
+```
+
+`--run` prints captured console output and the final value, then disconnects. It supports `await`, needs no TTY or `TERM` setting, and exits with status 1 if evaluation fails. Omit `--read-only` to allow writes through the guarded counter resource. Each invocation has fresh session variables and operates on the existing app.
+
 ## Read-Only Session
 
 ```sh

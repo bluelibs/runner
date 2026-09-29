@@ -31,3 +31,17 @@ export interface ConnectShellOptions extends ShellConfig {
   /** Interactive terminal output. Defaults to process.stdout. */
   output?: ShellOutput;
 }
+
+/** Noninteractive command options. The command runs in the existing app. */
+export interface RunShellOptions extends ShellConfig {
+  /** JavaScript source, including native REPL top-level await. */
+  command: string;
+}
+
+/** Captured console and evaluation output, without REPL prompts. */
+export interface ShellCommandResult {
+  /** Whether the native REPL evaluator reported successful completion. */
+  success: boolean;
+  /** Console output and the final value, formatted as in the interactive shell. */
+  output: string;
+}

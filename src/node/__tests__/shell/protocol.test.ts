@@ -12,7 +12,7 @@ function transport() {
 }
 const send = (socket: Socket, value: unknown) =>
   socket.emit("data", Buffer.from(`${JSON.stringify(value)}\n`));
-const greeting = { protocol: "runner-shell", version: 1 };
+const greeting = { protocol: "runner-shell", version: 2 };
 
 it("reads fragmented lines and preserves following terminal bytes", async () => {
   const socket = transport();
@@ -44,8 +44,8 @@ it("rejects destroyed transports, oversized lines, errors, and timeouts", async 
   );
   const oversized = transport();
   const line = readProtocolLine(oversized);
-  oversized.emit("data", Buffer.alloc(1025, 65));
-  await expect(line).rejects.toThrow("exceeds 1024");
+  oversized.emit("data", Buffer.alloc(64 * 1024 + 1, 65));
+  await expect(line).rejects.toThrow("exceeds 64 KiB");
   oversized.destroy();
   const broken = transport();
   const failed = readProtocolLine(broken);
@@ -76,7 +76,7 @@ it("refuses downgrades and unsupported servers before forwarding terminal input"
   socket.destroy();
   const old = transport();
   const incompatible = negotiateShellConnection(old, true);
-  send(old, { ...greeting, version: 2 });
+  send(old, { ...greeting, version: 3 });
   await expect(incompatible).rejects.toThrow();
   expect(old.write).not.toHaveBeenCalled();
   old.destroy();

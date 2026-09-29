@@ -1,7 +1,7 @@
 import type { Socket } from "node:net";
 import { shellError } from "./errors";
 
-const MAX_HANDSHAKE_BYTES = 1024;
+export const MAX_HANDSHAKE_BYTES = 64 * 1024;
 const HANDSHAKE_TIMEOUT_MS = 5000;
 
 /** Reads one bounded handshake line, leaving subsequent terminal bytes untouched. */
@@ -38,9 +38,7 @@ export function readProtocolLine(socket: Socket): Promise<string> {
       const newline = chunk.indexOf(10);
       const length = newline < 0 ? chunk.length : newline;
       if (buffer.length + length > MAX_HANDSHAKE_BYTES) {
-        fail(
-          shellError.new({ message: "Shell handshake exceeds 1024 bytes." }),
-        );
+        fail(shellError.new({ message: "Shell handshake exceeds 64 KiB." }));
         return;
       }
       buffer = Buffer.concat([buffer, chunk.subarray(0, length)]);

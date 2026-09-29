@@ -1,4 +1,5 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
+import { bindShellRuntime } from "./context";
 import { scopeShellSession } from "./sessionScope";
 import type { Socket } from "node:net";
 import { start } from "node:repl";
@@ -25,15 +26,7 @@ export function startShellSession(
     ignoreUndefined: true,
   });
   scopeShellSession(session, socket, runtime, scope, readOnly);
-  const bindRuntime = () => {
-    // Values constructed at the prompt must match application-side class schemas.
-    Object.assign(session.context, { Date, Map, Set, RegExp });
-    Object.defineProperty(session.context, "runtime", {
-      value: runtime,
-      enumerable: true,
-      configurable: true,
-    });
-  };
+  const bindRuntime = () => bindShellRuntime(session, runtime);
   bindRuntime();
   session.on("reset", bindRuntime);
   session.on("error", () => socket.destroy());

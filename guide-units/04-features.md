@@ -802,3 +802,5 @@ Register `resources.shell.with({ socketPath })` and attach a terminal with `conn
 Opt into a read-only connection with `connectShell({ socketPath, readOnly: true })`. Resources can depend on `resources.shell` and check `shell.isReadOnly()` inside write operations; the mode follows this container’s async execution scope. Resources must enforce the policy themselves.
 
 For remote access, run the connector on the application host through `ssh -t`. See [Runtime Shell](../readmes/RUNTIME_SHELL.md) for complete setup, SSH examples, and execution boundaries.
+
+For one-shot commands without a TTY, `await runShell({ socketPath, command: "await runtime.getHealth()", readOnly: true })` returns `{ success, output }`. The connector example exposes this as `--run`.
