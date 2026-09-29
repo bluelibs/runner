@@ -379,10 +379,11 @@ export interface IResourceDefinition<
    */
   configSchema?: ValidationSchemaInput<TConfig>;
   /**
-   * Behavior replacements declared at this resource boundary. Resource dependencies
-   * use independent instances in disjoint subtrees. Other kinds replace owned
-   * descendants. Overlapping scopes fail outside test mode; in test mode,
-   * outermost wins and same-resource duplicates use the last declaration.
+   * Applies replacements here and in this resource's registration subtree.
+   * Sibling subtrees may choose different resource replacements. Task, hook, and
+   * middleware targets must be registered here or below. Declaring one target twice
+   * on this resource always throws. Parent/descendant overrides throw outside test
+   * mode; in test mode, the declaration closest to the top of the tree wins.
    */
   overrides?:
     | Array<OverridableElements>
@@ -517,7 +518,11 @@ export interface IResource<
   register:
     | Array<RegisterableItem>
     | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
-  /** Subtree overrides; test mode permits overlaps with outermost/last-at-same-resource precedence. */
+  /**
+   * Replacements applied here and below. Each target may appear only once on this
+   * resource, in every mode. Test mode lets an ancestor's override win over a
+   * descendant's; other modes reject those overlapping declarations.
+   */
   overrides:
     | Array<OverridableElements>
     | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);

@@ -387,10 +387,11 @@ export interface ResourceFluentBuilderBeforeInit<
   >;
 
   /**
-   * Declares behavior replacements at this subtree boundary.
-   * Resource instances are independent in disjoint scopes; other kinds must belong
-   * to this subtree. Overlaps fail outside test mode. In test mode, outermost wins
-   * and same-resource duplicates use the last declaration.
+   * Applies replacements here and in this resource's registration subtree.
+   * Sibling subtrees may choose different resource replacements. Task, hook, and
+   * middleware targets must be registered here or below. Declaring one target twice
+   * on this resource always throws. Parent/descendant overrides throw outside test
+   * mode; in test mode, the declaration closest to the top of the tree wins.
    */
   overrides(
     o:
@@ -590,10 +591,11 @@ export interface ResourceFluentBuilderAfterInit<
     TMiddleware
   >;
   /**
-   * Declares behavior replacements at this subtree boundary.
-   * Resource instances are independent in disjoint scopes; other kinds must belong
-   * to this subtree. Overlaps fail outside test mode. In test mode, outermost wins
-   * and same-resource duplicates use the last declaration.
+   * Applies replacements here and in this resource's registration subtree.
+   * Sibling subtrees may choose different resource replacements. Task, hook, and
+   * middleware targets must be registered here or below. Declaring one target twice
+   * on this resource always throws. Parent/descendant overrides throw outside test
+   * mode; in test mode, the declaration closest to the top of the tree wins.
    */
   overrides(
     o:

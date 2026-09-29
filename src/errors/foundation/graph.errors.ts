@@ -75,7 +75,7 @@ export const overrideDuplicateTargetError = error<
   )
   .remediation(
     ({ targetId }) =>
-      `Keep a single override for "${targetId}" in overlapping scopes outside test mode. Disjoint resource scopes may override independently. In test mode, the outermost declaring resource wins and same-resource duplicates use the last declaration.`,
+      `Declare "${targetId}" only once on each resource, even in test mode. Sibling subtrees may choose different resource replacements. Parent and descendant overrides are allowed only in test mode, where the outermost declaration wins.`,
   )
   .build();
 

@@ -52,7 +52,7 @@ describe("subtree override compatibility", () => {
     }
   });
 
-  it("uses the last same-resource declaration in test mode without registering both instances", async () => {
+  it("rejects duplicate declarations before initialization even when a test harness would hide them", async () => {
     const first = jest.fn(async () => "first");
     const last = jest.fn(async () => "last");
     const mailer = r
@@ -69,16 +69,18 @@ describe("subtree override compatibility", () => {
       .register([read])
       .overrides([r.override(mailer, first), r.override(mailer, last)])
       .build();
-    const runtime = await run(r.resource("app").register([mailer, b]).build(), {
-      mode: "test",
-    });
-    try {
-      expect(await runtime.runTask(read)).toBe("last");
-      expect(first).not.toHaveBeenCalled();
-      expect(last).toHaveBeenCalledTimes(1);
-    } finally {
-      await runtime.dispose();
-    }
+    const rootInit = jest.fn(async () => "root");
+    const app = r
+      .resource("app")
+      .register([mailer, b])
+      .overrides([r.override(mailer, rootInit)])
+      .build();
+    await expect(run(app, { mode: "test" })).rejects.toThrow(
+      /declared more than once/,
+    );
+    expect(first).not.toHaveBeenCalled();
+    expect(last).not.toHaveBeenCalled();
+    expect(rootInit).not.toHaveBeenCalled();
   });
 
   it("keeps parent priority inside its scope while a sibling retains its independent override", async () => {

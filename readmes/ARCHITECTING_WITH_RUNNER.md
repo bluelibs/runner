@@ -767,8 +767,10 @@ Override contract notes:
 - task, hook, task middleware, and resource middleware overrides replace behavior with functions
 - resource overrides may replace `init` or patch lifecycle with `{ context?, init?, ready?, cooldown?, dispose? }`
 - keep overrides close to the owning composition where possible
-- resource overrides follow consumer registration scope: sibling instances remain independent
-- overlapping declarations fail outside `test`; in `test`, the outermost declaration wins and same-resource duplicates use the last declaration
+- put a resource override on the resource whose subtree should use it; sibling subtrees can choose different replacements for the same resource
+- outside `test`, treat that choice as final: another override for the same target on a parent, a descendant, or the same resource makes startup throw
+- in `test`, the declaration closest to the top of the registration tree wins, so a wrapper harness can replace choices below it
+- declare each target only once on a resource; duplicates on the same resource throw in every mode
 
 Typical examples:
 

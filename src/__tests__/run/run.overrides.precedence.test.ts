@@ -71,30 +71,6 @@ describe("run-overrides", () => {
     await result.dispose();
   });
 
-  it("uses the last duplicate override declared by the same resource in test mode", async () => {
-    const baseTask = defineTask({
-      id: "task-same-resource-duplicates",
-      run: async () => "Original",
-    });
-
-    const firstOverride = r.override(baseTask, async () => "First");
-    const secondOverride = r.override(baseTask, async () => "Second");
-
-    const app = defineResource({
-      id: "app-same-resource-duplicates",
-      register: [baseTask],
-      dependencies: { task: baseTask },
-      overrides: [firstOverride, secondOverride],
-      async init(_, deps) {
-        return deps.task();
-      },
-    });
-
-    const result = await run(app, { mode: RunnerMode.TEST });
-    expect(result.value).toBe("Second");
-    await result.dispose();
-  });
-
   it.each([RunnerMode.DEV, RunnerMode.PROD, RunnerMode.PRE_PROD])(
     "rejects overlapping declarations in %s mode",
     async (mode) => {

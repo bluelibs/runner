@@ -951,9 +951,25 @@ const dbResource = r
 
 Use `r.override(base, fn)` when you need to replace a component's behavior while keeping the same `id` — common in integration testing or when swapping out a library.
 
-Resource overrides apply to dependency consumers in the declaring resource and its registration subtree. Sibling subtrees can supply different implementations of the same resource. Overlapping declarations retain the existing rules: outside `test` mode they fail; in `test` mode the outermost enclosing declaration wins, and the last declaration at that resource wins. The original resource must be registered and visible to the declaring resource. Locked system resources cannot be overridden.
+For a **resource override**, where you attach `.overrides([...])` sets its scope. Put it on `billing`, and it applies to dependencies in `billing` and everything registered under it. A sibling such as `support` can choose a different replacement for the same resource. Consumers outside those subtrees keep the original.
 
-Task, hook, and middleware overrides still replace the target definition within its ownership tree: declare them from its owner or an ancestor. Duplicate targets still fail outside `test` mode. In `test` mode the outermost declaring ancestor wins, with the last declaration winning at the same resource.
+**Outside `test` mode, treat an override as the final choice for its subtree.** Another override for the same target on a parent, a descendant, or the same resource makes startup throw. Siblings are allowed because neither choice reaches into the other's subtree.
+
+For declarations that all replace the same resource:
+
+| Where `.overrides([...])` Is Attached | `dev`, `pre-prod`, `prod` | `test` |
+| --- | --- | --- |
+| Siblings `billing` and `support` | Each uses its own replacement | Each uses its own replacement |
+| `app` and its descendant `billing` | Startup throws | `app` wins in both `app` and `billing` |
+| Twice on `billing` | Startup throws | Startup throws |
+
+**One target, one declaration per resource, in every mode.** Even listing the same replacement twice is an error.
+
+The test exception lets a wrapper test harness replace choices made deeper in the app. The **outermost** declaration means the one closest to the top of the registration tree. Losing replacements never initialize.
+
+The original resource must be registered and visible to the resource declaring the override. Locked system resources cannot be overridden.
+
+For **task, hook, and middleware overrides**, declare the replacement on the resource that registers the target, or on one of its ancestors. These replace one target definition; they do not create separate versions for sibling consumers. Declaring the same target twice on one resource always throws. Parent and descendant declarations throw outside `test`; in `test`, the outermost declaration wins.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -1014,8 +1030,6 @@ const overriddenMiddleware = r.override(
 - resource object-form overrides may add `ready`, `cooldown`, or `dispose` even if the base resource did not define them
 - hook overrides keep the same `.on` target
 - override APIs do not change structural boundaries (dependencies, register tree, subtree policies)
-- independent sibling resource scopes are allowed in every mode
-- overlapping override scopes fail outside `test`; in `test`, the outermost declaration wins and same-resource duplicates use the last declaration
 
 Use the resource object form intentionally: overriding `context` changes the private lifecycle-state contract that `init()`, `ready()`, `cooldown()`, and `dispose()` share.
 
@@ -1026,7 +1040,7 @@ Use the resource object form intentionally: overriding `context` changes the pri
 | `r.override(base, fn)` | Creates a new definition with replaced behavior                       | No (not by itself)   |
 | `.overrides([...])`    | Registers override requests Runner validates and applies at bootstrap | Yes                  |
 
-Think of `r.override(...)` as _"build replacement definition"_ and `.overrides([...])` as _"apply replacement in this app"_.
+Think of `r.override(...)` as _"build the replacement"_ and `.overrides([...])` as _"apply it here"_. The file or function where you create the replacement does not set its scope. The resource where you attach `.overrides([...])` does.
 
 Direct registration of an override definition is also valid when you control the composition and only register one version for that id:
 
@@ -1056,9 +1070,9 @@ r.resource("test")
   .build();
 ```
 
-Outside `test` mode, the same declaring resource cannot list two overrides of one target, and ancestor/descendant declarations for that target conflict. Disjoint resource scopes do not conflict. In `test` mode duplicates are allowed: the outermost declaring resource wins, and same-resource duplicates use the last declaration. Overriding something not registered still throws, with a remediation hint.
+#### Different Resource Overrides in Sibling Subtrees
 
-#### Subtree Resource Instances
+Here, `billing` and `support` both depend on `mailer`. Each chooses its own replacement. This works in every mode:
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
@@ -1082,19 +1096,19 @@ const support = r.resource("support")
   .overrides([r.override(mailer, async () => ({ name: "support" }))])
   .build();
 const app = r.resource("app").register([mailer, billing, support]).build();
-const runtime = await run(app);
+const runtime = await run(app, { mode: "prod" });
 console.log(await runtime.runTask(sendInvoice)); // billing
 console.log(await runtime.runTask(sendReminder)); // support
 await runtime.dispose();
 ```
 
-Each winning override scope shares one resource instance across its consumers. Instances inherit the original registration's config and have independent context, initialization, readiness, cooldown, and disposal. Descendants inherit the outermost applicable override. Shadowed overrides do not create instances or run lifecycle hooks. Overrides replace the selected behavior as a whole; lifecycle patches inherit from the base passed to `r.override`, not from other scope declarations.
+`sendInvoice` gets the billing mailer; `sendReminder` gets the support mailer. If `app` also declared a mailer override, startup would throw outside `test`. In `test`, the app's override would replace both choices.
 
-Scope follows registration ownership, not the call stack. A billing task calling a support task does not change support's dependencies. A shared service registered outside billing keeps its own dependency wiring. Scoped resource instances do not duplicate the base resource's child registrations or subtree policies.
+**Instances and lifecycle:** each winning subtree shares one replacement instance. Each instance inherits the original config and has its own context and lifecycle, from initialization through disposal. A losing override never creates an instance. Lifecycle patches inherit omitted hooks from the base passed to `r.override(...)`; parent and child overrides are not merged together. The base resource's child registrations and subtree policies are not copied into each replacement.
 
-The original canonical resource id identifies the instance selected at the original registration location. Extra scoped instances have distinct canonical ids visible through runtime inspection and resource discovery. Operator access by a resource definition uses its original canonical id; it does not select a caller-dependent instance. Inspect a consumer's resolved dependencies to find its scoped instance's canonical id.
+**Calls between subtrees:** where a task or service is registered determines its dependencies. If a billing task calls `sendReminder`, that task still uses the support mailer. A shared service registered outside billing keeps its own dependencies, even when billing calls it.
 
-**Compatibility:** existing overlapping-override behavior is unchanged: duplicates fail outside `test`; test mode selects the outermost declaration and the last same-resource declaration. The added capability is independent resource overrides in disjoint subtrees. A root test harness can still replace all descendant implementations of a resource.
+**Runtime inspection:** the original canonical resource id refers to the instance chosen at the original registration location. Extra instances have their own canonical ids. Looking up the original resource definition does not select an instance based on the caller. To find a particular consumer's replacement, inspect that consumer's resolved dependencies.
 ## Tasks
 
 Tasks are Runner's main business operations. They are async functions with explicit dependency injection, validation, middleware support, and typed outputs.
@@ -6808,19 +6822,20 @@ describe("Notifications module", () => {
 });
 ```
 
-Ownership rule:
+Where to apply an override:
 
 - an override only works if the target definition is actually registered in the harness graph
-- resource overrides apply to consumers in the declaring subtree; the target must be visible to that resource
+- a resource override applies where you attach `.overrides([...])` and below it; the target must be visible there
 - task, hook, and middleware overrides must be declared by the target owner or one of its ancestors
 
 > **Note:** You do not need to pass `mode: "test"` explicitly when your test runner already sets `NODE_ENV=test`. Runner auto-detects `test` mode from the environment unless you override `mode` yourself.
 
 For acceptance testing in a deployed environment, use `mode: "pre-prod"`.
-Runner also detects this mode from `NODE_ENV=pre-prod`. Overlapping override declarations remain
-restricted to `test` mode. Passing an explicit Runner mode does not rewrite `NODE_ENV`.
+Runner also detects this mode from `NODE_ENV=pre-prod`. Like `dev` and `prod`, it throws if the same target is overridden on both a parent and a descendant, or more than once on the same resource. Passing an explicit Runner mode does not rewrite `NODE_ENV`.
 
-In `test` mode, the outermost declaration wins, so a wrapper test harness can replace implementations declared by descendant modules. Same-resource duplicates use the last declaration. Disjoint sibling resource overrides are independent in every mode.
+**Test mode lets the test harness have the final say.** If the harness and a resource below it both override the same target, the harness wins. More generally, the outermost declaration wins: the one closest to the top of the registration tree. **Declaring the same target twice on one resource still throws, even in tests.** Losing replacements never initialize.
+
+Sibling resource overrides work independently in **every mode**. For example, `billing` and `support` can each replace `mailer`; neither override affects the other's subtree. See the [override rules at a glance](#overrides).
 
 ### Full Integration Testing (Full Pipeline)
 
@@ -6868,10 +6883,11 @@ Important override rules:
 
 - `r.override(base, fn)` creates a replacement definition
 - `.overrides([...])` accepts override definitions only
-- overlapping declarations and same-resource duplicates fail outside `test` mode
-- in `test` mode the outermost declaring resource wins, and same-resource duplicates use the last declaration
-- sibling resource overrides create independent instances while preserving dependency references
-- scope follows registration ownership; calling a task from another subtree does not change its dependencies
+- outside `test`, an override is the final choice for its subtree: repeating the target on the same resource, a parent, or a descendant throws
+- in `test`, a wrapper harness can replace overrides below it
+- declaring the same target twice on one resource throws in every mode, even if both entries are the same replacement
+- sibling resource overrides use separate instances; tasks keep depending on the original resource reference
+- where a task is registered determines its dependencies, even when another subtree calls it
 - do not place both base and override in `.register([...])`
 
 ### Capturing Execution Context in Integration Tests

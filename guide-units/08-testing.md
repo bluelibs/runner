@@ -92,19 +92,20 @@ describe("Notifications module", () => {
 });
 ```
 
-Ownership rule:
+Where to apply an override:
 
 - an override only works if the target definition is actually registered in the harness graph
-- resource overrides apply to consumers in the declaring subtree; the target must be visible to that resource
+- a resource override applies where you attach `.overrides([...])` and below it; the target must be visible there
 - task, hook, and middleware overrides must be declared by the target owner or one of its ancestors
 
 > **Note:** You do not need to pass `mode: "test"` explicitly when your test runner already sets `NODE_ENV=test`. Runner auto-detects `test` mode from the environment unless you override `mode` yourself.
 
 For acceptance testing in a deployed environment, use `mode: "pre-prod"`.
-Runner also detects this mode from `NODE_ENV=pre-prod`. Overlapping override declarations remain
-restricted to `test` mode. Passing an explicit Runner mode does not rewrite `NODE_ENV`.
+Runner also detects this mode from `NODE_ENV=pre-prod`. Like `dev` and `prod`, it throws if the same target is overridden on both a parent and a descendant, or more than once on the same resource. Passing an explicit Runner mode does not rewrite `NODE_ENV`.
 
-In `test` mode, the outermost declaration wins, so a wrapper test harness can replace implementations declared by descendant modules. Same-resource duplicates use the last declaration. Disjoint sibling resource overrides are independent in every mode.
+**Test mode lets the test harness have the final say.** If the harness and a resource below it both override the same target, the harness wins. More generally, the outermost declaration wins: the one closest to the top of the registration tree. **Declaring the same target twice on one resource still throws, even in tests.** Losing replacements never initialize.
+
+Sibling resource overrides work independently in **every mode**. For example, `billing` and `support` can each replace `mailer`; neither override affects the other's subtree. See the [override rules at a glance](./02-resources.md#overrides).
 
 ### Full Integration Testing (Full Pipeline)
 
@@ -152,10 +153,11 @@ Important override rules:
 
 - `r.override(base, fn)` creates a replacement definition
 - `.overrides([...])` accepts override definitions only
-- overlapping declarations and same-resource duplicates fail outside `test` mode
-- in `test` mode the outermost declaring resource wins, and same-resource duplicates use the last declaration
-- sibling resource overrides create independent instances while preserving dependency references
-- scope follows registration ownership; calling a task from another subtree does not change its dependencies
+- outside `test`, an override is the final choice for its subtree: repeating the target on the same resource, a parent, or a descendant throws
+- in `test`, a wrapper harness can replace overrides below it
+- declaring the same target twice on one resource throws in every mode, even if both entries are the same replacement
+- sibling resource overrides use separate instances; tasks keep depending on the original resource reference
+- where a task is registered determines its dependencies, even when another subtree calls it
 - do not place both base and override in `.register([...])`
 
 ### Capturing Execution Context in Integration Tests

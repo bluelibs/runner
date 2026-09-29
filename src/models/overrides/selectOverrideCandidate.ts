@@ -12,7 +12,7 @@ export type OverrideCandidate = {
   override: SupportedOverride;
 };
 
-/** Disjoint resource scopes are independent; overlapping scopes retain the test-only duplicate policy. */
+/** Each resource declares a target once; only tests allow ancestor/descendant overrides. */
 export function selectOverrideCandidate(
   registry: StoreRegistry,
   candidates: readonly OverrideCandidate[],
@@ -26,7 +26,13 @@ export function selectOverrideCandidate(
       within(existing.source, candidate.source) ||
       within(candidate.source, existing.source),
   );
-  if (registry.getStoreMode() !== RunnerMode.TEST && conflicts.length > 0) {
+  const repeatedHere = conflicts.some(
+    (existing) => existing.source === candidate.source,
+  );
+  if (
+    repeatedHere ||
+    (registry.getStoreMode() !== RunnerMode.TEST && conflicts.length > 0)
+  ) {
     overrideDuplicateTargetError.throw({
       targetId: candidate.override.id,
       sources: [
