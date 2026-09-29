@@ -20,6 +20,8 @@ export interface ShellOutput extends Writable {
 export interface ShellConfig {
   /** Absolute Unix socket path inside an existing owner-only directory (0700). */
   socketPath: string;
+  /** Require read-only sessions on the server; opt in to one on the connector. Defaults to false. */
+  readOnly?: boolean;
 }
 
 /** Terminal connector options. The connector never starts another runtime. */

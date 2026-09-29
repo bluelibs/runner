@@ -1,15 +1,24 @@
+import { negotiateShellConnection } from "../../shell/protocol";
 import { runInThisContext } from "node:vm";
 import { createConnection } from "node:net";
 import { EventEmitter } from "node:events";
 
-export function openShell(socketPath: string) {
+export function openShell(socketPath: string, readOnly = false) {
   const socket = createConnection(socketPath);
   const updates = new EventEmitter();
   let output = "";
-  socket.setEncoding("utf8");
-  socket.on("data", (data: string) => {
-    output += data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
-    updates.emit("output");
+  socket.once("connect", () => {
+    void negotiateShellConnection(socket, readOnly).then(
+      () => {
+        socket.setEncoding("utf8");
+        socket.on("data", (data: string) => {
+          output += data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+          updates.emit("output");
+        });
+        socket.resume();
+      },
+      () => socket.destroy(),
+    );
   });
   socket.on("error", () => {});
   const waitFor = (text: string): Promise<string> =>
@@ -37,7 +46,7 @@ export function openShell(socketPath: string) {
     async command(code: string) {
       output = "";
       socket.write(`${code}\n`);
-      return waitFor("\nrunner> ");
+      return waitFor(readOnly ? "\nrunner[read-only]> " : "\nrunner> ");
     },
     output: () => output,
   };

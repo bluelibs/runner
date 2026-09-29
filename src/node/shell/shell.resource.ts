@@ -11,10 +11,14 @@ export const shellResource = resource<ShellConfig>("shell")
     description:
       "Interactive local Unix socket access to this container's live runtime.",
   })
-  .configSchema({ socketPath: Match.NonEmptyString })
+  .configSchema({
+    socketPath: Match.NonEmptyString,
+    readOnly: Match.Optional(Boolean),
+  })
   .dependencies({ runtime: runtimeResource })
   .init(
-    async ({ socketPath }, { runtime }) => new ShellServer(socketPath, runtime),
+    async ({ socketPath, readOnly }, { runtime }) =>
+      new ShellServer(socketPath, runtime, readOnly),
   )
   .ready(async (shell) => shell.listen())
   .cooldown(async (shell) => shell.close())

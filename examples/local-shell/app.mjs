@@ -7,14 +7,25 @@ const directory = join(tmpdir(), `runner-shell-${process.getuid()}`);
 await mkdir(directory, { mode: 0o700, recursive: true });
 const socketPath = join(directory, "example.sock");
 
-const counter = r.resource("counter").init(async () => ({ value: 0 })).build();
+const writeDenied = r.error("writeDenied").format(() => "This shell is read-only.").build();
+const counter = r.resource("counter")
+  .dependencies({ shell: resources.shell })
+  .init(async (_, { shell }) => {
+    let value = 0;
+    return {
+      get value() { return value; },
+      increment(amount) {
+        if (shell.isReadOnly()) throw writeDenied.new();
+        return value += amount;
+      },
+    };
+  }).build();
 const increment = r
   .task("increment")
   .inputSchema({ amount: Match.Integer })
   .dependencies({ counter })
   .run(async ({ amount }, { counter }) => {
-    counter.value += amount;
-    return counter.value;
+    return counter.increment(amount);
   })
   .build();
 

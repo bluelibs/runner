@@ -29,12 +29,20 @@ await runtime.getHealth()
 
 Variables survive between commands. Press Up/Down for session history, Tab for completion, and use `.exit` to disconnect while leaving the app running. Commands operate on live application state.
 
+## Read-Only Session
+
+```sh
+node examples/local-shell/shell.mjs --read-only
+```
+
+The counter resource depends on `resources.shell` and checks `shell.isReadOnly()` inside `increment()`. Reads still work; both task-based and direct increments throw. The guard uses the current async execution scope, so ordinary application work remains writable. The shell itself does not sandbox JavaScript or automatically protect other resources.
+
 ## Connect Through SSH
 
 With the app already running on the remote host, run the connector there as the same OS user:
 
 ```sh
-ssh -t app@server 'cd /srv/my-app && node examples/local-shell/shell.mjs'
+ssh -t app@server 'cd /srv/my-app && node examples/local-shell/shell.mjs --read-only'
 ```
 
 Only SSH crosses the network. The connector reaches a local Unix socket; Runner opens no TCP or HTTP listener. `-t` allocates the terminal needed for input editing.

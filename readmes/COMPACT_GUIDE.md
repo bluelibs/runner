@@ -870,3 +870,5 @@ Prefer feature-driven folders and naming by Runner item type:
 ## Local Runtime Shell (Node)
 
 Opt in with `resources.shell.with({ socketPath })` from `@bluelibs/runner/node`, using an absolute Unix socket path in an existing owner-only directory. A separate script calls `await connectShell({ socketPath })` to attach to the live container with JavaScript `await`, session variables, completion, and arrow-key history. For remote use, run that connector via `ssh -t`; no web listener is needed. See [Runtime Shell](RUNTIME_SHELL.md).
+
+Opt into a read-only connection with `connectShell({ socketPath, readOnly: true })`. Resources can depend on `resources.shell` and check `shell.isReadOnly()` inside write operations; the mode follows this container’s async execution scope. Resources must enforce the policy themselves.

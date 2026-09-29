@@ -1,3 +1,6 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { acceptShellConnection } from "./protocol";
+import { acceptsShellCommands } from "./sessionScope";
 import { createServer, type Server, type Socket } from "node:net";
 import type { RunResult } from "../../models/RunResult";
 import { assertPrivateSocketDirectory } from "./socketPath";
@@ -5,6 +8,7 @@ import { startShellSession } from "./session";
 
 /** Lifecycle-owned local shell listener for one Runner container. */
 export class ShellServer {
+  readonly #executionScope = new AsyncLocalStorage<boolean>();
   private readonly server: Server;
   private readonly connections = new Set<Socket>();
   private closing: Promise<void> | undefined;
@@ -14,13 +18,32 @@ export class ShellServer {
     /** Absolute address of this container's local shell. */
     readonly socketPath: string,
     runtime: RunResult<unknown>,
+    requireReadOnly = false,
   ) {
     this.server = createServer((socket) => {
       this.connections.add(socket);
       socket.on("error", () => socket.destroy());
       socket.once("close", () => this.connections.delete(socket));
-      startShellSession(socket, runtime);
+      if (!acceptsShellCommands(runtime)) {
+        socket.destroy();
+        return;
+      }
+      void acceptShellConnection(socket, requireReadOnly).then(
+        (readOnly) => {
+          if (!acceptsShellCommands(runtime)) {
+            socket.destroy();
+            return;
+          }
+          startShellSession(socket, runtime, this.#executionScope, readOnly);
+        },
+        () => socket.destroy(),
+      );
     });
+  }
+
+  /** Whether the current async execution belongs to a read-only session of this shell. */
+  isReadOnly(): boolean {
+    return this.#executionScope.getStore() === true;
   }
 
   /** Opens the socket. Existing paths are never deleted or taken over. */

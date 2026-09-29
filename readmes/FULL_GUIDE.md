@@ -4753,6 +4753,8 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 
 Register `resources.shell.with({ socketPath })` and attach a terminal with `connectShell({ socketPath })`, both from `@bluelibs/runner/node`. The optional resource exposes a local Unix socket inside an owner-only directory, with no HTTP or TCP listener. Its JavaScript REPL supports `await`, persistent session variables, completion, and Up/Down history against the live container.
 
+Opt into a read-only connection with `connectShell({ socketPath, readOnly: true })`. Resources can depend on `resources.shell` and check `shell.isReadOnly()` inside write operations; the mode follows this container’s async execution scope. Resources must enforce the policy themselves.
+
 For remote access, run the connector on the application host through `ssh -t`. See [Runtime Shell](./RUNTIME_SHELL.md) for complete setup, SSH examples, and execution boundaries.
 ## Serialization
 

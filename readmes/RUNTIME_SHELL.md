@@ -35,7 +35,10 @@ Create `shell.mjs` next to your application:
 ```js
 import { connectShell } from "@bluelibs/runner/node";
 
-await connectShell({ socketPath: "/run/my-app/runner.sock" });
+await connectShell({
+  socketPath: "/run/my-app/runner.sock",
+  readOnly: process.argv.includes("--read-only"),
+});
 ```
 
 Run it from another terminal:
@@ -86,6 +89,51 @@ ssh -t app@server 'cd /srv/my-app && node shell.mjs'
 `-t` allocates a terminal, so history, completion, and line editing work. There is no Runner network port to forward. SSH authenticates the remote session; filesystem permissions restrict access to the socket.
 
 For multiple replicas, select the host/container and socket explicitly. Session state belongs to one process and does not move between replicas.
+
+## Opt Into Read-Only Access
+
+Choose the mode when connecting:
+
+```sh
+node shell.mjs --read-only
+ssh -t app@server 'cd /srv/my-app && node shell.mjs --read-only'
+```
+
+`connectShell({ socketPath, readOnly: true })` negotiates the mode before attaching terminal input. The prompt becomes `runner[read-only]>`. The mode stays fixed for the connection, including after `.clear`. Both options default to `false`; registering `resources.shell.with({ socketPath, readOnly: true })` requires read-only mode for every connection, even if the connector requests writable access. Incompatible protocol versions fail before terminal input is forwarded.
+
+Resources enforce this policy at their operation boundary. Here is a complete in-memory database example; a real adapter checks the same method before issuing writes:
+
+```ts
+import { r, resources, run } from "@bluelibs/runner/node";
+
+const writeDenied = r.error("writeDenied")
+  .format(() => "This shell is read-only.")
+  .build();
+
+const database = r.resource("database")
+  .dependencies({ shell: resources.shell })
+  .init(async (_, { shell }) => {
+    const values = new Map<string, string>();
+    return {
+      get(key: string) { return values.get(key); },
+      set(key: string, value: string) {
+        if (shell.isReadOnly()) throw writeDenied.new();
+        values.set(key, value);
+      },
+    };
+  })
+  .build();
+
+// Provision this directory with mode 0700 before starting the app.
+await run(r.resource("app").register([
+  database,
+  resources.shell.with({ socketPath: "/run/my-app/runner.sock" }),
+]).build());
+```
+
+Call `shell.isReadOnly()` inside each operation, not once during resource initialization. It reads this container's async execution scope: shell evaluation, completion, awaited work, nested tasks, and timers created in that scope inherit the mode. Ordinary application requests and other containers see `false`; concurrent shell sessions keep their own mode. The shell does not establish another database connection. Your adapter can reject writes or select an existing read-only database client based on this value.
+
+This is cooperative resource policy, not a JavaScript sandbox. A resource that ignores the flag still permits mutations, and raw database clients can bypass wrapper guards. External queues and remote calls do not automatically carry this process-local scope. For database-enforced restrictions, use restricted database credentials or database-specific read-only transactions through your adapter.
 
 ## Execution Boundaries
 
