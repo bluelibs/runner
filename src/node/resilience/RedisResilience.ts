@@ -1,3 +1,4 @@
+import { createResilienceSemaphore } from "./semaphore";
 import type { ConcurrencyWaitOptions } from "../../globals/middleware/concurrency/wait";
 import { createHash, randomUUID } from "node:crypto";
 import { Match } from "../../tools/check";
@@ -8,6 +9,7 @@ import type {
   CircuitSnapshot,
   Resilience,
   ResilienceConfig,
+  ResilienceSemaphoreConfig,
 } from "../../globals/resilience/types";
 import { rateLimitScript, circuitScript, permitScript } from "./scripts";
 import { withRedisPermit } from "./permit";
@@ -147,6 +149,10 @@ export class RedisResilience implements Resilience {
       failures,
       generation: token,
     };
+  }
+
+  semaphore(config: ResilienceSemaphoreConfig) {
+    return createResilienceSemaphore(this, config);
   }
 
   withPermit<T>(

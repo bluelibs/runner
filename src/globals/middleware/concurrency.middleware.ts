@@ -1,3 +1,4 @@
+import { sharedConcurrencyKey } from "../resilience/concurrencyKey";
 import {
   getMiddlewareApplicationIdentity,
   requireMiddlewareApplicationIdentity,
@@ -106,12 +107,14 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
     );
 
     if (config.coordination !== "local" && !semaphore && state.resilience) {
-      const key = JSON.stringify([
-        resolvedKey === undefined ? "task" : "shared",
-        resolvedKey ??
-          getMiddlewareApplicationIdentity(execution, task.definition.id),
-        identityNamespace,
-      ]);
+      const key =
+        resolvedKey === undefined
+          ? JSON.stringify([
+              "task",
+              getMiddlewareApplicationIdentity(execution, task.definition.id),
+              identityNamespace,
+            ])
+          : sharedConcurrencyKey(resolvedKey, identityNamespace);
       const controller = getOrCreateTaskAbortController(journal);
       const link = getTaskAbortSignalLink(journal);
       try {

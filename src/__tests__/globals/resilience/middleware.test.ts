@@ -7,6 +7,7 @@ import { journal } from "../../../models/ExecutionJournal";
 
 function backend(): jest.Mocked<Resilience> {
   return {
+    semaphore: jest.fn(),
     rateLimit: jest
       .fn()
       .mockResolvedValue({ allowed: true, remaining: 1, resetTime: 1000 }),

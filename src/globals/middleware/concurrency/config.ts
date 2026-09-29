@@ -12,7 +12,7 @@ import {
   type IdentityScopedMiddlewareConfig,
 } from "../identityScope.shared";
 import type { MiddlewareKeyBuilder } from "../keyBuilder.shared";
-import type { ConcurrencyWaitOptions } from "./wait";
+import { concurrencyWaitPatterns, type ConcurrencyWaitOptions } from "./wait";
 
 /** Running-work and admission policy for a shared concurrency pool. */
 export interface ConcurrencyMiddlewareConfig
@@ -48,23 +48,7 @@ export const concurrencyConfigPattern: ValidationSchemaInput<ConcurrencyMiddlewa
     key: Match.Optional(Match.NonEmptyString),
     semaphore: Match.Optional(Semaphore),
     keyBuilder: Match.Optional(Function),
-    maxQueue: Match.Optional(
-      Match.Where(
-        (value: unknown): value is number =>
-          typeof value === "number" &&
-          Number.isSafeInteger(value) &&
-          value >= 0,
-      ),
-    ),
-    waitTimeoutMs: Match.Optional(
-      Match.Where(
-        (value: unknown): value is number =>
-          typeof value === "number" &&
-          Number.isSafeInteger(value) &&
-          value >= 0 &&
-          value <= 2_147_483_647,
-      ),
-    ),
+    ...concurrencyWaitPatterns,
     identityScope: identityScopePattern,
   });
 

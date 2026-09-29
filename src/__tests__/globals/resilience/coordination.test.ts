@@ -5,6 +5,7 @@ import type { Resilience } from "../../../globals/resilience/types";
 const config = { namespace: "test", redis: "redis://unused" };
 function backend(): jest.Mocked<Resilience> {
   return {
+    semaphore: jest.fn(),
     rateLimit: jest.fn().mockRejectedValue(new Error("Redis unavailable")),
     enterCircuit: jest.fn().mockRejectedValue(new Error("Redis unavailable")),
     settleCircuit: jest.fn(),

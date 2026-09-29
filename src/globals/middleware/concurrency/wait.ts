@@ -1,3 +1,4 @@
+import { Match } from "../../../tools/check";
 import {
   middlewareConcurrencyQueueFullError,
   middlewareConcurrencyWaitTimeoutError,
@@ -23,3 +24,22 @@ export function assertQueueAvailable(
     middlewareConcurrencyWaitTimeoutError.throw({ waitTimeoutMs: 0 });
   }
 }
+
+/** Shared validation keeps direct handles and middleware admission options identical. */
+export const concurrencyWaitPatterns = {
+  maxQueue: Match.Optional(
+    Match.Where(
+      (value: unknown): value is number =>
+        typeof value === "number" && Number.isSafeInteger(value) && value >= 0,
+    ),
+  ),
+  waitTimeoutMs: Match.Optional(
+    Match.Where(
+      (value: unknown): value is number =>
+        typeof value === "number" &&
+        Number.isSafeInteger(value) &&
+        value >= 0 &&
+        value <= 2_147_483_647,
+    ),
+  ),
+};

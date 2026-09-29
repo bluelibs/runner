@@ -326,6 +326,12 @@ on a task has its own shared permit pool.
 JavaScript config-object reuse does not create cross-task Redis groups. Explicit
 `Semaphore` instances imply local coordination, even when resilience is registered.
 Combining `semaphore` with `coordination: "distributed"` fails at startup.
+For imperative distributed reservations, the injected resource exposes
+`resilience.semaphore({ key, limit, maxQueue?, waitTimeoutMs? })`. Its
+`withPermit(async (signal) => ..., { signal? })` uses the same pool as unscoped
+distributed concurrency middleware with that key. These handles are not local
+`Semaphore` instances and are not passed to the middleware's `semaphore` option.
+See [Distributed Reservations with Resilience](#distributed-reservations-with-resilience).
 
 Redis performs admission and transitions atomically using its own clock. Conflicting
 parameters for an existing policy fail instead of silently creating separate

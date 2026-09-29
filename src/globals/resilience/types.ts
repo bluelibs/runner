@@ -9,6 +9,29 @@ export interface ResilienceConfig {
   leaseMs?: number;
 }
 
+/** Named distributed pool shared with unscoped concurrency middleware using the same key. */
+export interface ResilienceSemaphoreConfig extends ConcurrencyWaitOptions {
+  /** Non-empty shared pool name within this resilience namespace. */
+  key: string;
+  /** Maximum simultaneous permit holders across replicas. */
+  limit: number;
+}
+
+/** Cancellation for an individual distributed semaphore invocation. */
+export interface ResilienceSemaphoreRunOptions {
+  /** Cancels acquisition and cooperatively signals running work. */
+  signal?: AbortSignal;
+}
+
+/** Reusable distributed semaphore; its resilience resource owns disposal. */
+export interface ResilienceSemaphore {
+  /** Run under a renewable permit. Observe the signal for cancellation, shutdown, and lease loss. */
+  withPermit<T>(
+    run: (signal: AbortSignal) => Promise<T>,
+    options?: ResilienceSemaphoreRunOptions,
+  ): Promise<T>;
+}
+
 /** Atomic fixed-window admission result. */
 export interface RateAdmission {
   /** Whether this invocation consumed an allowance. */
@@ -35,8 +58,10 @@ export interface CircuitAdmission extends CircuitSnapshot {
   generation: string;
 }
 
-/** Portable internal contract; only the Node entry point provides Redis support. */
+/** Shared resilience service; only the Node entry point provides Redis support. */
 export interface Resilience {
+  /** Create a reusable handle to a named distributed pool; does not acquire a permit. */
+  semaphore(config: ResilienceSemaphoreConfig): ResilienceSemaphore;
   /** Consume an allowance atomically within a task's identity-scoped partition. */
   rateLimit(
     taskId: string,

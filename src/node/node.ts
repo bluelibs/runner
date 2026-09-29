@@ -53,4 +53,9 @@ export * from "./cache";
 export * from "./event-lanes";
 export * from "./rpc-lanes";
 
-export type { ResilienceConfig } from "../globals/resilience/types";
+export type {
+  ResilienceConfig,
+  ResilienceSemaphore,
+  ResilienceSemaphoreConfig,
+  ResilienceSemaphoreRunOptions,
+} from "../globals/resilience/types";
