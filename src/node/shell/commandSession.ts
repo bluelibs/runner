@@ -5,6 +5,8 @@ import { PassThrough, Writable } from "node:stream";
 import type { RunResult } from "../../models/RunResult";
 import { bindShellRuntime } from "./context";
 import { scopeShellSession } from "./sessionScope";
+import { createCommandOutput } from "./commandOutput";
+import { commandWriter } from "./commandWriter";
 
 export function startShellCommand(
   socket: Socket,
@@ -14,11 +16,11 @@ export function startShellCommand(
   command: string,
 ): void {
   const input = new PassThrough();
-  const chunks: Buffer[] = [];
+  const captured = createCommandOutput();
   // Disconnecting cannot cancel arbitrary JavaScript; late writes must remain harmless.
   const output = new Writable({
     write(chunk: Buffer, _encoding, callback) {
-      if (!socket.destroyed) chunks.push(chunk);
+      if (!socket.destroyed) captured.write(chunk);
       callback();
     },
   });
@@ -31,15 +33,16 @@ export function startShellCommand(
     preview: false,
     useColors: false,
     ignoreUndefined: true,
+    writer: commandWriter,
   });
   const cleanup = () => {
     session.close();
     input.destroy();
-    chunks.length = 0;
+    captured.clear();
   };
   const finish = (success: boolean) => {
     if (socket.destroyed) return;
-    const text = Buffer.concat(chunks).toString("utf8");
+    const text = captured.read();
     cleanup();
     socket.end(JSON.stringify({ success, output: text }));
   };

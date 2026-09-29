@@ -6,12 +6,14 @@ import type { RunResult } from "../../models/RunResult";
 import { assertPrivateSocketDirectory } from "./socketPath";
 import { startShellCommand } from "./commandSession";
 import { startShellSession } from "./session";
+import { shellError } from "./errors";
 
 /** Lifecycle-owned local shell listener for one Runner container. */
 export class ShellServer {
   readonly #executionScope = new AsyncLocalStorage<boolean>();
   private readonly server: Server;
   private readonly connections = new Set<Socket>();
+  private listening: Promise<void> | undefined;
   private closing: Promise<void> | undefined;
 
   /** Creates a listener without opening a socket until the resource is ready. */
@@ -70,6 +72,15 @@ export class ShellServer {
 
   /** Opens the socket. Existing paths are never deleted or taken over. */
   async listen(): Promise<void> {
+    if (this.closing) {
+      throw shellError.new({
+        message: "Cannot reopen a closed shell listener.",
+      });
+    }
+    return (this.listening ??= this.openListener());
+  }
+
+  private async openListener(): Promise<void> {
     await assertPrivateSocketDirectory(this.socketPath);
     await new Promise<void>((resolve, reject) => {
       const onError = (error: Error) => reject(error);
@@ -84,12 +95,17 @@ export class ShellServer {
   /** Disconnects sessions and closes the owned socket; safe to call again. */
   close(): Promise<void> {
     if (!this.closing) {
-      for (const socket of this.connections) socket.destroy();
-      this.closing = new Promise<void>((resolve) => {
-        if (!this.server.listening) return resolve();
-        this.server.close(() => resolve());
-      });
+      this.closing = this.closeListener();
     }
     return this.closing;
+  }
+
+  private async closeListener(): Promise<void> {
+    // Startup owns the socket until it settles, even before server.listening is true.
+    await this.listening?.catch(() => undefined);
+    for (const socket of this.connections) socket.destroy();
+    if (this.server.listening) {
+      await new Promise<void>((resolve) => this.server.close(() => resolve()));
+    }
   }
 }

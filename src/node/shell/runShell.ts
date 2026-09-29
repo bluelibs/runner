@@ -1,3 +1,5 @@
+import { MAX_COMMAND_RESPONSE_BYTES } from "./commandOutput";
+import { shellError } from "./errors";
 import { once } from "node:events";
 import { createConnection } from "node:net";
 import { check, Match } from "../../tools/check";
@@ -23,7 +25,16 @@ export async function runShell({
     await once(socket, "connect");
     await negotiateShellConnection(socket, readOnly, command);
     const chunks: Buffer[] = [];
-    for await (const chunk of socket) chunks.push(chunk);
+    let bytes = 0;
+    for await (const chunk of socket) {
+      bytes += chunk.length;
+      if (bytes > MAX_COMMAND_RESPONSE_BYTES) {
+        throw shellError.new({
+          message: "Shell command response exceeds its size limit.",
+        });
+      }
+      chunks.push(chunk);
+    }
     return resultSchema.parse(
       JSON.parse(Buffer.concat(chunks).toString("utf8")),
     );
