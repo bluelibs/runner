@@ -93,7 +93,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark basic task execution", async () => {
-    const iterations = 1000;
+    const iterations = 10_000;
     const task = defineTask({
       id: "benchmark-basic-task",
       run: async (n: number) => n * 2,
@@ -109,8 +109,8 @@ describe("Comprehensive Performance Benchmarks", () => {
 
       const { dispose, runTask } = await run(app);
 
-      // Extended warm-up for more stable results
-      for (let w = 0; w < BENCHMARK_CONFIG.warmupRuns * 100; w++) {
+      // Warm each fresh runtime before measuring steady-state task execution.
+      for (let w = 0; w < iterations; w++) {
         await runTask(task, w);
       }
 
@@ -489,7 +489,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
   it("should benchmark built-in cache middleware performance", async () => {
     const iterations = 500;
-    const cacheHitIterations = 500;
+    const cacheHitIterations = 10_000;
 
     const expensiveTask = defineTask({
       id: "benchmark-cache-expensive",
@@ -525,6 +525,11 @@ describe("Comprehensive Performance Benchmarks", () => {
 
       for (let index = 0; index < 10; index++) {
         await runTask(expensiveTask, index);
+      }
+      // Misses do not warm the hit path. Warm it before timing a longer batch
+      // to reduce sensitivity to short scheduling or GC pauses.
+      for (let index = 0; index < cacheHitIterations; index++) {
+        await runTask(expensiveTask, index % 10);
       }
       const hitStart = performance.now();
       for (let index = 0; index < cacheHitIterations; index++) {

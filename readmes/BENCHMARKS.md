@@ -53,6 +53,14 @@ evolves. Every execution-context sample measures both orders to avoid consistent
 second, warmer code path. Every tracked metric fails CI on a regression beyond its configured
 threshold. Missing, non-numeric, or non-finite measurements fail the comparison.
 
+Basic task samples warm each runtime with 10,000 calls before timing another 10,000.
+Cache samples warm the hit path separately, then time 10,000 hits and 500 unique misses;
+the speedup compares time per call. A batch lasting only a few milliseconds is too
+sensitive to JIT compilation, garbage collection, and scheduling pauses.
+
+CI copies the same benchmark workload to both the base and PR revisions before running
+them. Longer samples do not change the regression thresholds or discard slow samples.
+
 ## Distribution Checks
 
 QA and CI verify that built entrypoints import successfully and that representative
