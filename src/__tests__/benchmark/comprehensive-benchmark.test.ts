@@ -307,7 +307,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark event emission and handling", async () => {
-    const iterations = 500;
+    const iterations = 10_000;
     let eventHandlerCallCount = 0;
 
     const testEvent = defineEvent<{ value: number }>({
@@ -340,7 +340,8 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const { dispose, runTask } = await run(app);
 
-    await runTask(emitterTask, 1);
+    // Warm event dispatch and hook execution before measuring throughput.
+    for (let i = 0; i < 2000; i++) await runTask(emitterTask, i);
     eventHandlerCallCount = 0;
 
     const start = performance.now();
@@ -367,7 +368,7 @@ describe("Comprehensive Performance Benchmarks", () => {
   });
 
   it("should benchmark init-time event emission and handling", async () => {
-    const iterations = 500;
+    const iterations = 10_000;
     let eventHandlerCallCount = 0;
 
     const testEvent = defineEvent<{ value: number }>({
@@ -397,7 +398,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       register: [testEvent, eventHandler, emitterTask],
       dependencies: { emitterTask },
       async init(_, { emitterTask }) {
-        await emitterTask(1);
+        for (let i = 0; i < 2000; i++) await emitterTask(i);
         eventHandlerCallCount = 0;
 
         const start = performance.now();
