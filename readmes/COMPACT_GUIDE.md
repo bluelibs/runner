@@ -870,3 +870,15 @@ Prefer feature-driven folders and naming by Runner item type:
 
 - **Durable Workflows**: Replay-safe checkpoints for long-running flows. Use `step(id, fn)`, `sleep(ms)`, `waitForSignal(...)`, and `waitForExecution(...)` to model durable progress while the store remains the source of truth and queue/pubsub or polling wakes work back up. Lifecycle: `pauseExecution`/`resumeExecution`, `restartExecution` (terminal/paused only, fresh run; existing waiters stay on the source id), `d.continueAsNew(input)` (atomic chaptering; waits/signals follow the chain). State: `d.setState`/`d.replaceState`/`d.getState` (one typed record per run; keep derivations idempotent), read externally via `durable.getState(id)`. See [Durable Workflows](./DURABLE_WORKFLOWS.md).
 - **Remote Lanes**: Scale Runner across processes without changing domain definitions. Event Lanes are async and queue-based; in `network` mode, RPC Lanes provide sync request/response with binding-level transport retries for lane-routed, non-served calls. Only lane-assigned work is rerouted. See [Remote Lanes](./REMOTE_LANES.md).
+
+## Local Runtime Shell (Node)
+
+Opt in with `resources.shell.with({ socketPath })` from `@bluelibs/runner/node`, using an absolute Unix socket path in an existing owner-only directory. A separate script calls `await connectShell({ socketPath })` to attach to the live container with JavaScript `await`, session variables, completion, and arrow-key history. For remote use, run that connector via `ssh -t`; no web listener is needed. See [Runtime Shell](RUNTIME_SHELL.md).
+
+Omit `socketPath` to use `runner.sock` in the startup working directory (which must still be owner-only). Stale owned sockets are reclaimed; live listeners and non-socket files cause startup to fail.
+
+Opt into a read-only connection with `connectShell({ socketPath, readOnly: true })`. Resources can depend on `resources.shell` and check `shell.isReadOnly()` inside write operations; the mode follows this container’s async execution scope. Resources must enforce the policy themselves.
+
+For one-shot commands without a TTY, `await runShell({ socketPath, command: "await runtime.getHealth()", readOnly: true })` returns `{ success, output }`. The connector example exposes this as `--run`.
+
+The connector auto-detects terminal editing independently of the app’s `TERM`. Use `.tasks`, `.resources`, and `.status` for discovery; opt into reconnect history with `connectShell({ socketPath, historyFile })` inside an owner-only directory. History is in memory by default.

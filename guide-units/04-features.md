@@ -855,3 +855,17 @@ q.on("start", ({ taskId }) => console.log(`task ${taskId} started`));
 await q.run(async () => "ok");
 await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
+
+## Local Runtime Shell (Node)
+
+Register `resources.shell.with({ socketPath })` and attach a terminal with `connectShell({ socketPath })`, both from `@bluelibs/runner/node`. The optional resource exposes a local Unix socket inside an owner-only directory, with no HTTP or TCP listener. Its JavaScript REPL supports `await`, persistent session variables, completion, and Up/Down history against the live container.
+
+Omit `socketPath` to use `runner.sock` in the startup working directory (which must still be owner-only). Stale owned sockets are reclaimed; live listeners and non-socket files cause startup to fail.
+
+Opt into a read-only connection with `connectShell({ socketPath, readOnly: true })`. Resources can depend on `resources.shell` and check `shell.isReadOnly()` inside write operations; the mode follows this container’s async execution scope. Resources must enforce the policy themselves.
+
+For remote access, run the connector on the application host through `ssh -t`. See [Runtime Shell](../readmes/RUNTIME_SHELL.md) for complete setup, SSH examples, and execution boundaries.
+
+For one-shot commands without a TTY, `await runShell({ socketPath, command: "await runtime.getHealth()", readOnly: true })` returns `{ success, output }`. The connector example exposes this as `--run`.
+
+The connector auto-detects terminal editing independently of the app’s `TERM`. Use `.tasks`, `.resources`, and `.status` for discovery; opt into reconnect history with `connectShell({ socketPath, historyFile })` inside an owner-only directory. History is in memory by default.

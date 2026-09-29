@@ -53,7 +53,20 @@ export function isPlainObject(
 ): value is Record<string, unknown> {
   if (value === null || typeof value !== "object") return false;
   const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  if (prototype === Object.prototype || prototype === null) return true;
+  // REPLs and other VM contexts have their own Object.prototype. Accept those
+  // literal objects without admitting class instances or invoking accessors.
+  if (Object.getPrototypeOf(prototype) !== null) return false;
+  const constructor: unknown = Object.getOwnPropertyDescriptor(
+    prototype,
+    "constructor",
+  )?.value;
+  return (
+    typeof constructor === "function" &&
+    Function.prototype.toString.call(constructor) ===
+      Function.prototype.toString.call(Object) &&
+    constructor.prototype === prototype
+  );
 }
 
 // ── Parse-function detection ─────────────────────────────────────────────────
