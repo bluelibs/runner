@@ -241,6 +241,8 @@ export class OverrideManager {
   }
 
   processOverrides() {
+    if (this.overrides.size === 0) return;
+
     // Validate all targets exist before writing any overrides.
     for (const [targetId, override] of this.overrides.entries()) {
       if (!this.hasRegisteredOverrideTarget(targetId, override)) {
