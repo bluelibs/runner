@@ -197,9 +197,8 @@ describe("optional resilience middleware integration", () => {
       expect(
         JSON.parse(shared.withPermit.mock.calls[1][0]).slice(0, 2),
       ).toEqual(["shared", "payments"]);
-      await expect(runtime.runTask(local)).rejects.toThrow(
-        /Explicit local semaphores/,
-      );
+      await expect(runtime.runTask(local)).resolves.toBe("ok");
+      expect(shared.withPermit).toHaveBeenCalledTimes(2);
       shared.withPermit.mockImplementationOnce(
         async (_key, _limit, signal, abort) => {
           abort(new Error("lease lost"));

@@ -1,3 +1,7 @@
+import {
+  coordinationPattern,
+  type CoordinationConfig,
+} from "../../resilience/coordination";
 import { Semaphore } from "../../../models/Semaphore";
 import { validationError } from "../../../errors";
 import { Match } from "../../../tools/check";
@@ -12,7 +16,10 @@ import type { ConcurrencyWaitOptions } from "./wait";
 
 /** Running-work and admission policy for a shared concurrency pool. */
 export interface ConcurrencyMiddlewareConfig
-  extends IdentityScopedMiddlewareConfig, ConcurrencyWaitOptions {
+  extends
+    IdentityScopedMiddlewareConfig,
+    ConcurrencyWaitOptions,
+    CoordinationConfig {
   /**
    * Maximum number of concurrent executions.
    * If provided, a Semaphore will be created and shared for this config object.
@@ -29,13 +36,14 @@ export interface ConcurrencyMiddlewareConfig
   keyBuilder?: MiddlewareKeyBuilder;
 
   /**
-   * An existing Semaphore instance to use.
+   * An existing Semaphore instance to use. Implies local coordination.
    */
   semaphore?: Semaphore;
 }
 
 export const concurrencyConfigPattern: ValidationSchemaInput<ConcurrencyMiddlewareConfig> =
   Match.ObjectIncluding({
+    coordination: coordinationPattern,
     limit: Match.Optional(Match.PositiveInteger),
     key: Match.Optional(Match.NonEmptyString),
     semaphore: Match.Optional(Semaphore),

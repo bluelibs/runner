@@ -21,10 +21,7 @@ import {
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { Semaphore } from "../../models/Semaphore";
-import {
-  middlewareConcurrencyConflictError,
-  validationError,
-} from "../../errors";
+import { middlewareConcurrencyConflictError } from "../../errors";
 import { IDENTITY_SCOPE_SEPARATOR } from "../../async-contexts/identity.constants";
 import { getIdentityNamespace } from "./identityScope.shared";
 import { globalTags } from "../globalTags";
@@ -108,15 +105,7 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
       identityContext?.tryUse,
     );
 
-    if (state.resilience) {
-      if (semaphore) {
-        validationError.throw({
-          subject: "Middleware config",
-          id: "concurrency",
-          originalError:
-            "Explicit local semaphores cannot be used with Redis resilience. Configure limit and optional key instead.",
-        });
-      }
+    if (config.coordination !== "local" && !semaphore && state.resilience) {
       const key = JSON.stringify([
         resolvedKey === undefined ? "task" : "shared",
         resolvedKey ??

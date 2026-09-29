@@ -1,4 +1,8 @@
 import {
+  coordinationPattern,
+  type CoordinationConfig,
+} from "../resilience/coordination";
+import {
   getMiddlewareApplicationIdentity,
   requireMiddlewareApplicationIdentity,
 } from "../../models/middleware/applicationIdentity";
@@ -31,7 +35,8 @@ import {
 import { globalTags } from "../globalTags";
 import { identityContextResource } from "../resources/identityContext.resource";
 
-export interface RateLimitMiddlewareConfig extends IdentityScopedMiddlewareConfig {
+export interface RateLimitMiddlewareConfig
+  extends IdentityScopedMiddlewareConfig, CoordinationConfig {
   /**
    * Time window in milliseconds
    */
@@ -59,6 +64,7 @@ const positiveNonZeroIntegerPattern = Match.Where(
 );
 
 const rateLimitConfigPattern = Match.ObjectIncluding({
+  coordination: coordinationPattern,
   windowMs: positiveNonZeroIntegerPattern,
   max: positiveNonZeroIntegerPattern,
   keyBuilder: Match.Optional(Function),
@@ -137,7 +143,7 @@ export const rateLimitTaskMiddleware = taskMiddlewareBuilder("rateLimit")
         config.identityScope,
         identityContext?.tryUse,
       );
-      if (state.resilience) {
+      if (config.coordination !== "local" && state.resilience) {
         const admission = await state.resilience.rateLimit(
           getMiddlewareApplicationIdentity(execution, storageTaskId),
           key,

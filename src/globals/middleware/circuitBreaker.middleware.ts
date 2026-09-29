@@ -1,4 +1,8 @@
 import {
+  coordinationPattern,
+  type CoordinationConfig,
+} from "../resilience/coordination";
+import {
   getMiddlewareApplicationIdentity,
   requireMiddlewareApplicationIdentity,
 } from "../../models/middleware/applicationIdentity";
@@ -24,7 +28,7 @@ export enum CircuitBreakerState {
 /**
  * Configuration for the Circuit Breaker middleware
  */
-export interface CircuitBreakerMiddlewareConfig {
+export interface CircuitBreakerMiddlewareConfig extends CoordinationConfig {
   /**
    * Number of failures before tripping the circuit
    * @default 5
@@ -38,6 +42,7 @@ export interface CircuitBreakerMiddlewareConfig {
 }
 
 const circuitBreakerConfigPattern = Match.ObjectIncluding({
+  coordination: coordinationPattern,
   failureThreshold: Match.Optional(Match.PositiveInteger),
   resetTimeout: Match.Optional(Match.PositiveInteger),
 });
@@ -105,7 +110,7 @@ export const circuitBreakerMiddleware = taskMiddlewareBuilder("circuitBreaker")
     const failureThreshold = config.failureThreshold ?? 5;
     const resetTimeout = config.resetTimeout ?? 30000;
 
-    if (state.resilience) {
+    if (config.coordination !== "local" && state.resilience) {
       return runSharedCircuit(
         state.resilience,
         getMiddlewareApplicationIdentity(execution, taskId),

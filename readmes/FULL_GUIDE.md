@@ -2065,7 +2065,7 @@ Recommended ordering:
 
 By default, rate limiting, circuit breaking, and concurrency control keep isolated
 in-memory state in each runtime. In Node, register `resources.resilience` to make
-all three use shared Redis state automatically:
+all three use shared Redis state automatically unless a middleware selects local coordination:
 
 ```ts
 import { r, run, resources, middleware } from "@bluelibs/runner/node";
@@ -2105,6 +2105,29 @@ Redis connection and preserves the existing in-memory behavior. Supporting
 middleware state resources resolve resilience through an optional dependency;
 register the public resource itself, not a fork, for automatic adoption.
 
+Each of these three middleware accepts an optional `coordination` setting:
+
+| Setting | Behavior |
+| --- | --- |
+| Omitted | Uses registered resilience; otherwise memory |
+| `"local"` | Always uses memory within this runtime |
+| `"distributed"` | Requires registered resilience; missing registration fails at startup |
+
+For example, the `charge` task above can keep its concurrency cap local while
+sharing its rate limit across replicas by changing those two entries to:
+
+```ts
+middleware.task.rateLimit.with({
+  max: 100, windowMs: 60_000, coordination: "distributed",
+}),
+middleware.task.concurrency.with({ limit: 10, coordination: "local" }),
+```
+
+The local cap protects each worker's capacity; the distributed rate limit protects
+the shared provider allowance. Coordination is selected per middleware application,
+including subtree policies. `"local"` is an explicit choice, never an automatic
+fallback after a Redis error.
+
 Matching Redis database, `namespace`, canonical task id, canonical middleware id,
 and occurrence of that middleware share a policy across replicas. Stacked
 middleware applications keep separate state, so per-second and per-minute rate
@@ -2116,7 +2139,8 @@ Concurrency's explicit `key` or resolved `keyBuilder` shares permits across task
 still partitioned by identity scope. Without either, each middleware application
 on a task has its own shared permit pool.
 JavaScript config-object reuse does not create cross-task Redis groups. Explicit
-local `Semaphore` instances are rejected when resilience is enabled.
+`Semaphore` instances imply local coordination, even when resilience is registered.
+Combining `semaphore` with `coordination: "distributed"` fails at startup.
 
 Redis performs admission and transitions atomically using its own clock. Conflicting
 parameters for an existing policy fail instead of silently creating separate

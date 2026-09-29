@@ -1,3 +1,4 @@
+import { validateResilienceCoordination } from "./ResilienceCoordinationValidator";
 import { middlewareNotRegisteredError } from "../../errors";
 import { getStoredSubtreePolicy } from "../../definers/subtreePolicy";
 import {
@@ -11,6 +12,9 @@ import type { ValidatorContext } from "./ValidatorContext";
  * Validates that all middleware attachments reference registered middleware.
  */
 export function validateMiddlewareRegistrations(ctx: ValidatorContext): void {
+  for (const { middleware } of ctx.registry.taskMiddlewares.values()) {
+    validateResilienceCoordination(ctx, middleware);
+  }
   validateTaskMiddlewareAttachments(ctx);
   validateResourceMiddlewareAttachments(ctx);
   validateSubtreeMiddlewareAttachments(ctx);
@@ -28,6 +32,7 @@ function validateTaskMiddlewareAttachments(ctx: ValidatorContext): void {
           middlewareId: ctx.findIdByDefinition(middlewareAttachment),
         });
       }
+      validateResilienceCoordination(ctx, middlewareAttachment);
     }
   }
 }
@@ -67,6 +72,7 @@ function validateSubtreeMiddlewareAttachments(ctx: ValidatorContext): void {
           middlewareId: ctx.findIdByDefinition(middleware),
         });
       }
+      validateResilienceCoordination(ctx, middleware);
     }
 
     for (const middlewareEntry of subtreePolicy.resources?.middleware ?? []) {
