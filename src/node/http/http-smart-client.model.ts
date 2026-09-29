@@ -18,6 +18,7 @@ import {
   httpContextSerializationError,
 } from "../../errors";
 import { RUNNER_ASYNC_CONTEXT_HEADER } from "../../remote-lanes/http/constants";
+import { parseRetryAfterMs } from "../../remote-lanes/http/retryAfter";
 import { createCancellationErrorFromSignal } from "../../tools/abortSignals";
 
 export interface HttpSmartClientAuthConfig {
@@ -114,6 +115,7 @@ function toHttpStatusError(options: {
   statusMessage?: string;
   contentType?: string;
   bodyPreview?: string;
+  retryAfterMs?: number;
 }): RemoteLaneTransportError {
   const { statusCode, statusMessage, contentType, bodyPreview } = options;
   const message = statusMessage
@@ -128,7 +130,7 @@ function toHttpStatusError(options: {
       contentType,
       bodyPreview,
     },
-    { httpCode: statusCode },
+    { httpCode: statusCode, retryAfterMs: options.retryAfterMs },
   );
 }
 
@@ -211,6 +213,7 @@ async function postJson<T = any>(
               rejectOnce(
                 toHttpStatusError({
                   statusCode,
+                  retryAfterMs: parseRetryAfterMs(res.headers["retry-after"]),
                   statusMessage: res.statusMessage,
                   contentType: String(res.headers["content-type"] ?? ""),
                 }),
@@ -228,6 +231,7 @@ async function postJson<T = any>(
               rejectOnce(
                 toHttpStatusError({
                   statusCode,
+                  retryAfterMs: parseRetryAfterMs(res.headers["retry-after"]),
                   statusMessage: res.statusMessage,
                   contentType: String(res.headers["content-type"] ?? ""),
                   bodyPreview: text.slice(0, 512),
@@ -528,6 +532,7 @@ function parseMaybeJsonResponse<T = any>(
             reject(
               toHttpStatusError({
                 statusCode,
+                retryAfterMs: parseRetryAfterMs(res.headers["retry-after"]),
                 statusMessage: res.statusMessage,
                 contentType,
               }),
@@ -541,6 +546,7 @@ function parseMaybeJsonResponse<T = any>(
             reject(
               toHttpStatusError({
                 statusCode,
+                retryAfterMs: parseRetryAfterMs(res.headers["retry-after"]),
                 statusMessage: res.statusMessage,
                 contentType,
                 bodyPreview: text.slice(0, 512),
@@ -561,6 +567,7 @@ function parseMaybeJsonResponse<T = any>(
     return Promise.reject(
       toHttpStatusError({
         statusCode,
+        retryAfterMs: parseRetryAfterMs(res.headers["retry-after"]),
         statusMessage: res.statusMessage,
         contentType,
       }),

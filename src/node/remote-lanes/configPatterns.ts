@@ -12,6 +12,13 @@ const remoteLaneBindingAuthJwtHmacPattern = Match.ObjectIncluding({
   mode: Match.Optional("jwt_hmac"),
   header: Match.Optional(String),
   tokenTtlMs: Match.Optional(Number),
+  messageTtlMs: Match.Optional(
+    Match.Where(
+      (value: unknown): value is number =>
+        typeof value === "number" && Number.isSafeInteger(value) && value > 0,
+      "Expected a positive integer message token lifetime.",
+    ),
+  ),
   clockSkewMs: Match.Optional(Number),
   secret: Match.Optional(String),
   produceSecret: Match.Optional(String),
@@ -23,6 +30,13 @@ const remoteLaneBindingAuthJwtAsymmetricPattern = Match.ObjectIncluding({
   header: Match.Optional(String),
   algorithm: Match.Optional(Match.OneOf(...remoteLaneAuthModes)),
   tokenTtlMs: Match.Optional(Number),
+  messageTtlMs: Match.Optional(
+    Match.Where(
+      (value: unknown): value is number =>
+        typeof value === "number" && Number.isSafeInteger(value) && value > 0,
+      "Expected a positive integer message token lifetime.",
+    ),
+  ),
   clockSkewMs: Match.Optional(Number),
   privateKey: Match.Optional(String),
   privateKeyKid: Match.Optional(String),

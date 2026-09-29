@@ -19,7 +19,7 @@ describe("createRetryingRpcLaneCommunicator", () => {
     const eventWithResult = jest.fn(async () => ({ updated: true }));
     const wrapped = createRetryingRpcLaneCommunicator(
       { task, event, eventWithResult },
-      { delayMs: 0 },
+      { maxAttempts: 3, delayMs: 0 },
     );
     const signal = new AbortController().signal;
     const options = { headers: { "x-test": "1" }, signal };
@@ -48,7 +48,10 @@ describe("createRetryingRpcLaneCommunicator", () => {
 
   it("forwards calls without options", async () => {
     const task = jest.fn(async () => "ok");
-    const wrapped = createRetryingRpcLaneCommunicator({ task }, { delayMs: 0 });
+    const wrapped = createRetryingRpcLaneCommunicator(
+      { task },
+      { maxAttempts: 3, delayMs: 0 },
+    );
 
     await expect(wrapped.task!("t", { a: 1 })).resolves.toBe("ok");
     expect(task).toHaveBeenCalledWith("t", { a: 1 }, undefined);
@@ -81,7 +84,10 @@ describe("createRetryingRpcLaneCommunicator", () => {
       }
       return "recovered";
     });
-    const wrapped = createRetryingRpcLaneCommunicator({ task }, { delayMs: 0 });
+    const wrapped = createRetryingRpcLaneCommunicator(
+      { task },
+      { maxAttempts: 3, delayMs: 0 },
+    );
 
     await expect(wrapped.task!("t")).resolves.toBe("recovered");
     expect(task).toHaveBeenCalledTimes(3);
@@ -106,7 +112,10 @@ describe("createRetryingRpcLaneCommunicator", () => {
     const task = jest.fn(async () => {
       throw failure;
     });
-    const wrapped = createRetryingRpcLaneCommunicator({ task }, { delayMs: 0 });
+    const wrapped = createRetryingRpcLaneCommunicator(
+      { task },
+      { maxAttempts: 3, delayMs: 0 },
+    );
 
     await expect(wrapped.task!("t")).rejects.toBe(failure);
     expect(task).toHaveBeenCalledTimes(1);
@@ -148,7 +157,7 @@ describe("createRetryingRpcLaneCommunicator", () => {
     });
     const wrapped = createRetryingRpcLaneCommunicator(
       { task },
-      { delayMs: 0, retryIf: () => false },
+      { maxAttempts: 3, delayMs: 0, retryIf: () => false },
     );
 
     await expect(wrapped.task!("t")).rejects.toMatchObject({
@@ -168,6 +177,7 @@ describe("createRetryingRpcLaneCommunicator", () => {
     const wrapped = createRetryingRpcLaneCommunicator(
       { task },
       {
+        maxAttempts: 3,
         delayMs: (attempt, error) => {
           expect(error).toBeInstanceOf(RemoteLaneTransportError);
           seenAttempts.push(attempt);
@@ -189,7 +199,7 @@ describe("createRetryingRpcLaneCommunicator", () => {
     });
     const wrapped = createRetryingRpcLaneCommunicator(
       { task },
-      { delayMs: 30 },
+      { maxAttempts: 3, delayMs: 30 },
     );
 
     const startedAt = Date.now();
@@ -205,7 +215,10 @@ describe("createRetryingRpcLaneCommunicator", () => {
       }
       return "ok";
     });
-    const wrapped = createRetryingRpcLaneCommunicator({ task }, { delayMs: 5 });
+    const wrapped = createRetryingRpcLaneCommunicator(
+      { task },
+      { maxAttempts: 3, delayMs: 5 },
+    );
     const signal = new AbortController().signal;
 
     await expect(wrapped.task!("t", undefined, { signal })).resolves.toBe("ok");
@@ -218,7 +231,7 @@ describe("createRetryingRpcLaneCommunicator", () => {
     });
     const wrapped = createRetryingRpcLaneCommunicator(
       { task },
-      { delayMs: 5000 },
+      { maxAttempts: 3, delayMs: 5000 },
     );
     const controller = new AbortController();
     const pending = wrapped.task!("t", undefined, {
@@ -240,7 +253,10 @@ describe("createRetryingRpcLaneCommunicator", () => {
     const task = jest.fn(async () => {
       throw failure;
     });
-    const wrapped = createRetryingRpcLaneCommunicator({ task }, { delayMs: 0 });
+    const wrapped = createRetryingRpcLaneCommunicator(
+      { task },
+      { maxAttempts: 3, delayMs: 0 },
+    );
     const controller = new AbortController();
     controller.abort();
 

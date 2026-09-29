@@ -1,15 +1,17 @@
 import { Logger } from "../../../models/Logger";
-import { connectAmqplib } from "../../durable/optionalDeps/amqplib";
-import { createConsumeHandler } from "./createConsumeHandler";
+import { normalizeError } from "../../../tools/normalizeError";
 import {
-  buildQueueArguments,
+  openRabbitMQChannel,
+  resolveReconnect,
+  setupRabbitMQWithRetry,
+} from "./connectRabbitMQ";
+import { createTransportConsumer } from "./createTransportConsumer";
+import { RabbitMQDeliveryTracker } from "./RabbitMQDeliveryTracker";
+import { RabbitMQPublisher } from "./RabbitMQPublisher";
+import {
   Channel,
   ChannelModel,
-  ConsumeMessage,
-  DEFAULT_RECONNECT,
   RabbitMQTransportConfig,
-  RabbitMQTransportReconnectConfig,
-  resolveDeadLetterConfig,
 } from "./RabbitMQTransport.types";
 export type {
   RabbitMQTransportConfig,
@@ -21,7 +23,7 @@ export class RabbitMQTransport<TMessage> {
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private consumerTag: string | null = null;
-  private readonly messageMap = new Map<string, ConsumeMessage>();
+  private readonly deliveries = new RabbitMQDeliveryTracker<TMessage>();
   private readonly logger: Pick<Logger, "error">;
   private activeConsumerHandler: ((message: TMessage) => Promise<void>) | null =
     null;
@@ -29,6 +31,7 @@ export class RabbitMQTransport<TMessage> {
   private disposed = false;
   private initialized = false;
   private connectionGeneration = 0;
+  private readonly publisher = new RabbitMQPublisher();
 
   constructor(private readonly config: RabbitMQTransportConfig<TMessage>) {
     this.logger =
@@ -48,22 +51,8 @@ export class RabbitMQTransport<TMessage> {
     }
   }
 
-  private normalizeError(error: unknown): Error {
-    return error instanceof Error ? error : new Error(String(error));
-  }
-
-  private getReconnectConfig(): Required<RabbitMQTransportReconnectConfig> {
-    const config = this.config.reconnect ?? {};
-    return {
-      enabled: config.enabled ?? DEFAULT_RECONNECT.enabled,
-      maxAttempts: config.maxAttempts ?? DEFAULT_RECONNECT.maxAttempts,
-      initialDelayMs: config.initialDelayMs ?? DEFAULT_RECONNECT.initialDelayMs,
-      maxDelayMs: config.maxDelayMs ?? DEFAULT_RECONNECT.maxDelayMs,
-    };
-  }
-
   private shouldRecover(): boolean {
-    const reconnect = this.getReconnectConfig();
+    const reconnect = resolveReconnect(this.config.reconnect);
     return reconnect.enabled && this.initialized && !this.disposed;
   }
 
@@ -74,18 +63,17 @@ export class RabbitMQTransport<TMessage> {
     return this.channel;
   }
 
-  private async sleep(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
   private async setupConnectionAndChannel(): Promise<void> {
+    // Retired channels can emit close synchronously while recovery closes them.
+    const generation = ++this.connectionGeneration;
+    this.publisher.reset();
     const previousChannel = this.channel;
     const previousConnection = this.connection;
 
     this.channel = null;
     this.connection = null;
     this.consumerTag = null;
-    this.messageMap.clear();
+    this.deliveries.clear();
 
     if (previousChannel) {
       await previousChannel.close().catch(() => undefined);
@@ -94,48 +82,11 @@ export class RabbitMQTransport<TMessage> {
       await previousConnection.close().catch(() => undefined);
     }
 
-    const connection = (await connectAmqplib(
-      this.config.url || "amqp://localhost",
-    )) as ChannelModel;
-
-    const shouldUseConfirmChannel = this.config.publishConfirm !== false;
-    const canCreateConfirmChannel =
-      typeof connection.createConfirmChannel === "function";
-    const channel =
-      shouldUseConfirmChannel && canCreateConfirmChannel
-        ? await connection.createConfirmChannel!()
-        : await connection.createChannel();
-
-    this.connection = connection;
-    this.channel = channel;
-    const generation = ++this.connectionGeneration;
-    this.attachDisconnectHandlers(connection, channel, generation);
-
-    const durable = this.config.queue.durable ?? true;
-    const assertMode = this.config.queue.assert ?? "active";
-    const deadLetter = resolveDeadLetterConfig(this.config.queue.deadLetter);
-
-    if (deadLetter.queueName) {
-      if (assertMode === "passive") {
-        await channel.checkQueue?.(deadLetter.queueName);
-      } else {
-        await channel.assertQueue(deadLetter.queueName, {
-          durable,
-        });
-      }
-    }
-
-    const argumentsMap = buildQueueArguments(this.config.queue, deadLetter);
-
-    if (assertMode === "passive") {
-      await channel.checkQueue?.(this.config.queue.name);
-    } else {
-      await channel.assertQueue(this.config.queue.name, {
-        durable,
-        arguments: argumentsMap,
-      });
-    }
-    await channel.prefetch(this.config.prefetch || 10);
+    await openRabbitMQChannel(this.config, (connection, channel) => {
+      this.connection = connection;
+      this.channel = channel;
+      this.attachDisconnectHandlers(connection, channel, generation);
+    });
   }
 
   private attachDisconnectHandlers(
@@ -166,13 +117,14 @@ export class RabbitMQTransport<TMessage> {
 
     this.reportError("RabbitMQ transport connection dropped.", {
       source,
-      error: this.normalizeError(error),
+      error: normalizeError(error),
     });
 
     this.channel = null;
+    this.publisher.close();
     this.connection = null;
     this.consumerTag = null;
-    this.messageMap.clear();
+    this.deliveries.clear();
 
     if (this.activeConsumerHandler) {
       void this.ensureRecoveredAndResumed(`disconnect:${source}`);
@@ -180,37 +132,13 @@ export class RabbitMQTransport<TMessage> {
   }
 
   private async setupWithRetry(reason: string): Promise<void> {
-    const reconnect = this.getReconnectConfig();
-    const maxAttempts = reconnect.enabled ? reconnect.maxAttempts : 1;
-    let delayMs = reconnect.initialDelayMs;
-    let attempt = 0;
-
-    while (true) {
-      try {
-        await this.setupConnectionAndChannel();
-        return;
-      } catch (error) {
-        attempt += 1;
-        const normalizedError = this.normalizeError(error);
-
-        if (attempt >= maxAttempts || this.disposed) {
-          throw normalizedError;
-        }
-
-        this.reportError(
-          "RabbitMQ transport connection attempt failed; retrying.",
-          {
-            reason,
-            attempt,
-            maxAttempts,
-            delayMs,
-            error: normalizedError,
-          },
-        );
-        await this.sleep(delayMs);
-        delayMs = Math.min(delayMs * 2, reconnect.maxDelayMs);
-      }
-    }
+    await setupRabbitMQWithRetry({
+      reason,
+      reconnect: resolveReconnect(this.config.reconnect),
+      setup: () => this.setupConnectionAndChannel(),
+      disposed: () => this.disposed,
+      report: (message, data) => this.reportError(message, data),
+    });
   }
 
   private async ensureRecoveredAndResumed(reason: string): Promise<void> {
@@ -251,7 +179,7 @@ export class RabbitMQTransport<TMessage> {
 
       this.reportError(
         `RabbitMQ transport operation "${operation}" failed; attempting recovery.`,
-        { error: this.normalizeError(error) },
+        { error: normalizeError(error) },
       );
       await this.ensureRecoveredAndResumed(`operation:${operation}`);
       return await action();
@@ -271,14 +199,13 @@ export class RabbitMQTransport<TMessage> {
     },
   ): Promise<void> {
     await this.withRecovery("publish", async () => {
-      const channel = this.requireChannel();
-      channel.sendToQueue(this.config.queue.name, content, options);
-      if (
-        this.config.publishConfirm !== false &&
-        typeof channel.waitForConfirms === "function"
-      ) {
-        await channel.waitForConfirms();
-      }
+      await this.publisher.publish(
+        this.requireChannel(),
+        this.config.queue.name,
+        content,
+        options,
+        this.config.publishConfirm !== false,
+      );
     });
   }
 
@@ -289,37 +216,16 @@ export class RabbitMQTransport<TMessage> {
     });
   }
 
-  private settleWithNack(
-    channel: Pick<Channel, "nack">,
-    msg: ConsumeMessage,
-    requeue: boolean,
-  ): void {
-    try {
-      channel.nack(msg, false, requeue);
-    } catch (error) {
-      this.reportError("RabbitMQ transport failed to nack message.", {
-        error: this.normalizeError(error),
-        requeue,
-      });
-    }
-  }
-
   private async startConsume(
     handler: (message: TMessage) => Promise<void>,
   ): Promise<void> {
     const channel = this.requireChannel();
-    const onMessage = createConsumeHandler({
+    const onMessage = createTransportConsumer({
       channel,
-      decode: this.config.decode,
-      resolveMessageId: this.config.resolveMessageId,
-      parseFailureLogMessage: this.config.parseFailureLogMessage,
-      handlerFailureLogMessage: this.config.handlerFailureLogMessage,
-      reportError: (message, data) => this.reportError(message, data),
-      normalizeError: (error) => this.normalizeError(error),
-      settleWithNack: (targetChannel, msg, requeue) =>
-        this.settleWithNack(targetChannel, msg, requeue),
-      messageMap: this.messageMap,
+      config: this.config,
+      deliveries: this.deliveries,
       handler,
+      reportError: (message, data) => this.reportError(message, data),
     });
 
     const consumeReply = (await channel.consume(
@@ -355,36 +261,30 @@ export class RabbitMQTransport<TMessage> {
     this.consumerTag = null;
   }
 
-  async ack(messageId: string): Promise<void> {
-    const channel = this.channel;
-    const msg = this.messageMap.get(messageId);
-    if (!channel || !msg) {
-      return;
-    }
+  /** Pins settlement ownership while an adapter awaits a retry publication. */
+  readonly withDelivery = this.deliveries.withDelivery.bind(this.deliveries);
+  /** Resolves the payload belonging to the consumer's current broker delivery. */
+  getDeliveryMessage(messageId: string): TMessage | undefined {
+    return this.deliveries.getMessage(messageId);
+  }
 
-    channel.ack(msg);
-    this.messageMap.delete(messageId);
+  async ack(messageId: string): Promise<void> {
+    this.deliveries.ack(messageId);
   }
 
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
-    const channel = this.channel;
-    const msg = this.messageMap.get(messageId);
-    if (!channel || !msg) {
-      return;
-    }
-
-    channel.nack(msg, false, requeue);
-    this.messageMap.delete(messageId);
+    this.deliveries.nack(messageId, requeue);
   }
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    this.publisher.close();
     this.initialized = false;
     this.connectionGeneration += 1;
     this.reconnectInProgress = null;
 
     await this.cancelConsumer();
-    this.messageMap.clear();
+    this.deliveries.clear();
 
     const channel = this.channel;
     const connection = this.connection;

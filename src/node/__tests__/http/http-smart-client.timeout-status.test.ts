@@ -132,13 +132,13 @@ describe("createHttpSmartClient - timeout and status handling", () => {
     );
   });
 
-  it("JSON path converts malformed 502 JSON into HTTP_ERROR", async () => {
+  it("JSON path converts malformed 502 JSON into HTTP_ERROR with Retry-After", async () => {
     jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       const res = Readable.from(["<html>bad gateway</html>"]);
       cb(
         asIncoming(
           res,
-          { "content-type": "application/json" },
+          { "content-type": "application/json", "retry-after": "2" },
           502,
           "Bad Gateway",
         ),
@@ -150,6 +150,7 @@ describe("createHttpSmartClient - timeout and status handling", () => {
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
       code: "HTTP_ERROR",
       httpCode: 502,
+      retryAfterMs: 2000,
     });
   });
 

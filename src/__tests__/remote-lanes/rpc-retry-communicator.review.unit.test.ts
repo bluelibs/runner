@@ -83,6 +83,7 @@ describe("createRetryingRpcLaneCommunicator review regressions", () => {
       const wrapped = createRetryingRpcLaneCommunicator(
         { task },
         {
+          maxAttempts: 3,
           delayMs: () => {
             if (callback === "delayMs") controller.abort("cancelled");
             return 0;
@@ -120,7 +121,7 @@ describe("createRetryingRpcLaneCommunicator review regressions", () => {
     });
     const wrapped = createRetryingRpcLaneCommunicator(
       { task },
-      { delayMs: 100 },
+      { maxAttempts: 3, delayMs: 100 },
     );
 
     try {

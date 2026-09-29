@@ -22,7 +22,15 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   const buildRpcLaneRequestHeaders =
     createRpcLaneRequestHeadersBuilder(context);
   const retryingByLaneId = new Map<string, IRpcLaneCommunicator>();
+  const singleAttemptByLaneId = new Map<string, IRpcLaneCommunicator>();
   for (const [laneId, laneBinding] of resolved.bindingsByLaneId) {
+    singleAttemptByLaneId.set(
+      laneId,
+      createRetryingRpcLaneCommunicator(laneBinding.communicator, {
+        ...laneBinding.retry,
+        maxAttempts: 1,
+      }),
+    );
     retryingByLaneId.set(
       laneId,
       createRetryingRpcLaneCommunicator(
@@ -52,7 +60,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
         const bodyIsReencoded = isReadable(input) || hasNodeFile(input);
         // Upload sources may already be consumed after the first transport attempt.
         const communicator = bodyIsReencoded
-          ? resolved.bindingsByLaneId.get(lane.id)!.communicator
+          ? singleAttemptByLaneId.get(lane.id)!
           : retryingByLaneId.get(lane.id)!;
         const runRemoteTask = communicator.task;
         if (typeof runRemoteTask !== "function") {

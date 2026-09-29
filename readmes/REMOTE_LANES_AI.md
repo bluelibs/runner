@@ -47,6 +47,8 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - Missing verifier material fails fast (`remoteLanes-auth-verifierMissing`) for consumer roles.
   - Invalid auth, wrong-lane event messages, unknown events, and payload deserialization failures are permanent poison (`nack(false)`).
 - In `transparent` and `local-simulated`, profile `consume` does not start network consumers, but it can still declare lane presence and relay hook policy (`hooks.only`).
+- Queued JWT lifetime: `auth.messageTtlMs` → explicit `auth.tokenTtlMs` → 24 hours. RPC tokens still default to 60 seconds. Expiry/signature/payload binding remain enforced; retain verification keys across the backlog window and account for replay while valid.
+- RabbitMQ retries preserve logical message ids but track broker deliveries independently. Settle within the consumer handler; an external settlement of an overlapping id fails as ambiguous. Delivery remains at least once. Publishers honor channel drain as well as configured confirms.
 - Relay re-emits bypass lane interception to prevent loops.
 - Hooks run based on event subscriptions after relay re-emit.
 - When debug event emission logging is enabled (`logEventEmissionOnRun`), Event Lanes emits routing diagnostics: `event-lanes.enqueue`, `event-lanes.relay-emit`, and `event-lanes.skip-inactive-lane`.
@@ -110,7 +112,7 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
 - Define topology with `r.rpcLane.topology({ profiles, bindings })`:
   - `profiles[profile].serve` selects lanes this runtime serves locally.
   - `bindings[]` maps `lane -> communicator resource` plus async-context policy and optional lane JWT material (`auth`).
-  - `bindings[].retry` is an optional `{ maxAttempts?, delayMs?, retryIf? }` transport retry policy (default: 3 attempts, backoff, transport failures only; `maxAttempts: 1` disables).
+  - `bindings[].retry` is an optional `{ maxAttempts?, delayMs?, retryIf?, totalTimeoutMs? }` transport retry policy (default: 1 attempt; explicitly opt into retries only for safe-to-repeat calls).
 - Register `rpcLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `serializer` resource + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`) + optional `exposure.http`.
   - `serializer` defaults to `resources.serializer`; override it when RPC lanes need different serializer registrations or stricter transport-specific policy.
@@ -126,7 +128,8 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - Lane in `serve` -> task/event executes locally.
   - Lane not in `serve` -> task/event routes remotely via communicator.
   - Every assigned or served lane must have a communicator binding.
-  - Remote calls retry per binding `retry` policy; default retries connection failures, timeouts, and HTTP 408/429/502/503/504 only — never typed domain errors, other statuses, or aborts.
+  - Remote calls retry per binding `retry` policy; the default classifier permits connection failures, timeouts, and HTTP 408/429/502/503/504 only when retries are enabled — never typed domain errors, other statuses, or aborts.
+- `retry.totalTimeoutMs` bounds attempts plus delays, including the single upload attempt; buffered HTTP `timeoutMs` remains per attempt. Call completion does not bound later response-stream consumption. `Retry-After` on HTTP transport errors sets a minimum retry delay.
 - Lane-routed raw stream and multipart Node-file uploads make one attempt; their sources may already be consumed. Use `maxAttempts: 1` for non-replayable inputs with the standalone retry wrapper.
 - RPC-routed task middleware behavior:
   - Caller-side task middleware is skipped by default unless lane policy explicitly allowlists it.

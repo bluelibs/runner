@@ -250,7 +250,8 @@ Server primarily routes by `Content-Type`. If the header is omitted, requests fa
 
 ### Abort and Timeouts
 
-- **Client**: Set `timeoutMs` → `AbortController` (signal aborts request).
+- **Client**: Set `timeoutMs` → `AbortController` (signal aborts request). Buffered JSON and universal multipart requests share timeout/caller-cancellation handling and listener cleanup.
+- **RPC Call Budget**: Optional binding `retry.totalTimeoutMs` bounds all attempts and delays, including single-attempt uploads. A completed smart-client stream response needs a separate policy for later consumption. RPC calls default to one attempt; explicitly enable retries only for safe-to-repeat inputs/effects. `Retry-After` on HTTP transport errors sets the minimum retry delay without extending the call budget.
 - **Server**: Wires signal to task (`useRpcLaneRequestContext().signal`); aborts streams.
 - **Response**: 499/REQUEST_ABORTED on abort.
 - **Hook**: Tasks check `signal.aborted` or listen for "abort".

@@ -52,7 +52,12 @@ export function issueRemoteLaneToken({
   }
 
   const iat = Math.floor(nowMs / 1000);
-  const exp = Math.floor((nowMs + resolvedPolicy.tokenTtlMs) / 1000);
+  // Queue backlog/recovery can outlive the short authentication window of an RPC.
+  const tokenTtlMs =
+    target?.kind === "event-lane" && bindingAuth && bindingAuth.mode !== "none"
+      ? (bindingAuth.messageTtlMs ?? bindingAuth.tokenTtlMs ?? 86_400_000)
+      : resolvedPolicy.tokenTtlMs;
+  const exp = Math.floor((nowMs + tokenTtlMs) / 1000);
   const payload = {
     lane: laneId,
     cap: capability,

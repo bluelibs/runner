@@ -37,6 +37,7 @@ mechanics for RPC lanes and event lanes. Keep transport-specific routing in
   and runs only allowed registered contexts; preserve this boundary behavior.
 - Tokens bind lane, capability, optional target kind/id and payload hash, issuance,
   and expiry. Enforce configured algorithms/keys and signer/verifier readiness.
+- RPC token lifetime defaults to 60 seconds; queued events use messageTtlMs, explicit tokenTtlMs, then 24 hours. Queue backlog does not bypass signature, payload binding, or expiry.
 - Tokens are reusable while valid; this module does not provide replay deduplication.
 
 ## Tests And Further Reading

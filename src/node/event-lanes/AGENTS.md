@@ -41,6 +41,7 @@ contract; generic event/hook execution stays in the core EventManager.
 - Ack after successful relay. Auth, unknown-event, assignment, and malformed-payload
   failures are permanent; retryable failures requeue within the binding attempt budget.
   Final nack delegates dead-letter behavior to the queue/broker.
+- RabbitMQ retries preserve correlation ids but settle independent broker deliveries in their handler scope; stale handlers cannot settle redeliveries. Enqueue/relay diagnostics include the same messageId.
 - Cooldown stops intake/requeues late deliveries; dispose tears down managed queues.
   Resource-backed queues retain their resource-owned lifecycle.
 
