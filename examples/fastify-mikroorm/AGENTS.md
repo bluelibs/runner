@@ -1,16 +1,18 @@
 # AGENTS.md
 
+> **Keep This Guide Current:** If you make changes within this directory, update this `AGENTS.md` in the same change whenever responsibilities, entry points, contracts, or test guidance change. Keep it concise and accurate; do not make artificial edits when the guidance still holds.
+
 Authoritative guidance for working inside this repository as an agent. This app uses BlueLibs Runner, Fastify, and MikroORM (PostgreSQL). Read `README.md` and `readmes/runner-COMPACT_GUIDE.md` for broader context. If `readmes/runner-COMPACT_GUIDE.md` is missing, sync docs with `npx ts-node scripts/sync-docs.ts`.
 
 ## Repo Orientation
 
-- HTTP: `src/http`
+- HTTP: `src/web`
   - Router: `resources/fastify-router.resource.ts` (wires tasks with `httpRoute` to Fastify)
   - Tag: `tags/http-route.tag.ts`
   - Error class: `http-error.ts`
   - Context: `fastify-context.ts`
 - Users module: `src/users` (auth resource, tasks, tests, registration)
-- DB: `src/db` (MikroORM config, entities in `src/db/entities`, migrations in `src/db/migrations`)
+- DB: `src/db` (MikroORM config, entities in `src/db/resources/entities`, migrations in `src/db/migrations`)
 - App entry: `src/main.ts` (registers `env`, `db`, `fixtures`, `http`, `users`, `runner-dev`)
 - Test utils: `src/general/test/utils.ts` (`buildTestRunner`, `testOrmConfig`)
 - Import alias: use `#/` to refer to `src/` (see README "Import Aliases").
@@ -23,19 +25,19 @@ Authoritative guidance for working inside this repository as an agent. This app 
 - Always define `inputSchema` and `resultSchema` for tasks using `zod`.
 - Prefer strict typing; avoid `any` and `unknown`.
 - Prefer optional chaining and direct access (for example `cfg?.that?.x`) over manual guards.
-- Define MikroORM entities under `src/db/entities`.
+- Define MikroORM entities under `src/db/resources/entities`.
 - After entity changes: `npm run db:migrate:create` then `npm run db:migrate:up`.
 - Each new task must have a close-by test; split large tests into multiple files if needed.
 - Ensure anything you add is registered (feature `index.ts` and/or app/root resource).
 
 ## HTTP + Tasks Pattern
 
-- Tag tasks with `httpRoute` to expose them via Fastify. Config lives in `src/http/tags/http-route.tag.ts`:
+- Tag tasks with `httpRoute` to expose them via Fastify. Config lives in `src/web/tags/http-route.tag.ts`:
   - `method`: `get|post|put|delete|patch|options|head`
   - `path`: string
   - `inputFrom`: `"body" | "merged"` (merged uses `{...params, ...query, ...body}`)
   - `auth`: `"public" | "optional" | "required"`
-- Fastify router (`src/http/resources/fastify-router.resource.ts`) auto-registers routes for all tasks tagged with `httpRoute`, builds schemas from `inputSchema`/`resultSchema`, sets `x-request-id`, attaches a child logger, enforces `auth` mode, and maps errors.
+- Fastify router (`src/web/resources/fastify-router.resource.ts`) auto-registers routes for all tasks tagged with `httpRoute`, builds schemas from `inputSchema`/`resultSchema`, sets `x-request-id`, attaches a child logger, enforces `auth` mode, and maps errors.
 - Always add:
   - `meta`: meaningful `title` and `description`
   - `inputSchema` and `resultSchema` (`zod`) – these power runtime validation and Swagger
@@ -74,12 +76,12 @@ export const getUserById = task({
 ## Registration
 
 - Register new tasks/resources/middlewares in their feature `index.ts` (example: `src/users/index.ts` registers tasks, `auth` resource, and `authorize` middleware). Unregistered items won't be discoverable by the router or other dependencies.
-- The HTTP layer is registered in `src/http/index.ts` and the app root in `src/main.ts`. Ensure your feature resource is included in the app if you add a new feature.
+- The HTTP layer is registered in `src/web/index.ts` and the app root in `src/main.ts`. Ensure your feature resource is included in the app if you add a new feature.
 - In tests, explicitly register what you need using `buildTestRunner({ register: [...] })` and include `httpRoute` + `fastify` + `fastifyRouter` when testing HTTP behavior.
 
 ## Authorization & Auth
 
-- Use `authorize` task middleware (`src/http/middleware/authorize.middleware.ts`) to protect tasks by role:
+- Use `authorize` task middleware (`src/web/middleware/authorize.middleware.ts`) to protect tasks by role:
   - `required` (default `true`): user must exist; otherwise 401
   - `roles`: allowed roles; otherwise 403
 - At the route level, set `httpRoute.with({ auth: "public|optional|required" })`:
@@ -90,7 +92,7 @@ export const getUserById = task({
 
 ## Database & Migrations
 
-- Place entity classes in `src/db/entities`. Update related repositories/resources as needed.
+- Place entity classes in `src/db/resources/entities`. Update related repositories/resources as needed.
 - Migrations workflow:
   - Emit: `npm run db:migrate:create`
   - Apply: `npm run db:migrate:up`
