@@ -29,26 +29,37 @@ export class ShellServer {
         socket.destroy();
         return;
       }
-      void acceptShellConnection(socket, requireReadOnly).then(
-        ({ readOnly, run }) => {
-          if (!acceptsShellCommands(runtime)) {
-            socket.destroy();
-            return;
-          }
-          if (run !== undefined) {
-            startShellCommand(
-              socket,
-              runtime,
-              this.#executionScope,
-              readOnly,
-              run,
-            );
-          } else {
-            startShellSession(socket, runtime, this.#executionScope, readOnly);
-          }
-        },
-        () => socket.destroy(),
-      );
+      void acceptShellConnection(socket, requireReadOnly)
+        .then(
+          async ({ readOnly, run, terminal, historyFile }) => {
+            if (!acceptsShellCommands(runtime)) {
+              socket.destroy();
+              return;
+            }
+            if (run !== undefined) {
+              startShellCommand(
+                socket,
+                runtime,
+                this.#executionScope,
+                readOnly,
+                run,
+              );
+            } else {
+              await startShellSession(
+                socket,
+                runtime,
+                this.#executionScope,
+                readOnly,
+                terminal,
+                historyFile,
+              );
+            }
+          },
+          () => socket.destroy(),
+        )
+        .catch((error: unknown) =>
+          socket.end(`Shell setup failed: ${String(error)}\n`),
+        );
     });
   }
 

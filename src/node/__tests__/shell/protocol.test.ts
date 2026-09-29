@@ -12,7 +12,7 @@ function transport() {
 }
 const send = (socket: Socket, value: unknown) =>
   socket.emit("data", Buffer.from(`${JSON.stringify(value)}\n`));
-const greeting = { protocol: "runner-shell", version: 2 };
+const greeting = { protocol: "runner-shell", version: 3 };
 
 it("reads fragmented lines and preserves following terminal bytes", async () => {
   const socket = transport();
@@ -76,7 +76,7 @@ it("refuses downgrades and unsupported servers before forwarding terminal input"
   socket.destroy();
   const old = transport();
   const incompatible = negotiateShellConnection(old, true);
-  send(old, { ...greeting, version: 3 });
+  send(old, { ...greeting, version: 4 });
   await expect(incompatible).rejects.toThrow();
   expect(old.write).not.toHaveBeenCalled();
   old.destroy();

@@ -1,6 +1,7 @@
+import { env } from "node:process";
 import { once } from "node:events";
 import { createConnection } from "node:net";
-import { check } from "../../tools/check";
+import { check, Match } from "../../tools/check";
 import { shellError } from "./errors";
 import { negotiateShellConnection } from "./protocol";
 import { assertSocketPath } from "./socketPath";
@@ -14,11 +15,15 @@ import type { ConnectShellOptions } from "./types";
 export async function connectShell({
   socketPath,
   readOnly = false,
+  terminal = "auto",
+  historyFile,
   input = process.stdin,
   output = process.stdout,
 }: ConnectShellOptions): Promise<void> {
   assertSocketPath(socketPath);
   check(readOnly, Boolean);
+  check(terminal, Match.OneOf("auto", "interactive", "basic"));
+  check(historyFile, Match.Optional(Match.NonEmptyString));
   if (!input.isTTY || !output.isTTY) {
     throw shellError.new({
       message:
@@ -28,7 +33,11 @@ export async function connectShell({
   const socket = createConnection(socketPath);
   try {
     await once(socket, "connect");
-    await negotiateShellConnection(socket, readOnly);
+    await negotiateShellConnection(socket, readOnly, undefined, {
+      terminal:
+        terminal === "auto" ? env.TERM !== "dumb" : terminal === "interactive",
+      historyFile,
+    });
     await attachShellTerminal(socket, input, output);
   } finally {
     socket.destroy();

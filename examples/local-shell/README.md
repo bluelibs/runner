@@ -9,7 +9,7 @@ npm run build
 Start the app:
 
 ```sh
-TERM=xterm-256color node examples/local-shell/app.mjs
+node examples/local-shell/app.mjs
 ```
 
 In another terminal:
@@ -27,7 +27,20 @@ counter.value
 await runtime.getHealth()
 ```
 
+Try `.tasks`, `.resources counter`, and `.status` to discover the app and inspect the session. Terminal capabilities are detected by the connector; the app needs no `TERM` setup.
+
 Variables survive between commands. Press Up/Down for session history, Tab for completion, and use `.exit` to disconnect while leaving the app running. Commands operate on live application state.
+
+## Opt Into Persistent History
+
+Create an owner-only directory and select an explicit history file:
+
+```sh
+mkdir -m 700 "$HOME/.runner-shell"
+node examples/local-shell/shell.mjs --history-file "$HOME/.runner-shell/history.jsonl"
+```
+
+Up/Down can now recall commands after reconnecting. Without this option, history stays in memory. Commands beginning with a space are omitted from the file; use this for lines that contain secrets. When connecting through SSH, the history path is on the application host. `--run` never writes history.
 
 ## Run One Command
 

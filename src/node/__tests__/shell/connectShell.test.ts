@@ -109,6 +109,22 @@ describeUnix("connectShell", () => {
     }
   });
 
+  it.each(["interactive", "basic"] as const)(
+    "honors the %s terminal override",
+    async (terminal) => {
+      const { runtime, socketPath } = await boot();
+      const ready = readUntil(output, "runner> ");
+      const connected = connectShell({ socketPath, input, output, terminal });
+      await ready;
+      const status = readUntil(output, `Terminal: ${terminal}`);
+      input.write(".status\n");
+      await status;
+      input.write(".exit\n");
+      await connected;
+      await runtime.dispose();
+    },
+  );
+
   it("disconnects on terminal EOF", async () => {
     const { runtime, socketPath } = await boot();
     input.isRaw = undefined;

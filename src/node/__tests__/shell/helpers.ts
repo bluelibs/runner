@@ -3,12 +3,16 @@ import { runInThisContext } from "node:vm";
 import { createConnection } from "node:net";
 import { EventEmitter } from "node:events";
 
-export function openShell(socketPath: string, readOnly = false) {
+export function openShell(
+  socketPath: string,
+  readOnly = false,
+  options: { terminal?: boolean; historyFile?: string } = {},
+) {
   const socket = createConnection(socketPath);
   const updates = new EventEmitter();
   let output = "";
   socket.once("connect", () => {
-    void negotiateShellConnection(socket, readOnly).then(
+    void negotiateShellConnection(socket, readOnly, undefined, options).then(
       () => {
         socket.setEncoding("utf8");
         socket.on("data", (data: string) => {
@@ -56,12 +60,16 @@ export function openShell(socketPath: string, readOnly = false) {
 export function useInteractiveTerminal() {
   const nativeProcess: NodeJS.Process = runInThisContext("process");
   const previousTerm = nativeProcess.env.TERM;
+  const previousLocalTerm = process.env.TERM;
   beforeAll(() => {
     nativeProcess.env.TERM = "xterm";
+    process.env.TERM = "xterm";
   });
   afterAll(() => {
     if (previousTerm === undefined) delete nativeProcess.env.TERM;
     else nativeProcess.env.TERM = previousTerm;
+    if (previousLocalTerm === undefined) delete process.env.TERM;
+    else process.env.TERM = previousLocalTerm;
   });
 }
 

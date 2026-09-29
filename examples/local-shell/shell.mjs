@@ -5,6 +5,7 @@ import { connectShell, runShell } from "@bluelibs/runner/node";
 
 const { values } = parseArgs({ options: {
   run: { type: "string" },
+  "history-file": { type: "string" },
   "read-only": { type: "boolean", default: false },
 } });
 const options = {
@@ -16,5 +17,5 @@ if (values.run !== undefined) {
   process.stdout.write(result.output);
   process.exitCode = result.success ? 0 : 1;
 } else {
-  await connectShell(options);
+  await connectShell({ ...options, historyFile: values["history-file"] });
 }

@@ -73,10 +73,36 @@ The evaluator is [Node's native JavaScript REPL](https://nodejs.org/docs/latest-
 | An incomplete expression | Continue input over multiple lines |
 | `.editor` | Enter multiline editor mode; Ctrl+D submits |
 | `.clear` | Reset session variables and rebind `runtime` |
-| `.help` | Show Node REPL commands |
+| `.tasks [filter]` | List accessible task IDs and descriptions |
+| `.resources [filter]` | List accessible resource IDs and descriptions |
+| `.status` | Show app, process, access mode, terminal mode, and history settings |
+| `.help` | Show Node and Runner shell commands |
 | `.exit` or Ctrl+D at an empty prompt | Disconnect without disposing the app |
 
-History is not persisted to disk. Native line editing follows the application process's `TERM` setting. If your service starts with `TERM=dumb`, launch it with `TERM=xterm-256color` to enable arrow keys and completion.
+The connector detects terminal capabilities from its own `TERM`: a normal or unset value enables editing, while explicit `TERM=dumb` uses basic input. The app process’s `TERM` is unchanged and does not determine the session’s editing mode. To override detection, use `connectShell({ socketPath, terminal: "interactive" })` or `terminal: "basic"`. Interactive mode requires TTY streams and supports native editor mode, history, and completion; basic mode provides line input without those editing features.
+
+`.tasks` and `.resources` show canonical IDs, optional titles, and descriptions for definitions accessible through the root runtime API. A filter matches any part of that text, ignoring case. These commands list definitions without initializing or printing resource values. `.status` and discovery commands remain available after `.clear`.
+
+## Opt Into Persistent History
+
+History stays in memory by default. To restore it on reconnect, explicitly supply an absolute file path on the application host:
+
+```js
+await connectShell({
+  socketPath: "/run/my-app/runner.sock",
+  historyFile: "/run/my-app/shell-history.jsonl",
+});
+```
+
+The runnable connector example accepts `--history-file`:
+
+```sh
+ssh -t app@server 'cd /srv/my-app && node examples/local-shell/shell.mjs --history-file /run/my-app/shell-history.jsonl'
+```
+
+The history file must be inside an existing owner-only directory owned by the app user. New files use mode `0600`; shared files, symlinks, and files owned by another user are rejected. History uses JSON lines and append operations so concurrent sessions do not overwrite each other. Each new session loads the latest 1,000 records, keeping the newest occurrence of each command. Choose separate files for separate apps and rotate them as needed; existing sessions do not reload changes made by other sessions.
+
+Commands may contain secrets. Prefix a command with a space to omit that line from the persistent file; blank lines and `.exit` are also omitted. This does not remove it from the current session’s in-memory history. `--run` never writes persistent history.
 
 ## Connect Through SSH
 

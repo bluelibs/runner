@@ -26,6 +26,10 @@ export interface ShellConfig {
 
 /** Terminal connector options. The connector never starts another runtime. */
 export interface ConnectShellOptions extends ShellConfig {
+  /** Terminal capabilities; defaults to the connector's TERM. An explicit dumb terminal uses basic input. */
+  terminal?: "auto" | "interactive" | "basic";
+  /** Opt-in JSON-lines history file on the app host, inside an existing owner-only directory. */
+  historyFile?: string;
   /** Interactive terminal input. Defaults to process.stdin. */
   input?: ShellInput;
   /** Interactive terminal output. Defaults to process.stdout. */

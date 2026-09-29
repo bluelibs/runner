@@ -874,3 +874,5 @@ Opt in with `resources.shell.with({ socketPath })` from `@bluelibs/runner/node`,
 Opt into a read-only connection with `connectShell({ socketPath, readOnly: true })`. Resources can depend on `resources.shell` and check `shell.isReadOnly()` inside write operations; the mode follows this container’s async execution scope. Resources must enforce the policy themselves.
 
 For one-shot commands without a TTY, `await runShell({ socketPath, command: "await runtime.getHealth()", readOnly: true })` returns `{ success, output }`. The connector example exposes this as `--run`.
+
+The connector auto-detects terminal editing independently of the app’s `TERM`. Use `.tasks`, `.resources`, and `.status` for discovery; opt into reconnect history with `connectShell({ socketPath, historyFile })` inside an owner-only directory. History is in memory by default.
