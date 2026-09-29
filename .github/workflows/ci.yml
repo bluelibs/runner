@@ -74,6 +74,8 @@ jobs:
           DURABLE_INTEGRATION: "1"
           DURABLE_TEST_REDIS_URL: "redis://127.0.0.1:6379"
           DURABLE_TEST_RABBIT_URL: "amqp://127.0.0.1:5672"
+          # Enables Redis resilience coordination and recovery integration suites.
+          RESILIENCE_REDIS_URL: "redis://127.0.0.1:6379"
           # Enables Event Lanes real RabbitMQ integration suite.
           EVENT_LANES_INTEGRATION: "1"
           EVENT_LANES_TEST_RABBIT_URL: "amqp://127.0.0.1:5672"

@@ -9,12 +9,16 @@ on:
       - "package-lock.json"
       - "config/jest/**"
       - "scripts/run-jest-watchdog.mjs"
+      - "src/globals/middleware/**"
+      - "src/globals/resilience/**"
       - "src/node/durable/optionalDeps/**"
       - "src/node/durable/store/**"
       - "src/node/event-lanes/**"
       - "src/node/queue/rabbitmq/**"
+      - "src/node/resilience/**"
       - "src/node/__tests__/durable/store/**"
       - "src/node/__tests__/event-lanes/**"
+      - "src/node/__tests__/resilience/**"
   schedule:
     - cron: "17 4 * * 1"
 
@@ -77,3 +81,8 @@ jobs:
           --runTestsByPath
           src/node/__tests__/durable/store/RedisStore.real.integration.test.ts
           src/node/__tests__/event-lanes/RabbitMQEventLaneQueue.real.integration.test.ts
+
+      - name: Run Redis resilience integration tests
+        env:
+          RESILIENCE_REDIS_URL: redis://127.0.0.1:6379
+        run: npm run test:serial -- src/node/__tests__/resilience

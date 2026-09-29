@@ -1320,12 +1320,14 @@ Available events:
 | Guarantee               | Description                                                                   |
 | ----------------------- | ----------------------------------------------------------------------------- |
 | Store is truth          | All state persists in `IDurableStore`. Queue/pub-sub are optimizations.       |
-| At-least-once execution | Executions retry on failure. Steps run at-most-once per execution (memoized). |
+| At-least-once execution | Executions retry on failure. Persisted step results are reused on replay.    |
 | Durable sleep           | Timers persist. Resume after process restart.                                 |
 | Signal buffering        | Early signals queue until workflow waits.                                     |
 | Signal bounds           | Queued backlog is capped per key (backpressure); history keeps newest 1000.   |
 | Recovery                | Orphaned executions discovered and resumed on startup.                        |
 | Locks                   | Only one worker processes an execution at a time.                             |
+
+> **Note:** A step body can run again if the process crashes after an external action succeeds but before its result is persisted. For external side effects, use a stable idempotency key when the receiving service supports and enforces it; Runner cannot atomically commit an external action and its checkpoint.
 
 **Reserved step IDs**: Avoid `__` and `rollback:` prefixes.
 
