@@ -43,6 +43,15 @@ export type { AccessViolation } from "./visibility-tracker/contracts";
 export class VisibilityTracker {
   private readonly state = createVisibilityTrackerState();
 
+  /** Retains the original access contract for a compiled resource instance. @internal */
+  recordScopedResource(
+    instanceId: string,
+    targetId: string,
+    consumerId: string,
+  ): void {
+    this.state.scopedResources.set(instanceId, { targetId, consumerId });
+  }
+
   /**
    * Records that a resource exists in the registration tree.
    *

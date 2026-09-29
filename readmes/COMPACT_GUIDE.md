@@ -176,7 +176,7 @@ Important run options:
 - `executionContext: true | { ... }`: enable correlation ids and inherited execution signals, with optional frame tracking and cycle detection
 - `identity: myIdentityContext`: override which registered async context Runner reads for identity-aware framework behavior
 - `mode: "dev" | "pre-prod" | "prod" | "test"`: override environment-based mode detection; existing `RunnerMode` enum members are also accepted
-- `pre-prod` is also detected from `NODE_ENV=pre-prod`; it keeps normal override restrictions. Explicit `mode` does not change `NODE_ENV`.
+- `pre-prod` is also detected from `NODE_ENV=pre-prod`; override precedence is identical in all modes. Explicit `mode` does not change `NODE_ENV`.
 
 Observability options (`debug`, `logs`) do not change lifecycle semantics.
 
@@ -564,8 +564,7 @@ Important rules:
 - In unit tests, build the smallest root resource that expresses the contract you care about.
 - Run it with `await run(app)`. Assert through `runTask`, `emitEvent`, `getResourceValue`, or `getResourceConfig`.
 - `r.override(base, fn)` is the standard way to swap behavior in tests while preserving ids.
-- Duplicate override targets are allowed only in resolved `test` mode.
-  The outermost declaring resource wins, and same-resource duplicates use the last declaration.
+- Nearest override declarations win in every mode. Duplicate targets at the same declaring resource fail fast.
 
 ## Composition Boundaries
 
@@ -617,9 +616,10 @@ Overrides:
 - Use `r.override(base, fn)` when you need to replace behavior while preserving the original id.
 - For resources only, `r.override(resource, { context, init, ready, cooldown, dispose })` also supported. Object-form inherits unspecified hooks from base and may add new stages.
 - `.overrides([...])` applies override definitions during bootstrap.
-- Override direction is downstream-only: declare overrides from the resource that owns the target subtree or from one of its ancestors. Child resources cannot replace parent-owned or sibling-owned definitions.
+- Resource overrides select independent instances for consumers within the declaring subtree; nearest declaration wins, siblings stay independent. Config is inherited, lifecycle context is independent, and scope follows registration ownership rather than callers.
+- Task/hook/middleware overrides still target owned descendants; nearest declaring ancestor wins.
 - Override targets must already exist in the graph.
-- Outside `test` mode, duplicate override targets fail fast. In `test`, the outermost declaring resource wins and same-resource duplicates use the last declaration.
+- Duplicate targets at one declaring resource fail fast in every mode. Root test overrides do not force replacement through descendant specializations.
 
 ## Tags and Scheduling
 

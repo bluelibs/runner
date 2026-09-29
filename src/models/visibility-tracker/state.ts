@@ -9,6 +9,7 @@ import type { CompiledIsolationPolicy } from "./contracts";
 import { compileIsolationPolicy } from "./policyCompiler";
 
 export type VisibilityTrackerState = {
+  scopedResources: Map<string, { targetId: string; consumerId: string }>;
   ownership: Map<string, string>;
   exportSets: Map<string, Set<string>>;
   subtrees: Map<string, Set<string>>;
@@ -20,6 +21,7 @@ export type VisibilityTrackerState = {
 
 export function createVisibilityTrackerState(): VisibilityTrackerState {
   return {
+    scopedResources: new Map(),
     ownership: new Map<string, string>(),
     exportSets: new Map<string, Set<string>>(),
     subtrees: new Map<string, Set<string>>(),

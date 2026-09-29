@@ -36,7 +36,6 @@ import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { RegisterableKind } from "./store-registry/registerableKind";
 import { validationError } from "../../errors";
 import { getDefinitionIdentity } from "../../tools/isSameDefinition";
-import type { RunnerMode } from "../../types/runner";
 import {
   resolveHookTargets,
   type HookTargetResolutionEntry,
@@ -201,10 +200,6 @@ export class StoreRegistry {
 
   getValidator(): StoreValidator {
     return this.validator;
-  }
-
-  public getStoreMode(): RunnerMode {
-    return this.store.mode;
   }
 
   registerDefinitionAlias(reference: unknown, canonicalId: string): void {

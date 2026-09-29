@@ -386,6 +386,11 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /**
+   * Declares behavior replacements at this subtree boundary.
+   * Resource consumers receive the nearest scope's instance; other kinds must
+   * belong to this subtree. Duplicate targets at this boundary fail in all modes.
+   */
   overrides(
     o:
       | Array<OverridableElements>
@@ -583,6 +588,11 @@ export interface ResourceFluentBuilderAfterInit<
     TTags,
     TMiddleware
   >;
+  /**
+   * Declares behavior replacements at this subtree boundary.
+   * Resource consumers receive the nearest scope's instance; other kinds must
+   * belong to this subtree. Duplicate targets at this boundary fail in all modes.
+   */
   overrides(
     o:
       | Array<OverridableElements>

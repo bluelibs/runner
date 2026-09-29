@@ -703,7 +703,9 @@ const dbResource = r
 
 Use `r.override(base, fn)` when you need to replace a component's behavior while keeping the same `id` — common in integration testing or when swapping out a library.
 
-Override direction is downstream-only: declare `.overrides([...])` from the resource that owns the target subtree, or from one of its ancestors. Child resources cannot replace definitions owned by a parent or sibling subtree.
+Resource overrides apply to dependency consumers in the declaring resource and its registration subtree. The nearest enclosing declaration wins; sibling subtrees can supply different implementations of the same resource. The original resource must be registered and visible to the declaring resource. Locked system resources cannot be overridden.
+
+Task, hook, and middleware overrides still replace the target definition within its ownership tree: declare them from its owner or an ancestor. The nearest declaring ancestor wins in every runtime mode.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -764,7 +766,7 @@ const overriddenMiddleware = r.override(
 - resource object-form overrides may add `ready`, `cooldown`, or `dispose` even if the base resource did not define them
 - hook overrides keep the same `.on` target
 - override APIs do not change structural boundaries (dependencies, register tree, subtree policies)
-- duplicate override targets fail fast outside `test`; in `test`, the outermost declaring resource wins, and same-resource duplicates use the last declaration
+- duplicate override targets at the same declaring resource fail fast in every mode; nested declarations use the nearest scope
 
 Use the resource object form intentionally: overriding `context` changes the private lifecycle-state contract that `init()`, `ready()`, `cooldown()`, and `dispose()` share.
 
@@ -805,4 +807,42 @@ r.resource("test")
   .build();
 ```
 
-If multiple overrides target the same id, Runner rejects the graph with a duplicate-target override error outside `test` mode. In `test` mode, duplicates are allowed so a wrapper harness can replace a deeper mock, and the outermost declaring resource wins. Overriding something not registered still throws, with a remediation hint.
+The same declaring resource cannot list two overrides of the same target, including in `test` mode. A descendant may specialize an ancestor's override. Overriding something not registered still throws, with a remediation hint.
+
+#### Subtree Resource Instances
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+const mailer = r.resource("mailer").init(async () => ({ name: "default" })).build();
+const sendInvoice = r.task("sendInvoice")
+  .dependencies({ mailer })
+  .run(async (_, { mailer }) => mailer.name)
+  .build();
+const sendReminder = r.task("sendReminder")
+  .dependencies({ mailer })
+  .run(async (_, { mailer }) => mailer.name)
+  .build();
+
+const billing = r.resource("billing")
+  .register([sendInvoice])
+  .overrides([r.override(mailer, async () => ({ name: "billing" }))])
+  .build();
+const support = r.resource("support")
+  .register([sendReminder])
+  .overrides([r.override(mailer, async () => ({ name: "support" }))])
+  .build();
+const app = r.resource("app").register([mailer, billing, support]).build();
+const runtime = await run(app);
+console.log(await runtime.runTask(sendInvoice)); // billing
+console.log(await runtime.runTask(sendReminder)); // support
+await runtime.dispose();
+```
+
+Each override scope shares one resource instance across its consumers. Instances inherit the original registration's config and have independent context, initialization, readiness, cooldown, and disposal. Descendants without an override share their nearest ancestor's instance. Overrides replace the selected behavior as a whole; lifecycle patches inherit from the base passed to `r.override`, not from other scope declarations.
+
+Scope follows registration ownership, not the call stack. A billing task calling a support task does not change support's dependencies. A shared service registered outside billing keeps its own dependency wiring. Scoped resource instances do not duplicate the base resource's child registrations or subtree policies.
+
+The original canonical resource id identifies the instance selected at the original registration location. Extra scoped instances have distinct canonical ids visible through runtime inspection and resource discovery. Operator access by a resource definition uses its original canonical id; it does not select a caller-dependent instance. Inspect a consumer's resolved dependencies to find its scoped instance's canonical id.
+
+**Migration:** nested declarations previously failed outside `test`; test mode previously selected the outermost declaration and accepted same-resource duplicates. All modes now select the nearest declaration and reject same-resource duplicates. A root test harness no longer forces its override through a child's specialization.

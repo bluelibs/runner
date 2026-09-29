@@ -379,8 +379,9 @@ export interface IResourceDefinition<
    */
   configSchema?: ValidationSchemaInput<TConfig>;
   /**
-   * Safe overrides to swap behavior while preserving identities. See
-   * README: Overrides.
+   * Behavior replacements declared at this resource boundary. Resource dependencies
+   * use the nearest enclosing override instance. Other kinds replace owned
+   * descendants. Duplicate targets at this boundary fail in every runtime mode.
    */
   overrides?:
     | Array<OverridableElements>
@@ -515,7 +516,7 @@ export interface IResource<
   register:
     | Array<RegisterableItem>
     | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
-  /** Safe override declarations applied to this resource. */
+  /** Subtree override declarations; nearest scope wins and same-scope duplicates fail. */
   overrides:
     | Array<OverridableElements>
     | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);

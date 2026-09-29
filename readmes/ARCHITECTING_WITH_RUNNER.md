@@ -767,7 +767,8 @@ Override contract notes:
 - task, hook, task middleware, and resource middleware overrides replace behavior with functions
 - resource overrides may replace `init` or patch lifecycle with `{ context?, init?, ready?, cooldown?, dispose? }`
 - keep overrides close to the owning composition where possible
-- document precedence when multiple layers may apply overrides
+- resource overrides follow consumer registration scope: nearest declaration wins and sibling instances remain independent
+- duplicate targets at the same declaring resource fail in every mode; root test overrides do not override child specializations
 
 Typical examples:
 

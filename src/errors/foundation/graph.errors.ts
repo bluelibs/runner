@@ -75,7 +75,7 @@ export const overrideDuplicateTargetError = error<
   )
   .remediation(
     ({ targetId }) =>
-      `Keep a single override for "${targetId}" within the same runtime graph outside test mode. In test mode, duplicate override targets are allowed and the outermost declaring resource wins. If you need environment variants, select one override at composition time.`,
+      `Keep a single override for "${targetId}" at each declaring resource. Nested declarations use the nearest scope in every runtime mode. If you need environment variants, select one override at composition time.`,
   )
   .build();
 

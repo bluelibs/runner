@@ -95,16 +95,16 @@ describe("Notifications module", () => {
 Ownership rule:
 
 - an override only works if the target definition is actually registered in the harness graph
-- the override must be declared by the same owning resource or one of its ancestors
+- resource overrides apply to consumers in the declaring subtree; the target must be visible to that resource
+- task, hook, and middleware overrides must be declared by the target owner or one of its ancestors
 
 > **Note:** You do not need to pass `mode: "test"` explicitly when your test runner already sets `NODE_ENV=test`. Runner auto-detects `test` mode from the environment unless you override `mode` yourself.
 
 For acceptance testing in a deployed environment, use `mode: "pre-prod"`.
-Runner also detects this mode from `NODE_ENV=pre-prod`. It keeps normal override
-restrictions; only `test` mode permits duplicate override targets. Passing an
-explicit Runner mode does not rewrite `NODE_ENV`.
+Runner also detects this mode from `NODE_ENV=pre-prod`. Override precedence is
+identical in every mode. Passing an explicit Runner mode does not rewrite `NODE_ENV`.
 
-When multiple overrides target the same definition in resolved `test` mode, the outermost declaring resource wins.
+The nearest declaration wins. A wrapper test harness supplies defaults but does not replace descendant specializations; configure those specializations at their declaring boundary.
 
 ### Full Integration Testing (Full Pipeline)
 
@@ -152,11 +152,10 @@ Important override rules:
 
 - `r.override(base, fn)` creates a replacement definition
 - `.overrides([...])` accepts override definitions only
-- duplicate override targets are allowed only in resolved `test` mode, whether that came from `mode: "test"` or auto-detected `NODE_ENV=test`
-- in `test` mode, ancestor/descendant conflicts resolve to the outermost declaring resource
-- in `test` mode, same-resource duplicates resolve to the last declaration
-- unrelated duplicate override sources still fail fast, even in `test` mode
-- duplicate override targets fail fast outside `test` mode
+- the nearest declaring scope wins in all modes, including `test`
+- duplicate targets at the same declaring resource fail fast
+- sibling resource overrides create independent instances while preserving dependency references
+- scope follows registration ownership; calling a task from another subtree does not change its dependencies
 - do not place both base and override in `.register([...])`
 
 ### Capturing Execution Context in Integration Tests
