@@ -706,3 +706,7 @@ interface Schedule<TInput = unknown> {
   nextRun?: Date;
 }
 ```
+
+## Step Concurrency
+
+`d.step("charge", { concurrency: 5 }, fn)` limits live callbacks by persisted workflow key + explicit step ID. Use `{ concurrency: { key: "provider", limit: 5 } }` to share a pool across selected steps; every use of a shared key must have the same policy. `{ concurrency: { key?: string, windowMs: 60_000, max: 100 } }` limits callback starts per fixed window. Runner owns permits through the durable store; no separate semaphore is needed. Cached replay skips acquisition, live retries reacquire, and full pools save a retry timer and suspend the attempt (releasing workflow admission). Enable polling for resumption. Pass the step signal to external work; on cancellation/timeout, renewal stops and numeric permits stay held until callbacks settle or leases expire; lease loss prevents result persistence. Step, workflow, and resilience pools have separate identities.

@@ -97,6 +97,7 @@ export function createExecutionContext(params: {
   execution: Execution<unknown, unknown>;
   task: ITask<unknown, Promise<unknown>, any, any, any, any>;
   assertLockOwnership: () => void;
+  executionLockState?: ExecutionLockState;
   cancellationSignal: AbortSignal;
   auditConfig?: DurableServiceConfig["audit"];
   determinismConfig?: DurableServiceConfig["determinism"];
@@ -121,6 +122,7 @@ export function createExecutionContext(params: {
         params.determinismConfig?.implicitInternalStepIds,
       declaredSignalIds: getDeclaredDurableWorkflowSignalIds(params.task),
       assertLockOwnership: params.assertLockOwnership,
+      executionLockState: params.executionLockState,
       cancellationSignal: params.cancellationSignal,
       startWorkflowExecution: async (childTask, input, options) =>
         await params.startExecution(childTask, input, options),

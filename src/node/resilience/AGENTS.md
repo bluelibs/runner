@@ -12,8 +12,10 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `resource.ts`: keeps portable resource identity while supplying Node initialization.
 - `RedisResilience.ts`: backend facade, policy keys, runtime-local waiters, active operations, and disposal.
 - `scripts.ts`: atomic Redis operations for rate, circuit, and permit state.
-- `acquirePermit.ts`: cancellable admission retries, queue accounting, and wait deadlines.
-- `permit.ts`: permit ownership renewal, completion checks, and release.
+- `acquirePermit.ts`: admission retries, queue accounting, and wait deadlines.
+- `acquireLease.ts`: cancellation-safe acquisition and late-grant cleanup shared with durable steps.
+- `permit.ts`: Redis permit acquisition, owned callbacks, and shutdown.
+- `renewableLease.ts`: backend-independent renewal/deadline/completion checks shared with durable admission.
 - `semaphore.ts`: validates and snapshots a named semaphore's policy before producing its handle.
 - `../node.ts`: installs this resource into Node built-ins without replacing portable global state.
 

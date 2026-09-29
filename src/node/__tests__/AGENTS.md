@@ -9,7 +9,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Where To Start
 
-- `durable/core/service/`: workflow orchestration, queue roles, recovery, and result waiting.
+- `durable/core/service/`: workflow orchestration, queue roles, recovery, result waiting, and cross-worker step concurrency (live Redis uses `DURABLE_TEST_REDIS_URL`).
 - `durable/core/lifecycle/`: pause, resume, cancel, restart, continuation, and workflow state replay.
 - `durable/core/managers/`: lock/admission ownership, timer polling, transitions, and signal races.
 - `durable/core/durable-context/`, `durable/core/audit/`: replayable actions and observability.

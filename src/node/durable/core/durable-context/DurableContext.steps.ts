@@ -1,3 +1,13 @@
+import {
+  acquireStepAdmission,
+  parseStepConcurrency,
+} from "../managers/StepAdmissionController";
+import {
+  createExecutionLockState,
+  type ExecutionLockState,
+} from "../managers/ExecutionManager.locking";
+import type { StoreAdmission } from "../managers/StoreAdmissionController";
+import { runAdmittedStepCallback } from "./DurableContext.stepCallback";
 import type { DurableAuditEntryInput } from "../audit";
 import { DurableAuditEntryKind, isDurableInternalStepId } from "../audit";
 import { ContinuationSignal, SuspensionSignal } from "../interfaces/context";
@@ -56,11 +66,16 @@ export async function executeDurableStep<T>(params: {
   setCurrent: () => Promise<void>;
   stepId: string;
   options: StepOptions;
+  executionLockState?: ExecutionLockState;
   upFn: (context: DurableStepRunContext) => Promise<T>;
   signal: AbortSignal;
   downFn?: (result: T) => Promise<void>;
   compensations: DurableCompensation[];
 }): Promise<T> {
+  const concurrency =
+    params.options.concurrency === undefined
+      ? undefined
+      : parseStepConcurrency(params.options.concurrency);
   await params.assertCanContinue();
 
   const cached = await params.store.getStepResult(
@@ -83,6 +98,8 @@ export async function executeDurableStep<T>(params: {
 
   await params.setCurrent();
 
+  const lockState = params.executionLockState ?? createExecutionLockState();
+  let admission: Extract<StoreAdmission, { kind: "admitted" }> | undefined;
   let attempts = 0;
   const maxRetries = params.options.retries ?? 0;
   const startedAt = Date.now();
@@ -95,7 +112,29 @@ export async function executeDurableStep<T>(params: {
       throwDurablePauseInterruption();
     }
 
+    if (concurrency !== undefined) {
+      admission = await acquireStepAdmission({
+        store: params.store,
+        executionId: params.executionId,
+        stepId: params.stepId,
+        policy: concurrency,
+        lockState,
+        signal: params.signal,
+      });
+    }
+
     try {
+      if (admission) {
+        return await runAdmittedStepCallback({
+          ...params,
+          lockState,
+          deferRelease: () => {
+            admission = undefined;
+          },
+          release: admission.release,
+          stopRenewal: admission.stopRenewal,
+        });
+      }
       const context: DurableStepRunContext = { signal: params.signal };
       if (params.options.timeout) {
         return await withTimeout(
@@ -106,6 +145,9 @@ export async function executeDurableStep<T>(params: {
       }
       return await params.upFn(context);
     } catch (error) {
+      await admission?.release();
+      admission = undefined;
+      if (lockState.lost) throw error;
       if (isControlFlowSignal(error)) {
         throw error;
       }
@@ -133,37 +175,42 @@ export async function executeDurableStep<T>(params: {
     }
   };
 
-  const result = await executeWithRetry();
-  const durationMs = Date.now() - startedAt;
+  try {
+    const result = await executeWithRetry();
+    const durationMs = Date.now() - startedAt;
 
-  await params.assertCanPersistResult();
+    await params.assertCanPersistResult();
+    await admission?.assertOwnership();
 
-  await params.store.saveStepResult({
-    executionId: params.executionId,
-    stepId: params.stepId,
-    result,
-    completedAt: new Date(),
-  });
-
-  await params.appendAuditEntry({
-    kind: DurableAuditEntryKind.StepCompleted,
-    stepId: params.stepId,
-    durationMs,
-    isInternal: isDurableInternalStepId(params.stepId),
-  });
-
-  await clearExecutionCurrent(params.store, params.executionId);
-
-  if (params.downFn) {
-    registerCompensation(
-      params.compensations,
-      params.stepId,
+    await params.store.saveStepResult({
+      executionId: params.executionId,
+      stepId: params.stepId,
       result,
-      params.downFn,
-    );
-  }
+      completedAt: new Date(),
+    });
 
-  return result;
+    await params.appendAuditEntry({
+      kind: DurableAuditEntryKind.StepCompleted,
+      stepId: params.stepId,
+      durationMs,
+      isInternal: isDurableInternalStepId(params.stepId),
+    });
+
+    await clearExecutionCurrent(params.store, params.executionId);
+
+    if (params.downFn) {
+      registerCompensation(
+        params.compensations,
+        params.stepId,
+        result,
+        params.downFn,
+      );
+    }
+
+    return result;
+  } finally {
+    await admission?.release();
+  }
 }
 
 async function persistCompensationFailure(params: {

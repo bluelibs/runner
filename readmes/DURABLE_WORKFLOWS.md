@@ -239,6 +239,7 @@ const reservation = await d
 | --------- | -------------------------------------------------------- |
 | `retries` | Retry attempts on non-cancellation failures (default: 0) |
 | `timeout` | Step-level timeout in ms                                 |
+| `concurrency` | Global callback cap or fixed-window limit; see [Step Concurrency](#step-concurrency) |
 
 **Builder methods**:
 
@@ -655,6 +656,54 @@ leases; outcome writes recheck both the execution lock and the admission lease.
 Numeric concurrency requires store implementations with `acquireLock()`,
 `renewLock()`, and `releaseLock()`. Fixed-window rate limiting requires
 `acquireLock()`. The built-in memory and Redis stores support these contracts.
+
+### Step Concurrency
+
+Use step `concurrency` when only one expensive operation needs a global limit.
+In an existing workflow, where `d` is `durable.use()`:
+
+```ts
+await d.step(
+  "charge-payment",
+  {
+    retries: 3,
+    timeout: 30_000,
+    concurrency: { key: "payments.charge", limit: 5 },
+  },
+  async ({ signal }) => payments.charge(input, { signal }),
+);
+```
+
+Runner owns acquisition, renewal, and release through the durable store; no
+separate semaphore handle or resilience resource registration is needed.
+Workflow and step concurrency share admission machinery, and renewable lease
+handling is reused from the resilience module.
+
+- `concurrency: 5` caps live callbacks for the persisted workflow key and explicit
+  step ID. `{ limit: 5 }` is equivalent.
+- `{ key: "payments.charge", limit: 5 }` shares a pool across selected steps,
+  including steps in different workflows. All uses of a shared key must configure
+  the same policy. Step pools are separate from workflow and resilience pools.
+- `{ windowMs: 60_000, max: 100 }` caps callback starts per fixed window. Add
+  `key` to share that rate limit across selected steps.
+- Completed steps replay their cached result without acquiring a permit or
+  consuming a window allowance. Each live callback retry acquires again.
+- When capacity is full, Runner saves a retry timer and suspends the attempt,
+  releasing its workflow-level concurrency permit. Enable polling in at least
+  one worker sharing the store so blocked executions resume.
+- Numeric permits are renewed while the callback runs and ownership is checked
+  before persisting its result. Pass the callback's `signal` to external work:
+  cancellation, timeout, and lease loss signal the callback to stop. If a callback
+  ignores cancellation or timeout, renewal stops and its permit stays held until
+  it settles or the lease expires. A lost lease cannot authorize a result write.
+- Fixed-window allowances remain consumed until the window expires, including
+  failed callback attempts.
+
+The memory and Redis stores support both policies with the same lock capability
+requirements as workflow concurrency. Unsupported stores fail with a typed
+Runner error. A concurrency cap limits simultaneous callbacks; provider-side
+idempotency is still needed for a side effect that succeeds before a worker
+crashes without saving the step result.
 
 ---
 
