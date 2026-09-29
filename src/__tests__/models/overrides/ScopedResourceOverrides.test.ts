@@ -5,7 +5,7 @@ import { OverrideManager } from "../../../models/OverrideManager";
 import { createTestFixture } from "../../test-utils";
 
 describe("ScopedResourceOverrides compilation", () => {
-  it("selects the nearest declaration even when candidates arrive descendant-first", () => {
+  it("selects the outermost declaration even when candidates arrive descendant-first", () => {
     const registry = new StoreRegistry(createTestFixture().store);
     const service = r
       .resource("service")
@@ -30,6 +30,9 @@ describe("ScopedResourceOverrides compilation", () => {
       { source: "app", override: r.override(service, async () => "root") },
     ]);
     compiler.compile();
+    expect(
+      registry.resources.has("app.child.resources.overrides.app.service"),
+    ).toBe(false);
     expect(record).toHaveBeenCalledWith(
       "app.service",
       "app.service",
@@ -39,9 +42,7 @@ describe("ScopedResourceOverrides compilation", () => {
     expect(
       registry.tasks.get("app.child.tasks.read")?.task.dependencies,
     ).toEqual({
-      service: registry.resources.get(
-        "app.child.resources.overrides.app.service",
-      )?.resource,
+      service: registry.resources.get("app.service")?.resource,
     });
   });
 

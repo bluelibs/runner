@@ -4,7 +4,7 @@ import { r } from "../..";
 import { RunnerMode } from "../../types/runner";
 
 describe("run-overrides", () => {
-  it("uses the nearest override when nested declarations target the same task", async () => {
+  it("uses the outermost override when test mode has duplicate targets", async () => {
     const baseTask = defineTask({
       id: "task-same",
       run: async () => "Original",
@@ -30,11 +30,11 @@ describe("run-overrides", () => {
     });
 
     const result = await run(app, { mode: RunnerMode.TEST });
-    expect(result.value).toBe("Middle");
+    expect(result.value).toBe("Root");
     await result.dispose();
   });
 
-  it("uses the nearest override across three test-mode levels", async () => {
+  it("uses the outermost override across three test-mode levels", async () => {
     const baseTask = defineTask({
       id: "task-three-level-same",
       run: async () => "Original",
@@ -67,11 +67,11 @@ describe("run-overrides", () => {
     });
 
     const result = await run(app, { mode: RunnerMode.TEST });
-    expect(result.value).toBe("Child");
+    expect(result.value).toBe("Root");
     await result.dispose();
   });
 
-  it("rejects duplicate overrides declared by the same resource in test mode", async () => {
+  it("uses the last duplicate override declared by the same resource in test mode", async () => {
     const baseTask = defineTask({
       id: "task-same-resource-duplicates",
       run: async () => "Original",
@@ -90,13 +90,13 @@ describe("run-overrides", () => {
       },
     });
 
-    await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
-      /declared more than once/,
-    );
+    const result = await run(app, { mode: RunnerMode.TEST });
+    expect(result.value).toBe("Second");
+    await result.dispose();
   });
 
   it.each([RunnerMode.DEV, RunnerMode.PROD, RunnerMode.PRE_PROD])(
-    "uses the nearest nested declaration in %s mode",
+    "rejects overlapping declarations in %s mode",
     async (mode) => {
       const baseTask = defineTask({
         id: "task-same-non-test",
@@ -122,9 +122,9 @@ describe("run-overrides", () => {
         },
       });
 
-      const result = await run(app, { mode });
-      expect(result.value).toBe("Middle");
-      await result.dispose();
+      await expect(run(app, { mode })).rejects.toThrow(
+        /declared more than once/,
+      );
     },
   );
 

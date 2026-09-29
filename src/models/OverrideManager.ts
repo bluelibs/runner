@@ -2,7 +2,6 @@ import { IResource, RegisterableItem } from "../defs";
 import * as utils from "../define";
 import {
   overrideDefinitionRequiredError,
-  overrideDuplicateTargetError,
   overrideOutOfScopeError,
   overrideTargetNotRegisteredError,
 } from "../errors";
@@ -17,11 +16,10 @@ import {
   SupportedOverride,
 } from "./overrides/overrideDefinition";
 import { StoreRegistry } from "./store/StoreRegistry";
-
-type OverrideCandidate = {
-  source: string;
-  override: SupportedOverride;
-};
+import {
+  selectOverrideCandidate,
+  OverrideCandidate,
+} from "./overrides/selectOverrideCandidate";
 
 export type OverrideInspection = {
   /** Canonical id whose registered behavior was replaced. */
@@ -164,22 +162,13 @@ export class OverrideManager {
     candidate: OverrideCandidate,
   ): void {
     const candidates = this.overrideCandidatesByTarget.get(targetId) ?? [];
-    if (candidates.some((existing) => existing.source === candidate.source)) {
-      overrideDuplicateTargetError.throw({
-        targetId: candidate.override.id,
-        sources: [candidate.source],
-      });
-    }
+    const winner = selectOverrideCandidate(
+      this.registry,
+      candidates,
+      candidate,
+    );
     candidates.push(candidate);
     this.overrideCandidatesByTarget.set(targetId, candidates);
-    const winner = candidates.reduce((current, next) =>
-      this.registry.visibilityTracker.isWithinResourceSubtree(
-        current.source,
-        next.source,
-      )
-        ? next
-        : current,
-    );
     this.overrides.set(targetId, winner.override);
     this.overrideWinnerSources.set(targetId, winner.source);
   }

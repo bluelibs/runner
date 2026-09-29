@@ -75,7 +75,7 @@ export const overrideDuplicateTargetError = error<
   )
   .remediation(
     ({ targetId }) =>
-      `Keep a single override for "${targetId}" at each declaring resource. Nested declarations use the nearest scope in every runtime mode. If you need environment variants, select one override at composition time.`,
+      `Keep a single override for "${targetId}" in overlapping scopes outside test mode. Disjoint resource scopes may override independently. In test mode, the outermost declaring resource wins and same-resource duplicates use the last declaration.`,
   )
   .build();
 

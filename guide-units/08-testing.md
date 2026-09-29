@@ -101,10 +101,10 @@ Ownership rule:
 > **Note:** You do not need to pass `mode: "test"` explicitly when your test runner already sets `NODE_ENV=test`. Runner auto-detects `test` mode from the environment unless you override `mode` yourself.
 
 For acceptance testing in a deployed environment, use `mode: "pre-prod"`.
-Runner also detects this mode from `NODE_ENV=pre-prod`. Override precedence is
-identical in every mode. Passing an explicit Runner mode does not rewrite `NODE_ENV`.
+Runner also detects this mode from `NODE_ENV=pre-prod`. Overlapping override declarations remain
+restricted to `test` mode. Passing an explicit Runner mode does not rewrite `NODE_ENV`.
 
-The nearest declaration wins. A wrapper test harness supplies defaults but does not replace descendant specializations; configure those specializations at their declaring boundary.
+In `test` mode, the outermost declaration wins, so a wrapper test harness can replace implementations declared by descendant modules. Same-resource duplicates use the last declaration. Disjoint sibling resource overrides are independent in every mode.
 
 ### Full Integration Testing (Full Pipeline)
 
@@ -152,8 +152,8 @@ Important override rules:
 
 - `r.override(base, fn)` creates a replacement definition
 - `.overrides([...])` accepts override definitions only
-- the nearest declaring scope wins in all modes, including `test`
-- duplicate targets at the same declaring resource fail fast
+- overlapping declarations and same-resource duplicates fail outside `test` mode
+- in `test` mode the outermost declaring resource wins, and same-resource duplicates use the last declaration
 - sibling resource overrides create independent instances while preserving dependency references
 - scope follows registration ownership; calling a task from another subtree does not change its dependencies
 - do not place both base and override in `.register([...])`

@@ -388,8 +388,9 @@ export interface ResourceFluentBuilderBeforeInit<
 
   /**
    * Declares behavior replacements at this subtree boundary.
-   * Resource consumers receive the nearest scope's instance; other kinds must
-   * belong to this subtree. Duplicate targets at this boundary fail in all modes.
+   * Resource instances are independent in disjoint scopes; other kinds must belong
+   * to this subtree. Overlaps fail outside test mode. In test mode, outermost wins
+   * and same-resource duplicates use the last declaration.
    */
   overrides(
     o:
@@ -590,8 +591,9 @@ export interface ResourceFluentBuilderAfterInit<
   >;
   /**
    * Declares behavior replacements at this subtree boundary.
-   * Resource consumers receive the nearest scope's instance; other kinds must
-   * belong to this subtree. Duplicate targets at this boundary fail in all modes.
+   * Resource instances are independent in disjoint scopes; other kinds must belong
+   * to this subtree. Overlaps fail outside test mode. In test mode, outermost wins
+   * and same-resource duplicates use the last declaration.
    */
   overrides(
     o:

@@ -54,7 +54,10 @@ export class ScopedResourceOverrides {
       }
       plan.instances.set(winner, entry.resource);
       for (const candidate of plan.candidates) {
-        this.instance(plan, candidate);
+        // Shadowed overrides must not initialize services or allocate lifecycle state.
+        if (this.select(plan, candidate.source) === candidate) {
+          this.instance(plan, candidate);
+        }
       }
     }
 
@@ -96,7 +99,7 @@ export class ScopedResourceOverrides {
         continue;
       if (
         !winner ||
-        visibility.isWithinResourceSubtree(winner.source, candidate.source)
+        visibility.isWithinResourceSubtree(candidate.source, winner.source)
       ) {
         winner = candidate;
       }

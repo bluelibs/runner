@@ -12,19 +12,15 @@ const reader = (id: string) =>
     .build();
 
 describe("subtree resource overrides", () => {
-  it.each(["dev", "prod", "test"] as const)(
-    "isolates siblings and inherits the nearest declaration in %s",
+  it.each(["dev", "prod", "pre-prod", "test"] as const)(
+    "isolates siblings and inherits each subtree declaration in %s",
     async (mode) => {
       const rootRead = reader("rootRead");
       const bRead = reader("bRead");
       const inheritedRead = reader("inheritedRead");
       const leafRead = reader("leafRead");
       const cRead = reader("cRead");
-      const leaf = r
-        .resource("leaf")
-        .register([leafRead])
-        .overrides([r.override(mailer, async () => ({ name: "leaf" }))])
-        .build();
+      const leaf = r.resource("leaf").register([leafRead]).build();
       const b = r
         .resource("b")
         .register([
@@ -39,18 +35,14 @@ describe("subtree resource overrides", () => {
         .register([cRead])
         .overrides([r.override(mailer, async () => ({ name: "c" }))])
         .build();
-      const app = r
-        .resource("app")
-        .register([mailer, rootRead, b, c])
-        .overrides([r.override(mailer, async () => ({ name: "root" }))])
-        .build();
+      const app = r.resource("app").register([mailer, rootRead, b, c]).build();
       const runtime = await run(app, { mode });
       try {
-        expect(await runtime.runTask(rootRead)).toEqual({ name: "root" });
+        expect(await runtime.runTask(rootRead)).toEqual({ name: "original" });
         const bValue = await runtime.runTask(bRead);
         expect(bValue).toEqual({ name: "b" });
         expect(await runtime.runTask(inheritedRead)).toBe(bValue);
-        expect(await runtime.runTask(leafRead)).toEqual({ name: "leaf" });
+        expect(await runtime.runTask(leafRead)).toBe(bValue);
         expect(await runtime.runTask(cRead)).toEqual({ name: "c" });
       } finally {
         await runtime.dispose();
@@ -131,7 +123,7 @@ describe("subtree resource overrides", () => {
     }
   });
 
-  it.each(["test", "prod"] as const)(
+  it.each(["dev", "prod", "pre-prod"] as const)(
     "rejects duplicate targets at the same boundary in %s",
     async (mode) => {
       const app = r

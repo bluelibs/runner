@@ -176,7 +176,7 @@ describe("OverrideManager override graph recursion", () => {
     );
   });
 
-  it("resolves nested targets to the nearest override", () => {
+  it("resolves nested targets to the outermost override in test mode", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
     const taskRunner = fixture.createTaskRunner();
@@ -205,7 +205,7 @@ describe("OverrideManager override graph recursion", () => {
 
     const registry = (store as any).registry as any;
     const targetId = registry.resolveDefinitionId(baseTask);
-    expect(store.overrides.get(targetId)).toBe(childOverride);
+    expect(store.overrides.get(targetId)).toBe(rootOverride);
   });
 
   it("fails fast when override target reference cannot be resolved", () => {

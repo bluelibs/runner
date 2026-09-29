@@ -380,8 +380,9 @@ export interface IResourceDefinition<
   configSchema?: ValidationSchemaInput<TConfig>;
   /**
    * Behavior replacements declared at this resource boundary. Resource dependencies
-   * use the nearest enclosing override instance. Other kinds replace owned
-   * descendants. Duplicate targets at this boundary fail in every runtime mode.
+   * use independent instances in disjoint subtrees. Other kinds replace owned
+   * descendants. Overlapping scopes fail outside test mode; in test mode,
+   * outermost wins and same-resource duplicates use the last declaration.
    */
   overrides?:
     | Array<OverridableElements>
@@ -516,7 +517,7 @@ export interface IResource<
   register:
     | Array<RegisterableItem>
     | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
-  /** Subtree override declarations; nearest scope wins and same-scope duplicates fail. */
+  /** Subtree overrides; test mode permits overlaps with outermost/last-at-same-resource precedence. */
   overrides:
     | Array<OverridableElements>
     | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);

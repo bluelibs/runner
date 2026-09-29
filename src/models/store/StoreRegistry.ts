@@ -26,6 +26,7 @@ import {
   buildEventEmissionGraph as buildEmissionGraph,
 } from "../utils/buildDependencyGraph";
 import { IErrorHelper } from "../../types/error";
+import { RunnerMode } from "../../types/runner";
 import type { IAsyncContext } from "../../types/asyncContext";
 import { LockableMap } from "../../tools/LockableMap";
 import { VisibilityTracker } from "../VisibilityTracker";
@@ -200,6 +201,10 @@ export class StoreRegistry {
 
   getValidator(): StoreValidator {
     return this.validator;
+  }
+
+  public getStoreMode(): RunnerMode {
+    return this.store.mode;
   }
 
   registerDefinitionAlias(reference: unknown, canonicalId: string): void {
