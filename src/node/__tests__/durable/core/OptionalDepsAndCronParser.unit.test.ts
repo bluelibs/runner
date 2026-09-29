@@ -82,6 +82,11 @@ describe("durable: optional deps helpers", () => {
       );
       expect(client2).toEqual(expect.objectContaining({ url: null }));
       expect(ctor).toHaveBeenCalledTimes(2);
+      const options = { commandTimeout: 5000 };
+      createIORedisClient("redis://localhost", options);
+      createIORedisClient(undefined, options);
+      expect(ctor).toHaveBeenCalledWith("redis://localhost", options);
+      expect(ctor).toHaveBeenCalledWith(options);
     });
   });
 

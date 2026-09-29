@@ -11,3 +11,5 @@ export * from "./errors/generic.errors";
  * Shared public types for Runner error helpers.
  */
 export type { AnyError, IErrorHelper } from "./types/error";
+
+export { resilienceError } from "./globals/resilience/errors";

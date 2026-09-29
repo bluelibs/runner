@@ -1,3 +1,8 @@
+import { resilienceResource } from "../resilience/resource";
+import {
+  getOrCreateTaskAbortController,
+  getTaskAbortSignalLink,
+} from "../../models/runtime/taskCancellation";
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { Semaphore } from "../../models/Semaphore";
@@ -102,7 +107,9 @@ export const concurrencyResource = defineResource({
     description:
       "Tracks shared semaphores for the built-in concurrency middleware, including keyed and identity-scoped partitions.",
   },
-  init: async () => ({
+  dependencies: { resilience: resilienceResource.optional() },
+  init: async (_config, { resilience }) => ({
+    resilience,
     semaphoresByConfig: new WeakMap<
       ConcurrencyMiddlewareConfig,
       Map<string, Semaphore>
@@ -137,7 +144,7 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
     identityContext: identityContextResource,
   },
   async run(
-    { task, next },
+    { task, next, journal },
     { state, identityContext },
     config: ConcurrencyMiddlewareConfig,
   ) {
@@ -149,6 +156,34 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
       identityContext?.tryUse,
     );
 
+    if (state.resilience) {
+      if (semaphore) {
+        validationError.throw({
+          subject: "Middleware config",
+          id: "concurrency",
+          originalError:
+            "Explicit local semaphores cannot be used with Redis resilience. Configure limit and optional key instead.",
+        });
+      }
+      const key = JSON.stringify([
+        config.key === undefined ? "task" : "shared",
+        config.key ?? task.definition.id,
+        identityNamespace,
+      ]);
+      const controller = getOrCreateTaskAbortController(journal);
+      const link = getTaskAbortSignalLink(journal);
+      try {
+        return await state.resilience.withPermit(
+          key,
+          config.limit!,
+          link.signal,
+          (reason) => controller.abort(reason),
+          () => next(task.input),
+        );
+      } finally {
+        link.cleanup();
+      }
+    }
     if (!semaphore && config.limit !== undefined) {
       if (config.key !== undefined) {
         const scopedKey = `${identityNamespace}${IDENTITY_SCOPE_SEPARATOR}${config.key}`;

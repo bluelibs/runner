@@ -2061,6 +2061,83 @@ Recommended ordering:
 - concurrency for in-flight control
 - cache for idempotent reads
 
+### Shared Redis Resilience
+
+By default, rate limiting, circuit breaking, and concurrency control keep isolated
+in-memory state in each runtime. In Node, register `resources.resilience` to make
+all three use shared Redis state automatically:
+
+```ts
+import { r, run, resources, middleware } from "@bluelibs/runner/node";
+
+const charge = r
+  .task("charge")
+  .middleware([
+    middleware.task.rateLimit.with({ max: 100, windowMs: 60_000 }),
+    middleware.task.concurrency.with({ limit: 10 }),
+    middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
+  ])
+  .run(async () => "charged")
+  .build();
+
+const app = r
+  .resource("payments")
+  .register([
+    resources.resilience.with({
+      namespace: "payments:production",
+      redis: "redis://localhost:6379",
+    }),
+    charge,
+  ])
+  .build();
+
+const runtime = await run(app);
+try {
+  await runtime.runTask(charge);
+} finally {
+  await runtime.dispose();
+}
+```
+
+The optional `ioredis` dependency must be installed. Registration opens one
+connection owned by the resilience resource. Omitting this registration opens no
+Redis connection and preserves the existing in-memory behavior. Supporting
+middleware state resources resolve resilience through an optional dependency;
+register the public resource itself, not a fork, for automatic adoption.
+
+Sharing is explicit: matching Redis database, `namespace`, and full canonical task
+id share a policy across replicas. Different namespaces or task ids remain
+independent. Keep the application graph's ids consistent between replicas.
+`rateLimit.keyBuilder` and identity scoping partition the budget **within a task**.
+`maxKeys` bounds live rate-limit partitions per task across the namespace.
+Concurrency's explicit `key` shares permits across tasks, still partitioned by
+identity scope. Without `key`, each task has its own shared permit pool.
+JavaScript config-object reuse does not create cross-task Redis groups. Explicit
+local `Semaphore` instances are rejected when resilience is enabled.
+
+Redis performs admission and transitions atomically using its own clock. Conflicting
+parameters for an existing policy fail instead of silently creating separate
+budgets. Rate-limit and permit records expire after inactivity; circuit state is
+retained, including its policy parameters. Use a new namespace when deliberately
+changing a retained circuit policy. Runtime disposal does not clear shared state.
+
+`leaseMs` optionally controls concurrency permits and half-open circuit probes
+(default: 30,000 milliseconds). Permits renew while work runs. Ownership loss
+aborts the task cooperatively and rejects its invocation; an abandoned permit
+expires so another replica can proceed. This is not fencing of external side
+effects: work that ignores cancellation can outlive its permit. Permit waiters
+poll for availability and do not promise global FIFO ordering. Half-open probes
+must complete within `leaseMs`; an expired probe cannot update the circuit, and
+another call may claim a fresh probe.
+
+Redis startup and command failures propagate; there is no automatic fallback to
+local limits. The owned client uses bounded connection/command waits (five seconds)
+and no automatic reconnect loop. Recover connectivity by creating a new runtime.
+
+This opt-in applies only to `rateLimit`, `circuitBreaker`, and `concurrency`.
+Retry, timeout, fallback, debounce, throttle, caching, ordinary queues, and durable
+workflow admission retain their existing behavior and configuration.
+
 ### Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction.

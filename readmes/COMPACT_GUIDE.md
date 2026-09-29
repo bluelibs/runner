@@ -457,6 +457,7 @@ Operational notes:
 - Call `cache.invalidateKeys(key | key[], options?)` to delete cached entries by concrete storage key, or opt into identity scoping for the provided base key.
 - Call `cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
+- Node: register `resources.resilience.with({ namespace, redis: redisUrl, leaseMs? })` to share rate-limit, circuit-breaker, and concurrency state through Redis. Omit it for isolated in-memory defaults. Policies use full canonical task ids; concurrency `key` explicitly shares across tasks. Redis errors propagate without local fallback; permits renew and abort cooperatively on lease loss. Other middleware and durable admission are unchanged.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `debounce`, `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast on non-serializable input. `rateLimit` defaults to `canonicalTaskId` (shared quota per task). The `canonicalTaskId` is the full runtime id, so sibling resources with the same local id don't share state by accident.
 - See [Security](#security) for `identityScope` and identity-aware partitioning.

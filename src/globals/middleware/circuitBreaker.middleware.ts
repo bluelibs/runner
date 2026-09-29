@@ -1,3 +1,5 @@
+import { resilienceResource } from "../resilience/resource";
+import { runSharedCircuit } from "../resilience/circuit";
 import { defineResource } from "../../definers/defineResource";
 import { taskMiddlewareBuilder } from "../../definers/builders/middleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
@@ -66,8 +68,10 @@ export const circuitBreakerResource = defineResource({
     description:
       "Stores per-task circuit status for the built-in circuit breaker middleware.",
   },
-  init: async () => {
+  dependencies: { resilience: resilienceResource.optional() },
+  init: async (_config, { resilience }) => {
     return {
+      resilience,
       statusMap: new Map<string, CircuitBreakerStatus>(),
     };
   },
@@ -101,6 +105,16 @@ export const circuitBreakerMiddleware = taskMiddlewareBuilder("circuitBreaker")
       const failureThreshold = config.failureThreshold ?? 5;
       const resetTimeout = config.resetTimeout ?? 30000;
 
+      if (state.resilience) {
+        return runSharedCircuit(
+          state.resilience,
+          taskId,
+          failureThreshold,
+          resetTimeout,
+          journal,
+          () => next(task.input),
+        );
+      }
       const { statusMap } = state;
 
       let status = statusMap.get(taskId);

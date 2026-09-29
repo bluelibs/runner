@@ -132,6 +132,34 @@ export const rateLimitTaskMiddleware = taskMiddlewareBuilder("rateLimit")
         config.identityScope,
         identityContext?.tryUse,
       );
+      if (state.resilience) {
+        const admission = await state.resilience.rateLimit(
+          storageTaskId,
+          key,
+          config.max,
+          config.windowMs,
+          config.maxKeys,
+        );
+        journal.set(
+          rateLimitTaskMiddleware.journalKeys.remaining,
+          admission.remaining,
+          { override: true },
+        );
+        journal.set(
+          rateLimitTaskMiddleware.journalKeys.resetTime,
+          admission.resetTime,
+          { override: true },
+        );
+        journal.set(rateLimitTaskMiddleware.journalKeys.limit, config.max, {
+          override: true,
+        });
+        if (!admission.allowed) {
+          middlewareRateLimitExceededError.throw({
+            message: `Rate limit exceeded. Try again after ${new Date(admission.resetTime).toISOString()}`,
+          });
+        }
+        return await next(task.input);
+      }
       const now = Date.now();
       let keyedStates = state.states.get(config);
       const hadKeyedStates = keyedStates !== undefined;
