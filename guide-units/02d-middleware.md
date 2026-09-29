@@ -221,7 +221,7 @@ Runner ships with built-in middleware for common reliability, admission-control,
 | Middleware      | Config                                     | Notes                                                                                 |
 | --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------- |
 | cache           | `{ ttl, max, ttlAutopurge, keyBuilder }`   | backed by `resources.cache`; `keyBuilder` may return a string or `{ cacheKey, refs }` |
-| concurrency     | `{ limit, key?, semaphore? }`              | limits in-flight executions                                                           |
+| concurrency     | `{ limit, key?, keyBuilder?, maxQueue?, waitTimeoutMs?, semaphore? }`              | limits in-flight executions                                                           |
 | circuitBreaker  | `{ failureThreshold, resetTimeout }`       | opens after failures, then fails fast                                                 |
 | debounce        | `{ ms, keyBuilder?, maxKeys? }`            | waits for inactivity, then runs once with the latest input for that key               |
 | throttle        | `{ ms, keyBuilder?, maxKeys? }`            | runs immediately, then suppresses burst calls until the window ends                   |
@@ -295,8 +295,9 @@ id share a policy across replicas. Different namespaces or task ids remain
 independent. Keep the application graph's ids consistent between replicas.
 `rateLimit.keyBuilder` and identity scoping partition the budget **within a task**.
 `maxKeys` bounds live rate-limit partitions per task across the namespace.
-Concurrency's explicit `key` shares permits across tasks, still partitioned by
-identity scope. Without `key`, each task has its own shared permit pool.
+Concurrency's explicit `key` or resolved `keyBuilder` shares permits across tasks,
+still partitioned by identity scope. Without either, each task has its own shared
+permit pool.
 JavaScript config-object reuse does not create cross-task Redis groups. Explicit
 local `Semaphore` instances are rejected when resilience is enabled.
 
@@ -648,11 +649,61 @@ const heavyTask = r
   .build();
 ```
 
-**Key benefits:**
+Add bounded waiting and a dynamic pool name when one task talks to several providers:
 
-- **Resource protection**: Prevent connection pool exhaustion.
-- **Queueing**: Automatically queues excess requests instead of failing.
-- **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
+```typescript
+import { Match, middleware, r } from "@bluelibs/runner";
+
+const providerInput = Match.compile({ provider: String });
+const callProvider = r
+  .task("callProvider")
+  .inputSchema(providerInput)
+  .middleware([
+    middleware.task.concurrency.with({
+      limit: 5,
+      maxQueue: 20,
+      waitTimeoutMs: 1_000,
+      keyBuilder: (_taskId, input) =>
+        `provider:${providerInput.parse(input).provider}`,
+      identityScope: { tenant: true, required: true },
+    }),
+  ])
+  .run(async (input) => {
+    // At most 5 calls run per provider and tenant.
+    return input.provider;
+  })
+  .build();
+```
+
+`keyBuilder(canonicalTaskId, input)` must return a non-empty string. Its result
+names a shared pool, just like `key`: two tasks returning the same name share the
+limit. Use either `key` or `keyBuilder`, with `limit`. Identity scoping is applied
+after resolving the name, so tenants remain separate. An explicit `semaphore`
+cannot be combined with `limit`, `key`, or `keyBuilder`.
+
+| Option | Omitted | Explicit value |
+| --- | --- | --- |
+| `maxQueue` | Unlimited waiting calls | Non-negative integer; `0` rejects when all permits are occupied |
+| `waitTimeoutMs` | Unlimited acquisition time | Milliseconds waiting for a permit; `0` makes one immediate attempt |
+
+`maxQueue` counts waiting calls, excluding running calls, per resolved pool **per
+runtime**. With Redis resilience, running permits are shared globally while each
+runtime bounds its own waiting queue. Redis waiters poll for availability; there
+is no global FIFO guarantee. Calls still in their initial Redis admission request
+have not entered the waiting queue.
+
+Saturation throws `errors.middlewareConcurrencyQueueFullError`; an acquisition
+deadline throws `errors.middlewareConcurrencyWaitTimeoutError`. If both options
+are `0`, saturation takes precedence when the pool is busy. The deadline stops
+when a permit is acquired and does not limit execution time. Caller cancellation
+removes waiting calls promptly and reclaims their queue capacity. Configure the
+separate `timeout` middleware when execution also needs a deadline.
+
+Without Redis, reusing one middleware config shares its semaphore within the
+runtime. An explicit `key` or `keyBuilder` also shares across distinct configs.
+With Redis, use a named pool to share across tasks; config-object identity is not
+a distributed identity. Queue options can also accompany a local explicit
+`semaphore`.
 
 ### Circuit Breaker
 

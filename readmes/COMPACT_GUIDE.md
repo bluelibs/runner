@@ -438,7 +438,7 @@ Built-in resilience middleware:
 Config surfaces:
 
 - `cache.with({ ttl, max, ttlAutopurge, keyBuilder, identityScope })`
-- `concurrency.with({ limit, key?, semaphore? })`
+- `concurrency.with({ limit, key?, keyBuilder?, maxQueue?, waitTimeoutMs?, semaphore? })`
 - `circuitBreaker.with({ failureThreshold, resetTimeout })`
 - `debounce.with({ ms, keyBuilder?, maxKeys? })`
 - `throttle.with({ ms, keyBuilder?, maxKeys? })`
@@ -457,7 +457,8 @@ Operational notes:
 - Call `cache.invalidateKeys(key | key[], options?)` to delete cached entries by concrete storage key, or opt into identity scoping for the provided base key.
 - Call `cache.invalidateRefs(ref | ref[])` to delete cached entries linked to semantic refs such as `user:123`.
 - Order matters. Common pattern: `fallback` outermost, `timeout` inside `retry` when you want per-attempt budgets.
-- Node: register `resources.resilience.with({ namespace, redis: redisUrl, leaseMs? })` to share rate-limit, circuit-breaker, and concurrency state through Redis. Omit it for isolated in-memory defaults. Policies use full canonical task ids; concurrency `key` explicitly shares across tasks. Redis errors propagate without local fallback; permits renew and abort cooperatively on lease loss. Other middleware and durable admission are unchanged.
+- Node: register `resources.resilience.with({ namespace, redis: redisUrl, leaseMs? })` to share rate-limit, circuit-breaker, and concurrency state through Redis. Omit it for isolated in-memory defaults. Policies use full canonical task ids; concurrency `key` / `keyBuilder` explicitly shares across tasks. Redis errors propagate without local fallback; permits renew and abort cooperatively on lease loss. Other middleware and durable admission are unchanged.
+- Concurrency: `keyBuilder(canonicalTaskId, input)` returns a non-empty shared pool name before identity scoping; mutually exclusive with `key`. `maxQueue` bounds waiters per pool per runtime (`0` rejects saturation); `waitTimeoutMs` bounds acquisition (`0` tries once). Both default to unlimited. Cancellation frees waiting capacity. Saturation and timeout throw `middlewareConcurrencyQueueFullError` and `middlewareConcurrencyWaitTimeoutError`.
 - Use `rateLimit` for quotas, `concurrency` for in-flight limits, `circuitBreaker` for fail-fast protection, `cache` for idempotent reads, and `debounce` / `throttle` for burst shaping.
 - `cache`, `debounce`, `throttle` default to `canonicalTaskId + ":" + serialized input` partitioning and fail fast on non-serializable input. `rateLimit` defaults to `canonicalTaskId` (shared quota per task). The `canonicalTaskId` is the full runtime id, so sibling resources with the same local id don't share state by accident.
 - See [Security](#security) for `identityScope` and identity-aware partitioning.

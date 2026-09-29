@@ -1,3 +1,4 @@
+import type { ConcurrencyWaitOptions } from "../../globals/middleware/concurrency/wait";
 import { createHash, randomUUID } from "node:crypto";
 import { Match } from "../../tools/check";
 import { middlewareKeyCapacityExceededError } from "../../errors";
@@ -32,6 +33,7 @@ export class RedisResilience implements Resilience {
   private readonly namespace: string;
   private readonly controller = new AbortController();
   private readonly active = new Set<Promise<unknown>>();
+  private readonly waiters = new Map<string, number>();
   readonly leaseMs: number;
 
   constructor(
@@ -151,6 +153,7 @@ export class RedisResilience implements Resilience {
     signal: AbortSignal | undefined,
     abort: (reason: Error) => void,
     run: () => Promise<T>,
+    wait?: ConcurrencyWaitOptions,
   ): Promise<T> {
     const execute = async (operation: string, token: string) => {
       const result = Match.compile(Number).parse(
@@ -169,6 +172,8 @@ export class RedisResilience implements Resilience {
     };
     const pending = withRedisPermit({
       execute,
+      wait,
+      queue: { key, counts: this.waiters },
       leaseMs: this.leaseMs,
       signal,
       shutdown: this.controller.signal,

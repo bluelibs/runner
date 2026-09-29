@@ -1,3 +1,4 @@
+import type { ConcurrencyWaitOptions } from "../middleware/concurrency/wait";
 /** Configuration for opt-in Redis-backed task resilience. */
 export interface ResilienceConfig {
   /** Shared Redis namespace. Use a different namespace for each environment. */
@@ -63,6 +64,7 @@ export interface Resilience {
     signal: AbortSignal | undefined,
     abort: (reason: Error) => void,
     run: () => Promise<T>,
+    wait?: ConcurrencyWaitOptions,
   ): Promise<T>;
   /** Stop owned work and close the backend connection without clearing shared state. */
   dispose(): Promise<void>;

@@ -22,6 +22,7 @@ export type {
 } from "./middleware/circuitBreaker.middleware";
 export type {
   ConcurrencyMiddlewareConfig,
+  ConcurrencyWaitOptions,
   ConcurrencyState,
 } from "./middleware/concurrency.middleware";
 export type { FallbackMiddlewareConfig } from "./middleware/fallback.middleware";

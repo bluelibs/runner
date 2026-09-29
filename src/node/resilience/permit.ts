@@ -1,9 +1,13 @@
+import { acquireRedisPermit, type PermitQueue } from "./acquirePermit";
+import type { ConcurrencyWaitOptions } from "../../globals/middleware/concurrency/wait";
 import { randomUUID } from "node:crypto";
 import { resilienceError } from "../../globals/resilience/errors";
 import { abortableDelay } from "../../globals/middleware/retry.middleware";
 
 interface PermitOptions<T> {
   execute: (operation: string, token: string) => Promise<boolean>;
+  wait?: ConcurrencyWaitOptions;
+  queue?: PermitQueue;
   leaseMs: number;
   signal: AbortSignal | undefined;
   shutdown: AbortSignal;
@@ -21,15 +25,14 @@ export async function withRedisPermit<T>(
     : shutdown;
   const token = randomUUID();
   signal.throwIfAborted();
-  let leaseDeadline: number;
-  while (true) {
-    const requestedAt = performance.now();
-    if (await execute("acquire", token)) {
-      leaseDeadline = requestedAt + leaseMs;
-      break;
-    }
-    await abortableDelay(Math.min(100, leaseMs / 3), signal);
-  }
+  let leaseDeadline = await acquireRedisPermit(
+    execute,
+    token,
+    leaseMs,
+    signal,
+    options.wait,
+    options.queue,
+  );
   const remainingLease = () => Math.max(0, leaseDeadline - performance.now());
   const heartbeat = new AbortController();
   let rejectOwnership: (error: Error) => void;
