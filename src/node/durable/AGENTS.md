@@ -34,6 +34,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Execution, step, signal, timer, schedule, and lock ids have separate roles; preserve exact identities.
 - `resources/isolation.ts` encodes the complete namespace into default Redis prefixes and queue names.
 - Memory backends own state per instance. File persistence is for one process; Redis supports shared backend state.
+- Step `concurrency` derives pools from persisted workflow key + explicit step ID or an explicit shared key; full pools durably suspend and free workflow admission.
 - Store records determine correctness; bus messages wake waiters and do not replace durable state.
 - Queue creation and queue consumption are separate settings; built-ins consume only with `queue.consume: true`.
 - Runner integration owns an `AsyncLocalStorage` per durable runtime, not one process-wide workflow context.
