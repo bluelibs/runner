@@ -22,6 +22,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   const buildRpcLaneRequestHeaders =
     createRpcLaneRequestHeadersBuilder(context);
   const retryingByLaneId = new Map<string, IRpcLaneCommunicator>();
+  // Streams/files may be consumed on attempt one, so uploads use a no-retry wrapper.
   const singleAttemptByLaneId = new Map<string, IRpcLaneCommunicator>();
   for (const [laneId, laneBinding] of resolved.bindingsByLaneId) {
     singleAttemptByLaneId.set(
