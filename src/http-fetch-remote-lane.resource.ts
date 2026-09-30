@@ -3,7 +3,6 @@ import {
   buildEventRequestBody,
   type ProtocolEnvelope,
   RemoteLaneTransportError,
-  toRequestRejectionError,
 } from "./remote-lanes/http/protocol";
 import type { SerializerLike } from "./serializer";
 import type {
@@ -12,7 +11,7 @@ import type {
 } from "./remote-lanes/http/types";
 import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
 import { buildAsyncContextHeader } from "./node/remote-lanes/asyncContextAllowlist";
-import { linkAbortSignals } from "./tools/abortSignals";
+import { postFetch } from "./remote-lanes/http/postFetch";
 import { RUNNER_ASYNC_CONTEXT_HEADER } from "./remote-lanes/http/constants";
 export { normalizeError } from "./tools/normalizeError";
 export type {
@@ -23,15 +22,7 @@ export type {
 
 // normalizeError is re-exported from error-utils for public API
 
-function remoteLaneTimeoutError(timeoutMs?: number): RemoteLaneTransportError {
-  return new RemoteLaneTransportError(
-    "TIMEOUT",
-    `Remote lane request timed out after ${timeoutMs}ms`,
-    { timeoutMs },
-  );
-}
-
-async function postSerialized<T = any>(options: {
+function postSerialized<T>(options: {
   fetch: typeof fetch;
   url: string;
   body: unknown;
@@ -39,137 +30,23 @@ async function postSerialized<T = any>(options: {
   signal?: AbortSignal;
   timeoutMs?: number;
   serializer: SerializerLike;
-  onRequest?: (requestContext: {
+  onRequest?: (context: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
   contextHeaderText?: string;
 }): Promise<T> {
-  const {
-    fetch: fetchFn,
-    url,
-    body,
-    headers,
-    signal,
-    timeoutMs,
-    serializer,
-    onRequest,
-    contextHeaderText,
-  } = options;
-  const controller =
-    timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  // Distinguishes the client's own timeout from a caller-supplied signal abort:
-  // both surface as an AbortError from fetch, but only our timer sets this flag.
-  let timedOut = false;
-  const signalLink = linkAbortSignals([signal, controller?.signal]);
-  try {
-    if (controller) {
-      timeout = setTimeout(() => {
-        timedOut = true;
-        controller.abort();
-      }, timeoutMs);
-    }
-    const reqHeaders = {
+  return postFetch<T>({
+    ...options,
+    body: () => options.serializer.stringify(options.body),
+    headers: {
       "content-type": "application/json; charset=utf-8",
-      ...headers,
-    } as Record<string, string>;
-    if (contextHeaderText) {
-      reqHeaders[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeaderText;
-    }
-    if (onRequest) await onRequest({ url, headers: reqHeaders });
-    // Serialize outside the request try/catch: serialization failures are
-    // caller bugs, not network failures, and must propagate untouched.
-    const serializedBody = serializer.stringify(body);
-    let res: Response;
-    try {
-      res = await fetchFn(url, {
-        method: "POST",
-        headers: reqHeaders,
-        body: serializedBody,
-        signal: signalLink.signal,
-        // Security: prevent automatic redirects from forwarding auth headers.
-        redirect: "error",
-      });
-    } catch (error) {
-      if (timedOut) {
-        throw remoteLaneTimeoutError(timeoutMs);
-      }
-      // Pre-response failures (DNS, refused, reset) become retryable
-      // NETWORK_ERRORs; caller aborts pass through untouched.
-      throw toRequestRejectionError(error, signalLink.signal?.aborted ?? false);
-    }
-
-    let text: string;
-    try {
-      text = await res.text();
-    } catch (error) {
-      if (timedOut && error instanceof Error && error.name === "AbortError") {
-        throw remoteLaneTimeoutError(timeoutMs);
-      }
-      throw error;
-    }
-    const status =
-      typeof (res as { status?: unknown }).status === "number"
-        ? (res as { status: number }).status
-        : 200;
-    const statusText =
-      typeof (res as { statusText?: unknown }).statusText === "string"
-        ? (res as { statusText: string }).statusText
-        : "";
-    const ok =
-      typeof (res as { ok?: unknown }).ok === "boolean"
-        ? (res as { ok: boolean }).ok
-        : status >= 200 && status < 300;
-    const contentType =
-      typeof (res as { headers?: { get?: (name: string) => string | null } })
-        .headers?.get === "function"
-        ? ((
-            res as { headers: { get: (name: string) => string | null } }
-          ).headers.get("content-type") ?? undefined)
-        : undefined;
-
-    if (!text) {
-      if (!ok) {
-        throw new RemoteLaneTransportError(
-          "HTTP_ERROR",
-          statusText
-            ? `Remote lane HTTP ${status} ${statusText}`
-            : `Remote lane HTTP ${status}`,
-          { statusCode: status, statusText, contentType },
-          { httpCode: status },
-        );
-      }
-      // The endpoint returned an empty 2xx body — no payload to parse.
-      // Callers that expect void/undefined return are safe; typed return T requires the cast.
-      return undefined as T;
-    }
-
-    try {
-      const json = serializer.parse<T>(text);
-      return json;
-    } catch (error) {
-      if (!ok) {
-        throw new RemoteLaneTransportError(
-          "HTTP_ERROR",
-          statusText
-            ? `Remote lane HTTP ${status} ${statusText}`
-            : `Remote lane HTTP ${status}`,
-          {
-            statusCode: status,
-            statusText,
-            contentType,
-            bodyPreview: text.slice(0, 512),
-          },
-          { httpCode: status },
-        );
-      }
-      throw error;
-    }
-  } finally {
-    if (timeout) clearTimeout(timeout);
-    signalLink.cleanup();
-  }
+      ...options.headers,
+      ...(options.contextHeaderText
+        ? { [RUNNER_ASYNC_CONTEXT_HEADER]: options.contextHeaderText }
+        : {}),
+    },
+  });
 }
 
 /**

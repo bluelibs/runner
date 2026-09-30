@@ -108,7 +108,7 @@ export type RpcLaneRetryDelayStrategy = (
 export interface RpcLaneRetryPolicy {
   /**
    * Total attempts per call, including the first attempt.
-   * Defaults to 3. Use 1 to disable retries for this binding.
+   * Defaults to 1. Set a larger value only for operations safe to repeat.
    */
   maxAttempts?: number;
   /**
@@ -121,6 +121,8 @@ export interface RpcLaneRetryPolicy {
    * Defaults to retrying only transport failures without a server answer.
    */
   retryIf?: (error: unknown) => boolean;
+  /** Overall call budget across attempts and delays; integer 1..2147483647 ms, unset by default. */
+  totalTimeoutMs?: number;
 }
 
 /**
@@ -133,6 +135,8 @@ export interface ResolvedRpcLaneRetryPolicy {
   delayMs: number | RpcLaneRetryDelayStrategy;
   /** Classifies failures that can consume another attempt. */
   retryIf: (error: unknown) => boolean;
+  /** Optional overall call budget including all attempts and delays. */
+  totalTimeoutMs?: number;
 }
 
 /**
@@ -145,7 +149,7 @@ export interface IRpcLaneTopologyBinding {
   auth?: RemoteLaneBindingAuth;
   /**
    * Transport-level retry policy for calls routed through this binding.
-   * Omit for the default policy (3 attempts, backoff, transport failures only).
+   * Omit for one attempt. Opt into retries only for operations safe to repeat.
    */
   retry?: RpcLaneRetryPolicy;
 }

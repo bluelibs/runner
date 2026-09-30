@@ -380,6 +380,8 @@ Delivery lifecycle:
 Important boundary:
 
 - `attempts` is transport metadata, not business payload. Application code should not set or depend on it directly.
+- `id` is a stable message correlation id, preserved across RabbitMQ retries. Each broker delivery has independent settlement ownership. Call `ack(id)` / `nack(id)` inside the consumer handler so overlapping deliveries with the same id settle on their originating channel. Outside that handler, settlement is allowed only when the id identifies a single pending delivery; ambiguous ids fail immediately. Stale handlers cannot settle a redelivery after recovery.
+- Delivery remains at least once: publishing a retry and acknowledging its original are separate broker operations. Make consumer effects idempotent or deduplicate them in the application.
 
 ### RabbitMQ Notes and Operational Knobs
 
@@ -387,7 +389,7 @@ For production, swap `MemoryEventLaneQueue` for `RabbitMQEventLaneQueue`. It sup
 
 - `prefetch`: consumer back-pressure per worker
 - `maxAttempts` + `retryDelayMs`: retry policy at lane binding level
-- `publishConfirm`: wait for broker publish confirmations (recommended for durability)
+- `publishConfirm`: wait for broker publish confirmations (recommended for durability); publishers also pause new sends while the AMQP channel buffer is waiting to drain
 - `reconnect`: connection/channel recovery policy for broker drops
 - `queue.deadLetter`: dead-letter policy wiring on queue declaration
 
@@ -586,7 +588,7 @@ sequenceDiagram
 
 ### Retry Policy
 
-Remote calls fail for boring reasons: the peer is restarting, the network blips, a gateway sheds load. RPC lanes retry those transport failures by default so one blip does not fail your task.
+RPC calls make one attempt by default. A lost response can follow a successful remote execution, so repeating a call can duplicate its effects. Opt into retries for idempotent tasks or calls protected by application-level deduplication.
 
 ```typescript
 const topology = r.rpcLane.topology({
@@ -596,7 +598,8 @@ const topology = r.rpcLane.topology({
       lane: billingLane,
       communicator: billingCommunicator,
       retry: {
-        maxAttempts: 3, // total attempts, including the first
+        maxAttempts: 3, // opt in only when repeated execution is safe
+        totalTimeoutMs: 5_000, // all attempts and delays share this budget
         delayMs: 250, // fixed delay, or (attempt, error) => ms
         // retryIf: (error) => ..., // custom classifier
       },
@@ -611,11 +614,13 @@ Rules:
 - The default classifier retries connection failures and client timeouts, plus HTTP 408/429/502/503/504 responses.
 - Typed domain errors, other 4xx/5xx statuses, and malformed responses are never retried by default because the server returned a definitive answer; repeating the call is a business decision. Caller aborts are a separate, non-response cancellation condition and are also never retried by default. Use task middleware (`retry`, `circuitBreaker`, `fallback`) for response failures that need business-aware retries.
 - The default delay is exponential backoff with jitter starting at 100ms.
-- Use `maxAttempts: 1` to disable retries for a binding.
-- The client `timeoutMs` is per attempt. Request time can consume up to `timeoutMs × maxAttempts`, while worst-case end-to-end duration also includes as many as `maxAttempts − 1` retry delays. Retry delays honor the caller abort signal.
+- `maxAttempts` includes the first attempt and defaults to `1`. Set a larger value to enable retries. **Migration:** bindings that previously relied on the implicit three attempts must now set `retry: { maxAttempts: 3 }` explicitly after checking that repeated execution is safe.
+- Client `timeoutMs` limits each buffered HTTP attempt, including JSON and browser multipart uploads. Optional `retry.totalTimeoutMs` limits the entire communicator call across attempts and delays; it is a positive integer up to `2147483647` milliseconds. Without it, the policy adds no overall deadline. Caller cancellation interrupts the call budget and retry delays.
+- HTTP `Retry-After` on transport errors sets a minimum retry delay: Runner waits for the larger of that value and `delayMs`. The overall budget still applies.
+- A budget rejects even if a custom communicator ignores its signal, but it cannot undo work already running remotely. For smart-client stream responses, the call budget ends when the response stream is returned; stream consumption needs its own cancellation policy.
 
 Lane-routed upload calls (raw readable streams and multipart Node files) make a
-single transport attempt, because an upload source may already be consumed.
+single transport attempt, because an upload source may already be consumed. The configured `totalTimeoutMs` still applies to that attempt.
 When using `createRetryingRpcLaneCommunicator` directly, use `maxAttempts: 1`
 for non-replayable inputs such as streams.
 
@@ -699,7 +704,7 @@ Keep responsibilities clearly separated:
 **Transport-level (lane binding + broker config):**
 
 - Event lanes: `maxAttempts` + `retryDelayMs` at the lane binding level control retry budget before final failure
-- RPC lanes: `retry` at the binding level controls sync-call retries (default 3 attempts, transport failures only). There is no DLQ for synchronous calls — the last error is thrown to the caller
+- RPC lanes: `retry` at the binding level controls sync-call retries (default 1 attempt; explicit retries classify transport failures). There is no DLQ for synchronous calls — the last error is thrown to the caller
 - DLQ behavior is **broker/queue-policy owned**
 - Runner settles final consumer failure with `nack(false)` — it does **not** manually publish to a DLQ queue
 - If your queue has no dead-letter configuration, a final `nack(false)` discards the message per broker behavior
@@ -812,6 +817,8 @@ This enables Event Lanes routing diagnostics. Look for these entries:
 | `event-lanes.relay-emit`         | Consumer dequeued and re-emitted the event locally                       |
 | `event-lanes.skip-inactive-lane` | Event's lane is not consumed by the active profile (nacked with requeue) |
 
+Enqueue and relay entries include the same `messageId` for correlation.
+
 If you see `skip-inactive-lane`, your active profile likely doesn't include the lane in its `consume` list.
 
 ## Pros and Cons by Mode
@@ -892,12 +899,14 @@ Binding auth (JWT):
 - Supported modes: `none`, `jwt_hmac`, `jwt_asymmetric`.
 - `local-simulated` enforces auth when configured (it does not bypass lane JWT checks).
 - Lane JWTs are target-bound and time-bound: Runner signs lane id, capability, target kind/id, payload hash, `iat`, and `exp`.
+- RPC tokens default to `tokenTtlMs: 60_000`. Queued event tokens use `messageTtlMs`, then an explicitly configured `tokenTtlMs`, then a 24-hour default. `messageTtlMs` must be a positive safe integer in milliseconds. For example, `auth: { secret: process.env.LANE_SECRET, messageTtlMs: 3_600_000 }` permits an hour of queue backlog and retries. This token lifetime is separate from RabbitMQ `queue.messageTtl`, which controls broker retention.
+- Choose queued token lifetime for the longest expected backlog/retry window and retain verification keys for that period when rotating them. Longer validity also permits longer replay of a captured envelope. Expiry remains enforced; already issued expired tokens are not extended by changing configuration.
 - Runner validates lane JWT signature and claims on each receive path. It does not keep a replay cache, so the same unexpired token remains valid until it expires.
 - Event-lane consumers reject permanent poison immediately (`nack(false)`) for invalid auth, unknown events, wrong-lane events, and payload parse/deserialization failures.
 - For asymmetric mode (`jwt_asymmetric`), producers sign with **private keys**, consumers verify with **public keys**.
 - This principle is identical for RPC and Event Lanes.
 
-> **Note:** Lane JWTs are short-lived bearer auth tokens. Verification proves the token is authentic, unexpired, and bound to the expected lane/target/payload.
+> **Note:** Lane JWTs are bearer auth tokens with bounded validity. Verification proves the token is authentic, unexpired, and bound to the expected lane/target/payload.
 
 Asymmetric JWT should prove these two properties in your setup:
 
@@ -1060,4 +1069,4 @@ Node-side allow-list helper:
 | `event`           | `(id, payload?) => Promise<void>`    | Optional           |
 | `eventWithResult` | `(id, payload?) => Promise<unknown>` | Optional           |
 
-Custom communicators participate in default retries by throwing `RemoteLaneTransportError` (exported from `@bluelibs/runner`) for transport failures. Use `createRetryingRpcLaneCommunicator` to wrap any communicator with a retry policy outside lanes, and `isRetryableRemoteLaneError` to compose custom `retryIf` classifiers.
+Custom communicators participate in opted-in retries by throwing `RemoteLaneTransportError` (exported from `@bluelibs/runner`) for transport failures. Use `createRetryingRpcLaneCommunicator` to wrap any communicator with a retry policy outside lanes, and `isRetryableRemoteLaneError` to compose custom `retryIf` classifiers.

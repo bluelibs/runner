@@ -34,7 +34,7 @@ This layer wires runtime-owned definitions; it does not own generic task executi
 - Require communicator methods for the operation used. Preserve optional
   `eventWithResult`, returned event payloads, and caller cancellation.
 - Retry wrappers are per resolved binding and preserve communicator receivers.
-  Raw streams and Node-file uploads bypass retries because their sources are consumed.
+  Default execution is one attempt. Raw streams and Node-file uploads retain the overall call budget but make one attempt because their sources are consumed.
 - JSON auth hashes exact serialized request bodies and forwarded context headers.
   Re-encoded multipart/octet-stream bodies use the matching empty-body convention.
 - Exposure uses a resolved serving policy, canonical endpoint ids, and the runtime's

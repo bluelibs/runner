@@ -37,7 +37,8 @@ lane topology, retries, and serving policies are owned by sibling modules.
   remote errors, and caller signals across all transport paths.
 - Abort/timeout/source-error handling settles once and removes listeners. Streaming
   response lifetime differs from a buffered JSON response; avoid premature cleanup.
-- These clients do not decide lane retry policy. RPC routing bypasses retry for
+- HTTP status transport errors retain parsed Retry-After guidance for the portable retry wrapper.
+- These clients do not decide lane retry policy. RPC routing limits execution to one attempt (with the overall budget) for
   stream/upload sources, which may already be consumed after the first request.
 
 ## Tests To Read

@@ -116,7 +116,7 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
     expect(channelMock.nack).toHaveBeenCalledWith(amqpMsg, false, false);
   });
 
-  it("falls back to broker nack requeue when message is not tracked", async () => {
+  it("retains delivery ownership even if the attempt cache is cleared", async () => {
     await queue.init();
 
     let consumer:
@@ -152,7 +152,8 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
 
     await queue.nack("msg-requeue-fallback", true);
 
-    expect(channelMock.nack).toHaveBeenCalledWith(amqpMsg, false, true);
+    expect(channelMock.sendToQueue).toHaveBeenCalled();
+    expect(channelMock.ack).toHaveBeenCalledWith(amqpMsg);
   });
 
   it("throws if used before init", async () => {
