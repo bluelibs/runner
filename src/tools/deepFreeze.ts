@@ -6,48 +6,69 @@ const isObjectLike = (value: unknown): value is object | Function =>
 const shouldFreezeRecursively = (value: object | Function): boolean =>
   typeof value === "function" || Array.isArray(value) || isPlainObject(value);
 
-/**
- * Recursively freezes an object graph. Handles cycles via WeakSet.
- */
+// Only successful complete traversals enter this cache. Object.isFrozen alone
+// cannot prove that children of a shallow-frozen object are immutable.
+const completedGraphs = new WeakSet<object>();
+
+interface FreezeTraversal {
+  completed: object[];
+  cacheable: boolean;
+  hasOpaqueDescendant: boolean;
+}
+
+/** Recursively freezes an object graph, preserving cycles and opaque instances. */
 export function deepFreeze<T>(
   value: T,
   seen = new WeakSet<object>(),
   depth = 0,
 ): T {
-  if (!isObjectLike(value)) {
-    return value;
-  }
+  // Explicit traversal state can exclude descendants, so it cannot prove a
+  // complete graph traversal or reuse one completed under different options.
+  const traversal: FreezeTraversal = {
+    completed: [],
+    cacheable: arguments.length <= 1,
+    hasOpaqueDescendant: false,
+  };
+  const result = freezeGraph(value, seen, depth, traversal);
+  // A frozen child can still point into an unfinished cycle if the root fails.
+  if (traversal.cacheable && !traversal.hasOpaqueDescendant)
+    traversal.completed.forEach((object) => completedGraphs.add(object));
+  return result;
+}
 
+function freezeGraph<T>(
+  value: T,
+  seen: WeakSet<object>,
+  depth: number,
+  traversal: FreezeTraversal,
+): T {
+  if (!isObjectLike(value)) return value;
   if (depth > 0 && !shouldFreezeRecursively(value)) {
+    // An opaque instance remains mutable, including its prototype. It can
+    // become plain later, so ancestors cannot certify a closed frozen graph.
+    traversal.hasOpaqueDescendant = true;
     return value;
   }
-
   const objectValue = value as object;
-  if (seen.has(objectValue)) {
+  if (
+    (traversal.cacheable && completedGraphs.has(objectValue)) ||
+    seen.has(objectValue)
+  )
     return value;
-  }
   seen.add(objectValue);
-
   for (const key of Reflect.ownKeys(objectValue)) {
     const descriptor = Object.getOwnPropertyDescriptor(objectValue, key);
-    if (!descriptor) {
-      continue;
-    }
-
+    if (!descriptor) continue;
     if ("value" in descriptor) {
-      deepFreeze(descriptor.value, seen, depth + 1);
+      freezeGraph(descriptor.value, seen, depth + 1, traversal);
       continue;
     }
-
-    if (descriptor.get) {
-      deepFreeze(descriptor.get, seen, depth + 1);
-    }
-    if (descriptor.set) {
-      deepFreeze(descriptor.set, seen, depth + 1);
-    }
+    if (descriptor.get) freezeGraph(descriptor.get, seen, depth + 1, traversal);
+    if (descriptor.set) freezeGraph(descriptor.set, seen, depth + 1, traversal);
   }
-
-  return Object.freeze(objectValue) as T;
+  Object.freeze(objectValue);
+  traversal.completed.push(objectValue);
+  return value;
 }
 
 /**

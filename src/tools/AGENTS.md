@@ -14,6 +14,7 @@ This directory holds focused helpers shared by definitions and runtime orchestra
 - `definitionId.ts` distinguishes source, local, canonical, and storage IDs. `isSameDefinition.ts` handles stable lineage identity and configured wrappers.
 - `scope.ts`, `subtreeOf.ts`, and `classifyIsolationEntry.ts` define selector semantics; `buildUniversalManifest.ts` builds portable upload manifests and collects file sources.
 - [check/AGENTS.md](check/AGENTS.md) explains validation, matching, schemas, and hydration behind `check.ts`.
+- `deepFreeze.ts` memoizes only successful traversals without skipped opaque descendants; shallow freezing, cycles and caller-provided traversal exclusions retain their contracts.
 
 ## Contracts To Preserve
 
