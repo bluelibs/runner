@@ -33,6 +33,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Boundary Contracts
 
+- Durable workflow/step concurrency shares renewable lease handling with resilience while retaining store-owned admission and durable suspension.
 - Runtime state belongs to each `run(app)` instance, resource, or explicit backend namespace.
 - Keep connections, timers, async context, queue consumers, and listeners lifecycle-owned.
 - Sharing backend state requires an explicit namespace/prefix/queue identity; never derive it from a shortened id.
