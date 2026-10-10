@@ -60,12 +60,20 @@ export class RemoteLaneTransportError extends Error {
   public readonly httpCode?: number;
   public readonly id?: string;
   public readonly data?: unknown;
+  /** Server-requested delay before retrying this HTTP failure. */
+  public readonly retryAfterMs?: number;
 
   constructor(
     code: string,
     message: string,
     details?: unknown,
-    extras?: { id?: string; data?: unknown; httpCode?: number },
+    extras?: {
+      id?: string;
+      data?: unknown;
+      httpCode?: number;
+      /** Server-requested minimum delay before another transport attempt. */
+      retryAfterMs?: number;
+    },
   ) {
     super(message);
     this.name = "RemoteLaneTransportError";
@@ -74,6 +82,7 @@ export class RemoteLaneTransportError extends Error {
     this.httpCode = extras?.httpCode;
     this.id = extras?.id;
     this.data = extras?.data;
+    this.retryAfterMs = extras?.retryAfterMs;
   }
 }
 
