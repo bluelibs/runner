@@ -148,12 +148,14 @@ describe("Redis permit admission", () => {
         const granted = Promise.resolve(true);
         void granted.then(() => {
           void Promise.resolve().then(() =>
-            other.caller.abort(new Error("cancelled")),
+            Promise.resolve().then(() =>
+              other.caller.abort(new Error("cancelled")),
+            ),
           );
         });
         return granted;
       })
-      .mockImplementationOnce(() => new Promise(() => {}));
+      .mockRejectedValueOnce(new Error("cleanup failed"));
     const result = other.start("token").catch((error: unknown) => error);
     await jest.advanceTimersByTimeAsync(0);
     expect(await result).toEqual(new Error("cancelled"));

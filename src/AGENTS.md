@@ -32,6 +32,7 @@ Runner describes a typed graph first and executes it only after `run(app)`. Buil
 - `run(app)` instances must remain isolated, including middleware state, listeners, tracing, and teardown. Process-wide hooks coordinate cleanup rather than owning app services.
 - User definitions have local IDs. Ownership compilation creates canonical IDs; stateful indexes use storage identities. Never shorten an internal ID to a leaf/display name.
 - Built definitions carry stable lineage identity. Two equal strings do not establish equality between independently built definitions.
+- Durable step concurrency shares lease/acquisition helpers with Node resilience; durable stores retain ownership of admission and suspension.
 - Keep Node dependencies behind platform adapters or within `node/`; check both exports and consumer bundles when changing that boundary.
 - Preserve startup validation, registry locking, lazy initialization, source-aware admission, and cleanup on bootstrap failure. Read the controllers before changing shutdown phase behavior.
 - Public surfaces, including indirectly exported types, require JSDoc. Update source docs and `readmes/COMPACT_GUIDE.md` minimally when the public core story changes; advanced Node topics have dedicated guides.

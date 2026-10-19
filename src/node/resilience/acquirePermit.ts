@@ -1,3 +1,4 @@
+import { acquireCancellableLease } from "./acquireLease";
 import { abortableDelay } from "../../globals/middleware/retry.middleware";
 import {
   assertQueueAvailable,
@@ -18,40 +19,6 @@ type Execute = (operation: string, token: string) => Promise<boolean>;
 function releaseCancelledGrant(execute: Execute, token: string): void {
   // Cancellation must not wait for Redis; the lease expires if cleanup fails.
   void execute("release", token).catch(() => {});
-}
-
-/** Cancels the caller promptly while reclaiming any grant delivered after cancellation. */
-function attempt(
-  execute: Execute,
-  token: string,
-  signal: AbortSignal,
-): Promise<boolean> {
-  signal.throwIfAborted();
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const cleanup = () => signal.removeEventListener("abort", onAbort);
-    const onAbort = () => {
-      settled = true;
-      cleanup();
-      reject(signal.reason);
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    void execute("acquire", token).then(
-      (granted) => {
-        if (settled) {
-          if (granted) releaseCancelledGrant(execute, token);
-          return;
-        }
-        settled = true;
-        cleanup();
-        resolve(granted);
-      },
-      (error: unknown) => {
-        cleanup();
-        if (!settled) reject(error);
-      },
-    );
-  });
 }
 
 /** Returns the conservative local expiry of the newly acquired Redis lease. */
@@ -81,7 +48,14 @@ export async function acquireRedisPermit(
   try {
     while (true) {
       const requestedAt = performance.now();
-      if (await attempt(execute, token, signal)) {
+      if (
+        await acquireCancellableLease({
+          acquire: async () =>
+            (await execute("acquire", token)) ? token : null,
+          release: (grant) => execute("release", grant),
+          signal,
+        })
+      ) {
         if (signal.aborted) {
           releaseCancelledGrant(execute, token);
           signal.throwIfAborted();

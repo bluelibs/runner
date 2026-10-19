@@ -1,3 +1,11 @@
+import type { StepOptions, DurableStepRunContext } from "./context.step";
+export type {
+  StepOptions,
+  DurableStepRunContext,
+  DurableStepConcurrency,
+  DurableStepConcurrencyLimit,
+  DurableStepRateLimit,
+} from "./context.step";
 import type { IDurableStateContext } from "./context.state";
 import type { IEventDefinition } from "../../../../types/event";
 import type { AnyTask } from "../../../../types/task";
@@ -6,18 +14,6 @@ import type {
   ResolveTaskOutput,
 } from "../../../../types/utilities";
 import type { DurableStepId } from "../ids";
-
-export interface StepOptions {
-  retries?: number;
-  timeout?: number;
-}
-
-/**
- * Live execution controls available to a running durable step body.
- */
-export interface DurableStepRunContext {
-  signal: AbortSignal;
-}
 
 /**
  * Options for sleep operations.
@@ -272,7 +268,9 @@ export interface IDurableContext extends IDurableStateContext {
  * normal suspension, not a failure, and schedules the resume.
  */
 export class SuspensionSignal extends Error {
-  constructor(public readonly reason: "sleep" | "yield" | "timeout") {
+  constructor(
+    public readonly reason: "sleep" | "yield" | "timeout" | "step-concurrency",
+  ) {
     super(`Execution suspended: ${reason}`);
     this.name = "SuspensionSignal";
   }
