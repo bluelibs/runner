@@ -7,6 +7,7 @@
 Runner describes a typed graph first and executes it only after `run(app)`. Builders define contracts; the store compiles ownership and registration; runtime services enforce visibility, validation, lifecycle, and execution. Each run creates its own services.
 
 - `index.ts` exports the portable surface through `public.ts`, `defs.ts`, and `public-types.ts`.
+- Durable event dispatch uses a portable EventManager adapter; Node bridge ownership stays under `node/durable/bridge/`.
 - `public.ts` assembles `r`, built-in namespaces, and runtime exports; `define.ts` exposes definition factories.
 - `run.ts` wires services, registers the graph, processes overrides, validates it, initializes resources, locks registries, runs readiness, and returns `RunResult`.
 - [Node entry points](node/AGENTS.md) extend the portable surface. Package export conditions select the Node entry for Node consumers; browser, edge, and universal builds must remain portable.

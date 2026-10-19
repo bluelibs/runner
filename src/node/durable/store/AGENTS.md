@@ -9,6 +9,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Entry Points And Layout
 
+- `RedisStore.retention.ts` and `memory-store/retention.ts` collect due success history while retaining completion receipts. Collection must coordinate with execution ownership and preserve waiter/parent results.
 - `MemoryStore.ts`: facade over instance-owned `memory-store/` operations.
 - `PersistentMemoryStore.ts`: adds serialized snapshots and local restart persistence.
 - `RedisStore.ts`: facade delegating to `RedisStore.*` operations.

@@ -245,6 +245,15 @@ export interface IDurableContext extends IDurableStateContext {
   /** Runs registered `.down()` compensations in reverse order. */
   rollback(): Promise<void>;
 
+  /** @internal Resolves a stable durable event call site under the determinism policy. */
+  _eventStepId(eventId: string, explicit?: string): string;
+
+  /** @internal Checkpoint compensation while permitting cancellation-requested teardown. */
+  _compensate<T>(
+    stepId: string,
+    fn: (context: DurableStepRunContext) => Promise<T>,
+  ): Promise<T>;
+
   /**
    * Atomically closes this run as `continued_as_new` and starts a successor
    * with the given input, carried workflow state, and fresh steps.

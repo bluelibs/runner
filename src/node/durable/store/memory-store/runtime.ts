@@ -1,3 +1,4 @@
+import { collectionDeadline } from "../../core/retention";
 import type {
   DurableExecutionWaiter,
   DurableSignalState,
@@ -27,9 +28,21 @@ export class MemoryStoreRuntime {
 
   set executions(records: Map<string, Execution>) {
     this.executionRecords = new IndexedExecutions();
-    for (const [id, execution] of records)
+    this.historyDeadlines.clear();
+    for (const [id, execution] of records) {
       this.executionRecords.set(id, execution);
+      this.indexHistory(execution);
+    }
   }
+  readonly historyDeadlines = new Map<string, number>();
+
+  indexHistory(execution: Execution): void {
+    const deadline = collectionDeadline(execution);
+    if (deadline === undefined || execution.historyCollectedAt)
+      this.historyDeadlines.delete(execution.id);
+    else this.historyDeadlines.set(execution.id, deadline);
+  }
+
   executionIdByIdempotencyKey = new Map<string, string>();
   stepResults = new Map<string, Map<string, StepResult>>();
   signalStates = new Map<string, Map<string, DurableSignalState>>();

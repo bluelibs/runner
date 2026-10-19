@@ -1,3 +1,4 @@
+import type { ExecutionRetention } from "../retention";
 import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
 import type { ExecuteOptions } from "../interfaces/service";
@@ -10,7 +11,10 @@ import {
   TimerType,
   type Execution,
 } from "../types";
+import { durableExecutionInvariantError } from "../../../../errors";
 import { createExecutionId } from "../utils";
+import { durableWorkflowTag } from "../../tags/durableWorkflow.tag";
+import { retentionDelay } from "../retention";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -21,6 +25,7 @@ type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
  */
 export interface ExecutionPersistenceDeps {
   store: IDurableStore;
+  retention?: ExecutionRetention;
   queue?: IDurableQueue;
   auditLogger: AuditLogger;
   getTaskWorkflowKey: (task: AnyTask) => string;
@@ -43,12 +48,25 @@ export function createPendingExecution(
   options: ExecuteOptions | undefined,
   executionId?: string,
 ): Execution<unknown, unknown> {
+  const policy =
+    options?.retention ??
+    durableWorkflowTag.extract(task)?.retention ??
+    deps.retention;
+  if (
+    retentionDelay(policy) !== undefined &&
+    !deps.store.collectCompletedHistory
+  ) {
+    durableExecutionInvariantError.throw({
+      message: "Configured retention requires store.collectCompletedHistory().",
+    });
+  }
   const now = new Date();
   return {
     id: executionId ?? createExecutionId(),
     workflowKey: deps.getTaskWorkflowKey(task),
     parentExecutionId: options?.parentExecutionId,
     input,
+    retention: policy,
     status: ExecutionStatus.Pending,
     attempt: 1,
     maxAttempts: deps.maxAttempts,

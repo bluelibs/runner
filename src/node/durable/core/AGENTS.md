@@ -10,6 +10,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 ## Entry Points And Ownership
 
 - `interfaces/` and `types.ts`: public service, context, resource, store, bus, and queue contracts.
+- `HistoryCollector.ts` owns lifecycle-bound successful-history collection; `retention.ts` defines admission-time policy and eligibility. `runnerContext.ts` shares one execution stack per Runner Store across durable backends.
 - `DurableService.ts`: delegates starts, signals, schedules, recovery, waiting, and lifecycle to managers.
 - `DurableResource.ts`: Runner-facing facade and scoped `use()`; `createRunnerDurableRuntime.ts` owns runtime wiring.
 - `DurableContext.ts` and `StepBuilder.ts`: workflow-facing replayable actions and compensation.
@@ -33,6 +34,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Keep durable state mutation, waiter completion, and timer handling consistent with store atomic contracts.
 - Continue-as-new links runs and migrates buffered signals atomically; pause/cancel races must win safely.
 - Followed execution waits distinguish the requested root from the current continuation tip.
+- Persisted compensation failures notify execution waiters, including queued parents. Error text alone must not park an unrelated business failure.
 - Pause, shutdown interruption, business failure, and cancellation are distinct outcomes.
   Parking an attempt must not silently consume a retry or turn it into workflow failure.
 - Renew and check ownership around long-running work; do not commit after a lease is lost.

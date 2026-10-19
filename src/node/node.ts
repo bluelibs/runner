@@ -3,6 +3,8 @@
 import { resources as baseResources, tags as baseTags } from "../public";
 import { registerRpcLaneHttpPresetsForNode } from "./rpc-lanes/registerRpcLaneHttpPresets";
 import { durableSupportResource } from "./durable/resources/durable.resource";
+import { durableEventBridgeResource } from "./durable/bridge/resource";
+import { durableEventTag } from "./durable/bridge/tag";
 import { durableWorkflowTag } from "./durable/tags/durableWorkflow.tag";
 import { memoryDurableResource } from "./durable/resources/memoryDurableResource";
 import { redisDurableResource } from "./durable/resources/redisDurableResource";
@@ -20,6 +22,7 @@ export const resources = Object.freeze({
   resilience: resilienceResource,
   shell: shellResource,
   durable: durableSupportResource,
+  durableEventBridge: durableEventBridgeResource,
   memoryWorkflow: memoryDurableResource,
   redisWorkflow: redisDurableResource,
   redisCacheProvider: redisCacheProviderResource,
@@ -31,6 +34,7 @@ export const resources = Object.freeze({
 export const tags = Object.freeze({
   ...baseTags,
   durableWorkflow: durableWorkflowTag,
+  durableEvent: durableEventTag,
 });
 
 export * from "../public";

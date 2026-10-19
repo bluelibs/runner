@@ -10,6 +10,8 @@ This directory owns focused authored guides beyond the core learning chapters. R
 - `MULTI_PLATFORM.md` and `PUBLIC_API.md`: platform boundaries and public surfaces.
 - `SERIALIZER_PROTOCOL.md`: encoding/hydration contracts; compare changes with `../src/serializer/` and its tests.
 - `DURABLE_WORKFLOWS.md` and `DURABLE_WORKFLOWS_AI.md`: Node workflow semantics and the compact field guide.
+- `DURABLE_EVENTS.md` and `DURABLE_RETENTION.md`: implemented Node event bridge and successful-history collection, including current storage limitations.
+- `DURABLE_EVENTS_PROPOSAL.md` and `DURABLE_RETENTION_PROPOSAL.md`: documentation-first proposals for the event bridge and successful-execution cleanup; these are not shipped API references.
 - `REMOTE_LANES.md`, `REMOTE_LANES_AI.md`, and `REMOTE_LANES_HTTP_POLICY.md`: transport topology and HTTP policy.
 - `RUNTIME_SHELL.md`: Node shell lifecycle and operator behavior.
 - `BENCHMARKS.md`, `COMPARISON.md`, `ENTERPRISE.md`, and `CRITICAL_THINKING.md`: performance and positioning; keep claims supported.

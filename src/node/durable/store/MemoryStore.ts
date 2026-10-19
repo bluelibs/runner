@@ -1,3 +1,4 @@
+import { collectCompletedHistory } from "./memory-store/retention";
 import type { DurableAuditEntry } from "../core/audit";
 import type {
   ExpectedExecutionStatuses,
@@ -35,6 +36,10 @@ import { toDurableExecutionState } from "../core/executionIndex";
 export type { MemoryStoreSnapshot } from "./memory-store/types";
 
 export class MemoryStore implements IDurableStore {
+  /** Collects due successful history while preserving completion receipts. */
+  async collectCompletedHistory(now: Date, limit: number): Promise<number> {
+    return collectCompletedHistory(this.runtime, now, limit);
+  }
   /** Reads only metadata for an exact execution storage identity. */
   async getExecutionState(id: string): Promise<DurableExecutionState | null> {
     const execution = this.runtime.executions.get(id);
