@@ -17,6 +17,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Directory Map
 
+- `bridge/`: durable event policy, per-run dispatch, persisted hook plans, compensation recovery, and parent linkage.
 - `core/`: service/resource/context/operator facades, typed interfaces, and focused managers.
 - `store/`: durable records, indexes, waiters, schedules, snapshots, and lock ownership.
 - `queue/`: memory and RabbitMQ execution delivery; delegates shared transport to `../queue/`.

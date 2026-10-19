@@ -27,6 +27,8 @@ export async function findRestartBlocker(
   store: IDurableStore,
   source: Execution,
 ): Promise<string | null> {
+  if (source.historyCollectedAt)
+    return "completed history collected; start a new workflow with explicit input";
   if (!isRestartableStatus(source.status)) return source.status;
   if (source.status !== ExecutionStatus.ContinuedAsNew) return null;
 

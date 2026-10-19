@@ -106,6 +106,12 @@ export interface IHookDefinition<
     >,
     dependencies: DependencyValuesType<TDependencies>,
   ) => Promise<HookRunResult<TOn>>;
+  /** Registered compensation for durable hooks; receipts must be serializable. */
+  compensate?: (
+    receipt: any,
+    event: Parameters<IHookDefinition<TDependencies, TOn, TMeta>["run"]>[0],
+    dependencies: DependencyValuesType<TDependencies>,
+  ) => Promise<void>;
   tags?: HookTagType[];
 }
 

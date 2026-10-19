@@ -31,6 +31,7 @@ export type BuilderState<
     on: TOn;
     /** Hook handler function. Required before build(). */
     run: IHookDefinition<TDeps, NonNullable<TOn>, TMeta>["run"] | undefined;
+    compensate?: IHookDefinition<TDeps, NonNullable<TOn>, TMeta>["compensate"];
     /** Declarative error contract. */
     throws?: ThrowsList;
   }

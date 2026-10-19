@@ -1,5 +1,7 @@
 # Durable Workflows (Node-only)
 
+Successful workflows support [history retention and collection](DURABLE_RETENTION.md). Runner events can trigger workflows through the [durable event bridge](DURABLE_EVENTS.md).
+
 ← [Back to main README](../README.md)
 
 ---

@@ -4,6 +4,8 @@ This directory defines the public graph and runtime shapes, inference utilities,
 internal store contracts, and runtime brands. It contains executable constants and
 helpers as well as TypeScript types; it is not a declarations-only directory.
 
+Durable hook compensation and optional event operation identities remain portable contracts; Node execution stays outside this directory.
+
 ## Maintenance
 
 If you make changes within this directory, update this AGENTS.md in the same change

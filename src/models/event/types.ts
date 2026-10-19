@@ -2,8 +2,19 @@ import {
   DependencyValuesType,
   EventHandlerType,
   IEventEmission,
+  IEvent,
+  IEventEmitOptions,
+  IEventEmitReport,
 } from "../../defs";
 import { IHook } from "../../types/hook";
+
+/** Optional platform integration which replaces selected event dispatch. */
+export type EventDispatchAdapter = (
+  definition: IEvent<any>,
+  event: IEventEmission<any>,
+  listeners: readonly IListenerStorage[],
+  options: IEventEmitOptions,
+) => Promise<IEventEmitReport> | undefined;
 
 /**
  * Default options for event handlers.

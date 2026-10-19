@@ -1,3 +1,4 @@
+import { collectionDeadline } from "../core/retention";
 import { ExecutionStatus, type Execution } from "../core/types";
 import type { ExpectedExecutionStatuses } from "../core/interfaces/store";
 import { durableStoreShapeError } from "../../../errors";
@@ -34,6 +35,13 @@ function saveExecutionIndexesScript(shift = 0): string {
       redis.call("srem", KEYS[${4 + shift}], ARGV[2])
     end
     ${writeExecutionIndexScript(`KEYS[${5 + shift}]`, `KEYS[${6 + shift}]`)}
+    local cleanupIndex = KEYS[${5 + shift}] .. ":cleanup"
+    local deleteAfter = tonumber(ARGV[8])
+    if deleteAfter and deleteAfter >= 0 then
+      redis.call("zadd", cleanupIndex, deleteAfter, ARGV[2])
+    else
+      redis.call("zrem", cleanupIndex, ARGV[2])
+    end
   `;
 }
 
@@ -133,6 +141,7 @@ export async function createExecutionWithIdempotencyKey(
     toRedisFlag(isStuck),
     "",
     ...executionIndexArgs(runtime, params.execution),
+    collectionDeadline(params.execution) ?? -1,
   );
 
   if (outcome === "__created__") {
@@ -169,6 +178,7 @@ export async function saveExecution(
     toRedisFlag(isStuck),
     "",
     ...executionIndexArgs(runtime, execution),
+    collectionDeadline(execution) ?? -1,
   );
 }
 
@@ -224,6 +234,7 @@ export async function saveExecutionIfStatus(
     toRedisFlag(isStuck),
     runtime.serializer.stringify(expectedStatuses),
     ...executionIndexArgs(runtime, execution),
+    collectionDeadline(execution) ?? -1,
   );
   runtime.assertEvalResultNotError(outcome);
   return outcome === 1;

@@ -30,6 +30,7 @@ export async function createExecutionWithIdempotencyKey(
 
   runtime.executionIdByIdempotencyKey.set(key, params.execution.id);
   runtime.executions.set(params.execution.id, cloneExecution(params.execution));
+  runtime.indexHistory(params.execution);
   await runtime.persistDurableMutation();
   return { created: true, executionId: params.execution.id };
 }
@@ -39,6 +40,7 @@ export async function saveExecution(
   execution: Execution,
 ): Promise<void> {
   runtime.executions.set(execution.id, cloneExecution(execution));
+  runtime.indexHistory(execution);
   await runtime.persistDurableMutation();
 }
 
@@ -88,6 +90,7 @@ export async function saveExecutionIfStatus(
   }
 
   runtime.executions.set(execution.id, cloneExecution(execution));
+  runtime.indexHistory(execution);
   await runtime.persistDurableMutation();
   return true;
 }
@@ -110,10 +113,13 @@ export async function updateExecution(
     return;
   }
 
-  runtime.executions.set(
-    id,
-    cloneExecution({ ...execution, ...updates, updatedAt: new Date() }),
-  );
+  const updated = cloneExecution({
+    ...execution,
+    ...updates,
+    updatedAt: new Date(),
+  });
+  runtime.executions.set(id, updated);
+  runtime.indexHistory(updated);
   await runtime.persistDurableMutation();
 }
 

@@ -1,5 +1,7 @@
 # Durable Workflows — Token-Friendly Reference
 
+Successful workflows support [history retention and collection](DURABLE_RETENTION.md). Runner events can trigger workflows through the [durable event bridge](DURABLE_EVENTS.md).
+
 ← [Full documentation](./DURABLE_WORKFLOWS_FRESH.md)
 
 ---

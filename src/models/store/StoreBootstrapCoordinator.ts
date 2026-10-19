@@ -236,6 +236,11 @@ export class StoreBootstrapCoordinator {
           this.state.resolveRegisteredDefinition(eventDefinition),
         )) as EventManager["hasListeners"],
       intercept: manager.intercept.bind(manager),
+      setDispatchAdapter: manager.setDispatchAdapter.bind(manager),
+      getDispatchListeners: (event) =>
+        manager.getDispatchListeners(
+          this.state.resolveRegisteredDefinition(event),
+        ),
       interceptHook: manager.interceptHook.bind(manager),
       executeHookWithInterceptors:
         manager.executeHookWithInterceptors.bind(manager),

@@ -13,6 +13,7 @@ For fluent APIs, also follow [builders/AGENTS.md](builders/AGENTS.md).
 
 ## Start Here
 
+- Hook compensation is a registered handler separate from the run receipt; preserve it through definition construction and cloning.
 - [defineTask.ts](defineTask.ts), [defineResource.ts](defineResource.ts),
   [defineEvent.ts](defineEvent.ts), and [defineHook.ts](defineHook.ts) construct
   the central graph primitives.

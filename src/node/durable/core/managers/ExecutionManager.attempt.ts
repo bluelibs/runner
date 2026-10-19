@@ -203,6 +203,8 @@ export async function runTaskAttempt(params: {
 }
 
 export async function handleExecutionAttemptError(params: {
+  /** Verifies and notifies a persisted compensation failure; false falls through to normal error handling. */
+  settleCompensationFailure?: () => Promise<boolean>;
   error: unknown;
   runningExecution: Execution<unknown, unknown>;
   guards: ExecutionAttemptGuards;
@@ -280,7 +282,11 @@ export async function handleExecutionAttemptError(params: {
     return;
   }
 
-  if (isCompensationFailure(params.error)) {
+  if (
+    isCompensationFailure(params.error) &&
+    (!params.settleCompensationFailure ||
+      (await params.settleCompensationFailure()))
+  ) {
     return;
   }
 

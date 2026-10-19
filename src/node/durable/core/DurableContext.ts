@@ -313,6 +313,25 @@ export class DurableContext implements IDurableContext {
     });
   }
 
+  /** @internal Names event call sites using the existing implicit-id policy. */
+  _eventStepId(eventId: string, explicit?: string): string {
+    if (explicit) return `event:${explicit}`;
+    this.determinism.assertOrWarnImplicitInternalStepId("emit");
+    const key = `runner:${eventId}`;
+    const index = this.emitIndexes.get(key) ?? 0;
+    this.emitIndexes.set(key, index + 1);
+    return `event:${eventId}:${index}`;
+  }
+
+  /** @internal Runs a named compensation checkpoint during teardown. */
+  async _compensate<T>(
+    stepId: string,
+    fn: (context: DurableStepRunContext) => Promise<T>,
+  ): Promise<T> {
+    this.determinism.assertUniqueStepId(stepId);
+    return await this.internalStep<T>(stepId).up(fn);
+  }
+
   async rollback(): Promise<void> {
     await rollbackDurableCompensations({
       store: this.store,
