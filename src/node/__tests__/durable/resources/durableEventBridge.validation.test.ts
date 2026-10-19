@@ -100,7 +100,7 @@ describe("durable bridge validation", () => {
     }
   });
 
-  it("rejects persisted route and compatibility mismatches", async () => {
+  it("rejects persisted route and compensation policy mismatches", async () => {
     const durable = durableResource.fork("workflows");
     const event = r.event("created").tags([tags.durableEvent]).build();
     const runtime = await run(
@@ -124,14 +124,12 @@ describe("durable bridge validation", () => {
         data: undefined,
         timestamp: new Date(),
         source: { kind: "runtime", id: "test" },
-        version: "1",
         compensation: false,
       };
       const bridge = runtime.getResourceValue(resources.durableEventBridge);
       for (const override of [
         { eventId: "missing" },
         { resourceId: "missing" },
-        { version: "2" },
         { compensation: true },
       ]) {
         await expect(bridge.execute({ ...input, ...override })).rejects.toThrow(

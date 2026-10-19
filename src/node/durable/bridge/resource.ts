@@ -144,7 +144,6 @@ export class DurableEventBridge {
             eventId: definition.id,
             resourceId: route.id,
             hookIds: hooks.map((hook) => hook.id!),
-            version: route.policy.version ?? "1",
             data: event.data,
             source: event.source,
             timestamp: event.timestamp,
@@ -196,7 +195,6 @@ export class DurableEventBridge {
     if (
       !route ||
       route.id !== input.resourceId ||
-      (route.policy.version ?? "1") !== input.version ||
       (route.policy.compensation === "required") !== input.compensation
     )
       bridgeError(

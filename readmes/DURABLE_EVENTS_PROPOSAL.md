@@ -193,7 +193,7 @@ Existing `.transactional()` hooks return undo closures. They remain supported fo
 ## Execution Rules
 
 - Persist the ordered plan, event timestamp, payload, source metadata, and persistence identities. Preserve Runner's stable hook ordering and source-aware eligibility. Do not flatten canonical identities to local names.
-- Replay completed hooks from their receipts. Freeze plan membership for an execution; new deployments must not insert hooks into existing executions. Missing or incompatible versioned plans fail before more side effects. Explicit plan versions permit old and new code to coexist.
+- Replay completed hooks from their receipts. Freeze plan membership for an execution; new deployments must not insert hooks into existing executions. Recovery resolves saved hook identities to current implementations and retains saved ordering. Added hooks apply only to new emissions. Missing or retargeted saved hooks fail before more side effects; payload and compensation receipt compatibility remains the application's responsibility.
 - Exhaust forward retries before entering compensation. Persist that decision and the triggering error. Once compensation starts, forward execution never resumes in that execution.
 - Compensate successful hooks in reverse order. Persist each undo result, attempt the remaining undos after an individual failure, and report the original error plus compensation errors. `retryRollback` retries only outstanding undos.
 - A failed hook may have partially acted before throwing. Its external operation must be idempotent or reconcilable. Compensation of previously completed hooks cannot automatically repair it.

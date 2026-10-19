@@ -9,16 +9,16 @@ import { EXECUTION_PAUSED_ABORT_REASON } from "../../../durable/core/pauseInterr
 import { runtimeShutdownAbortReason } from "../../../../tools/runtimeShutdownAbortReason";
 
 describe("persisted event execution contracts", () => {
-  it("fails before effects when an event or its ordered plan is missing", async () => {
+  it("fails before effects when an event or a saved hook is missing", async () => {
     const effect = jest.fn(async () => "receipt");
     const fixture = await setup(effect);
     try {
       await expect(fixture.execute({ eventId: "missing" })).rejects.toThrow(
         "no longer registered",
       );
-      await expect(fixture.execute({ hookIds: ["missing"] })).rejects.toThrow(
-        "hook plan changed",
-      );
+      await expect(
+        fixture.execute({ hookIds: [...fixture.input.hookIds, "missing"] }),
+      ).rejects.toThrow("saved hook 'missing' is no longer registered");
       expect(effect).not.toHaveBeenCalled();
     } finally {
       await fixture.close();

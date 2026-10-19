@@ -14,7 +14,7 @@ This Node integration replaces selected EventManager dispatch with one registere
 
 Compile routing from canonical definitions and visibility. Tag startup dependencies can be discovered before their values initialize; resolve backend values when dispatch is admitted after initialization. Preserve hook execution through Runner admission, DI, and interceptors.
 
-Parent emission checkpoints use the per-Runner context stack across durable resources. Automatic child identity must survive replay. Persist ordered hook identities and compatibility versions; never silently change an in-flight plan.
+Parent emission checkpoints use the per-Runner context stack across durable resources. Automatic child identity must survive replay. Persist ordered hook identities; replay that membership and order using current implementations, without event versions. Added hooks affect new emissions only. Missing or retargeted saved hooks fail before effects; compensation handlers must accept older receipts.
 
 Compensation phase and undo checkpoints survive recovery independently of forward execution. Keep business errors and undo errors, including cancellation races; pause/shutdown interruptions must park work. Hook bodies cannot suspend or continue as new. History collection belongs to the core and store modules.
 

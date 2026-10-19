@@ -112,7 +112,9 @@ Existing `.transactional()` events return undo closures; migrate them to registe
 
 ## Deployment And Retention
 
-Persisted executions include ordered hook membership and an event compatibility `version` (default `"1"`). Changing hook membership, routing, compensation policy, or version rejects recovery before more effects. Keep compatible definitions deployed until their executions settle; the bridge does not migrate old plans automatically.
+Each execution saves its ordered hook membership. Recovery uses that saved plan: completed hooks reuse their receipts, and unfinished hooks run their currently deployed implementations. Added hooks participate only in new emissions; changing hook order does not reorder existing executions. There is no event version setting.
+
+Keep saved hooks registered for their original event until executions settle. Missing or retargeted saved hooks reject recovery before further effects, including compensation. Backend routing and compensation policy must also remain compatible. Current hook implementations must accept persisted event payloads; current compensation handlers must accept receipts produced by older implementations. Changing a completed hook does not rerun it, but changing its compensation handler affects outstanding undo work.
 
 Event retention overrides bridge retention, which overrides the durable resource default. [Successful history collection](DURABLE_RETENTION.md) removes bulky completed history while preserving completion results. Failed and compensation-failed workflows retain their history.
 

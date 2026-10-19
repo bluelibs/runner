@@ -40,7 +40,6 @@ export async function setup(
     data: undefined,
     timestamp: new Date(),
     source: runtimeSource.runtime("test"),
-    version: "1",
     compensation: false,
   };
   await backend.saveExecution({

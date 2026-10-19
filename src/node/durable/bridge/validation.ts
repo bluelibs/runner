@@ -5,7 +5,6 @@ import type { DurableEventBridgeConfig, DurableEventConfig } from "./types";
 
 const resource = Match.Where(isResource);
 const retention = Match.Optional(Object);
-const version = Match.Optional(Match.NonEmptyString);
 
 /** Validates event policy before runtime routing is compiled. */
 export function parseEventPolicy(input: unknown): DurableEventConfig {
@@ -14,7 +13,6 @@ export function parseEventPolicy(input: unknown): DurableEventConfig {
     durable: Match.Optional(resource),
     compensation: Match.Optional("required"),
     retention,
-    version,
   });
   const config = input as DurableEventConfig;
   retentionDelay(config.retention);

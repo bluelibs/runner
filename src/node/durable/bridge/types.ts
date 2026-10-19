@@ -19,8 +19,6 @@ export type DurableEventResource = IResource<
 export interface DurableEventConfig {
   /** Opt out of broad bridge selectors. Defaults to true. */
   enabled?: boolean;
-  /** Explicit compatibility version for persisted hook plans. Defaults to "1". */
-  version?: string;
   /** Overrides the bridge's default durable resource. */
   durable?: DurableEventResource;
   /** Requires every participating hook to declare compensation. */
@@ -50,8 +48,6 @@ export interface DurableEventInput {
   resourceId: string;
   /** Frozen ordered canonical hook membership. */
   hookIds: string[];
-  /** Explicit plan compatibility version. */
-  version: string;
   /** Serializer-validated event payload. */
   data: unknown;
   /** Original emission time, preserved on replay. */

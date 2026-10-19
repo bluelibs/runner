@@ -46,17 +46,19 @@ export async function executeEvent(
   const definition = deps.store.events.get(input.eventId)?.event;
   if (!definition)
     bridgeError(`Durable event '${input.eventId}' is no longer registered.`);
-  const listeners = eventHooks(
-    deps.store,
-    deps.manager,
-    definition!,
-    input.compensation,
+  const available = new Map(
+    eventHooks(deps.store, deps.manager, definition!, input.compensation).map(
+      (listener) => [listener.id, listener],
+    ),
   );
-  const ids = listeners.map((hook) => hook.id!);
-  if (JSON.stringify(ids) !== JSON.stringify(input.hookIds))
-    bridgeError(
-      `Durable event '${input.eventId}' hook plan changed; restore compatible definitions before recovery.`,
-    );
+  // Membership and order belong to the emission; implementations belong to the deployment.
+  const listeners = input.hookIds.map(
+    (id) =>
+      available.get(id) ??
+      bridgeError(
+        `Durable event '${input.eventId}' saved hook '${id}' is no longer registered for this event; restore it before recovery.`,
+      ),
+  );
   const execution = await deps.backend.getExecution(context.executionId);
   const phase = await deps.backend.getStepResult(
     context.executionId,
