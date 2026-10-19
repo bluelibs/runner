@@ -16,7 +16,6 @@ export class HistoryCollector {
     private readonly config: DurableServiceConfig,
     private readonly logger: Logger,
   ) {
-    retentionDelay(config.retention);
     this.interval = config.garbageCollection?.intervalMs ?? 60_000;
     this.batchSize = config.garbageCollection?.batchSize ?? 100;
     check(this.interval, Match.Range({ min: 1, integer: true }));

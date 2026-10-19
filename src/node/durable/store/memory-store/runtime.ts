@@ -38,8 +38,7 @@ export class MemoryStoreRuntime {
 
   indexHistory(execution: Execution): void {
     const deadline = collectionDeadline(execution);
-    if (deadline === undefined || execution.historyCollectedAt)
-      this.historyDeadlines.delete(execution.id);
+    if (deadline === undefined) this.historyDeadlines.delete(execution.id);
     else this.historyDeadlines.set(execution.id, deadline);
   }
 

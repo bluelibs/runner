@@ -8,7 +8,6 @@ import type { Serializer } from "../../../serializer";
 import type { IEventEmitReport } from "../../../types/event";
 import { runnerDurableContext } from "../core/runnerContext";
 import type { DurableResource } from "../core/DurableResource";
-type DurableEventRuntime = Pick<DurableResource, keyof DurableResource>;
 import type { IDurableStore } from "../core/interfaces/store";
 import { durableRuntimeTag } from "../tags/durableRuntime.tag";
 import {
@@ -22,6 +21,8 @@ import type { DurableEventBridgeConfig, DurableEventInput } from "./types";
 import type { ITask } from "../../../types/task";
 import { parseBridgeConfig } from "./validation";
 import { retentionDelay } from "../core/retention";
+
+type DurableEventRuntime = Pick<DurableResource, keyof DurableResource>;
 
 const eventTask: ITask<
   DurableEventInput,
@@ -66,13 +67,13 @@ export class DurableEventBridge {
     bridgeId: string,
   ) {
     retentionDelay(config.retention);
+    const visible = runtimes.filter((entry) =>
+      deps.store.isItemVisibleToConsumer(entry.definition.id, bridgeId),
+    );
     for (const { event } of deps.store.events.values()) {
       const policy = eventPolicy(event, config);
       if (!policy) continue;
       assertNoLaneRoute(deps.store, event.id);
-      const visible = runtimes.filter((entry) =>
-        deps.store.isItemVisibleToConsumer(entry.definition.id, bridgeId),
-      );
       const reference = policy.durable ?? config.defaultDurable;
       const target = reference
         ? visible.find(

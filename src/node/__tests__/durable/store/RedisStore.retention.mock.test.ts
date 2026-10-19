@@ -74,4 +74,42 @@ describe("Redis history collector contract", () => {
     expect(args[16]).toContain("signal%2Fone");
     expect(JSON.parse(args[17] as string)).toEqual(["timer"]);
   });
+
+  it("reads timers once per batch and groups them by execution", async () => {
+    const { store, redisMock } = harness;
+    redisMock.zrangebyscore.mockResolvedValue(["one", "two"]);
+    redisMock.get
+      .mockResolvedValueOnce(serializer.stringify(execution))
+      .mockResolvedValueOnce(serializer.stringify({ ...execution, id: "two" }));
+    redisMock.hgetall.mockResolvedValue({
+      first: serializer.stringify({ id: "first", executionId: "one" }),
+      second: serializer.stringify({ id: "second", executionId: "one" }),
+      third: serializer.stringify({ id: "third", executionId: "two" }),
+      scheduled: serializer.stringify({ id: "scheduled", type: "scheduled" }),
+    });
+    expect(await store.collectCompletedHistory(now, 2)).toBe(2);
+    expect(redisMock.hgetall).toHaveBeenCalledTimes(1);
+    expect(
+      redisMock.eval.mock.calls.map((args) => JSON.parse(args[17] as string)),
+    ).toEqual([["first", "second"], ["third"]]);
+  });
+
+  it.each(["retain", "postpone"])(
+    "rechecks a policy changed to %s after index selection",
+    async (policy) => {
+      const { store, redisMock } = harness;
+      const current: Execution = {
+        ...execution,
+        retention: {
+          onComplete: policy === "retain" ? "retain" : { afterMs: 1000 },
+        },
+      };
+      redisMock.zrangebyscore.mockResolvedValue(["one"]);
+      redisMock.get.mockResolvedValue(serializer.stringify(current));
+      expect(await store.collectCompletedHistory(now, 1)).toBe(0);
+      expect(redisMock.eval).not.toHaveBeenCalled();
+      expect(redisMock.hgetall).not.toHaveBeenCalled();
+      expect(redisMock.zrem).not.toHaveBeenCalled();
+    },
+  );
 });

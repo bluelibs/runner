@@ -1,6 +1,7 @@
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
 import type { Execution, Timer } from "../core/types";
 import { check } from "../../../tools/check";
+import { collectionDeadline } from "../core/retention";
 
 /** One Lua commit serializes collection against lifecycle/operator writes. */
 export async function collectCompletedHistory(
@@ -19,6 +20,7 @@ export async function collectCompletedHistory(
   );
   check(ids, [String]);
   let collected = 0;
+  let timersByExecution: Map<string, string[]> | undefined;
   for (const id of ids as string[]) {
     const raw = runtime.parseRedisString(
       await runtime.redis.get(runtime.executionKey(id)),
@@ -28,6 +30,9 @@ export async function collectCompletedHistory(
       continue;
     }
     const execution = runtime.serializer.parse<Execution>(raw);
+    // The policy may have changed after this execution was selected from the index.
+    const deadline = collectionDeadline(execution);
+    if (deadline === undefined || deadline > now.getTime()) continue;
     const signalIds = await runtime.scanSetMembers(runtime.signalIdsKey(id));
     const detailKeys = signalIds.flatMap((signal) => [
       runtime.signalKey(id, signal),
@@ -35,12 +40,8 @@ export async function collectCompletedHistory(
       runtime.signalWaiterPayloadKey(id, signal),
       runtime.signalWaiterStepKey(id, signal),
     ]);
-    const timerValues = runtime.parseHashValues<Timer>(
-      await runtime.redis.hgetall(runtime.timersKey()),
-    );
-    const timerIds = timerValues
-      .filter((timer) => timer.executionId === id)
-      .map((timer) => timer.id);
+    timersByExecution ??= await readTimersByExecution(runtime);
+    const timerIds = timersByExecution.get(id) ?? [];
     const compacted = runtime.serializer.stringify({
       ...execution,
       input: undefined,
@@ -93,4 +94,20 @@ export async function collectCompletedHistory(
     if (outcome === 1) collected++;
   }
   return collected;
+}
+
+async function readTimersByExecution(
+  runtime: RedisStoreRuntime,
+): Promise<Map<string, string[]>> {
+  const timers = runtime.parseHashValues<Timer>(
+    await runtime.redis.hgetall(runtime.timersKey()),
+  );
+  const grouped = new Map<string, string[]>();
+  for (const timer of timers) {
+    if (timer.executionId === undefined) continue;
+    const ids = grouped.get(timer.executionId) ?? [];
+    ids.push(timer.id);
+    grouped.set(timer.executionId, ids);
+  }
+  return grouped;
 }

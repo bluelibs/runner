@@ -6,50 +6,53 @@ import { MemoryStore } from "../../../durable/store/MemoryStore";
 const logs = { printThreshold: null } as const;
 
 describe("durable event identity", () => {
-  it("links a child routed to a different durable resource to its emitting parent", async () => {
-    const parentStore = new MemoryStore();
-    const childStore = new MemoryStore();
-    const parents = durableResource.fork("parents");
-    const children = durableResource.fork("children");
-    const event = r
-      .event("created")
-      .tags([tags.durableEvent.with({ durable: children })])
-      .build();
-    const parent = r
-      .task("parent")
-      .dependencies({ emit: event, parents })
-      .run(async (_, { emit, parents }) => {
-        await emit(undefined, { stepId: "create", idempotencyKey: "child" });
-        await parents.use().sleep(1, { stepId: "replay" });
-        return "done";
-      })
-      .build();
-    const runtime = await run(
-      r
-        .resource("app")
-        .register([
-          resources.durable,
-          parents.with({ store: parentStore, polling: { interval: 5 } }),
-          children.with({ store: childStore }),
-          resources.durableEventBridge,
-          event,
-          parent,
-        ])
-        .build(),
-      { logs },
-    );
-    try {
-      const result = await runtime
-        .getResourceValue(parents)
-        .startAndWait(parent);
-      expect(await childStore.listExecutions()).toHaveLength(1);
-      expect((await childStore.listExecutions())[0].parentExecutionId).toBe(
-        result.durable.executionId,
+  it.each([undefined, "child"])(
+    "links and deduplicates cross-backend children with idempotency key %s",
+    async (idempotencyKey) => {
+      const parentStore = new MemoryStore();
+      const childStore = new MemoryStore();
+      const parents = durableResource.fork("parents");
+      const children = durableResource.fork("children");
+      const event = r
+        .event("created")
+        .tags([tags.durableEvent.with({ durable: children })])
+        .build();
+      const parent = r
+        .task("parent")
+        .dependencies({ emit: event, parents })
+        .run(async (_, { emit, parents }) => {
+          await emit(undefined, { stepId: "create", idempotencyKey });
+          await parents.use().sleep(1, { stepId: "replay" });
+          return "done";
+        })
+        .build();
+      const runtime = await run(
+        r
+          .resource("app")
+          .register([
+            resources.durable,
+            parents.with({ store: parentStore, polling: { interval: 5 } }),
+            children.with({ store: childStore }),
+            resources.durableEventBridge,
+            event,
+            parent,
+          ])
+          .build(),
+        { logs },
       );
-    } finally {
-      await runtime.dispose();
-    }
-  });
+      try {
+        const result = await runtime
+          .getResourceValue(parents)
+          .startAndWait(parent);
+        expect(await childStore.listExecutions()).toHaveLength(1);
+        expect((await childStore.listExecutions())[0].parentExecutionId).toBe(
+          result.durable.executionId,
+        );
+      } finally {
+        await runtime.dispose();
+      }
+    },
+  );
 
   it("honors explicit emission deduplication without requiring a key", async () => {
     const store = new MemoryStore();
