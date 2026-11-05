@@ -50,7 +50,7 @@ describe("rpcLanesResource retry", () => {
     await runtime.dispose();
   });
 
-  it("retries with the default policy when no retry is configured", async () => {
+  it("does not repeat a timed-out operation without explicit retry configuration", async () => {
     const lane = r.rpcLane("tests-rpc-lanes-retry-default-lane").build();
     const task = defineTask({
       id: "tests-rpc-lanes-retry-default-task",
@@ -83,7 +83,7 @@ describe("rpcLanesResource retry", () => {
     await expect(runtime.runTask(task as any)).rejects.toMatchObject({
       code: "TIMEOUT",
     });
-    expect(remoteTask).toHaveBeenCalledTimes(3);
+    expect(remoteTask).toHaveBeenCalledTimes(1);
     await runtime.dispose();
   });
 

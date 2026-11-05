@@ -89,6 +89,7 @@ export class LocalSimulatedEventLaneTransport {
       };
 
       await this.diagnostics.logEnqueue({
+        messageId: message.id,
         eventId,
         laneId: eventRoute.lane.id,
         profile: this.context.profile,

@@ -11,6 +11,7 @@ import {
   httpContextSerializationError,
   httpEventWithResultUnavailableError,
 } from "./errors";
+import { postFetch } from "./remote-lanes/http/postFetch";
 import { RUNNER_ASYNC_CONTEXT_HEADER } from "./remote-lanes/http/constants";
 
 /**
@@ -191,19 +192,16 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       cfg.contexts,
     );
     if (contextHeader) headers[RUNNER_ASYNC_CONTEXT_HEADER] = contextHeader;
-    if (cfg.onRequest) await cfg.onRequest({ url, headers });
-    const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
-    const res = await fetchImpl(url, {
-      method: "POST",
-      body: fd,
+    return postFetch<ProtocolEnvelope<any>>({
+      fetch: cfg.fetchImpl ?? globalThis.fetch,
+      url,
       headers,
+      body: () => fd,
       signal,
-      // Security: prevent automatic redirects from forwarding auth headers.
-      redirect: "error",
+      timeoutMs: cfg.timeoutMs,
+      serializer: cfg.serializer,
+      onRequest: cfg.onRequest,
     });
-    const text = await res.text();
-    const json = text ? cfg.serializer.parse(text) : undefined;
-    return json as ProtocolEnvelope<any>;
   }
 
   return {

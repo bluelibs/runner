@@ -662,7 +662,7 @@ export const eventLaneRetryPolicyInvalidError = error<
 export const rpcLaneRetryPolicyInvalidError = error<
   {
     laneId: string;
-    field: "maxAttempts" | "delayMs";
+    field: "maxAttempts" | "delayMs" | "totalTimeoutMs";
     value: string;
   } & DefaultErrorType
 >("rpcLane-retryPolicyInvalid")
@@ -673,14 +673,16 @@ export const rpcLaneRetryPolicyInvalidError = error<
   .remediation(({ field }) =>
     field === "maxAttempts"
       ? "Use a positive integer for maxAttempts (for example: 1, 2, 3...). Use 1 to disable retries."
-      : "Use a non-negative number of milliseconds or a (attempt, error) => number strategy for delayMs.",
+      : field === "totalTimeoutMs"
+        ? "Use a positive integer totalTimeoutMs no larger than 2147483647 milliseconds."
+        : "Use a non-negative number of milliseconds or a (attempt, error) => number strategy for delayMs.",
   )
   .build();
 
 /** Invalid retry policy supplied to the standalone communicator wrapper. */
 export const rpcLaneRetryPolicyInvalidInputError = error<
   {
-    field: "maxAttempts" | "delayMs";
+    field: "maxAttempts" | "delayMs" | "totalTimeoutMs";
     value: string;
   } & DefaultErrorType
 >("rpcLane-retryPolicyInvalidInput")
@@ -691,7 +693,9 @@ export const rpcLaneRetryPolicyInvalidInputError = error<
   .remediation(({ field }) =>
     field === "maxAttempts"
       ? "Use a positive integer for maxAttempts (for example: 1, 2, 3...). Use 1 to disable retries."
-      : "Use a non-negative number of milliseconds or a (attempt, error) => number strategy for delayMs.",
+      : field === "totalTimeoutMs"
+        ? "Use a positive integer totalTimeoutMs no larger than 2147483647 milliseconds."
+        : "Use a non-negative number of milliseconds or a (attempt, error) => number strategy for delayMs.",
   )
   .build();
 

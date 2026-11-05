@@ -7,7 +7,6 @@ type CreateConsumeHandlerOptions<TMessage> = {
   decode: (message: ConsumeMessage) => TMessage | null;
   resolveMessageId: (message: TMessage) => string | undefined;
   parseFailureLogMessage: string;
-  handlerFailureLogMessage: string;
   reportError: (message: string, data: Record<string, unknown>) => void;
   normalizeError: (error: unknown) => Error;
   settleWithNack: (
@@ -15,8 +14,11 @@ type CreateConsumeHandlerOptions<TMessage> = {
     msg: ConsumeMessage,
     requeue: boolean,
   ) => void;
-  messageMap: Map<string, ConsumeMessage>;
-  handler: (message: TMessage) => Promise<void>;
+  deliver: (
+    id: string,
+    message: TMessage,
+    raw: ConsumeMessage,
+  ) => Promise<void>;
 };
 
 export function createConsumeHandler<TMessage>({
@@ -24,12 +26,10 @@ export function createConsumeHandler<TMessage>({
   decode,
   resolveMessageId,
   parseFailureLogMessage,
-  handlerFailureLogMessage,
   reportError,
   normalizeError,
   settleWithNack,
-  messageMap,
-  handler,
+  deliver,
 }: CreateConsumeHandlerOptions<TMessage>) {
   return async (msg: ConsumeMessage | null): Promise<void> => {
     if (!msg) {
@@ -59,19 +59,6 @@ export function createConsumeHandler<TMessage>({
       return;
     }
 
-    messageMap.set(messageId, msg);
-    try {
-      await handler(decoded);
-    } catch (error) {
-      reportError(handlerFailureLogMessage, {
-        error: normalizeError(error),
-        messageId,
-      });
-      try {
-        settleWithNack(channel, msg, false);
-      } finally {
-        messageMap.delete(messageId);
-      }
-    }
+    await deliver(messageId, decoded, msg);
   };
 }

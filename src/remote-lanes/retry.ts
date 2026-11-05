@@ -4,14 +4,14 @@ import type {
   RpcLaneRetryPolicy,
 } from "../defs";
 import { rpcLaneRetryPolicyInvalidInputError } from "../errors";
-import { createCancellationErrorFromSignal } from "../tools/abortSignals";
+import { callWithRpcLaneRetry } from "./rpcRetryCall";
 import { exponentialBackoffWithJitterMs } from "../tools/retryDelay";
 import { RemoteLaneTransportError } from "./http/protocol";
 
 /**
  * Default total attempts per lane-routed call, including the first attempt.
  */
-export const DEFAULT_RPC_LANE_MAX_ATTEMPTS = 3;
+export const DEFAULT_RPC_LANE_MAX_ATTEMPTS = 1;
 
 /** Transport error codes retried without inspecting the HTTP status. */
 const RETRYABLE_TRANSPORT_CODES = new Set([
@@ -79,6 +79,7 @@ export function resolveRpcLaneRetryPolicy(
     delayMs:
       policy.delayMs ?? ((attempt) => exponentialBackoffWithJitterMs(attempt)),
     retryIf: policy.retryIf ?? isRetryableRemoteLaneError,
+    totalTimeoutMs: policy.totalTimeoutMs,
   };
 }
 
@@ -94,7 +95,9 @@ export function resolveRpcLaneRetryPolicy(
  */
 export function getRpcLaneRetryPolicyViolation(
   policy: RpcLaneRetryPolicy,
-): { field: "maxAttempts" | "delayMs"; value: string } | undefined {
+):
+  | { field: "maxAttempts" | "delayMs" | "totalTimeoutMs"; value: string }
+  | undefined {
   const { maxAttempts, delayMs } = policy;
   if (
     maxAttempts !== undefined &&
@@ -108,6 +111,15 @@ export function getRpcLaneRetryPolicyViolation(
     (!Number.isFinite(delayMs) || delayMs < 0)
   ) {
     return { field: "delayMs", value: String(delayMs) };
+  }
+
+  if (
+    policy.totalTimeoutMs !== undefined &&
+    (!Number.isInteger(policy.totalTimeoutMs) ||
+      policy.totalTimeoutMs < 1 ||
+      policy.totalTimeoutMs > 2_147_483_647)
+  ) {
+    return { field: "totalTimeoutMs", value: String(policy.totalTimeoutMs) };
   }
 
   return undefined;
@@ -124,8 +136,7 @@ export function getRpcLaneRetryPolicyViolation(
  * single-use inputs.
  *
  * @param communicator The transport adapter to wrap.
- * @param policy Retry policy; omit for the default (3 attempts, backoff,
- * transport failures only).
+ * @param policy Retry policy; omit for the default (one attempt; retries require explicit maxAttempts).
  * @returns Communicator with identical methods plus retry behavior.
  */
 export function createRetryingRpcLaneCommunicator(
@@ -137,85 +148,23 @@ export function createRetryingRpcLaneCommunicator(
   const task = communicator.task;
   if (task) {
     wrapped.task = (id, input, options) =>
-      attemptRpcLaneCall(resolved, options?.signal, () =>
-        task.call(communicator, id, input, options),
+      callWithRpcLaneRetry(resolved, options, (activeOptions) =>
+        task.call(communicator, id, input, activeOptions),
       );
   }
   const event = communicator.event;
   if (event) {
     wrapped.event = (id, payload, options) =>
-      attemptRpcLaneCall(resolved, options?.signal, () =>
-        event.call(communicator, id, payload, options),
+      callWithRpcLaneRetry(resolved, options, (activeOptions) =>
+        event.call(communicator, id, payload, activeOptions),
       );
   }
   const eventWithResult = communicator.eventWithResult;
   if (eventWithResult) {
     wrapped.eventWithResult = (id, payload, options) =>
-      attemptRpcLaneCall(resolved, options?.signal, () =>
-        eventWithResult.call(communicator, id, payload, options),
+      callWithRpcLaneRetry(resolved, options, (activeOptions) =>
+        eventWithResult.call(communicator, id, payload, activeOptions),
       );
   }
   return wrapped;
-}
-
-async function attemptRpcLaneCall<T>(
-  policy: ResolvedRpcLaneRetryPolicy,
-  signal: AbortSignal | undefined,
-  call: () => Promise<T>,
-): Promise<T> {
-  let retries = 0;
-  while (true) {
-    try {
-      return await call();
-    } catch (error) {
-      if (signal?.aborted) {
-        throw error;
-      }
-      if (!policy.retryIf(error) || retries + 1 >= policy.maxAttempts) {
-        throw error;
-      }
-      const delay =
-        typeof policy.delayMs === "function"
-          ? policy.delayMs(retries, error)
-          : policy.delayMs;
-      if (delay > 0) {
-        await delayWithAbort(delay, signal);
-      }
-      // A policy callback or the completed delay may have cancelled the call.
-      if (signal?.aborted) {
-        throw createCancellationErrorFromSignal(signal);
-      }
-      retries += 1;
-    }
-  }
-}
-
-function delayWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
-  if (!signal) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-  const activeSignal = signal;
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const cleanup = () => {
-      clearTimeout(timer);
-      activeSignal.removeEventListener("abort", onAbort);
-    };
-    const settle = (complete: () => void) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      cleanup();
-      complete();
-    };
-    function onAbort() {
-      settle(() => reject(createCancellationErrorFromSignal(activeSignal)));
-    }
-    const timer = setTimeout(() => settle(resolve), ms);
-    activeSignal.addEventListener("abort", onAbort, { once: true });
-    if (activeSignal.aborted) {
-      onAbort();
-    }
-  });
 }

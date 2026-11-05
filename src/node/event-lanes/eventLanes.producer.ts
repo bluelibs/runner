@@ -70,7 +70,7 @@ export function registerEventLaneProducerInterceptor(options: {
       },
     });
 
-    await binding.queue.enqueue({
+    const messageId = await binding.queue.enqueue({
       laneId: eventRoute.lane.id,
       eventId: resolvedEmissionId,
       payload,
@@ -80,6 +80,7 @@ export function registerEventLaneProducerInterceptor(options: {
     });
     emission.stopPropagation();
     await diagnostics.logEnqueue({
+      messageId,
       eventId: resolvedEmissionId,
       laneId: eventRoute.lane.id,
       profile: context.profile,

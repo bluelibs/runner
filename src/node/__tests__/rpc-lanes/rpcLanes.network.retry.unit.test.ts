@@ -85,7 +85,7 @@ function eventRouting(communicator: {
             communicator,
             auth: undefined,
             asyncContextAllowList: undefined,
-            retry: resolveRpcLaneRetryPolicy({ delayMs: 0 }),
+            retry: resolveRpcLaneRetryPolicy({ maxAttempts: 3, delayMs: 0 }),
           },
         ],
       ]),
@@ -124,6 +124,26 @@ function testEmission(data: unknown) {
 }
 
 describe("rpc-lanes network retry", () => {
+  it("retains the overall budget for a non-replayable upload", async () => {
+    jest.useFakeTimers();
+    try {
+      const task = jest.fn(async () => new Promise<never>(() => {}));
+      const run = taskRouting({
+        communicator: { task },
+        retry: { maxAttempts: 3, totalTimeoutMs: 10 },
+      });
+      const outcome = run(Readable.from(["upload"])).catch(
+        (error: unknown) => error,
+      );
+      await jest.advanceTimersByTimeAsync(10);
+      await expect(outcome).resolves.toMatchObject({ code: "TIMEOUT" });
+      expect(task).toHaveBeenCalledTimes(1);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("retries task calls on retryable failures", async () => {
     const task = jest.fn(async () => {
       if (task.mock.calls.length < 3) {
@@ -131,7 +151,10 @@ describe("rpc-lanes network retry", () => {
       }
       return "recovered";
     });
-    const run = taskRouting({ communicator: { task }, retry: { delayMs: 0 } });
+    const run = taskRouting({
+      communicator: { task },
+      retry: { maxAttempts: 3, delayMs: 0 },
+    });
 
     await expect(run({ a: 1 })).resolves.toBe("recovered");
     expect(task).toHaveBeenCalledTimes(3);
@@ -208,7 +231,10 @@ describe("rpc-lanes network retry", () => {
     const task = jest.fn(async () => {
       throw transportError("TIMEOUT");
     });
-    const run = taskRouting({ communicator: { task }, retry: { delayMs: 0 } });
+    const run = taskRouting({
+      communicator: { task },
+      retry: { maxAttempts: 3, delayMs: 0 },
+    });
     const controller = new AbortController();
     controller.abort();
 

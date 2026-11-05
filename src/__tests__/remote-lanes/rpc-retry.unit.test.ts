@@ -72,9 +72,9 @@ describe("isRetryableRemoteLaneError", () => {
 });
 
 describe("resolveRpcLaneRetryPolicy", () => {
-  it("applies transport-safe defaults", () => {
+  it("does not repeat operations by default", () => {
     const resolved = resolveRpcLaneRetryPolicy();
-    expect(resolved.maxAttempts).toBe(3);
+    expect(resolved.maxAttempts).toBe(1);
     expect(resolved.retryIf).toBe(isRetryableRemoteLaneError);
     expect(typeof resolved.delayMs).toBe("function");
     const delay = (resolved.delayMs as (attempt: number) => number)(0);
@@ -103,15 +103,20 @@ describe("resolveRpcLaneRetryPolicy", () => {
   });
 
   it("reports invalid fixed delays without rejecting delay strategies", () => {
-    expect(getRpcLaneRetryPolicyViolation({ delayMs: -1 })).toEqual({
+    expect(
+      getRpcLaneRetryPolicyViolation({ maxAttempts: 3, delayMs: -1 }),
+    ).toEqual({
       field: "delayMs",
       value: "-1",
     });
     expect(
-      getRpcLaneRetryPolicyViolation({ delayMs: Number.POSITIVE_INFINITY }),
+      getRpcLaneRetryPolicyViolation({
+        maxAttempts: 3,
+        delayMs: Number.POSITIVE_INFINITY,
+      }),
     ).toEqual({ field: "delayMs", value: "Infinity" });
     expect(
-      getRpcLaneRetryPolicyViolation({ delayMs: () => 0 }),
+      getRpcLaneRetryPolicyViolation({ maxAttempts: 3, delayMs: () => 0 }),
     ).toBeUndefined();
   });
 });

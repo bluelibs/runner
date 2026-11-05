@@ -10,6 +10,8 @@ export interface RemoteLaneBindingAuthJwtHmac {
   mode?: "jwt_hmac";
   header?: string;
   tokenTtlMs?: number;
+  /** Queued event token lifetime; defaults to tokenTtlMs when set, otherwise 24 hours. */
+  messageTtlMs?: number;
   clockSkewMs?: number;
   /**
    * Shared secret used for both produce+consume paths.
@@ -25,6 +27,8 @@ export interface RemoteLaneBindingAuthJwtAsymmetric {
   header?: string;
   algorithm?: RemoteLaneJwtAsymmetricAlgorithm;
   tokenTtlMs?: number;
+  /** Queued event token lifetime; defaults to tokenTtlMs when set, otherwise 24 hours. */
+  messageTtlMs?: number;
   clockSkewMs?: number;
   /**
    * Private key used to sign outbound lane tokens.

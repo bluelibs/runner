@@ -247,28 +247,26 @@ describe("node: RabbitMQTransport resilience", () => {
     ).rejects.toThrow("transport not initialized");
   });
 
-  it("logs nack-settlement failures", () => {
+  it("logs nack-settlement failures through the malformed-message boundary", async () => {
     const loggerError = jest.fn();
-    const transport = createTransport({
-      logger: { error: loggerError },
-    });
-
-    const failingChannel = {
-      nack: () => {
+    const channel = createChannelMock({
+      nack: jest.fn(() => {
         throw "nack-failed";
-      },
-    };
-    const message = { content: Buffer.from("hello") };
-
-    (transport as any).settleWithNack(failingChannel, message, true);
-
+      }),
+    });
+    jest
+      .spyOn(amqplibModule, "connectAmqplib")
+      .mockResolvedValue(createConnectionMock(channel));
+    const transport = createTransport({ logger: { error: loggerError } });
+    await transport.init();
+    await transport.consume(async () => {});
+    const onMessage = channel.consume.mock.calls[0][1];
+    await onMessage({ content: Buffer.from("invalid-json") });
     expect(loggerError).toHaveBeenCalledWith(
       "RabbitMQ transport failed to nack message.",
-      expect.objectContaining({
-        requeue: true,
-        error: expect.any(Error),
-      }),
+      expect.objectContaining({ requeue: false, error: expect.any(Error) }),
     );
+    await transport.dispose();
   });
 
   it("swallows close failures during dispose", async () => {

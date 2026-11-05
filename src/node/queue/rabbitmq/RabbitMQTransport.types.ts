@@ -28,7 +28,14 @@ export type Channel = {
   ack: (msg: ConsumeMessage) => unknown;
   nack: (msg: ConsumeMessage, allUpTo?: boolean, requeue?: boolean) => unknown;
   close: () => Promise<unknown>;
-  on?: (event: "close" | "error", handler: (error?: unknown) => void) => void;
+  on?: (
+    event: "close" | "error" | "drain",
+    handler: (error?: unknown) => void,
+  ) => void;
+  removeListener?: (
+    event: "close" | "error" | "drain",
+    handler: (error?: unknown) => void,
+  ) => void;
 };
 
 export type ChannelModel = {

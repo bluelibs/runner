@@ -6,6 +6,7 @@ import { EVENT_LANES_RESOURCE_ID } from "./eventLanes.resource";
 const EVENT_LANES_LOG_SOURCE = EVENT_LANES_RESOURCE_ID;
 
 type EventLanesEnqueueLogInput = {
+  messageId: string;
   eventId: string;
   laneId: string;
   profile: string;

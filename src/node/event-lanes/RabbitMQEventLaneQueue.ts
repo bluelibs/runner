@@ -187,30 +187,37 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
   }
 
   async ack(messageId: string): Promise<void> {
-    this.messagesById.delete(messageId);
+    const message = this.transport.getDeliveryMessage(messageId);
+    if (this.messagesById.get(messageId) === message)
+      this.messagesById.delete(messageId);
     await this.transport.ack(messageId);
   }
 
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
-    const message = this.messagesById.get(messageId);
+    const message = this.transport.getDeliveryMessage(messageId);
 
     if (!requeue) {
-      this.messagesById.delete(messageId);
+      if (this.messagesById.get(messageId) === message)
+        this.messagesById.delete(messageId);
       await this.transport.nack(messageId, false);
       return;
     }
 
     if (message) {
-      const messageForRetry: EventLaneMessage = {
-        ...message,
-        attempts: message.attempts,
-      };
+      await this.transport.withDelivery(messageId, async () => {
+        const messageForRetry: EventLaneMessage = {
+          ...message,
+          attempts: message.attempts,
+        };
 
-      await this.transport.publish(
-        Buffer.from(JSON.stringify(messageForRetry)),
-      );
-      this.messagesById.delete(messageId);
-      await this.transport.ack(messageId);
+        await this.transport.publish(
+          Buffer.from(JSON.stringify(messageForRetry)),
+        );
+        if (this.messagesById.get(messageId) === message) {
+          this.messagesById.delete(messageId);
+        }
+        await this.transport.ack(messageId);
+      });
       return;
     }
 

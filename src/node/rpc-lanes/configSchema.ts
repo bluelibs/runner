@@ -27,6 +27,7 @@ const rpcLaneRetryPolicyPattern = Match.ObjectIncluding({
   maxAttempts: Match.Optional(Number),
   delayMs: Match.Optional(Match.OneOf(Number, Function)),
   retryIf: Match.Optional(Function),
+  totalTimeoutMs: Match.Optional(Number),
 });
 
 const rpcLanesResourceConfigPattern = Match.ObjectIncluding({
