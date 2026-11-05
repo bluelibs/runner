@@ -121,6 +121,8 @@
       "createNodeFile",
       "createRunnerDurableRuntime",
       "disposeDurableService",
+      "durableEventBridgeResource",
+      "durableEventTag",
       "durableEvents",
       "durableEventsArray",
       "durableResource",

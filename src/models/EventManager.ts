@@ -18,6 +18,8 @@ import { EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS } from "../types/executionCo
 import { IHook } from "../types/hook";
 import { RuntimeCallSource, runtimeSource } from "../types/runtimeSource";
 import {
+  IListenerStorage,
+  EventDispatchAdapter,
   EventEmissionInterceptor,
   HandlerOptionsDefaults,
   HookExecutionInterceptor,
@@ -59,6 +61,7 @@ function hasEmissionSource(
  * Listeners are processed in order based on their priority.
  */
 export class EventManager {
+  private dispatchAdapter?: EventDispatchAdapter;
   private emissionInterceptors: EventEmissionInterceptor[] = [];
   private hookInterceptors: HookExecutionInterceptor[] = [];
 
@@ -207,6 +210,24 @@ export class EventManager {
     return this.registry.hasListeners(eventDefinition);
   }
 
+  /** Installs one platform-owned dispatch bridge before runtime locking. */
+  setDispatchAdapter(adapter: EventDispatchAdapter): void {
+    this.checkLock();
+    if (this.dispatchAdapter) {
+      validationError.throw({
+        subject: "Event dispatch bridge",
+        id: "eventManager",
+        originalError: "Only one event dispatch bridge may be registered.",
+      });
+    }
+    this.dispatchAdapter = adapter;
+  }
+
+  /** Snapshots the effective ordered hook registrations for a definition. */
+  getDispatchListeners(event: IEvent<any>): readonly IListenerStorage[] {
+    return this.registry.getListenersForEmit(event).slice();
+  }
+
   // ---- Interceptor API ----
 
   intercept(interceptor: EventEmissionInterceptor): void {
@@ -258,6 +279,7 @@ export class EventManager {
   }
 
   dispose(): void {
+    this.dispatchAdapter = undefined;
     this.registry.clear();
     this.emissionInterceptors.length = 0;
     this.hookInterceptors.length = 0;
@@ -355,7 +377,11 @@ export class EventManager {
       );
 
       // Fast path: no listeners and no interceptors — no executor needed.
-      if (allListeners.length === 0 && interceptors.length === 0) {
+      if (
+        allListeners.length === 0 &&
+        interceptors.length === 0 &&
+        !this.dispatchAdapter
+      ) {
         return {
           emission: event as IEventEmission<TInput>,
           report: createEmptyReport(0),
@@ -371,6 +397,8 @@ export class EventManager {
         emissionConfig.failureMode,
         interceptors,
         event,
+        this.dispatchAdapter,
+        options,
       );
 
       await context.runInterceptor(0, event);

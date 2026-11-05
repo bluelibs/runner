@@ -1,3 +1,4 @@
+import type { ExecutionRetention } from "../retention";
 import type { IEventDefinition } from "../../../../types/event";
 import type { ITask } from "../../../../types/task";
 import type { IDurableStore } from "./store";
@@ -91,6 +92,17 @@ export type UpdateScheduleOptions =
     };
 
 export interface DurableServiceConfig {
+  /** Default successful execution history retention. */
+  retention?: ExecutionRetention;
+  /** Background history collection; defaults to enabled, every 60 seconds, 100 records. */
+  garbageCollection?: {
+    /** Enables background collection. Defaults to true. */
+    enabled?: boolean;
+    /** Interval between collection passes in milliseconds. Defaults to 60000. */
+    intervalMs?: number;
+    /** Maximum executions collected per pass. Defaults to 100. */
+    batchSize?: number;
+  };
   store: IDurableStore;
   queue?: IDurableQueue;
   eventBus?: IEventBus;
@@ -202,6 +214,8 @@ export interface DurableServiceConfig {
 }
 
 export interface ExecuteOptions {
+  /** Overrides successful execution history retention. */
+  retention?: ExecutionRetention;
   timeout?: number;
   priority?: number;
   /**

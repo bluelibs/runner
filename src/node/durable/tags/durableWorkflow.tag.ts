@@ -1,3 +1,4 @@
+import type { ExecutionRetention } from "../core/retention";
 import { defineTag } from "../../../definers/defineTag";
 import { genericError } from "../../../errors";
 import { Match } from "../../../tools/check";
@@ -21,6 +22,8 @@ export interface DurableWorkflowRateLimit {
 export type DurableWorkflowConcurrency = number | DurableWorkflowRateLimit;
 
 export interface DurableWorkflowTagConfig {
+  /** Overrides successful execution history retention for this workflow. */
+  retention?: ExecutionRetention;
   /**
    * Optional stable durable workflow key persisted across refactors.
    * When omitted, durable falls back to the canonical runtime task id.
@@ -56,6 +59,11 @@ const durableWorkflowConfigPattern = Match.compile({
   key: Match.Optional(Match.NonEmptyString),
   category: Match.Optional(String),
   metadata: Match.Optional(Object),
+  retention: Match.Optional({
+    onComplete: Match.OneOf("retain", "delete", {
+      afterMs: Match.Range({ min: 0 }),
+    }),
+  }),
   signals: Match.Optional(
     Match.ArrayOf(Match.ObjectIncluding({ id: Match.NonEmptyString })),
   ),

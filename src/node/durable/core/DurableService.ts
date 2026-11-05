@@ -16,6 +16,7 @@ import type { Schedule } from "./types";
 import type { IEventDefinition } from "../../../types/event";
 import type { ITask } from "../../../types/task";
 import { createExecutionId } from "./utils";
+import { HistoryCollector } from "./HistoryCollector";
 import { readExistingExecutionState } from "./durable-context/state";
 
 import {
@@ -62,6 +63,7 @@ export class DurableService implements IDurableService {
   private readonly pollingManager: PollingManager;
   private readonly recoveryManager: RecoveryManager;
   private readonly logger: Logger;
+  private readonly historyCollector: HistoryCollector;
   private readonly cooldownHandlers: Array<() => Promise<void> | void> = [];
   private readonly stopHandlers: Array<() => Promise<void>> = [];
   private recoveryStopRegistered = false;
@@ -80,6 +82,7 @@ export class DurableService implements IDurableService {
       });
     this.logger = baseLogger.with({ source: "durable.service" });
     this.workerId = config.workerId ?? createExecutionId();
+    this.historyCollector = new HistoryCollector(config, this.logger);
 
     // Initialize task registry
     this.taskRegistry = new TaskRegistry(
@@ -135,6 +138,7 @@ export class DurableService implements IDurableService {
         audit: config.audit,
         determinism: config.determinism,
         execution: config.execution,
+        retention: config.retention,
       },
       this.taskRegistry,
       this.auditLogger,
@@ -184,6 +188,11 @@ export class DurableService implements IDurableService {
     });
   }
 
+  /** @internal Starts lifecycle-owned retention maintenance. */
+  startHistoryCollection(): void {
+    this.historyCollector.start();
+  }
+
   // ─── Public API (delegating to managers) ───────────────────────────────────
 
   registerTask<TInput, TResult>(
@@ -208,6 +217,7 @@ export class DurableService implements IDurableService {
     }
 
     this.lifecycleState = "cooldown";
+    await this.historyCollector.stop();
     let firstError: unknown = null;
 
     while (this.cooldownHandlers.length > 0) {
@@ -265,6 +275,7 @@ export class DurableService implements IDurableService {
     if (task === undefined) {
       this.assertCanStartBackgroundProcessing("DurableService.start()");
       this.pollingManager.start();
+      this.historyCollector.start();
       return;
     }
 
@@ -589,6 +600,7 @@ export async function initDurableService(
       eventBusInitialized = true;
     }
     await service.startLiveCancellationListener();
+    service.startHistoryCollection();
     if (config.recovery?.onStartup === true) {
       service.startRecoveryOnInit();
     }

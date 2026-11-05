@@ -52,6 +52,10 @@ export interface IEventEmitReport {
  * Runtime options for a single event emission.
  */
 export interface IEventEmitOptions {
+  /** Stable call-site identity when emitting a durable event from a workflow. */
+  stepId?: string;
+  /** Optional domain deduplication key for durable event submissions. */
+  idempotencyKey?: string;
   /**
    * Controls error behavior during listener execution.
    * - fail-fast (default): throw on first failure.
@@ -201,6 +205,15 @@ export interface IEventEmission<TPayload = any> {
    * Whether this emission runs in transactional listener mode.
    */
   transactional: boolean;
+  /** Stable operation identities present when the durable event bridge runs a hook. */
+  durable?: {
+    /** Persisted workflow execution identity. */
+    executionId: string;
+    /** Stable key for deduplicating the hook's external effect. */
+    stepKey: string;
+    /** Separate stable key for deduplicating compensation. */
+    compensationKey: string;
+  };
   /**
    * Stops propagation to remaining event listeners.
    */

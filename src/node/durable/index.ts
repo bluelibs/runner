@@ -58,3 +58,12 @@ export { memoryDurableResource } from "./resources/memoryDurableResource";
 export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";
 export { redisDurableResource } from "./resources/redisDurableResource";
 export type { RedisDurableResourceConfig } from "./resources/redisDurableResource";
+
+export { durableEventBridgeResource } from "./bridge/resource";
+export { durableEventTag } from "./bridge/tag";
+export type {
+  DurableEventBridgeConfig,
+  DurableEventConfig,
+  DurableEventResource,
+} from "./bridge/types";
+export type { ExecutionRetention } from "./core/retention";

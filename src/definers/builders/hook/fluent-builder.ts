@@ -101,6 +101,14 @@ export function makeHookBuilder<
       return makeHookBuilder<TDeps, TOn, TMeta, true>(next);
     },
 
+    compensate(
+      fn: NonNullable<IHookDefinition<TDeps, any, TMeta>["compensate"]>,
+    ) {
+      return makeHookBuilder<TDeps, TOn, TMeta, true>(
+        clone(state, { compensate: fn }),
+      );
+    },
+
     throws(list: ThrowsList) {
       const next = clone(state, { throws: list });
       return makeHookBuilder<TDeps, TOn, TMeta, THasRun>(next);

@@ -33,6 +33,7 @@ export function defineHook<
     on: hookDef.on,
     order: hookDef.order,
     run: hookDef.run,
+    compensate: hookDef.compensate,
     meta: hookDef.meta || ({} as TMeta),
     tags: hookDef.tags || [],
     throws: normalizeThrows({ kind: "hook", id: hookDef.id }, hookDef.throws),

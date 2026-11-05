@@ -9,6 +9,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Entry Points And Layout
 
+- `RedisStore.retention.ts` and `memory-store/retention.ts` collect due success history while retaining completion receipts. Collection must coordinate with execution ownership and preserve waiter/parent results. Redis groups timer metadata once per batch and reschedules blocked entries so they cannot starve later work.
 - `MemoryStore.ts`: facade over instance-owned `memory-store/` operations.
 - `PersistentMemoryStore.ts`: adds serialized snapshots and local restart persistence.
 - `RedisStore.ts`: facade delegating to `RedisStore.*` operations.
@@ -26,6 +27,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Keep exact execution/workflow/step/signal/schedule identities. Backend prefixes are storage namespaces.
 - Create execution plus idempotency claim atomically; losing a race returns the existing execution id.
 - Status-conditional saves must not overwrite a competing lifecycle transition.
+- History collection rechecks the current retention deadline after selecting due IDs; the Redis commit then compares the exact record again. A policy extension must win in either race window.
 - Continuation commits close the prior run, link the successor, and migrate queued signals together.
 - Signal backlog remains FIFO and retains repeated identical signals; history and backlog are different records.
 - Completing a waiter must commit the step, remove the waiter, and handle its timeout consistently.
@@ -47,4 +49,5 @@ Start with `MemoryStore.snapshot.test.ts`, `MemoryStore.continuation.test.ts`,
 `RedisStore.executionIndex.test.ts`, and signal/waiter/lock suites for the affected record.
 Exercise both memory and Redis implementations when changing shared store semantics.
 Real Redis suites have explicit infrastructure gates; mocked tests alone do not verify live atomicity.
+`RedisStore.retention.real.integration.test.ts` covers operator races, ownership/waiter/parent protection, and collection fairness.
 For code changes run focused tests then root QA; guide-only edits follow the docs exception.

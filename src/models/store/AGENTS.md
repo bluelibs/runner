@@ -15,6 +15,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
   ownership tracking, tags, and graph construction.
 - `StoreLookup.ts` distinguishes extracting a requested ID from finding a
   registered canonical ID. A candidate alone does not prove registration.
+- The EventManager facade also exposes dispatch-adapter installation and effective hook snapshots for Node integrations.
 - `StoreBootstrapCoordinator.ts` registers framework/app definitions, applies
   overrides, validates, and starts dependency processing.
 - `StoreLifecycleCoordinator.ts` owns ready/cooldown/dispose waves and resource

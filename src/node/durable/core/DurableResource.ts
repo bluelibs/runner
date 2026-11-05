@@ -74,6 +74,16 @@ export class DurableResource implements IDurableResource {
     return this.operatorInstance;
   }
 
+  /** @internal Backend access for integrations sharing durable execution ownership. */
+  getStore(): IDurableStore {
+    return this.requireStoreForRepository();
+  }
+
+  /** Returns this runtime's active workflow context, when called within one. */
+  current(): IDurableContext | undefined {
+    return this.contextStorage.getStore();
+  }
+
   use(): IDurableContext {
     const durableContext = this.contextStorage.getStore();
     if (!durableContext) {

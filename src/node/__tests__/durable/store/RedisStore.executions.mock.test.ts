@@ -104,6 +104,7 @@ describe("durable: RedisStore executions (mock)", () => {
       "",
       expect.any(String),
       expect.any(String),
+      -1,
     );
 
     redisMock.eval.mockResolvedValueOnce(123 as any);
@@ -156,6 +157,7 @@ describe("durable: RedisStore executions (mock)", () => {
       "",
       expect.any(String),
       expect.any(String),
+      -1,
     );
 
     redisMock.get.mockResolvedValue(serializer.stringify(execution));
@@ -201,6 +203,7 @@ describe("durable: RedisStore executions (mock)", () => {
       "",
       expect.any(String),
       expect.any(String),
+      -1,
     );
 
     await store.saveExecution({
@@ -229,6 +232,7 @@ describe("durable: RedisStore executions (mock)", () => {
       "",
       expect.any(String),
       expect.any(String),
+      -1,
     );
   });
 

@@ -35,6 +35,7 @@ The parent [../AGENTS.md](../AGENTS.md) covers low-level definers.
   an earlier branch's dependencies, metadata, arrays, or eventual built definition.
 - Dependency merge behavior distinguishes config-aware resource dependencies from
   task-style dependencies. Respect explicit replacement options and lazy suppliers.
+- Hook `.run()` infers the receipt consumed by `.compensate()`; preserve that inference through permitted post-run methods.
 - Builder type phases encode ordering: for example task `.run()` closes shape-changing
   methods, while metadata, throws declarations, and `.build()` remain available.
 - Missing required handlers/selectors fail at build time even when JavaScript callers

@@ -98,9 +98,15 @@ export interface HookFluentBuilderWithOn<
   /** Declare which typed errors this hook may throw (declarative only). */
   throws(list: ThrowsList): HookFluentBuilderWithOn<TDeps, TOn, TMeta>;
   /** Set the hook's run handler. Required before build(). */
-  run(
-    fn: IHookDefinition<TDeps, ResolvedOn<TOn>, TMeta>["run"],
-  ): HookFluentBuilderAfterRun<TDeps, TOn, TMeta>;
+  run<
+    TOutput extends ReturnType<
+      IHookDefinition<TDeps, ResolvedOn<TOn>, TMeta>["run"]
+    >,
+  >(
+    fn: (
+      ...args: Parameters<IHookDefinition<TDeps, ResolvedOn<TOn>, TMeta>["run"]>
+    ) => TOutput,
+  ): HookFluentBuilderAfterRun<TDeps, TOn, TMeta, Awaited<TOutput>>;
 }
 
 /**
@@ -111,16 +117,26 @@ export interface HookFluentBuilderAfterRun<
   TDeps extends DependencyMapType = {},
   TOn extends ValidOnTarget = ValidOnTarget,
   TMeta extends ITaskMeta = ITaskMeta,
+  TReceipt = any,
 > {
+  /** Registers durable compensation, with the receipt inferred from run(). */
+  compensate(
+    fn: (
+      receipt: TReceipt,
+      ...args: Parameters<IHookDefinition<TDeps, ResolvedOn<TOn>, TMeta>["run"]>
+    ) => Promise<void>,
+  ): HookFluentBuilderAfterRun<TDeps, TOn, TMeta, TReceipt>;
   id: string;
   /** Sets hook execution priority; lower numbers run earlier. */
-  order(order: number): HookFluentBuilderAfterRun<TDeps, TOn, TMeta>;
+  order(order: number): HookFluentBuilderAfterRun<TDeps, TOn, TMeta, TReceipt>;
   /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
-  ): HookFluentBuilderAfterRun<TDeps, TOn, TNewMeta>;
+  ): HookFluentBuilderAfterRun<TDeps, TOn, TNewMeta, TReceipt>;
   /** Declare which typed errors this hook may throw (declarative only). */
-  throws(list: ThrowsList): HookFluentBuilderAfterRun<TDeps, TOn, TMeta>;
+  throws(
+    list: ThrowsList,
+  ): HookFluentBuilderAfterRun<TDeps, TOn, TMeta, TReceipt>;
   /**
    * Materializes the final hook definition for registration or reuse.
    *

@@ -1,3 +1,4 @@
+import type { ExecutionRetention } from "./retention";
 /**
  * Maximum buffered (unconsumed) signals per execution+signal key. Senders
  * past this point get an explicit backpressure error instead of growing
@@ -214,6 +215,10 @@ export interface Execution<TInput = unknown, TResult = unknown> {
   current?: DurableExecutionCurrent;
   createdAt: Date;
   updatedAt: Date;
+  /** Admission-time successful history retention policy. */
+  retention?: ExecutionRetention;
+  /** History has been collected; the completion receipt and result remain readable. */
+  historyCollectedAt?: Date;
   completedAt?: Date;
 }
 

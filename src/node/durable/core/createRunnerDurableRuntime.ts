@@ -1,5 +1,6 @@
 import type { DurableServiceConfig } from "./interfaces/service";
 import { initDurableService } from "./DurableService";
+import { runnerDurableContext } from "./runnerContext";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { IDurableContext } from "./interfaces/context";
 import { DurableResource } from "./DurableResource";
@@ -138,7 +139,9 @@ export async function createRunnerDurableRuntime(
       return getDurableWorkflowKey(task, canonicalTaskId);
     },
     contextProvider: (durableContext, fn) =>
-      contextStorage.run(durableContext, fn),
+      runnerDurableContext(deps.runnerStore).run(durableContext, () =>
+        contextStorage.run(durableContext, fn),
+      ),
   });
 
   if (config.roles?.queueConsumer === true && config.queue) {

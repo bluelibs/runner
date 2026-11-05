@@ -1,4 +1,5 @@
 import { createIORedisClient } from "../optionalDeps/ioredis";
+import { collectCompletedHistory } from "./RedisStore.retention";
 import type {
   DurableQueuedSignalRecord,
   DurableExecutionState,
@@ -39,6 +40,10 @@ import * as workflowStateOps from "./RedisStore.workflowState";
 export type { RedisClient, RedisPipeline, RedisStoreConfig };
 
 export class RedisStore implements IDurableStore {
+  /** Collects due successful history while preserving completion receipts. */
+  async collectCompletedHistory(now: Date, limit: number): Promise<number> {
+    return collectCompletedHistory(this.runtime, now, limit);
+  }
   /** Reads only metadata for an exact execution storage identity. */
   async getExecutionState(id: string): Promise<DurableExecutionState | null> {
     return executionIndexOps.getExecutionState(this.runtime, id);

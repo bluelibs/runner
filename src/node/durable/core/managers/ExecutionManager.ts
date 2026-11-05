@@ -53,6 +53,7 @@ export interface ExecutionManagerConfig {
   audit?: DurableServiceConfig["audit"];
   determinism?: DurableServiceConfig["determinism"];
   execution?: DurableServiceConfig["execution"];
+  retention?: DurableServiceConfig["retention"];
 }
 
 /**
@@ -104,6 +105,7 @@ export class ExecutionManager {
     });
 
     this.persistenceDeps = {
+      retention: config.retention,
       store: this.config.store,
       queue: this.config.queue,
       auditLogger: this.auditLogger,

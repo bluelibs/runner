@@ -51,6 +51,8 @@ export type ExpectedExecutionStatuses = readonly [
 export type ScheduleUpdate = Omit<Partial<Schedule>, "id">;
 
 export interface IDurableStore {
+  /** Atomically collects due successful history, retaining completion receipts for replay and waiters. */
+  collectCompletedHistory?(now: Date, limit: number): Promise<number>;
   saveExecution(execution: Execution): Promise<void>;
   /**
    * Atomically replaces an execution when its current status still matches one

@@ -3,13 +3,14 @@ import {
   IEvent,
   IEventEmission,
   IEventEmitReport,
+  IEventEmitOptions,
   TagType,
 } from "../../defs";
 import {
   transactionalParallelConflictError,
   validationError,
 } from "../../errors";
-import { EventEmissionInterceptor } from "./types";
+import { EventDispatchAdapter, EventEmissionInterceptor } from "./types";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 import {
   createEmptyReport,
@@ -79,12 +80,21 @@ export class EmissionContext<TInput> {
     private readonly failureMode: EventEmissionFailureMode,
     private readonly emissionInterceptors: EventEmissionInterceptor[],
     initialEvent: IEventEmission<TInput>,
+    private readonly dispatchAdapter?: EventDispatchAdapter,
+    private readonly emitOptions: IEventEmitOptions = {},
   ) {
     this.deepestEvent = initialEvent;
     this.executionReport = createEmptyReport(allListeners.length);
   }
 
   async baseEmit(eventToEmit: IEventEmission<any>): Promise<IEventEmitReport> {
+    const bridged = this.dispatchAdapter?.(
+      this.eventDefinition,
+      eventToEmit,
+      this.allListeners,
+      this.emitOptions,
+    );
+    if (bridged) return await bridged;
     if (this.allListeners.length === 0) {
       this.executionReport.propagationStopped =
         eventToEmit.isPropagationStopped();

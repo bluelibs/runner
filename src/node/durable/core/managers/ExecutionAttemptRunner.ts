@@ -541,6 +541,15 @@ export class ExecutionAttemptRunner {
   }): Promise<void> {
     await handleAttemptErrorFn({
       ...params,
+      settleCompensationFailure: async () => {
+        const execution = await this.deps.store.getExecution(
+          params.runningExecution.id,
+        );
+        if (execution?.status !== ExecutionStatus.CompensationFailed)
+          return false;
+        await this.deps.notifyFinished(execution);
+        return true;
+      },
       getShutdownInterruptionReason: () =>
         this.deps.cancellation.getShutdownInterruptionReason(),
       transitionToCancelled: (p) =>
