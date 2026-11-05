@@ -14,7 +14,7 @@ Configuration describes how the same source becomes portable, browser, edge, and
 - `eslint/eslint.config.mjs`: source lint/formatting rules.
 - `public-api/runtime-exports.json`: runtime export expectations exercised by source tests.
 - `benchmarks/`: comparison policy, baseline, and recorded results. Fresh CI comparisons use base-revision thresholds.
-- `typedoc/typedoc.json` and `typedoc.custom.css`: API-site output; authored framework guides live elsewhere.
+- `typedoc/typedoc.json` and `typedoc.custom.css`: API-site output via `../scripts/generate-api-docs.mjs`; keep the entry point explicit so patched minimatch works without TypeDoc's legacy glob discovery. Authored framework guides live elsewhere.
 
 ## Contracts To Preserve
 

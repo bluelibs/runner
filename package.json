@@ -134,10 +134,11 @@
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "audit:full": "npm audit --audit-level=moderate",
     "test:benchmark-compare": "node --test scripts/__tests__/compare-benchmarks.test.mjs",
-    "qa": "npm run test:benchmark-compare && npm run coverage:ai && npm run lint:fix && npm run typecheck && npm run build && npm run check:entrypoints && npm run check:consumers",
+    "qa": "npm run test:benchmark-compare && npm run test:docs && npm run coverage:ai && npm run lint:fix && npm run typecheck && npm run build && npm run check:entrypoints && npm run check:consumers",
     "prepublishOnly": "npm run clean && npm run build",
     "postbuild": "npm run guide:compose",
-    "typedoc": "typedoc --options config/typedoc/typedoc.json",
+    "typedoc": "node ./scripts/generate-api-docs.mjs --options config/typedoc/typedoc.json",
+    "test:docs": "node --test scripts/__tests__/generate-api-docs.test.mjs",
     "benchmark": "jest --config config/jest/jest.bench.config.js --verbose --runInBand",
     "benchmark:json": "BENCHMARK_OUTPUT=./config/benchmarks/benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
     "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./config/benchmarks/baseline.json ./config/benchmarks/benchmark-results.json ./config/benchmarks/benchmarks.config.json",
@@ -201,10 +202,7 @@
     "esbuild": "$esbuild",
     "glob": "^14.0.3",
     "minimatch": "^11.0.1",
-    "test-exclude": "^7.0.1",
-    "typedoc": {
-      "minimatch": "^10.2.6"
-    }
+    "test-exclude": "^7.0.1"
   },
   "npmSkills": {
     "publish": {
