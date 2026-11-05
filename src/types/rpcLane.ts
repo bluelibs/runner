@@ -108,7 +108,7 @@ export type RpcLaneRetryDelayStrategy = (
 export interface RpcLaneRetryPolicy {
   /**
    * Total attempts per call, including the first attempt.
-   * Defaults to 1. Set a larger value only for operations safe to repeat.
+   * Defaults to 3. Set to 1 for operations unsafe to repeat without deduplication.
    */
   maxAttempts?: number;
   /**
@@ -149,7 +149,7 @@ export interface IRpcLaneTopologyBinding {
   auth?: RemoteLaneBindingAuth;
   /**
    * Transport-level retry policy for calls routed through this binding.
-   * Omit for one attempt. Opt into retries only for operations safe to repeat.
+   * Omit for three attempts. Set maxAttempts to 1 for effects unsafe to repeat.
    */
   retry?: RpcLaneRetryPolicy;
 }

@@ -1,12 +1,12 @@
 # Changelog
 
-## 7.0.0 (unreleased)
+## 6.9.0 (unreleased)
 
 ### Migration
 
-- RPC lane calls now make **one attempt by default**, instead of three. Applications that need the previous retry budget must configure `retry: { maxAttempts: 3 }` explicitly after checking that repeated execution is safe. A lost response can follow a committed remote effect. ([#144](https://github.com/bluelibs/runner/pull/144))
+- RPC lane calls retain **three total attempts by default**. Non-idempotent callers must configure `retry: { maxAttempts: 1 }` explicitly or provide deduplication: a lost response can follow a committed remote effect. Retry budgets, `Retry-After`, and cancellation support remain available. ([#144](https://github.com/bluelibs/runner/pull/144))
 - Queued event authentication now defaults to a 24-hour token lifetime. `auth.messageTtlMs` overrides an explicit `auth.tokenTtlMs`, and existing explicit lifetimes remain respected. RPC tokens keep their 60-second default. Retain verification keys across the configured backlog/retry window; longer validity also increases the replay window.
-- This major version does not change existing support commitments for previous major versions.
+- This minor release does not change existing support commitments for previous major versions.
 
 ### Features
 
@@ -29,7 +29,7 @@
 
 ### Verification
 
-- Combined `npm run qa` completed successfully: 5,809 total discovered tests, zero failures, 100% instrumented coverage, five benchmark-comparison tests, lint/type checks, all platform builds, standalone entry points, and browser/Node consumer bundles. Normal Redis/RabbitMQ integration gates were enabled; the compact report does not retain passed/skipped counts.
+- Final release verification is recorded in the release preparation pull request after restoring the three-attempt RPC default.
 - A separate live batch passed all 16 tests across five suites with zero skips: Redis history collection and lifecycle races, Redis atomicity, memory/Redis step concurrency, RabbitMQ retry/recovery, and overlapping duplicate delivery ownership.
 - The production dependency audit reported zero vulnerabilities.
 

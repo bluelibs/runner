@@ -38,12 +38,15 @@ describe("createRetryingRpcLaneCommunicator", () => {
     expect(eventWithResult).toHaveBeenCalledWith("e", { c: 3 }, options);
   });
 
-  it("uses the default policy when omitted", async () => {
-    const task = jest.fn(async () => "ok");
+  it("allows three total attempts when the policy is omitted", async () => {
+    const failure = transportError("TIMEOUT");
+    const task = jest.fn(async () => {
+      throw failure;
+    });
     const wrapped = createRetryingRpcLaneCommunicator({ task });
 
-    await expect(wrapped.task!("t")).resolves.toBe("ok");
-    expect(task).toHaveBeenCalledTimes(1);
+    await expect(wrapped.task!("t")).rejects.toBe(failure);
+    expect(task).toHaveBeenCalledTimes(3);
   });
 
   it("forwards calls without options", async () => {

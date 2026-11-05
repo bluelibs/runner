@@ -72,9 +72,9 @@ describe("isRetryableRemoteLaneError", () => {
 });
 
 describe("resolveRpcLaneRetryPolicy", () => {
-  it("does not repeat operations by default", () => {
+  it("retains three total attempts by default", () => {
     const resolved = resolveRpcLaneRetryPolicy();
-    expect(resolved.maxAttempts).toBe(1);
+    expect(resolved.maxAttempts).toBe(3);
     expect(resolved.retryIf).toBe(isRetryableRemoteLaneError);
     expect(typeof resolved.delayMs).toBe("function");
     const delay = (resolved.delayMs as (attempt: number) => number)(0);

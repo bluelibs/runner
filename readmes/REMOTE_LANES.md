@@ -588,7 +588,7 @@ sequenceDiagram
 
 ### Retry Policy
 
-RPC calls make one attempt by default. A lost response can follow a successful remote execution, so repeating a call can duplicate its effects. Opt into retries for idempotent tasks or calls protected by application-level deduplication.
+RPC calls retain three total attempts by default. A lost response can follow a successful remote execution, so repeating a call can duplicate its effects. Non-idempotent callers must set `retry: { maxAttempts: 1 }` explicitly or protect calls with application-level deduplication.
 
 ```typescript
 const topology = r.rpcLane.topology({
@@ -598,7 +598,7 @@ const topology = r.rpcLane.topology({
       lane: billingLane,
       communicator: billingCommunicator,
       retry: {
-        maxAttempts: 3, // opt in only when repeated execution is safe
+        maxAttempts: 3, // default; use 1 for effects unsafe to repeat
         totalTimeoutMs: 5_000, // all attempts and delays share this budget
         delayMs: 250, // fixed delay, or (attempt, error) => ms
         // retryIf: (error) => ..., // custom classifier
@@ -614,7 +614,7 @@ Rules:
 - The default classifier retries connection failures and client timeouts, plus HTTP 408/429/502/503/504 responses.
 - Typed domain errors, other 4xx/5xx statuses, and malformed responses are never retried by default because the server returned a definitive answer; repeating the call is a business decision. Caller aborts are a separate, non-response cancellation condition and are also never retried by default. Use task middleware (`retry`, `circuitBreaker`, `fallback`) for response failures that need business-aware retries.
 - The default delay is exponential backoff with jitter starting at 100ms.
-- `maxAttempts` includes the first attempt and defaults to `1`. Set a larger value to enable retries. **Migration:** bindings that previously relied on the implicit three attempts must now set `retry: { maxAttempts: 3 }` explicitly after checking that repeated execution is safe.
+- `maxAttempts` includes the first attempt and defaults to `3`. The default remains unchanged. Set `retry: { maxAttempts: 1 }` for operations unsafe to repeat without deduplication.
 - Client `timeoutMs` limits each buffered HTTP attempt, including JSON and browser multipart uploads. Optional `retry.totalTimeoutMs` limits the entire communicator call across attempts and delays; it is a positive integer up to `2147483647` milliseconds. Without it, the policy adds no overall deadline. Caller cancellation interrupts the call budget and retry delays.
 - HTTP `Retry-After` on transport errors sets a minimum retry delay: Runner waits for the larger of that value and `delayMs`. The overall budget still applies.
 - A budget rejects even if a custom communicator ignores its signal, but it cannot undo work already running remotely. For smart-client stream responses, the call budget ends when the response stream is returned; stream consumption needs its own cancellation policy.
@@ -704,7 +704,7 @@ Keep responsibilities clearly separated:
 **Transport-level (lane binding + broker config):**
 
 - Event lanes: `maxAttempts` + `retryDelayMs` at the lane binding level control retry budget before final failure
-- RPC lanes: `retry` at the binding level controls sync-call retries (default 1 attempt; explicit retries classify transport failures). There is no DLQ for synchronous calls — the last error is thrown to the caller
+- RPC lanes: `retry` at the binding level controls sync-call retries (default 3 attempts; the classifier selects transport failures). There is no DLQ for synchronous calls — the last error is thrown to the caller
 - DLQ behavior is **broker/queue-policy owned**
 - Runner settles final consumer failure with `nack(false)` — it does **not** manually publish to a DLQ queue
 - If your queue has no dead-letter configuration, a final `nack(false)` discards the message per broker behavior
