@@ -1,3 +1,4 @@
+import type { ExecutionLockState } from "./managers/ExecutionManager.locking";
 import type { IEventBus } from "./interfaces/bus";
 import type {
   ContinueAsNewOptions,
@@ -77,6 +78,7 @@ import { throwDurablePauseInterruption } from "./pauseInterruption";
  * around indexes/guards to keep a single in-memory attempt deterministic.
  */
 export class DurableContext implements IDurableContext {
+  private readonly executionLockState: ExecutionLockState | undefined;
   private readonly sleepIndexRef = { current: 0 };
   private readonly signalIndexes = new Map<string, number>();
   private readonly emitIndexes = new Map<string, number>();
@@ -137,9 +139,12 @@ export class DurableContext implements IDurableContext {
       getTaskPersistenceId?: (
         task: ITask<any, Promise<any>, any, any, any, any>,
       ) => string;
+      /** Shares attempt ownership with store-coordinated step leases. */
+      executionLockState?: ExecutionLockState;
       cancellationSignal?: AbortSignal;
     } = {},
   ) {
+    this.executionLockState = options.executionLockState;
     this.auditEnabled = options.auditEnabled ?? false;
     this.auditEmitter = options.auditEmitter ?? null;
     this.implicitInternalStepIdsPolicy =
@@ -279,6 +284,7 @@ export class DurableContext implements IDurableContext {
     allowCancellationRequested = false,
   ): Promise<T> {
     return await executeDurableStep({
+      workflowAttempt: this.attempt,
       store: this.store,
       executionId: this.executionId,
       assertCanContinue: async () =>
@@ -306,6 +312,7 @@ export class DurableContext implements IDurableContext {
         ),
       stepId,
       options,
+      executionLockState: this.executionLockState,
       upFn,
       signal: this.cancellationSignal,
       downFn,

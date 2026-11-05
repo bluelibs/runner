@@ -258,6 +258,7 @@ export class ExecutionAttemptRunner {
       task,
       guards.assertLockOwnership,
       attemptCancellation.signal,
+      executionLockState,
     );
 
     try {
@@ -312,6 +313,7 @@ export class ExecutionAttemptRunner {
     task: AnyTask,
     assertLockOwnership: () => void,
     cancellationSignal: AbortSignal,
+    executionLockState?: ExecutionLockState,
   ): DurableContext {
     return createContextFn({
       store: this.deps.store,
@@ -319,6 +321,7 @@ export class ExecutionAttemptRunner {
       execution,
       task,
       assertLockOwnership,
+      executionLockState,
       cancellationSignal,
       auditConfig: this.deps.audit,
       determinismConfig: this.deps.determinism,

@@ -12,8 +12,10 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `resource.ts`: keeps portable resource identity while supplying Node initialization.
 - `RedisResilience.ts`: backend facade, policy keys, runtime-local waiters, active operations, and disposal.
 - `scripts.ts`: atomic Redis operations for rate, circuit, and permit state.
-- `acquirePermit.ts`: cancellable admission retries, queue accounting, and wait deadlines.
-- `permit.ts`: permit ownership renewal, completion checks, and release.
+- `acquirePermit.ts`: admission retries, queue accounting, and wait deadlines.
+- `acquireLease.ts`: cancellation-safe acquisition and late-grant cleanup shared with durable steps.
+- `permit.ts`: Redis permit acquisition, owned callbacks, and shutdown.
+- `renewableLease.ts`: backend-independent renewal/deadline/completion checks shared with durable admission.
 - `semaphore.ts`: validates and snapshots a named semaphore's policy before producing its handle.
 - `../node.ts`: installs this resource into Node built-ins without replacing portable global state.
 
@@ -27,7 +29,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Semaphore handles own configuration; the backend owns permits, waiters, and shutdown.
 - Cancellation returns promptly even when Redis acquisition stalls; release any late grant.
 - Acquired permits have conservative local deadlines, renewal, and final ownership verification.
-- Lease loss or stalled renewal aborts work cooperatively and prevents a successful owned result.
+- Lease loss or stalled renewal aborts work cooperatively and prevents a successful owned result. Token-fenced cleanup does not wait for a stalled renewal response.
 - Circuit settlement carries the admission generation so stale outcomes cannot corrupt newer state.
 - Disposal aborts permit ownership, settles tracked work, then disconnects the owned client.
 - Resource init validates/connects/pings the client and disconnects it if startup fails.
