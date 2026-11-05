@@ -19,6 +19,10 @@ Runner turns typed definitions into an isolated runtime. Read [the compact guide
 
 The working style is contract-first: agree on interfaces, define acceptance criteria, then implement the smallest readable change. Runtime state belongs to each `run(app)`; definition identity and canonical runtime addressing must remain distinct.
 
+## Release Preparation
+
+Keep `package.json` and the root package entries in `package-lock.json` aligned. Record migration requirements and verified release scope in `CHANGELOG.md`; observable default-behavior changes require explicit compatibility review. Build and inspect the npm tarball, including exports and materialized skill references. Main-branch workflows run validation and publish API documentation; npm publication and release tags are separate actions.
+
 ## General Principles
 
 - Be passionate about what you do, be precise, thoughtful and clear.
