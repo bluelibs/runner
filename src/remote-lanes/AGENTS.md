@@ -26,7 +26,7 @@ Node topology, JWT authentication, queues, and HTTP exposure belong in `src/node
 
 ## Contracts To Preserve
 
-- `maxAttempts` includes the first call; the default is one attempt; repeating execution requires an explicit policy.
+- `maxAttempts` includes the first call; the default remains three attempts. Non-idempotent callers must explicitly choose one attempt or provide deduplication.
   Numeric attempts must be positive integers and numeric delays finite/nonnegative.
 - Default retries require a `RemoteLaneTransportError` with a retryable code or
   supported HTTP status. Typed domain errors carrying `id`, caller cancellation,

@@ -112,7 +112,7 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
 - Define topology with `r.rpcLane.topology({ profiles, bindings })`:
   - `profiles[profile].serve` selects lanes this runtime serves locally.
   - `bindings[]` maps `lane -> communicator resource` plus async-context policy and optional lane JWT material (`auth`).
-  - `bindings[].retry` is an optional `{ maxAttempts?, delayMs?, retryIf?, totalTimeoutMs? }` transport retry policy (default: 1 attempt; explicitly opt into retries only for safe-to-repeat calls).
+  - `bindings[].retry` is an optional `{ maxAttempts?, delayMs?, retryIf?, totalTimeoutMs? }` transport retry policy (default: 3 total attempts; non-idempotent calls require explicit `maxAttempts: 1` or deduplication).
 - Register `rpcLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `serializer` resource + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`) + optional `exposure.http`.
   - `serializer` defaults to `resources.serializer`; override it when RPC lanes need different serializer registrations or stricter transport-specific policy.

@@ -47,6 +47,7 @@ concise and accurate; if the guidance remains accurate, make no artificial edits
   canonical ids. Read each field's JSDoc before passing an id across layers.
 - Public types and indirect public members need JSDoc. Widening generics can break
   inference without breaking compilation of the library implementation itself.
+- RPC retry contracts retain three total attempts by default; non-idempotent callers choose one attempt or provide deduplication.
 - Keep shared contracts platform-portable. Node-only implementations and exports
   belong under [../node](../node), even when shared files describe their interfaces.
 

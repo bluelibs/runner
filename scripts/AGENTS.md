@@ -19,7 +19,7 @@ Scripts are Node/shell tooling for this repository, not part of the portable run
 
 - Resolve repository-owned paths explicitly; do not assume a consumer's working directory matches the repository unless the command requires it.
 - Forward process exit status and preserve intentional watchdog/cleanup behavior.
-- Coverage display must match Jest's instrumented source scope. Never mask gaps by filtering files away.
+- Coverage display must match Jest's instrumented source scope. The compact reporter records passed/skipped test and suite counts separately from discovered totals. Never mask gaps by filtering files away.
 - Generated documentation is output, not an authoring surface. Update the include sources and compose them when their content changes.
 - Packaging swaps symlinks for copies temporarily. Do not leave materialized reference trees committed or overwrite canonical documentation from the copies.
 - Benchmark comparisons must retain base thresholds and equivalent workloads across revisions.

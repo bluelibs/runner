@@ -240,8 +240,12 @@ class JestAIReporter {
       summary: {
         success: aggregatedResults.success,
         totalTests: aggregatedResults.numTotalTests,
+        passedTests: aggregatedResults.numPassedTests,
+        skippedTests: aggregatedResults.numPendingTests,
         failedTests: aggregatedResults.numFailedTests,
         totalSuites: aggregatedResults.numTotalTestSuites,
+        passedSuites: aggregatedResults.numPassedTestSuites,
+        skippedSuites: aggregatedResults.numPendingTestSuites,
         failedSuites: aggregatedResults.numFailedTestSuites,
         runtimeErrorSuites: aggregatedResults.numRuntimeErrorTestSuites,
       },

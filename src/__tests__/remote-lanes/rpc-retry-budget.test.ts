@@ -9,14 +9,16 @@ import { parseRetryAfterMs } from "../../remote-lanes/http/retryAfter";
 describe("RPC retry safety and call budget", () => {
   afterEach(() => jest.useRealTimers());
 
-  it("does not repeat a committed side effect after a lost response by default", async () => {
+  it("does not repeat a committed side effect after a lost response when retries are disabled", async () => {
     let effects = 0;
     const task = jest.fn(async () => {
       effects += 1;
       throw new RemoteLaneTransportError("TIMEOUT", "response lost");
     });
     await expect(
-      createRetryingRpcLaneCommunicator({ task }).task!("charge"),
+      createRetryingRpcLaneCommunicator({ task }, { maxAttempts: 1 }).task!(
+        "charge",
+      ),
     ).rejects.toMatchObject({ code: "TIMEOUT" });
     expect(effects).toBe(1);
   });

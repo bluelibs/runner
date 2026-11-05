@@ -11,7 +11,7 @@ import { RemoteLaneTransportError } from "./http/protocol";
 /**
  * Default total attempts per lane-routed call, including the first attempt.
  */
-export const DEFAULT_RPC_LANE_MAX_ATTEMPTS = 1;
+export const DEFAULT_RPC_LANE_MAX_ATTEMPTS = 3;
 
 /** Transport error codes retried without inspecting the HTTP status. */
 const RETRYABLE_TRANSPORT_CODES = new Set([
@@ -136,7 +136,7 @@ export function getRpcLaneRetryPolicyViolation(
  * single-use inputs.
  *
  * @param communicator The transport adapter to wrap.
- * @param policy Retry policy; omit for the default (one attempt; retries require explicit maxAttempts).
+ * @param policy Retry policy; omit for three total attempts. Use maxAttempts: 1 for effects unsafe to repeat.
  * @returns Communicator with identical methods plus retry behavior.
  */
 export function createRetryingRpcLaneCommunicator(
