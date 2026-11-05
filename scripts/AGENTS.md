@@ -10,6 +10,7 @@ Scripts are Node/shell tooling for this repository, not part of the portable run
 - `run-coverage-ai.mjs`, `jest-ai-reporter.js`, `print-fresh-coverage.mjs`, and `coverage-scope.mjs`: compact coverage reporting and fresh result accounting.
 - `compose-guide.mjs`: reads explicit include manifests in `../guide-units/`, writing the generated landing README and full guide. It does not discover every Markdown file in that folder.
 - `check-built-entrypoints.mjs`: imports built entry points independently; `check-consumer-bundles.mjs` bundles browser and Node consumers against package exports.
+- `generate-api-docs.mjs`: converts the configured explicit source entry through TypeDoc's public API, preserving compiler diagnostics, plugins, source links, validation policies, and outputs without legacy glob discovery.
 - `compare-benchmarks.mjs` and `__tests__/compare-benchmarks.test.mjs`: benchmark contracts; configuration/data live in `../config/benchmarks/`.
 - `pack-npm-skills.mjs`: temporarily materializes linked guide/readme references for npm packaging and restores symlinks afterward.
 - `verify-durable-pagination.mjs`: targeted durable pagination verification.
@@ -26,4 +27,4 @@ Scripts are Node/shell tooling for this repository, not part of the portable run
 
 ## Validation
 
-Run `npm run test:benchmark-compare` for benchmark comparator changes; use the owning package commands for other scripts. Run `npm run qa` for code/tooling changes. Docs-only changes to this guide need verified references only.
+Run `npm run test:benchmark-compare` for benchmark comparator changes and `npm run test:docs` for the documentation generator. The generator accepts normal TypeDoc CLI options but requires one explicit source file; watch mode, entry-point expansion, and document globs fail explicitly. Use the owning package commands for other scripts. Run `npm run qa` for code/tooling changes. Docs-only changes to this guide need verified references only.
