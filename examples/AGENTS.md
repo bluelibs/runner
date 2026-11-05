@@ -22,7 +22,7 @@ Examples are separate consumer apps and demonstrations, not framework implementa
 
 - Local `file:...` dependencies consume this repository's built package. Build at the repository root before installing/testing a consumer; use each example's own scripts and configuration.
 - Root Jest/typecheck do not validate every separate example. Inspect that example's package scripts to choose its tests/build; Node test, Jest, and web Vitest suites coexist here.
-- Example lockfiles are intentionally ignored; do not introduce tracked generated builds, dependencies, local databases, or environment secrets.
+- Example lockfiles are generally ignored; `durable-workflows/package-lock.json` is already tracked. Rebuild that lockfile from scratch when refreshing its local Runner link so stale `../../node_modules` snapshots are removed. Do not introduce other tracked generated builds, dependencies, local databases, or environment secrets.
 - HTTP adapters translate ingress/response behavior; tasks own business actions; resources own services; middleware owns reusable task policy.
 - Use typed local IDs in newly authored definitions and canonical/storage identity for stateful framework integration.
 - Keep broker/database requirements and demo mode explicit. In-memory demos and real services have different validation setups.
