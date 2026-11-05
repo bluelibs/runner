@@ -13,7 +13,7 @@
 - Add durable event dispatch through ordinary event emission APIs, with persisted ordered hook membership, recoverable compensation, parent linkage, and replay deduplication. Existing executions retain their saved hook order while using current implementations. ([#149](https://github.com/bluelibs/runner/pull/149))
 - Add immediate or delayed successful-workflow history collection for memory, file-persisted memory, and Redis stores. Configure `retention.onComplete` and the background `garbageCollection` interval/batch size; policy resolves when each execution is admitted. Completion results, receipts, and idempotency mappings remain available to late waiters and parent replay. ([#149](https://github.com/bluelibs/runner/pull/149))
 - Add `StepOptions.concurrency` for numeric, named shared, and fixed-window callback-start limits across durable workers. Saturation suspends the attempt and releases workflow admission; lease ownership and callback retry budgets survive interruption and replay. ([#145](https://github.com/bluelibs/runner/pull/145))
-- Add optional RPC retry deadlines through `retry.totalTimeoutMs`, honor `Retry-After`, and support queued event token lifetimes through `auth.messageTtlMs`. ([#144](https://github.com/bluelibs/runner/pull/144))
+- Add optional RPC retry deadlines through `retry.totalTimeoutMs`, honor `Retry-After`, and support queued event token lifetimes through `auth.messageTtlMs`. The RPC default remains three total attempts. ([#144](https://github.com/bluelibs/runner/pull/144))
 
 ### Fixes
 
@@ -29,7 +29,8 @@
 
 ### Verification
 
-- Final release verification is recorded in the release preparation pull request after restoring the three-attempt RPC default.
-- A separate live batch passed all 16 tests across five suites with zero skips: Redis history collection and lifecycle races, Redis atomicity, memory/Redis step concurrency, RabbitMQ retry/recovery, and overlapping duplicate delivery ownership.
+- After restoring the three-attempt RPC default and setting version 6.9.0, `npm run qa` passed: 5,780 tests passed, 29 skipped, zero failed; 810 suites passed, seven skipped. Instrumented coverage is 100%; five benchmark-comparison tests, lint/type checks, all platform builds, standalone entry points, and browser/Node consumer bundles passed. Normal Redis/RabbitMQ integration gates were enabled; separately gated live suites were verified below.
+- Separate live checks passed 96 tests across 17 suites with zero skips: Redis history collection and lifecycle races, Redis atomicity, memory/Redis step concurrency, RabbitMQ retry/recovery, overlapping duplicate delivery ownership, and the full Redis resilience test selection.
+- Fresh sequential benchmarks against the shipped 6.8.1 source passed all 11 workloads per revision and the unchanged local regression thresholds. Both revisions used identical dependencies, five measured runs, and two warmups; no significant regression was detected.
 - The production dependency audit reported zero vulnerabilities.
 
