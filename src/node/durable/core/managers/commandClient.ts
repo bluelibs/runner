@@ -6,15 +6,15 @@ import { durableExecutionInvariantError } from "../../../../errors";
 import { check, Match } from "../../../../tools/check";
 import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
 import { durableWorkflowTag } from "../../tags/durableWorkflow.tag";
-import { createExecutionId, sleepMs } from "../utils";
+import { createExecutionId } from "../utils";
 import { followContinuedExecutionChain } from "../continuedChain";
 import { isExecutionTerminal } from "../types";
+import { waitForStoreResult } from "./waitForStoreResult";
 
 interface CommandClientDeps {
   config: DurableServiceConfig;
   tasks: TaskRegistry;
   kickoff: (id: string) => Promise<void>;
-  arm: (id: string) => Promise<void>;
   rejectPending: (id: string, message: string) => Promise<void>;
 }
 
@@ -35,6 +35,7 @@ export async function submitCommand(
   if (
     !store.withExecutionOwnership ||
     !store.enqueueCommand ||
+    !store.rescheduleCommandTimer ||
     !store.getCommand ||
     !store.getNextCommand ||
     !store.saveCommand ||
@@ -42,7 +43,7 @@ export async function submitCommand(
   )
     return durableExecutionInvariantError.throw({
       message:
-        "Tracked commands require atomic ownership and command receipt support on the durable store.",
+        "Tracked commands require atomic ownership, command receipts, and command timer support on the durable store.",
     });
   const taskKey = deps.tasks.getTaskKey(task);
   const id = JSON.stringify([
@@ -84,41 +85,51 @@ export async function submitCommand(
     });
   }
   if (receipt.status === "pending" || receipt.status === "running") {
-    await deps.arm(receipt.executionId);
     void deps.kickoff(receipt.executionId).catch(() => {
       /* The persisted timer retries failed dispatch. */
     });
   }
-  while (true) {
-    const current = await store.getCommand(id);
-    if (!current)
-      return durableExecutionInvariantError.throw({
-        message: "Command receipt disappeared.",
-      });
-    if (current.status === "completed") return current.result;
-    if (current.status === "failed")
-      return durableExecutionInvariantError.throw({
-        message: current.error!.message,
-      });
-    const target = await store.getExecution(current.executionId);
-    if (
-      !target ||
-      isExecutionTerminal(target.status) ||
-      target.status === "cancelling"
-    ) {
-      await deps.rejectPending(
-        current.executionId,
-        "Target workflow is closed.",
-      );
-      continue;
+  const channel = `command:${id}`;
+  const readReceipt = async (): Promise<
+    { done: false; channel: string } | { done: true; value: unknown }
+  > => {
+    while (true) {
+      const current = await store.getCommand!(id);
+      if (!current)
+        return durableExecutionInvariantError.throw({
+          message: "Command receipt disappeared.",
+        });
+      if (current.status === "completed")
+        return { done: true, value: current.result };
+      if (current.status === "failed")
+        return durableExecutionInvariantError.throw({
+          message: current.error!.message,
+        });
+      const target = await store.getExecution(current.executionId);
+      if (
+        !target ||
+        isExecutionTerminal(target.status) ||
+        target.status === "cancelling"
+      ) {
+        await deps.rejectPending(
+          current.executionId,
+          "Target workflow is closed.",
+        );
+        continue;
+      }
+      return { done: false, channel };
     }
-    if (
-      options.waitTimeoutMs !== undefined &&
-      Date.now() - started >= options.waitTimeoutMs
-    )
-      return durableExecutionInvariantError.throw({
+  };
+  return waitForStoreResult({
+    check: readReceipt,
+    channel,
+    eventBus: deps.config.eventBus,
+    startedAt: started,
+    timeoutMs: options.waitTimeoutMs,
+    pollEveryMs: 500,
+    buildTimeoutError: async () =>
+      durableExecutionInvariantError.new({
         message: "Command wait timed out; the durable request remains pending.",
-      });
-    await sleepMs(10);
-  }
+      }),
+  });
 }

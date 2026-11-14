@@ -376,6 +376,8 @@ export const TimerStatus = {
 export type TimerStatus = (typeof TimerStatus)[keyof typeof TimerStatus];
 
 export interface Timer {
+  /** Internal retry redrive retained until the command FIFO is empty. */
+  commandWakeup?: true;
   /** Pinned scheduled workflow version, when declared. */
   workflowVersion?: number;
   id: string;

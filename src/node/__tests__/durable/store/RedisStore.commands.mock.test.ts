@@ -17,6 +17,29 @@ const command: DurableCommandRecord = {
 };
 
 describe("Redis command receipt contract", () => {
+  it("reschedules a command FIFO with its exact timer indexes and reports an empty queue", async () => {
+    const { store, redisMock } = harness;
+    expect(await store.rescheduleCommandTimer("run/a:b", new Date(1000))).toBe(
+      true,
+    );
+    expect(redisMock.eval).toHaveBeenLastCalledWith(
+      expect.any(String),
+      4,
+      "durable:command_queue:run%2Fa%3Ab",
+      "durable:timers",
+      "durable:timers_schedule",
+      "durable:execution_timers:run%2Fa%3Ab",
+      'commands:"run/a:b"',
+      expect.any(String),
+      1000,
+      "1",
+    );
+    redisMock.eval.mockResolvedValueOnce(0);
+    expect(await store.rescheduleCommandTimer("run/a:b", new Date(2000))).toBe(
+      false,
+    );
+  });
+
   it("reads stored receipts and FIFO heads without removing them", async () => {
     const { store, redisMock } = harness;
     expect(await store.getCommand("missing")).toBeNull();
@@ -98,23 +121,20 @@ describe("Redis command receipt contract", () => {
     redisMock.get.mockResolvedValue(serializer.stringify(expected));
     expect(await store.completeCommand(completed, expected)).toBe(true);
     expect(
-      await store.completeCommand(
-        { ...completed, stateInitialized: true, state: null },
-        expected,
-      ),
+      await store.completeCommand({ ...completed, state: null }, expected),
     ).toBe(true);
     redisMock.get.mockResolvedValue(
       serializer.stringify({ ...expected, historyRecorded: true }),
     );
     expect(
       await store.completeCommand(
-        { ...completed, stateInitialized: true, state: { value: { n: 3n } } },
+        { ...completed, state: { value: { n: 3n } } },
         { ...expected, historyRecorded: true },
       ),
     ).toBe(true);
     expect(
       await store.completeCommand(
-        { ...completed, stateInitialized: true, state: null },
+        { ...completed, state: null },
         { ...expected, historyRecorded: true },
       ),
     ).toBe(true);

@@ -66,15 +66,17 @@ export interface IDurableStore {
   /** Logical workflow-timer clock for isolated test adapters; leases always use backend real time. */
   getWorkflowTime?(): number;
 
-  /** Atomically inserts one command and its per-execution FIFO membership; duplicates retain their receipt. */
+  /** Atomically inserts one command, FIFO membership, and one shared command wakeup; duplicates retain their receipt. */
   enqueueCommand?(command: DurableCommandRecord): Promise<DurableCommandRecord>;
+  /** Atomically reschedules the shared wakeup while the FIFO is nonempty, otherwise removes it. Returns whether commands remain; never releases a timer claim. */
+  rescheduleCommandTimer?(executionId: string, fireAt: Date): Promise<boolean>;
   /** Reads a command receipt, including after workflow history collection. */
   getCommand?(commandId: string): Promise<DurableCommandRecord | null>;
   /** Reads the next pending request without removing it. */
   getNextCommand?(executionId: string): Promise<DurableCommandRecord | null>;
   /** Updates only a live FIFO head; terminal receipts cannot be overwritten. */
   saveCommand?(command: DurableCommandRecord): Promise<boolean>;
-  /** Atomically commits a receipt, optional staged state, and FIFO removal. A target snapshot guards successful state application. */
+  /** Atomically commits a receipt, optional staged state, FIFO removal, and removal of the final command wakeup. A target snapshot guards successful state application. */
   completeCommand?(
     command: DurableCommandRecord,
     expectedExecution?: Execution,

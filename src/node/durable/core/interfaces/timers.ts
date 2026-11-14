@@ -1,6 +1,6 @@
 /**
  * Processes persisted timers for workflow sleeps, delayed retries, signal/child
- * wait timeouts, and scheduled workflow starts. Each setting applies to this
+ * wait timeouts, command redrive, and scheduled workflow starts. Each setting applies to this
  * process; workers sharing a store coordinate through renewable timer claims.
  *
  * Queue consumption executes delivered workflows. Timer processing advances
@@ -12,7 +12,7 @@ export interface DurableTimerConfig {
    *
    * Disable on API processes when workers sharing the same store handle timers.
    * Keep enabled on at least one process for sleeps, delayed retries, wait
-   * timeouts, and schedules to advance. Disabling this does not disable queue
+   * timeouts, interrupted commands, and schedules to advance. Disabling this does not disable queue
    * consumption, execution heartbeats, or orphan recovery.
    *
    * The store must implement `claimReadyTimers()` when enabled. An explicit

@@ -31,7 +31,9 @@ export async function createCheckpointExecution(
         entry.completedOrder ?? 0,
       ]),
     ),
-    entries: structuredClone(branch.history),
+    entries: new Map(
+      structuredClone(branch.history).map((entry) => [entry.stepId, entry]),
+    ),
   });
   if (branch.state)
     runtime.workflowStates.set(branch.execution.id, {

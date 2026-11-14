@@ -22,7 +22,6 @@ export function createCommandStore(
     assertOpen();
     const updated = {
       ...command,
-      stateInitialized: true,
       state: { value: structuredClone(record.state) },
     };
     if (!(await store.saveCommand!(updated)))

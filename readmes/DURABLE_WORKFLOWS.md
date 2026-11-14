@@ -927,7 +927,9 @@ State is staged privately and committed with the successful result receipt as on
 
 An optional `idempotencyKey` is scoped by the originally addressed execution and canonical command task. Reusing it returns the original receipt, including after completion; changed input does not replace that request. Initial submission follows a continuation to its live tip. Without a key each call is a new request. `waitTimeoutMs` stops only the caller's wait; it does not cancel the accepted command. Paused workflows retain their queued commands until resume; closing the target fails outstanding requests. Keep a timer worker running to redrive interrupted requests. Command receipts remain available after successful workflow detail collection.
 
-Built-in stores support commands. Custom stores may omit the new capabilities and retain existing behavior; requesting a command without atomic receipt/ownership support fails clearly.
+Admission atomically saves one shared wakeup timer per execution alongside its command FIFO. Duplicate callers reuse it, and committing the final receipt removes it. A timer delivery reschedules and releases its claim instead of deleting the wakeup, so a request arriving during delivery stays recoverable. Enable `timers` on at least one process sharing the store. Callers wait using bus notifications with store polling as a fallback; the persisted receipt is always authoritative.
+
+Built-in stores support commands. Custom stores may omit the new capabilities and retain existing behavior; requesting a command without atomic receipt/ownership and command-timer support fails clearly. Command admission, completion, and `rescheduleCommandTimer()` must coordinate FIFO membership and wakeup indexes atomically.
 
 ## Child Workflows
 

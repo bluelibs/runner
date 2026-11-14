@@ -113,7 +113,8 @@ export function exportSnapshot(
       : {
           histories: [...runtime.histories].map(([executionId, history]) => ({
             executionId,
-            ...structuredClone(history),
+            sequence: history.sequence,
+            entries: structuredClone([...history.entries.values()]),
           })),
         }),
     executions: Array.from(runtime.executions.values()).map(cloneExecution),
@@ -153,7 +154,15 @@ export function restoreSnapshot(
   runtime.histories = new Map(
     (snapshot.histories ?? []).map(({ executionId, ...history }) => [
       executionId,
-      structuredClone(history),
+      {
+        sequence: history.sequence,
+        entries: new Map(
+          structuredClone(history.entries).map((entry) => [
+            entry.stepId,
+            entry,
+          ]),
+        ),
+      },
     ]),
   );
   runtime.commands = new Map(

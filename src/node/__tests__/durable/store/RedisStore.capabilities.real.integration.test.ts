@@ -82,7 +82,6 @@ const redisUrl =
     const staged = {
       ...command,
       status: "running" as const,
-      stateInitialized: true,
       state: { value: { count: 4n } },
     };
     expect(await owned.saveCommand!(staged)).toBe(true);

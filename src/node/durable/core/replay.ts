@@ -34,9 +34,19 @@ export async function replayWorkflow(
   let matched = 0;
   const boundary = Symbol("replay boundary");
   const seen = new Set<string>();
+  let cursor = 0;
+  const children = new Map<string, string[]>();
+  for (const entry of history) {
+    if (entry.parentStepId === undefined) continue;
+    const siblings = children.get(entry.parentStepId) ?? [];
+    siblings.push(entry.stepId);
+    children.set(entry.parentStepId, siblings);
+  }
   const observer: DurableReplayObserver = {
     before(operation) {
-      const next = history.find((entry) => !seen.has(entry.stepId));
+      while (cursor < history.length && seen.has(history[cursor].stepId))
+        cursor++;
+      const next = history[cursor];
       if (!next) throw boundary;
       if (
         next.stepId !== operation.stepId ||
@@ -54,12 +64,16 @@ export async function replayWorkflow(
     },
     after(stepId) {
       // A cached callback also skips its saved nested operations.
-      const parents = new Set([stepId]);
-      for (const entry of history)
-        if (entry.parentStepId && parents.has(entry.parentStepId)) {
-          parents.add(entry.stepId);
-          seen.add(entry.stepId);
+      const parents = [stepId];
+      for (let index = 0; index < parents.length; index++) {
+        const descendants = children.get(parents[index]);
+        children.delete(parents[index]);
+        if (!descendants) continue;
+        for (const id of descendants) {
+          seen.add(id);
+          parents.push(id);
         }
+      }
     },
     effect() {
       issues.push(

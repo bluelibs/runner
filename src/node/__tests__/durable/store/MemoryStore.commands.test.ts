@@ -33,7 +33,6 @@ describe("memory tracked command commits", () => {
     const completed = {
       ...request("one"),
       status: "completed" as const,
-      stateInitialized: true,
       state: { value: { count: 1n } },
       result: "done",
       completedAt: new Date(),
@@ -69,7 +68,6 @@ describe("memory tracked command commits", () => {
         {
           ...request("two"),
           status: "completed",
-          stateInitialized: true,
           state: null,
           completedAt: new Date(),
         },
@@ -116,7 +114,6 @@ describe("memory tracked command commits", () => {
       await store.completeCommand({
         ...accepted,
         status: "failed",
-        stateInitialized: true,
         state: { value: { n: -1 } },
       }),
     ).toBe(true);
@@ -140,7 +137,6 @@ describe("memory tracked command commits", () => {
     await store.saveCommand({
       ...request("one"),
       status: "running",
-      stateInitialized: true,
       state: { value: { cursor: 5 } },
     });
     await store.recordExecutionHistory("run", {

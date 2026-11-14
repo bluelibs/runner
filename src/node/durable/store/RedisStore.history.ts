@@ -41,7 +41,9 @@ export const recordHistoryScript = `
   local update = cjson.decode(ARGV[1])
   local raw = redis.call("hget", KEYS[1], update.stepId)
   local entry
-  if raw then entry = cjson.decode(raw)
+  if raw then
+    entry = cjson.decode(raw)
+    if update.phase == "started" or entry.completedOrder then return 1 end
   else
     entry = {stepId=update.stepId, kind=update.kind, parentStepId=update.parentStepId,
       taskKey=update.taskKey, startedOrder=redis.call("incr", KEYS[2])}

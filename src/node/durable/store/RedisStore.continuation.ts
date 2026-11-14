@@ -13,7 +13,7 @@ import {
   writeExecutionIndexScript,
 } from "./RedisStore.executionIndex";
 import { statusFlags, toRedisFlag } from "./RedisStore.executionState";
-import { commandQueueKey } from "./RedisStore.commands";
+import { commandQueueKey } from "./RedisStore.commandTimer";
 
 const SIGNAL_SET_CHANGED = "__signal_set_changed__";
 const BACKLOG_FULL_PREFIX = "__backlog_full__:";

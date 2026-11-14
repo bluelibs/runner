@@ -44,6 +44,7 @@ import type {
 } from "../core/interfaces/history";
 import * as commandOps from "./memory-store/commands";
 import type { DurableCommandRecord } from "../core/interfaces/commands";
+import { nextCommandWakeup } from "../core/commandWakeup";
 
 export type { MemoryStoreSnapshot } from "./memory-store/types";
 
@@ -59,7 +60,15 @@ export class MemoryStore implements IDurableStore {
   async enqueueCommand(
     command: DurableCommandRecord,
   ): Promise<DurableCommandRecord> {
-    return commandOps.enqueueCommand(this.runtime, command);
+    return commandOps.enqueueCommand(
+      this.runtime,
+      command,
+      nextCommandWakeup(this),
+    );
+  }
+  /** Reschedules one shared wakeup without consuming its timer claim. */
+  async rescheduleCommandTimer(id: string, fireAt: Date): Promise<boolean> {
+    return commandOps.rescheduleCommandTimer(this.runtime, id, fireAt);
   }
   /** Reads a retained command receipt. */
   async getCommand(id: string): Promise<DurableCommandRecord | null> {
@@ -85,12 +94,14 @@ export class MemoryStore implements IDurableStore {
     id: string,
     update: DurableHistoryUpdate,
   ): Promise<void> {
-    updateHistory(this.runtime, id, update);
-    await this.runtime.persistDurableMutation();
+    if (updateHistory(this.runtime, id, update))
+      await this.runtime.persistDurableMutation();
   }
   /** Reads an isolated copy of the recorded prefix. */
   async listExecutionHistory(id: string): Promise<DurableHistoryEntry[]> {
-    return structuredClone(this.runtime.histories.get(id)?.entries ?? []);
+    return structuredClone([
+      ...(this.runtime.histories.get(id)?.entries.values() ?? []),
+    ]);
   }
   /** Scopes attempt writes without changing the operator or signal caller's store. */
   withExecutionOwnership(owner: DurableExecutionOwnership): IDurableStore {

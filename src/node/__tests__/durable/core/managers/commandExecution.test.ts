@@ -19,7 +19,6 @@ describe("owned command execution", () => {
     await f.manager.drain(f.execution, f.workflow, f.store, f.lock);
     expect(await f.store.getWorkflowState("run")).toBeNull();
     expect(await f.store.getNextCommand("run")).toMatchObject({
-      stateInitialized: true,
       state: { value: { n: 4 } },
     });
     await f.manager.drain(f.execution, f.workflow, f.store, f.lock);

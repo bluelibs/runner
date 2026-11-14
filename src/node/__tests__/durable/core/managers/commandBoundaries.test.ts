@@ -68,7 +68,6 @@ describe("command context boundaries", () => {
     await f.manager.drain(f.execution, f.workflow, custom, f.lock);
     f.config.store = custom;
     await f.manager.rejectPending("run", "closed");
-    await f.manager.arm("run");
   });
 
   it("rejects a successful result whose target changes during commit", async () => {

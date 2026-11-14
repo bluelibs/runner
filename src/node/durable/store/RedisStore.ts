@@ -48,6 +48,7 @@ import type {
 } from "../core/interfaces/history";
 import * as commandOps from "./RedisStore.commands";
 import type { DurableCommandRecord } from "../core/interfaces/commands";
+import { rescheduleCommandTimer } from "./RedisStore.commandTimer";
 
 export type { RedisClient, RedisPipeline, RedisStoreConfig };
 
@@ -64,6 +65,10 @@ export class RedisStore implements IDurableStore {
     command: DurableCommandRecord,
   ): Promise<DurableCommandRecord> {
     return commandOps.enqueueCommand(this.runtime, command);
+  }
+  /** Reschedules a pending command FIFO atomically with timer indexes. */
+  async rescheduleCommandTimer(id: string, fireAt: Date): Promise<boolean> {
+    return rescheduleCommandTimer(this.runtime, id, fireAt);
   }
   /** Reads a retained receipt. */
   async getCommand(id: string): Promise<DurableCommandRecord | null> {

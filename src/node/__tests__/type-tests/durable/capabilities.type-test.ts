@@ -11,6 +11,7 @@ import type {
   DurableResource,
   IDurableService,
   IDurableStore,
+  TimerType,
 } from "../../../../node";
 
 void (async (d: IDurableWorkflowContext, durable: DurableResource) => {
@@ -52,6 +53,7 @@ void (async (d: IDurableWorkflowContext, durable: DurableResource) => {
 type LegacyStore = Omit<
   IDurableStore,
   | "enqueueCommand"
+  | "rescheduleCommandTimer"
   | "getCommand"
   | "getNextCommand"
   | "saveCommand"
@@ -67,6 +69,17 @@ declare const oldService: LegacyService;
 const store: IDurableStore = oldStore;
 const service: IDurableService = oldService;
 void [store, service];
+
+// Shared command wakeups retain the existing timer variants for exhaustive consumers.
+const legacyTimerTypes: Record<TimerType, true> = {
+  sleep: true,
+  timeout: true,
+  scheduled: true,
+  cron: true,
+  retry: true,
+  signal_timeout: true,
+};
+void legacyTimerTypes;
 
 // Existing callback-oriented context implementations remain structurally compatible.
 

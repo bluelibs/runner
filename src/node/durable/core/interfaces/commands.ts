@@ -26,9 +26,7 @@ export interface DurableCommandRecord {
   result?: unknown;
   /** Persisted failure returned to callers. */
   error?: { message: string; stack?: string };
-  /** Staged state is initialized once and survives worker takeover. */
-  stateInitialized?: boolean;
-  /** Private state, atomically applied only when the command succeeds. */
+  /** Private state applied atomically on success. Undefined is uninitialized; null is initialized without a value. */
   state?: { value: unknown } | null;
   /** Admission timestamp. */
   createdAt: Date;

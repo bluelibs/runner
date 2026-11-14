@@ -1,9 +1,11 @@
-import { createExecutionId } from "../utils";
 import { submitCommand } from "./commandClient";
 import type { AnyTask } from "../../../../types/task";
 import type { IDurableStore } from "../interfaces/store";
 import type { DurableServiceConfig } from "../interfaces/service";
-import type { DurableCommandOptions } from "../interfaces/commands";
+import type {
+  DurableCommandOptions,
+  DurableCommandRecord,
+} from "../interfaces/commands";
 import type { Execution } from "../types";
 import { isExecutionTerminal } from "../types";
 import { durableExecutionInvariantError } from "../../../../errors";
@@ -39,7 +41,6 @@ export class CommandManager {
         config: this.config,
         tasks: this.tasks,
         kickoff: this.kickoff,
-        arm: (id) => this.arm(id),
         rejectPending: (id, message) => this.rejectPending(id, message),
       },
       executionId,
@@ -49,21 +50,24 @@ export class CommandManager {
     );
   }
 
-  async arm(executionId: string): Promise<void> {
-    if (
-      !this.config.store.getNextCommand ||
-      !(await this.config.store.getNextCommand(executionId))
-    )
-      return;
-    await this.config.store.createTimer({
-      id: `commands:${JSON.stringify(executionId)}:${createExecutionId()}`,
-      executionId,
-      type: "retry",
-      status: "pending",
-      fireAt: new Date(
-        (this.config.store.getWorkflowTime?.() ?? Date.now()) + 1000,
-      ),
-    });
+  private async complete(
+    store: IDurableStore,
+    command: DurableCommandRecord,
+    expected?: Execution,
+  ): Promise<boolean> {
+    const committed = await store.completeCommand!(command, expected);
+    if (committed) {
+      try {
+        await this.config.eventBus?.publish(`command:${command.id}`, {
+          type: "finished",
+          payload: null,
+          timestamp: new Date(),
+        });
+      } catch {
+        // The receipt is durable; polling covers missed notifications.
+      }
+    }
+    return committed;
   }
 
   async rejectPending(id: string, message: string): Promise<void> {
@@ -75,7 +79,7 @@ export class CommandManager {
       next = await store.getNextCommand(id)
     ) {
       if (
-        !(await store.completeCommand({
+        !(await this.complete(store, {
           ...next,
           status: "failed",
           error: { message },
@@ -115,7 +119,7 @@ export class CommandManager {
           (entry) => this.tasks.getTaskKey(entry) === request!.taskKey,
         );
       if (!task) {
-        await owned.completeCommand!({
+        await this.complete(owned, {
           ...request,
           status: "failed",
           error: {
@@ -129,11 +133,10 @@ export class CommandManager {
         return durableExecutionInvariantError.throw({
           message: "Commands require a task executor.",
         });
-      if (!request.stateInitialized) {
+      if (request.state === undefined) {
         const state = await owned.getWorkflowState?.(execution.id);
         request = {
           ...request,
-          stateInitialized: true,
           state: state ? { value: state.state } : null,
         };
       }
@@ -183,7 +186,8 @@ export class CommandManager {
         const latest = await owned.getExecution(execution.id);
         if (latest?.status === "paused") return;
         if (
-          !(await owned.completeCommand!(
+          !(await this.complete(
+            owned,
             {
               ...staged.record,
               status: "completed",
@@ -195,7 +199,7 @@ export class CommandManager {
         ) {
           if ((await owned.getExecution(execution.id))?.status === "paused")
             return;
-          await owned.completeCommand!({
+          await this.complete(owned, {
             ...staged.record,
             status: "failed",
             error: {
@@ -216,7 +220,7 @@ export class CommandManager {
             error.reason === "step-concurrency")
         )
           return;
-        await owned.completeCommand!({
+        await this.complete(owned, {
           ...staged.record,
           status: "failed",
           error: {

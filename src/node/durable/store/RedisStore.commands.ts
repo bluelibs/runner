@@ -10,13 +10,15 @@ import {
 } from "./RedisStore.history";
 import { check, Match } from "../../../tools/check";
 import { isDeepStrictEqual } from "node:util";
-
-export function commandQueueKey(
-  runtime: RedisStoreRuntime,
-  id: string,
-): string {
-  return runtime.k(`command_queue:${runtime.encodeKeyPart(id)}`);
-}
+import {
+  commandWakeupTimer,
+  commandWakeupDelayMs,
+} from "../core/commandWakeup";
+import {
+  commandTimerKeys,
+  commandQueueKey,
+  syncCommandTimerScript,
+} from "./RedisStore.commandTimer";
 function recordsKey(runtime: RedisStoreRuntime) {
   return runtime.k("command_receipts");
 }
@@ -62,6 +64,10 @@ export async function enqueueCommand(
   command: DurableCommandRecord,
 ): Promise<DurableCommandRecord> {
   const payload = runtime.serializer.stringify(command);
+  const timer = commandWakeupTimer(
+    command.executionId,
+    new Date(Date.now() + commandWakeupDelayMs),
+  );
   for (let attempt = 0; attempt < 20; attempt++) {
     const existing = await getCommand(runtime, command.id);
     if (existing) return existing;
@@ -88,16 +94,25 @@ export async function enqueueCommand(
       redis.call("hset", KEYS[1], ARGV[1], ARGV[2])
       redis.call("hset", KEYS[2], ARGV[1], "pending")
       redis.call("rpush", KEYS[3], ARGV[1])
+      do
+        local KEYS = {KEYS[3], KEYS[5], KEYS[6], KEYS[7]}
+        local ARGV = {ARGV[4], ARGV[5], ARGV[6], "0"}
+        ${syncCommandTimerScript}
+      end
       return ARGV[2]
     `,
-      4,
+      7,
       recordsKey(runtime),
       statusesKey(runtime),
       commandQueueKey(runtime, command.executionId),
       runtime.executionKey(command.executionId),
+      ...commandTimerKeys(runtime, command.executionId),
       command.id,
       payload,
       source,
+      timer.id,
+      runtime.serializer.stringify(timer),
+      timer.fireAt.getTime(),
     );
     if (typeof result === "string")
       return runtime.serializer.parse<DurableCommandRecord>(result);
@@ -138,6 +153,10 @@ export async function completeCommand(
 ): Promise<boolean> {
   check(command.status, Match.OneOf("completed", "failed"));
   const success = command.status === "completed";
+  const timer = commandWakeupTimer(
+    command.executionId,
+    new Date(Date.now() + commandWakeupDelayMs),
+  );
   if (
     success &&
     (!expected ||
@@ -166,7 +185,7 @@ export async function completeCommand(
       })
     : "";
   const history =
-    expected?.historyRecorded && success && command.stateInitialized
+    expected?.historyRecorded && success && command.state !== undefined
       ? JSON.stringify({
           kind: "command",
           stepId: `__command:${command.id}`,
@@ -187,6 +206,11 @@ export async function completeCommand(
     redis.call("hset", KEYS[1], ARGV[1], ARGV[2])
     redis.call("hset", KEYS[2], ARGV[1], ARGV[3])
     redis.call("lpop", KEYS[3])
+    do
+      local KEYS = {KEYS[3], KEYS[8], KEYS[9], KEYS[10]}
+      local ARGV = {ARGV[8], ARGV[9], ARGV[10], "0"}
+      ${syncCommandTimerScript}
+    end
     if ARGV[7] ~= "" then
       local KEYS = {KEYS[6], KEYS[7]}
       local ARGV = {ARGV[7]}
@@ -194,7 +218,7 @@ export async function completeCommand(
     end
     return 1
   `,
-    7,
+    10,
     recordsKey(runtime),
     statusesKey(runtime),
     commandQueueKey(runtime, command.executionId),
@@ -202,13 +226,17 @@ export async function completeCommand(
     runtime.workflowStateKey(command.executionId),
     historyKey(runtime, command.executionId),
     historySequenceKey(runtime, command.executionId),
+    ...commandTimerKeys(runtime, command.executionId),
     command.id,
     runtime.serializer.stringify({ ...command, state: undefined }),
     command.status,
     expectedPayload,
-    command.stateInitialized ? "1" : "0",
+    command.state !== undefined ? "1" : "0",
     state,
     history,
+    timer.id,
+    runtime.serializer.stringify(timer),
+    timer.fireAt.getTime(),
   );
   return result === 1;
 }

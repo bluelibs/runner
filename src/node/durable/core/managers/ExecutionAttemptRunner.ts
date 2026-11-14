@@ -52,7 +52,7 @@ import {
 import { continueExecutionAsNew as continueAsNewFlow } from "./ExecutionManager.continueAsNew";
 import type { AttemptCancellationController } from "./AttemptCancellationController";
 import { WorkflowAdmissionController } from "./WorkflowAdmissionController";
-import { redriveIfResumedDuringLock } from "./ExecutionAttemptRunner.redrive";
+import { redriveAfterLockRelease } from "./ExecutionAttemptRunner.redrive";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -113,7 +113,6 @@ export class ExecutionAttemptRunner {
     });
 
     if (acquiredLock === null) {
-      await this.commands?.arm(executionId);
       return;
     }
 
@@ -130,6 +129,7 @@ export class ExecutionAttemptRunner {
     });
 
     let lockedSnapshot: Execution<unknown, unknown> | null = null;
+    let commandAtStart: string | null = null;
     try {
       const store =
         acquiredLock.lockId !== "no-lock" &&
@@ -142,20 +142,22 @@ export class ExecutionAttemptRunner {
               },
             })
           : this.deps.store;
-      lockedSnapshot = await this.executionStores.run(store, () =>
-        this.runUnderExecutionLock(executionId, lockState),
-      );
+      lockedSnapshot = await this.executionStores.run(store, async () => {
+        commandAtStart =
+          (await store.getNextCommand?.(executionId))?.id ?? null;
+        return this.runUnderExecutionLock(executionId, lockState);
+      });
     } catch (error) {
       if (!lockState.lost) throw error;
     } finally {
       stopHeartbeat();
       await acquiredLock.release();
-      await this.commands?.arm(executionId);
     }
 
-    await redriveIfResumedDuringLock({
+    await redriveAfterLockRelease({
       store: this.deps.store,
       lockedSnapshot,
+      commandAtStart,
       lockState,
       shutdownInterruptionReason:
         this.deps.cancellation.getShutdownInterruptionReason(),

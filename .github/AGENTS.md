@@ -7,7 +7,7 @@
 This directory owns GitHub workflows, issue templates, contribution guidance, and dependency update policy.
 
 - `workflows/ci.yml`: typecheck, lint, benchmark comparator and documentation-generator tests, and coverage-enforced source tests with Redis/RabbitMQ. API docs and Pages deployment run on pushes to main.
-- `workflows/real-infrastructure.yml`: focused live Redis/RabbitMQ fault tests, atomic execution fencing and cluster takeover, tracked command/checkpoint commits, successful-history retention races, duplicate delivery ownership, selected path-triggered PR checks, manual runs, and a weekly schedule.
+- `workflows/real-infrastructure.yml`: focused live Redis/RabbitMQ fault tests, atomic execution fencing and cluster takeover, tracked command/checkpoint commits, shared command wakeup races and unchanged-history writes, successful-history retention races, duplicate delivery ownership, selected path-triggered PR checks, manual runs, and a weekly schedule.
 - `workflows/bench-regression.yml`: base/head comparison with identical head workloads and protected base thresholds, plus built entry-point/consumer checks.
 - `workflows/security.yml`: production dependency audit.
 - `dependabot.yml`: dependency update configuration.

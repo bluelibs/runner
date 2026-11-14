@@ -6,17 +6,22 @@ export function updateHistory(
   runtime: MemoryStoreRuntime,
   executionId: string,
   update: DurableHistoryUpdate,
-): void {
+): boolean {
   runtime.assertOwnership();
   const history = runtime.histories.get(executionId) ?? {
     sequence: 0,
-    entries: [],
+    entries: new Map(),
   };
-  let entry = history.entries.find((entry) => entry.stepId === update.stepId);
+  let entry = history.entries.get(update.stepId);
+  if (
+    entry &&
+    (update.phase === "started" || entry.completedOrder !== undefined)
+  )
+    return false;
   if (!entry) {
     const { phase: _phase, stateAfter: _state, ...identity } = update;
     entry = { ...identity, startedOrder: ++history.sequence };
-    history.entries.push(entry);
+    history.entries.set(update.stepId, entry);
   }
   if (update.phase === "completed" && entry.completedOrder === undefined) {
     entry.completedOrder = ++history.sequence;
@@ -24,4 +29,5 @@ export function updateHistory(
       entry.stateAfter = structuredClone(update.stateAfter);
   }
   runtime.histories.set(executionId, history);
+  return true;
 }

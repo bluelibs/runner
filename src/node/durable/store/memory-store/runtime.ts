@@ -27,7 +27,7 @@ type MemoryStoreDurableMutationHooks = {
 export class MemoryStoreRuntime {
   histories = new Map<
     string,
-    { sequence: number; entries: DurableHistoryEntry[] }
+    { sequence: number; entries: Map<string, DurableHistoryEntry> }
   >();
   commands = new Map<string, DurableCommandRecord>();
   commandQueues = new Map<string, string[]>();

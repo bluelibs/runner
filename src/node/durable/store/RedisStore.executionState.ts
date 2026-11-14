@@ -3,7 +3,7 @@ import { ExecutionStatus, type Execution } from "../core/types";
 import type { ExpectedExecutionStatuses } from "../core/interfaces/store";
 import { durableStoreShapeError } from "../../../errors";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
-import { commandQueueKey } from "./RedisStore.commands";
+import { commandQueueKey } from "./RedisStore.commandTimer";
 import { saveStepResult } from "./RedisStore.executionViews";
 import {
   executionIndexArgs,
