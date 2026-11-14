@@ -47,6 +47,9 @@ describe("command context boundaries", () => {
       new DurableContext(staged.store, new NoopEventBus(), "run", 1),
     );
     expect(context.executionId).toBe("run");
+    expect(() => context._eventStepId("orders.placed", "placed")).toThrow(
+      "cannot suspend or start child workflows",
+    );
     staged.close();
     await expect(context.step("late", async () => 1)).rejects.toThrow(
       "no longer active",

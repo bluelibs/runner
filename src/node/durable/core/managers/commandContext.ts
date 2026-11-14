@@ -81,6 +81,7 @@ export function commandContext(context: IDurableContext): IDurableContext {
     "workflow",
     "continueAsNew",
     "rollback",
+    "_eventStepId",
   ]);
   return new Proxy(context, {
     get(target, property, receiver) {
