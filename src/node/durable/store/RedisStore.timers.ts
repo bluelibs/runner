@@ -1,6 +1,7 @@
 import { durableStoreShapeError } from "../../../errors";
 import { TimerStatus, type Timer } from "../core/types";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
+import { executionTimerIndexKey } from "./RedisStore.recovery";
 
 function parsePendingTimerPayloads(
   runtime: RedisStoreRuntime,
@@ -56,6 +57,7 @@ export async function createTimer(
     `
       redis.call("hset", KEYS[1], ARGV[1], ARGV[2])
       redis.call("zadd", KEYS[2], ARGV[3], ARGV[1])
+      if ARGV[4] ~= "" then redis.call("sadd", ARGV[4], ARGV[1]) end
       return "OK"
     `,
     2,
@@ -64,6 +66,9 @@ export async function createTimer(
     timer.id,
     runtime.serializer.stringify(timer),
     timer.fireAt.getTime(),
+    timer.executionId === undefined
+      ? ""
+      : executionTimerIndexKey(runtime, timer.executionId),
   );
 }
 

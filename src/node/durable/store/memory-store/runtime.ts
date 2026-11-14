@@ -13,6 +13,9 @@ import type { DurableAuditEntry } from "../../core/audit";
 import { Semaphore } from "../../../../models/Semaphore";
 import type { DurableMutationResult, MemoryStoreSnapshot } from "./types";
 import { IndexedExecutions } from "./IndexedExecutions";
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { DurableExecutionOwnership } from "../../core/interfaces/ownership";
+import { IndexedTimers } from "./IndexedTimers";
 
 type MemoryStoreDurableMutationHooks = {
   captureSnapshot: () => MemoryStoreSnapshot | null;
@@ -20,6 +23,20 @@ type MemoryStoreDurableMutationHooks = {
 };
 
 export class MemoryStoreRuntime {
+  private readonly ownership =
+    new AsyncLocalStorage<DurableExecutionOwnership>();
+
+  withOwnership<T>(owner: DurableExecutionOwnership, operation: () => T): T {
+    return this.ownership.run(owner, operation);
+  }
+
+  assertOwnership(): void {
+    const owner = this.ownership.getStore();
+    if (!owner) return;
+    const lease = this.locks.get(`execution:${owner.executionId}`);
+    if (lease?.id !== owner.lockId || lease.expires <= Date.now())
+      owner.onLost();
+  }
   private executionRecords = new IndexedExecutions();
 
   get executions(): IndexedExecutions {
@@ -52,7 +69,16 @@ export class MemoryStoreRuntime {
   executionWaiters = new Map<string, Map<string, DurableExecutionWaiter>>();
   workflowStates = new Map<string, WorkflowState>();
   auditEntries = new Map<string, DurableAuditEntry[]>();
-  timers = new Map<string, Timer>();
+  private timerRecords = new IndexedTimers();
+
+  get timers(): IndexedTimers {
+    return this.timerRecords;
+  }
+
+  set timers(timers: Map<string, Timer>) {
+    this.timerRecords = new IndexedTimers();
+    for (const [id, timer] of timers) this.timerRecords.set(id, timer);
+  }
   schedules = new Map<string, Schedule>();
   locks = new Map<string, { id: string; expires: number }>();
   private readonly signalStateSemaphore = new Semaphore(1);
@@ -77,6 +103,7 @@ export class MemoryStoreRuntime {
     fn: () => DurableMutationResult<T> | Promise<DurableMutationResult<T>>,
   ): Promise<T> {
     const { result, snapshot } = await this.withSignalStatePermit(async () => {
+      this.assertOwnership();
       const mutation = await fn();
       return {
         result: mutation.result,
@@ -96,6 +123,7 @@ export class MemoryStoreRuntime {
   ): Promise<T> {
     const { result, snapshot } = await this.withExecutionWaiterPermit(
       async () => {
+        this.assertOwnership();
         const mutation = await fn();
         return {
           result: mutation.result,

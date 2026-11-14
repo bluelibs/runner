@@ -96,7 +96,7 @@ const durableRegistration = durable.with({
   persist: { filePath: "./.runner/durable-memory.json" }, // Optional: persist memory store state to disk for local restart drills
   serializer: durableSerializer, // Optional: custom serializer resource for persisted durable payloads
   queue: { consume: true }, // Optional: test queue-mode semantics
-  polling: { enabled: true }, // Drive timers/sleeps/timeouts with bounded fan-out
+  timers: { enabled: true }, // Drive timers/sleeps/timeouts with bounded fan-out
   recovery: { onStartup: true }, // Recover orphaned executions on boot
 });
 ```
@@ -592,6 +592,43 @@ strict work bound. See the [Studio pagination contract](../examples/durable-work
 > internal API for trusted processes: enforce tenancy and access control at
 > your lane/edge before calling it.
 
+### Timer Processing And Process Roles
+
+`timers` controls persisted deadlines: workflow sleeps, delayed retries, signal
+and child-wait timeouts, and scheduled starts. It is enabled by default. Arriving
+signals and child completions can wake workflows directly; their deadlines use
+timer processing. Running attempts renew their execution ownership automatically.
+
+```ts
+timers: {
+  enabled: true,
+  pollIntervalMs: 1000, // Delay between checks for due timers
+  concurrency: 10,     // Maximum active timer handlers on this process
+  claimTtlMs: 5000,    // Renewable timer claim; default 5000 with a queue, 30000 without
+}
+```
+
+All numeric options must be positive integers. Timer-handler concurrency is
+separate from workflow/step concurrency; claim duration is separate from
+execution ownership and workflow deadlines.
+
+| Setting | Responsibility |
+| --- | --- |
+| `queue.consume` | Execute workflows delivered through the configured queue |
+| `timers.enabled` | Process due persisted deadlines |
+| `recovery.enabled` | Find and redispatch abandoned executions |
+
+For a combined application/worker process, consume the queue, leave timers
+enabled, and enable recovery. To split roles, API processes submit through a
+shared queue with consumption, timers, and recovery disabled; workers enable all
+three against the same backend. Without a queue, starts execute locally. Keep
+timer processing enabled on at least one process for deadlines to advance.
+
+`polling` is a deprecated compatibility alias. Replace `polling.interval` with
+`timers.pollIntervalMs`; `enabled`, `concurrency`, and `claimTtlMs` keep their names.
+When both groups are supplied, each defined `timers` field wins. Omitted fields
+fall back to `polling`, then the existing defaults. There is no runtime warning.
+
 ### Recovery
 
 ```ts
@@ -599,6 +636,58 @@ const report = await durable.recover();
 ```
 
 Runs automatically at startup when `recovery.onStartup: true`.
+
+For recovery while the cluster stays running, enable continuous sweeps on workers
+that register the workflows they can execute:
+
+```ts
+recovery: {
+  enabled: true,       // Opt-in continuous recovery
+  intervalMs: 5_000,   // Default sweep interval
+  batchSize: 100,      // Maximum metadata candidates per sweep (1–1000)
+  concurrency: 10,     // Maximum in-flight recovery submissions per worker
+  claimTtlMs: 30_000,  // Suppress duplicate recovery dispatches during delivery
+}
+```
+
+Each sweep advances a keyset cursor through active execution metadata. It skips
+live execution leases, paused/terminal runs, unknown workflow keys, retry timers,
+and healthy sleeps or signal/child waits. An abandoned attempt can resume after
+its lease expires without restarting another worker. Recovery also repairs
+missing wait timers and lost signal/child wakeups by replaying persisted state;
+completed steps remain cached. At least one timer poller must still run for
+ordinary sleeps, retries, and timeouts.
+
+Workers coordinate recovery submissions with a store claim. A successful
+submission retains that claim until its TTL expires, giving queued delivery time
+to arrive. Actual execution ownership is decided separately by the execution
+lease (currently 30 seconds, renewed while the attempt runs). Recovery latency
+includes lease expiry, reaching the candidate's metadata page, and queue delivery;
+the sweep interval alone is not a failover deadline. Cooldown stops new recovery
+admissions; final disposal waits for already admitted submissions to settle.
+
+The built-in stores atomically check the attempt's lease token with each
+attempt-owned mutation, including step results, workflow state, waiters, timers,
+continuations, and outcome transitions. An expired or replaced owner cannot
+overwrite the new owner's progress. Root/operator calls and external signal
+delivery retain their existing contracts. Already-started external effects can
+overlap during failover: use downstream idempotency or reconciliation.
+
+Redis is the shared backend for separate processes. Memory supports multiple
+services sharing one store instance; file-persisted memory remains single-process.
+Before enabling continuous recovery on existing Redis data, complete the execution
+metadata backfill described above and upgrade all writers. The timer index is
+backfilled lazily using `HSCAN` pages on first inspection; custom Redis clients
+need `hscan()`. Concurrent legacy writers do not maintain the new timer index.
+Redis Cluster support is not introduced by this feature.
+
+Custom stores keep their existing behavior unless they implement the optional
+`withExecutionOwnership(ownership)` capability. The returned store must verify
+the lease and commit each mutation atomically, invoking `ownership.onLost()` on
+loss. Continuous recovery additionally requires `hasExecutionLease(id)`, indexed
+`getExecutionTimers(id)` and `listExecutionStates(...)`, plus
+`acquireLock`/`renewLock`/`releaseLock`; missing capabilities fail at construction.
+Manual `recover()` and `onStartup` retain their existing drain behavior.
 
 ---
 
@@ -941,7 +1030,7 @@ Durable scheduling persists schedule definitions and timers in the store. The po
                                │
                                ▼
 ┌────────────────────────────────────────────────────────────────┐
-│ Polling Loop (enabled: true, interval: 1000ms, concurrency: 10)│
+│ Timer Processing (timers.enabled: true)                        │
 │                                                                │
 │ Every tick / wake:                                             │
 │ 1. claimReadyTimers(now, availableSlots, workerId, ttlMs)      │
@@ -963,9 +1052,9 @@ Durable scheduling persists schedule definitions and timers in the store. The po
 | Deduped         | Uses `idempotencyKey: timer:sched:ID:fireAt` to prevent duplicate runs for same tick.               |
 | Rebinding guard | Cannot change `workflowKey` on existing schedule (throws).                                          |
 
-### Polling Backpressure
+### Timer Processing Backpressure
 
-`polling.concurrency` is a per-worker cap, not a global cap.
+`timers.concurrency` is a per-worker cap, not a global cap.
 
 - One worker with `concurrency: 10` handles up to 10 timers at a time.
 - Four workers with `concurrency: 10` can drain up to about 40 timers at a
@@ -1085,7 +1174,7 @@ const durableRegistration = durable.with({
     quorum: true,
     deadLetter: "durable-dlq",
   },
-  polling: { enabled: true, interval: 1000, concurrency: 10 }, // per worker
+  timers: { enabled: true, pollIntervalMs: 1000, concurrency: 10 }, // per worker
   recovery: { onStartup: true },
 });
 ```
@@ -1096,13 +1185,13 @@ handler cost in your own topology.
 
 ### Role Separation
 
-**API nodes** (no background work):
+**API nodes** (submit work; workers handle execution, timers, and recovery):
 
 ```ts
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
-  polling: { enabled: false }, // No timer driving
+  timers: { enabled: false }, // No timer driving
 });
 ```
 
@@ -1112,7 +1201,7 @@ const durableRegistration = durable.with({
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL!, consume: true },
-  polling: { enabled: true, interval: 1000, concurrency: 10 }, // per worker
+  timers: { enabled: true, pollIntervalMs: 1000, concurrency: 10 }, // per worker
   recovery: { onStartup: true },
 });
 ```
@@ -1378,8 +1467,8 @@ Available events:
 | Durable sleep           | Timers persist. Resume after process restart.                                 |
 | Signal buffering        | Early signals queue until workflow waits.                                     |
 | Signal bounds           | Queued backlog is capped per key (backpressure); history keeps newest 1000.   |
-| Recovery                | Orphaned executions discovered and resumed on startup.                        |
-| Locks                   | Only one worker processes an execution at a time.                             |
+| Recovery                | Startup/manual drains; optional continuous indexed orphan sweeps.            |
+| Ownership               | Built-in stores atomically reject attempt writes after lease expiry or replacement. |
 
 > **Note:** A step body can run again if the process crashes after an external action succeeds but before its result is persisted. For external side effects, use a stable idempotency key when the receiving service supports and enforces it; Runner cannot atomically commit an external action and its checkpoint.
 

@@ -76,7 +76,7 @@ export class DurableResource implements IDurableResource {
 
   /** @internal Backend access for integrations sharing durable execution ownership. */
   getStore(): IDurableStore {
-    return this.requireStoreForRepository();
+    return this.current()?._getStore() ?? this.requireStoreForRepository();
   }
 
   /** Returns this runtime's active workflow context, when called within one. */

@@ -36,10 +36,35 @@ import * as timerOps from "./RedisStore.timers";
 import * as schedulingOps from "./RedisStore.scheduling";
 import * as executionIndexOps from "./RedisStore.executionIndex";
 import * as workflowStateOps from "./RedisStore.workflowState";
+import type { DurableExecutionOwnership } from "../core/interfaces/ownership";
+import { scopeExecutionStore } from "./ownership";
+import { getExecutionTimers } from "./RedisStore.recovery";
 
 export type { RedisClient, RedisPipeline, RedisStoreConfig };
 
 export class RedisStore implements IDurableStore {
+  /** Scopes mutations to their execution lease without affecting other callers. */
+  withExecutionOwnership(owner: DurableExecutionOwnership): IDurableStore {
+    return scopeExecutionStore(this, (operation) =>
+      this.runtime.withOwnership(owner, operation),
+    );
+  }
+
+  /** Redis expires the lease on the server, independently of worker clocks. */
+  async hasExecutionLease(executionId: string): Promise<boolean> {
+    return (
+      this.runtime.parseRedisString(
+        await this.runtime.redis.get(
+          this.runtime.lockKey(`execution:${executionId}`),
+        ),
+      ) !== null
+    );
+  }
+
+  /** Uses execution-local timer membership, backfilling older timer records once. */
+  async getExecutionTimers(executionId: string): Promise<Timer[]> {
+    return getExecutionTimers(this.runtime, executionId);
+  }
   /** Collects due successful history while preserving completion receipts. */
   async collectCompletedHistory(now: Date, limit: number): Promise<number> {
     return collectCompletedHistory(this.runtime, now, limit);
@@ -476,11 +501,15 @@ export class RedisStore implements IDurableStore {
   }
 
   async acquireLock(resource: string, ttlMs: number): Promise<string | null> {
-    return await schedulingOps.acquireLock(this.runtime, resource, ttlMs);
+    return await this.runtime.withoutOwnership(() =>
+      schedulingOps.acquireLock(this.runtime, resource, ttlMs),
+    );
   }
 
   async releaseLock(resource: string, lockId: string): Promise<void> {
-    await schedulingOps.releaseLock(this.runtime, resource, lockId);
+    await this.runtime.withoutOwnership(() =>
+      schedulingOps.releaseLock(this.runtime, resource, lockId),
+    );
   }
 
   async renewLock(
@@ -488,7 +517,9 @@ export class RedisStore implements IDurableStore {
     lockId: string,
     ttlMs: number,
   ): Promise<boolean> {
-    return await schedulingOps.renewLock(this.runtime, resource, lockId, ttlMs);
+    return await this.runtime.withoutOwnership(() =>
+      schedulingOps.renewLock(this.runtime, resource, lockId, ttlMs),
+    );
   }
 
   async dispose(): Promise<void> {

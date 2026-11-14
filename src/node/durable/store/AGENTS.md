@@ -21,6 +21,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Timer/scheduling modules: bounded claim polling and recurring schedule state.
 - `memory-store/runtime.ts`, `shared.ts`, and `snapshot.ts`: maps, cloning, durable mutation hooks, and restoration.
 - `memory-store/IndexedExecutions.ts` and `OrderedKeys.ts`: write-through query indexes.
+- `ownership.ts` scopes store calls without bypassing subclass hooks; backend runtimes own separate async-local ownership. `RedisStore.ownership.ts` checks the lease inside each mutation script; memory checks synchronously inside mutation permits.
+- `memory-store/IndexedTimers.ts` and `RedisStore.recovery.ts` index pending timers per execution. Redis legacy timers use paged HSCAN backfill; cleanup compares observed payloads so recreated timers keep membership.
 
 ## Persistence Contracts
 
@@ -32,6 +34,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Signal backlog remains FIFO and retains repeated identical signals; history and backlog are different records.
 - Completing a waiter must commit the step, remove the waiter, and handle its timeout consistently.
 - Claimed timers and locks use owner tokens/leases; stale owners cannot renew or finalize another owner's work.
+- Attempt-owned writes must atomically compare the live execution lease before mutation. Never replace this with a read/renew followed by an unguarded write. Optional custom stores without this capability cannot enable continuous recovery.
 - Schedule cadence/payload can change, but `ScheduleUpdate` does not permit replacing its id.
 - Metadata queries use indexes without scanning payloads; cursors preserve stable ordering.
 - Memory state belongs to each instance. Preserve cloning semantics for workflow/signal/execution payloads.

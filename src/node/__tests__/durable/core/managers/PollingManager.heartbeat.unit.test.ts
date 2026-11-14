@@ -28,7 +28,7 @@ function createPollingManager(store: IDurableStore, logger?: Logger) {
 
   return new PollingManager(
     "worker-1",
-    { interval: 1 },
+    { pollIntervalMs: 1 },
     store,
     undefined,
     3,

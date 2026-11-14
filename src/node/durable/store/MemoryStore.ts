@@ -32,10 +32,30 @@ import * as timerOps from "./memory-store/timers";
 import * as workflowStateOps from "./memory-store/workflowState";
 import type { MemoryStoreSnapshot } from "./memory-store/types";
 import { toDurableExecutionState } from "../core/executionIndex";
+import type { DurableExecutionOwnership } from "../core/interfaces/ownership";
+import { scopeExecutionStore } from "./ownership";
+import { cloneTimer } from "./memory-store/shared";
 
 export type { MemoryStoreSnapshot } from "./memory-store/types";
 
 export class MemoryStore implements IDurableStore {
+  /** Scopes attempt writes without changing the operator or signal caller's store. */
+  withExecutionOwnership(owner: DurableExecutionOwnership): IDurableStore {
+    return scopeExecutionStore(this, (operation) =>
+      this.runtime.withOwnership(owner, operation),
+    );
+  }
+
+  /** Expired leases cannot keep an orphaned execution out of recovery. */
+  async hasExecutionLease(executionId: string): Promise<boolean> {
+    const lease = this.runtime.locks.get(`execution:${executionId}`);
+    return lease !== undefined && lease.expires > Date.now();
+  }
+
+  /** Uses the pending-timer index, including timers restored from snapshots. */
+  async getExecutionTimers(executionId: string): Promise<Timer[]> {
+    return this.runtime.timers.forExecution(executionId).map(cloneTimer);
+  }
   /** Collects due successful history while preserving completion receipts. */
   async collectCompletedHistory(now: Date, limit: number): Promise<number> {
     return collectCompletedHistory(this.runtime, now, limit);

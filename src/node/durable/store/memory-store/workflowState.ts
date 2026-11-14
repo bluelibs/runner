@@ -14,6 +14,7 @@ export async function saveWorkflowState(
   runtime: MemoryStoreRuntime,
   state: WorkflowState,
 ): Promise<void> {
+  runtime.assertOwnership();
   runtime.workflowStates.set(state.executionId, cloneWorkflowState(state));
   await runtime.persistDurableMutation();
 }

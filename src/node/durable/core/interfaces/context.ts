@@ -14,6 +14,7 @@ import type {
   ResolveTaskOutput,
 } from "../../../../types/utilities";
 import type { DurableStepId } from "../ids";
+import type { IDurableStore } from "./store";
 
 /**
  * Options for sleep operations.
@@ -114,6 +115,9 @@ export interface IStepBuilder<T> extends PromiseLike<T> {
 export interface IDurableContext extends IDurableStateContext {
   readonly executionId: string;
   readonly attempt: number;
+
+  /** @internal Attempt-scoped backend for integrations that commit workflow progress. */
+  _getStore(): IDurableStore;
 
   /**
    * Memoized save point: runs `fn` once and returns its persisted result on

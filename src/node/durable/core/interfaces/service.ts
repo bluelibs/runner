@@ -8,6 +8,9 @@ import type { IDurableContext } from "./context";
 import type { ExecutionStatus, Schedule } from "../types";
 import type { DurableAuditEmitter } from "../audit";
 import type { Logger } from "../../../../models/Logger";
+import type { DurableTimerConfig } from "./timers";
+
+export type { DurableTimerConfig } from "./timers";
 
 export interface ITaskExecutor {
   run<TInput, TResult>(
@@ -153,35 +156,35 @@ export interface DurableServiceConfig {
     enabled?: boolean;
     emitter?: DurableAuditEmitter;
   };
-  polling?: {
+  /**
+   * Processes persisted sleeps, delayed retries, wait timeouts, and scheduled
+   * starts on this process. Enabled by default; disable on API processes when
+   * workers sharing the store handle timers. Queue consumption and orphan
+   * recovery are configured independently; execution heartbeats are automatic.
+   *
+   * When both `timers` and deprecated `polling` are supplied, each defined
+   * `timers` field wins; omitted fields fall back to `polling`, then defaults.
+   */
+  timers?: DurableTimerConfig;
+  /**
+   * Legacy timer-processing configuration. Defaults and behavior are preserved.
+   * Each field is used only when its corresponding `timers` field is omitted.
+   * @deprecated Use `timers`; replace `polling.interval` with `timers.pollIntervalMs`.
+   */
+  polling?: Omit<DurableTimerConfig, "pollIntervalMs"> & {
     /**
-     * Enables the store-backed timer poller for this process.
-     *
-     * When enabled, the durable store must implement `claimReadyTimers(...)`
-     * so workers can split timer backlogs without scanning and fan-outing the
-     * entire ready set on every poll pass.
+     * Delay between checks for due timers, in milliseconds. Default: 1000.
+     * @deprecated Use `timers.pollIntervalMs`.
      */
-    enabled?: boolean;
-    /** Poll interval in milliseconds. Default: 1000. */
     interval?: number;
-    /**
-     * Maximum number of timers this worker processes concurrently.
-     *
-     * This is a per-worker cap. Total cluster drain capacity scales with the
-     * number of polling workers, so `workers * concurrency` is the effective
-     * upper bound during backlog recovery.
-     *
-     * Default: 10.
-     */
-    concurrency?: number;
-    /**
-     * Time-to-live for timer claims in milliseconds.
-     *
-     * Default: 5000 when a queue is configured, otherwise 30000.
-     */
-    claimTtlMs?: number;
   };
   recovery?: {
+    /** Continuously sweep for orphaned executions. Opt-in; requires atomic ownership and indexed store capabilities. */
+    enabled?: boolean;
+    /** Continuous sweep interval in milliseconds. Default: 5000. */
+    intervalMs?: number;
+    /** Maximum metadata candidates inspected per continuous sweep (1–1000). Default: 100. */
+    batchSize?: number;
     /** Automatically starts background orphan recovery when the runtime boots. */
     onStartup?: boolean;
     /** Maximum number of concurrent recovery attempts per drain. Default: 10. */
@@ -450,7 +453,8 @@ export interface IDurableService {
   recover(): Promise<RecoverReportType>;
 
   /**
-   * Starts the durable polling loop (timers/schedules processing).
+   * Starts persisted timer processing for sleeps, retries, wait timeouts, and
+   * scheduled starts, even when automatic startup is disabled with `timers.enabled`.
    */
   start(): void;
 

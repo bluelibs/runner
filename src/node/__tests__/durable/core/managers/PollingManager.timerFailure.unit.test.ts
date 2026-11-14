@@ -49,7 +49,7 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
 
     const pollingManager = new PollingManager(
       "worker-1",
-      { interval: 1 },
+      { pollIntervalMs: 1 },
       store,
       undefined,
       3,
@@ -215,7 +215,7 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
     const scheduleManager = new ScheduleManager(store, taskRegistry);
     const pollingManager = new PollingManager(
       "worker-1",
-      { interval: 1 },
+      { pollIntervalMs: 1 },
       store,
       undefined,
       3,
@@ -283,7 +283,7 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
     const scheduleManager = new ScheduleManager(store, taskRegistry);
     const pollingManager = new PollingManager(
       "worker-1",
-      { interval: 1 },
+      { pollIntervalMs: 1 },
       store,
       undefined,
       3,
@@ -339,7 +339,7 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
     const processExecution = jest.fn(async () => {});
     const pollingManager = new PollingManager(
       "worker-1",
-      { interval: 1 },
+      { pollIntervalMs: 1 },
       store,
       undefined,
       3,

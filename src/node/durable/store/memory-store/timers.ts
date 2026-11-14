@@ -21,6 +21,7 @@ export async function createTimer(
   runtime: MemoryStoreRuntime,
   timer: Timer,
 ): Promise<void> {
+  runtime.assertOwnership();
   runtime.timers.set(timer.id, cloneTimer(timer));
   await runtime.persistDurableMutation();
 }
@@ -36,6 +37,7 @@ export async function markTimerFired(
   runtime: MemoryStoreRuntime,
   timerId: string,
 ): Promise<void> {
+  runtime.assertOwnership();
   const timer = runtime.timers.get(timerId);
   if (!timer) {
     return;
@@ -52,6 +54,7 @@ export async function deleteTimer(
   runtime: MemoryStoreRuntime,
   timerId: string,
 ): Promise<void> {
+  runtime.assertOwnership();
   if (!runtime.timers.delete(timerId)) {
     return;
   }
@@ -65,6 +68,7 @@ export async function claimTimer(
   workerId: string,
   ttlMs: number,
 ): Promise<boolean> {
+  runtime.assertOwnership();
   const claimKey = getTimerClaimKey(timerId);
   const now = Date.now();
   runtime.pruneExpiredLocks(now);
@@ -86,6 +90,7 @@ export async function renewTimerClaim(
   workerId: string,
   ttlMs: number,
 ): Promise<boolean> {
+  runtime.assertOwnership();
   const claimKey = getTimerClaimKey(timerId);
   const now = Date.now();
   runtime.pruneExpiredLocks(now);
@@ -106,6 +111,7 @@ export async function releaseTimerClaim(
   timerId: string,
   workerId: string,
 ): Promise<boolean> {
+  runtime.assertOwnership();
   const claimKey = getTimerClaimKey(timerId);
   const now = Date.now();
   runtime.pruneExpiredLocks(now);
@@ -123,6 +129,7 @@ export async function finalizeClaimedTimer(
   timerId: string,
   workerId: string,
 ): Promise<boolean> {
+  runtime.assertOwnership();
   const claimKey = getTimerClaimKey(timerId);
   const now = Date.now();
   runtime.pruneExpiredLocks(now);

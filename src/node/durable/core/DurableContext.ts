@@ -223,6 +223,11 @@ export class DurableContext implements IDurableContext {
     return typeof stepId === "string" ? stepId : stepId.id;
   }
 
+  /** @internal Keeps integration writes under the active execution's lease. */
+  _getStore(): IDurableStore {
+    return this.store;
+  }
+
   private internalStep<T>(
     stepId: string,
     options: StepOptions = {},

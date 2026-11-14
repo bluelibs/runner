@@ -13,6 +13,9 @@ import type {
   WorkflowState,
 } from "../types";
 import type { DurableAuditEntry } from "../audit";
+import type { DurableExecutionOwnership } from "./ownership";
+
+export type { DurableExecutionOwnership } from "./ownership";
 
 export interface ListExecutionsOptions {
   /** Lifecycle states to include. Omit to include every state. */
@@ -51,6 +54,17 @@ export type ExpectedExecutionStatuses = readonly [
 export type ScheduleUpdate = Omit<Partial<Schedule>, "id">;
 
 export interface IDurableStore {
+  /**
+   * Returns a call-scoped store that atomically verifies the execution lease
+   * with each mutation. Loss invokes ownership.onLost before exposing an error.
+   * Transient locks retain their own token checks so stale attempts can clean up.
+   * Required for continuous cluster recovery; legacy custom stores may omit it.
+   */
+  withExecutionOwnership?(ownership: DurableExecutionOwnership): IDurableStore;
+  /** Reads whether an execution lease is currently live, using backend expiry. */
+  hasExecutionLease?(executionId: string): Promise<boolean>;
+  /** Reads this execution's pending timers without scanning unrelated executions. */
+  getExecutionTimers?(executionId: string): Promise<Timer[]>;
   /** Atomically collects due successful history, retaining completion receipts for replay and waiters. */
   collectCompletedHistory?(now: Date, limit: number): Promise<number>;
   saveExecution(execution: Execution): Promise<void>;

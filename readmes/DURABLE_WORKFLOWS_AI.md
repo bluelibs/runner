@@ -31,7 +31,7 @@ const durableSerializer =
   resources.serializer.fork("app-durable-serializer");
 const durableRegistration = durable.with({
   serializer: durableSerializer, // optional resource, not instance
-  polling: { enabled: true },
+  timers: { enabled: true },
   recovery: { onStartup: true },
 });
 
@@ -394,6 +394,44 @@ const report = await durableRuntime.recover();
 
 Runs automatically at startup when `recovery.onStartup: true`.
 
+Enable `recovery: { enabled: true, intervalMs: 5000, batchSize: 100,
+concurrency: 10, claimTtlMs: 30000 }` for continuous recovery without worker
+restarts. These are the defaults except `enabled` (off). Sweeps page active
+metadata, skip live leases/unknown workflows/healthy waits, repair missing wait
+timers and lost signal/child wakeups, and resume from saved checkpoints. Claims
+suppress repeated queue submissions until expiry; execution leases separately
+arbitrate attempts. Failover includes lease expiry (currently 30 seconds), page
+traversal, and delivery latency. Keep a timer poller running. Cooldown stops new
+admissions; disposal drains accepted submissions.
+
+Built-in stores fence attempt mutations atomically against the execution lease;
+late old workers cannot overwrite progress. External effects still need downstream
+idempotency. Redis supports cross-process recovery; memory requires the same store
+instance and file persistence remains single-process. Existing Redis deployments
+must finish execution-index backfill and upgrade all writers before enabling;
+the timer index backfills lazily with `HSCAN`. Custom clients need `hscan()`.
+Custom stores must implement `withExecutionOwnership`, `hasExecutionLease`,
+`getExecutionTimers`, `listExecutionStates`, and renewable locks to enable sweeps;
+otherwise construction fails. Legacy custom-store, manual and startup-drain
+behavior stays available. See the main guide for the ownership capability contract.
+
+## Timer Processing
+
+Timer configuration uses `timers: { enabled: true, pollIntervalMs: 1000,
+concurrency: 10, claimTtlMs: 5000 }`. These are the defaults with a queue;
+without a queue the claim default is 30000. Numeric values must be positive
+integers. Timers process sleeps, delayed retries, wait timeouts, and scheduled
+starts. Queue consumption executes work; recovery finds abandoned executions;
+active execution heartbeats are automatic. Keep timers enabled on at least one
+process. Disable timers on API processes only when workers sharing the backend
+handle them; use a shared queue for API/worker separation.
+
+`polling` is deprecated but supported. Move `polling.interval` to
+`timers.pollIntervalMs`; other option names are unchanged. Defined `timers`
+fields override corresponding `polling` fields; omitted values inherit legacy
+settings, then defaults. Deprecation is surfaced through interface JSDoc,
+without runtime warnings.
+
 ## Signals
 
 ```ts
@@ -492,7 +530,7 @@ ensureSchedule(task, input, { id, cron, timezone? })
     → Computes nextRun
     → Persists Timer { id: "sched:id", fireAt, scheduleId }
 
-Polling Loop (when polling.enabled: true)
+Timer Processing (when timers.enabled: true)
     → claimReadyTimers(now, availableSlots, workerId, claimTtlMs)
       claims only as many ready timers as this worker can process now
     → handleScheduledTaskTimer()
@@ -509,7 +547,7 @@ Polling Loop (when polling.enabled: true)
 - Backpressured — polling drains ready timers in bounded waves instead of
   releasing the whole backlog at once
 
-`polling.concurrency` is per worker.
+`timers.concurrency` is per worker.
 
 - `10` means one worker handles up to 10 timers at a time
 - total cluster drain capacity scales with worker count
@@ -583,15 +621,15 @@ const workerConfig = durable.with({
     quorum: true,
     deadLetter: "durable-dlq",
   },
-  polling: { enabled: true, interval: 1000, concurrency: 10 }, // per worker
+  timers: { enabled: true, pollIntervalMs: 1000, concurrency: 10 }, // per worker
   recovery: { onStartup: true },
 });
 
-// API node (no background work)
+// API node (submit work; workers handle execution, timers, and recovery)
 const apiConfig = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! }, // transport only, no consume
-  polling: { enabled: false },
+  timers: { enabled: false },
 });
 ```
 
@@ -646,7 +684,7 @@ await runtime.dispose();
 | Signal not delivered   | Verify `executionId` matches stored                    |
 | Compensation fails     | Fix downstream, use `retryRollback()`                  |
 | Intervals overlap      | Use `d.sleep()` for completion-based spacing           |
-| Timers don't fire      | Ensure `polling.enabled: true` in at least one process |
+| Timers don't fire      | Ensure `timers.enabled: true` in at least one process |
 | Continue rejected      | Call only from a running attempt                       |
 | Restart rejected       | Wait for terminal state, or pause first                |
 | State grows per replay | Guard appends so writes are idempotent                 |

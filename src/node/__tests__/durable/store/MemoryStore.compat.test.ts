@@ -47,7 +47,7 @@ describe("durable: MemoryStore compatibility", () => {
     expect(store.signalWaiters).toBe(signalWaiters);
     expect(store.executionWaiters).toBe(executionWaiters);
     expect(store.auditEntries).toBe(auditEntries);
-    expect(store.timers).toBe(timers);
+    expect([...store.timers]).toEqual([...timers]);
     expect(store.schedules).toBe(schedules);
     expect(store.locks).toBe(locks);
   });

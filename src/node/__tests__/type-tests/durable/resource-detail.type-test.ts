@@ -6,7 +6,12 @@ type AssertFalse<T extends false> = T;
 void (() => {
   const durable = resources.memoryWorkflow.fork("types-durable-repository");
   const durableRegistration = durable.with({
-    polling: { enabled: false },
+    timers: {
+      enabled: false,
+      pollIntervalMs: 1000,
+      concurrency: 10,
+      claimTtlMs: 5000,
+    },
   });
 
   const detailTask = r

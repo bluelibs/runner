@@ -10,6 +10,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 ## Entry Points And Ownership
 
 - `interfaces/` and `types.ts`: public service, context, resource, store, bus, and queue contracts.
+- `interfaces/timers.ts` documents deadline processing and process roles. `timerConfig.ts` normalizes preferred `timers` settings with field-wise fallback to deprecated `polling`; `timers.pollIntervalMs` replaces `polling.interval`. Defaults and explicit false values must remain compatible.
 - `HistoryCollector.ts` owns lifecycle-bound successful-history collection; `retention.ts` defines admission-time policy and eligibility. `runnerContext.ts` shares one execution stack per Runner Store across durable backends.
 - `DurableService.ts`: delegates starts, signals, schedules, recovery, waiting, and lifecycle to managers.
 - `DurableResource.ts`: Runner-facing facade and scoped `use()`; `createRunnerDurableRuntime.ts` owns runtime wiring.
@@ -21,6 +22,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `managers/ExecutionAttemptRunner*`: live attempts, replay outcomes, and recovery redrive.
 - `managers/SignalHandler*`, `WaitManager*`: durable delivery and result waiting.
 - `managers/PollingManager*`, `ScheduleManager`, `RecoveryManager`: timers, recurrence, and crash recovery.
+- `managers/ClusterRecovery.ts` owns opt-in bounded continuous metadata sweeps; `clusterRecoveryEligibility.ts` distinguishes orphaned progress from healthy parked waits. Recovery dispatch claims are separate from execution leases.
 - `managers/WorkflowAdmissionController.ts`: workflow admission; `StoreAdmissionController.ts` shares store-backed policies with `StepAdmissionController.ts`. Renewal and cancellable acquisition reuse Node resilience helpers.
 - `durable-context/`: focused steps, waits, sleep, state, switch, and determinism operations. Runner events use injected dependencies; the incomplete context bus-emission API is removed.
 - `continuedChain.ts`, `executionWaiters.ts`, `signalWaiters.ts`, `waiterCore.ts`: shared chain/wait bookkeeping.
@@ -40,6 +42,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Step saturation saves a retry timer and releases workflow admission; interrupted callbacks stop renewal and retain numeric capacity until settlement or lease expiry, including execution-lock loss.
 - `durable-context/DurableContext.stepAttempt.ts` journals step retry consumption by workflow attempt so concurrency replay preserves its budget. Obsolete fixed-window grants defer, and callback entry checks expiry synchronously before user code.
 - Renew and check ownership around long-running work; do not commit after a lease is lost.
+- `ExecutionAttemptRunner` passes an execution-owned store through async-local attempt scope; built-in stores atomically fence mutations. Root lease acquisition/heartbeat, operator calls, and external signal delivery remain independent. Continuous recovery requires ownership plus indexed metadata/timer inspection and renewable locks.
 - Retain compatibility with optional store methods: unsupported requested features fail clearly.
 - Runtime admission, polling timers, cancellation listeners, workers, and async context belong to this service instance.
 
