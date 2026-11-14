@@ -49,12 +49,6 @@ export interface WaitForExecutionOptions {
   stepId?: string;
 }
 
-/** Options for emit operations. */
-export interface EmitOptions {
-  /** Explicit step ID for replay stability. If not provided, an auto-indexed ID is used. */
-  stepId?: string;
-}
-
 /**
  * Options for starting a child workflow from within a durable workflow.
  */
@@ -210,12 +204,6 @@ export interface IDurableContext extends IDurableStateContext {
     options: WaitForExecutionOptions,
   ): Promise<ResolveTaskOutput<TTask>>;
 
-  emit<TPayload>(
-    event: IEventDefinition<TPayload>,
-    payload: TPayload,
-    options?: EmitOptions,
-  ): Promise<void>;
-
   /**
    * Append a custom audit entry for observability and debugging.
    * This is a no-op if audit is disabled or the store does not support it.
@@ -242,7 +230,7 @@ export interface IDurableContext extends IDurableStateContext {
   rollback(): Promise<void>;
 
   /** @internal Resolves a stable durable event call site under the determinism policy. */
-  _eventStepId(eventId: string, explicit?: string): string;
+  _eventStepId(eventKey: string, explicit?: string): string;
 
   /** @internal Checkpoint compensation while permitting cancellation-requested teardown. */
   _compensate<T>(

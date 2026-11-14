@@ -14,7 +14,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `durable/core/managers/`: lock/admission ownership, timer polling, transitions, and signal races.
 - `durable/core/durable-context/`, `durable/core/audit/`: replayable actions and observability.
 - `durable/store/`: memory/file/Redis parity, snapshots, indexes, waiters, and atomic mutation.
-- `durable/resources/`, `durable/helpers/`: Runner backend wiring and shared focused helpers; `durableEventBridge.deployments.test.ts` verifies saved listener membership and order with current handlers during recovery.
+- `durable/resources/`, `durable/helpers/`: Runner backend wiring and shared focused helpers; deployment suites verify saved listener order and current handlers, while `durableEventBridge.keys.test.ts` covers event moves, parent replay, deduplication, compensation, and key collisions.
 - `durable/bus/`, `durable/queue/`, `durable/tags/`, `durable/emitters/`: adapter and discovery contracts.
 - `shell/`: socket safety, handshake, native REPL, read-only scope, app isolation, and shutdown.
 - `resilience/`: policy identity, cancellation, permit leases, local/distributed coordination.

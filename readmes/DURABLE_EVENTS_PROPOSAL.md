@@ -235,6 +235,6 @@ This makes successful execution details eligible for collection as soon as compl
 
 Add the bridge under `src/node/durable/`, with Node exports for its tag and resource. Extend portable hook definitions only for the typed compensation contract; portable event execution must not import the durable engine.
 
-Compile plans during graph setup, and execute them using the existing durable task engine. Add durable compensation-phase recovery and retention to that engine rather than introducing a second scheduler or store. The current `durableContext.emit()` remains a bus notification; this proposal does not silently change it into Runner event dispatch.
+Compile plans during graph setup, and execute them using the existing durable task engine. Add durable compensation-phase recovery and retention to that engine rather than introducing a second scheduler or store. The incomplete `DurableContext.emit()` bus-notification API was subsequently removed; ordinary Runner event dependencies dispatch through the bridge. See [the implemented contract](DURABLE_EVENTS.md) for optional stable event keys.
 
 Related existing contracts: [events and hooks](../guide-units/02c-events-and-hooks.md), [durable workflows](DURABLE_WORKFLOWS.md), and [durable core architecture](../src/node/durable/core/AGENTS.md).

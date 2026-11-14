@@ -110,7 +110,7 @@ export interface DurableServiceConfig {
   taskExecutor?: ITaskExecutor;
   determinism?: {
     /**
-     * Internal step IDs for `sleep()`/`emit()`/`waitForSignal()` default to call-order based IDs.
+     * Internal step IDs for `sleep()`, `waitForSignal()`, and bridged event emissions default to call-order based IDs.
      * In production this can be a replay/versioning footgun when refactors change call order.
      *
      * - "allow" (default): do nothing

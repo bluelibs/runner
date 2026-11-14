@@ -9,6 +9,7 @@ export const DurableAuditEntryKind = {
   SignalWaiting: "signal_waiting",
   SignalDelivered: "signal_delivered",
   SignalTimedOut: "signal_timed_out",
+  /** Historical notification entry retained for reading older execution histories. */
   EmitPublished: "emit_published",
   SwitchEvaluated: "switch_evaluated",
   Note: "note",

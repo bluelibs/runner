@@ -129,6 +129,8 @@ describe("durable bridge validation", () => {
       const bridge = runtime.getResourceValue(resources.durableEventBridge);
       for (const override of [
         { eventId: "missing" },
+        { eventKey: "missing" },
+        { eventKey: input.eventId },
         { resourceId: "missing" },
         { compensation: true },
       ]) {

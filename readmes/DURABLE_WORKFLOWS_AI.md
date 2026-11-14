@@ -195,13 +195,16 @@ const route = await d.switch(
 
 Branch decision persisted. On replay: cached result returned, matchers skipped.
 
-### emit()
+### Runner Event Emission
 
-```ts
-await d.emit(OrderCompleted, { orderId: "123" });
-```
+Use injected Runner event dependencies. The [durable event bridge](DURABLE_EVENTS.md)
+checkpoints selected events' hooks and links their executions to the active parent.
+Configure `tags.durableEvent.with({ key: "orders.completed" })` for stable event
+identity across moves and renames; emission `idempotencyKey` deduplicates caller retries.
 
-Replay-safe. Uses internal step IDs like `__emit:orderCompleted:0`.
+`d.emit()` was an incomplete bus-notification feature and has been removed. It
+never dispatched Runner hooks or delivered workflow signals. Send workflow signals
+with `durable.signal(executionId, Event, payload)`.
 
 ### rollback()
 

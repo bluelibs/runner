@@ -22,7 +22,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `managers/SignalHandler*`, `WaitManager*`: durable delivery and result waiting.
 - `managers/PollingManager*`, `ScheduleManager`, `RecoveryManager`: timers, recurrence, and crash recovery.
 - `managers/WorkflowAdmissionController.ts`: workflow admission; `StoreAdmissionController.ts` shares store-backed policies with `StepAdmissionController.ts`. Renewal and cancellable acquisition reuse Node resilience helpers.
-- `durable-context/`: focused steps, waits, sleep, state, emit, switch, and determinism operations.
+- `durable-context/`: focused steps, waits, sleep, state, switch, and determinism operations. Runner events use injected dependencies; the incomplete context bus-emission API is removed.
 - `continuedChain.ts`, `executionWaiters.ts`, `signalWaiters.ts`, `waiterCore.ts`: shared chain/wait bookkeeping.
 - `current.ts`, `executionIndex.ts`, `executionCursor.ts`: persisted current activity and query projections.
 

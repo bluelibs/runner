@@ -17,6 +17,8 @@ export type DurableEventResource = IResource<
 
 /** Event-level durable dispatch policy. */
 export interface DurableEventConfig {
+  /** Stable persistence identity across event renames or moves; defaults to its canonical id. */
+  key?: string;
   /** Opt out of broad bridge selectors. Defaults to true. */
   enabled?: boolean;
   /** Overrides the bridge's default durable resource. */
@@ -42,8 +44,10 @@ export interface DurableEventBridgeConfig {
 
 /** Persisted event dispatch input; contains no resource values or closures. */
 export interface DurableEventInput {
-  /** Canonical event definition identity. */
+  /** Canonical event definition identity at admission. */
   eventId: string;
+  /** Configured stable event identity; absent for canonical-id addressing. */
+  eventKey?: string;
   /** Canonical owning durable resource identity. */
   resourceId: string;
   /** Frozen ordered canonical hook membership. */

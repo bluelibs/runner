@@ -839,31 +839,6 @@ describe("durable: DurableContext", () => {
     expect(runs).toBe(1);
   });
 
-  it("emits events using event definitions", async () => {
-    const { bus, ctx } = createContext();
-
-    const received: Array<{ type: string; payload: unknown }> = [];
-    await bus.subscribe("durable:events", async (evt) => {
-      received.push({ type: evt.type, payload: evt.payload });
-    });
-
-    const E1 = defineEvent<{ a: number }>({ id: "event-1" });
-    const E2 = defineEvent<{ b: number }>({ id: "event-2" });
-    const E3 = defineEvent<{ c: number }>({ id: "event-3" });
-
-    await ctx.emit(E1, { a: 1 });
-    await ctx.emit(E1, { a: 2 });
-    await ctx.emit(E2, { b: 2 });
-    await ctx.emit(E3, { c: 3 });
-
-    expect(received).toEqual([
-      { type: "event-1", payload: { a: 1 } },
-      { type: "event-1", payload: { a: 2 } },
-      { type: "event-2", payload: { b: 2 } },
-      { type: "event-3", payload: { c: 3 } },
-    ]);
-  });
-
   it("prevents user steps from using internal reserved step ids", async () => {
     const { ctx } = createContext();
 
@@ -2150,7 +2125,7 @@ describe("durable: DurableContext", () => {
     await expect(ctx.waitForSignal(Paid)).rejects.toThrow("signal lock");
   });
 
-  it("supports explicit step ids for sleep, signals, and emits", async () => {
+  it("supports explicit step ids for sleep and signals", async () => {
     const { store, ctx } = createContext();
 
     await expect(
@@ -2170,15 +2145,6 @@ describe("durable: DurableContext", () => {
       expect.objectContaining({
         executionId: "e1",
         stepId: "__signal:stable-signal",
-      }),
-    );
-
-    const Stable = defineEvent<{ ok: boolean }>({ id: "event-stable" });
-    await ctx.emit(Stable, { ok: true }, { stepId: "stable-emit" });
-    expect(await store.getStepResult("e1", "__emit:stable-emit")).toEqual(
-      expect.objectContaining({
-        executionId: "e1",
-        stepId: "__emit:stable-emit",
       }),
     );
   });

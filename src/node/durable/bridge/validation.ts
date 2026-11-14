@@ -9,6 +9,7 @@ const retention = Match.Optional(Object);
 /** Validates event policy before runtime routing is compiled. */
 export function parseEventPolicy(input: unknown): DurableEventConfig {
   check(input, {
+    key: Match.Optional(Match.NonEmptyString),
     enabled: Match.Optional(Boolean),
     durable: Match.Optional(resource),
     compensation: Match.Optional("required"),

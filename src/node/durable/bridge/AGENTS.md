@@ -14,6 +14,8 @@ This Node integration replaces selected EventManager dispatch with one registere
 
 Compile routing from canonical definitions and visibility. Tag startup dependencies can be discovered before their values initialize; resolve backend values when dispatch is admitted after initialization. Preserve hook execution through Runner admission, DI, and interceptors.
 
+Optional event policy `key` is the stable persistence identity for saved event lookup, parent submission steps, and per-emission deduplication. Reject collisions, including canonical-id fallbacks, at bootstrap. Unkeyed saved inputs retain canonical addressing; event keys do not replace saved hook or backend identities.
+
 Parent emission checkpoints use the per-Runner context stack across durable resources. Automatic child identity must survive replay. Persist ordered hook identities; replay that membership and order using current implementations, without event versions. Added hooks affect new emissions only. Missing or retargeted saved hooks fail before effects; compensation handlers must accept older receipts.
 
 Compensation phase and undo checkpoints survive recovery independently of forward execution. Keep business errors and undo errors, including cancellation races; pause/shutdown interruptions must park work. Hook bodies cannot suspend or continue as new. History collection belongs to the core and store modules.

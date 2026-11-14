@@ -4,7 +4,6 @@ import type {
   ContinueAsNewOptions,
   DurableInfo,
   DurableStepRunContext,
-  EmitOptions,
   IDurableContext,
   IStepBuilder,
   SignalOptions,
@@ -51,7 +50,6 @@ import {
   rollbackDurableCompensations,
   type DurableCompensation,
 } from "./durable-context/DurableContext.steps";
-import { emitDurably } from "./durable-context/DurableContext.emit";
 import { sleepDurably } from "./durable-context/DurableContext.sleep";
 import { waitForExecutionDurably } from "./durable-context/DurableContext.waitForExecution";
 import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSignal";
@@ -72,8 +70,8 @@ import { throwDurablePauseInterruption } from "./pauseInterruption";
  * made available to user code via `DurableResource.use()` (AsyncLocalStorage).
  *
  * It provides deterministic "save points" (`step()`), typed subflow starts
- * (`workflow()`), durable suspension primitives (`sleep()`, `waitForSignal()`,
- * `waitForExecution()`), and best-effort side-channel notifications (`emit()`).
+ * (`workflow()`), and durable suspension primitives (`sleep()`, `waitForSignal()`,
+ * `waitForExecution()`).
  * The durable store is the source of truth; this class is intentionally thin state
  * around indexes/guards to keep a single in-memory attempt deterministic.
  */
@@ -81,7 +79,7 @@ export class DurableContext implements IDurableContext {
   private readonly executionLockState: ExecutionLockState | undefined;
   private readonly sleepIndexRef = { current: 0 };
   private readonly signalIndexes = new Map<string, number>();
-  private readonly emitIndexes = new Map<string, number>();
+  private readonly eventIndexes = new Map<string, number>();
   private noteIndex = 0;
 
   private readonly implicitInternalStepIdsWarned =
@@ -117,7 +115,8 @@ export class DurableContext implements IDurableContext {
 
   constructor(
     private readonly store: IDurableStore,
-    private readonly bus: IEventBus,
+    /** Preserves constructor compatibility after removal of context bus emission. */
+    _bus: IEventBus,
     public readonly executionId: string,
     public readonly attempt: number,
     options: {
@@ -321,13 +320,12 @@ export class DurableContext implements IDurableContext {
   }
 
   /** @internal Names event call sites using the existing implicit-id policy. */
-  _eventStepId(eventId: string, explicit?: string): string {
+  _eventStepId(eventKey: string, explicit?: string): string {
     if (explicit) return `event:${explicit}`;
     this.determinism.assertOrWarnImplicitInternalStepId("emit");
-    const key = `runner:${eventId}`;
-    const index = this.emitIndexes.get(key) ?? 0;
-    this.emitIndexes.set(key, index + 1);
-    return `event:${eventId}:${index}`;
+    const index = this.eventIndexes.get(eventKey) ?? 0;
+    this.eventIndexes.set(eventKey, index + 1);
+    return `event:${eventKey}:${index}`;
   }
 
   /** @internal Runs a named compensation checkpoint during teardown. */
@@ -506,26 +504,6 @@ export class DurableContext implements IDurableContext {
       expectedWorkflowKey: this.getTaskPersistenceId(_task),
       assertCanContinue: this.assertCanContinue.bind(this),
       assertUniqueStepId: this.determinism.assertUniqueStepId,
-      options,
-    });
-  }
-
-  async emit<TPayload>(
-    event: IEventDefinition<TPayload>,
-    payload: TPayload,
-    options?: EmitOptions,
-  ): Promise<void> {
-    return await emitDurably({
-      bus: this.bus,
-      assertCanContinue: this.assertCanContinue.bind(this),
-      appendAuditEntry: this.audit.append,
-      assertUniqueStepId: this.determinism.assertUniqueStepId,
-      assertOrWarnImplicitInternalStepId:
-        this.determinism.assertOrWarnImplicitInternalStepId,
-      emitIndexes: this.emitIndexes,
-      internalStep: this.internalStep.bind(this),
-      event,
-      payload,
       options,
     });
   }

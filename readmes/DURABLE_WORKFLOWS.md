@@ -322,13 +322,15 @@ const childExecutionId = await d.workflow(
 
 Auto-derives `idempotencyKey` from `parentExecutionId + stepId` when not provided.
 
-### `emit()` — Durable Event Emission
+### Runner Event Emission
 
-```ts
-await d.emit(OrderCompleted, { orderId: "123" });
-```
+Emit registered Runner events through injected event dependencies. The
+[durable event bridge](DURABLE_EVENTS.md) checkpoints participating hooks and
+links the event execution to the active workflow as its child.
 
-Implemented as internal step(s) with IDs like `__emit:orderCompleted:0`. Replay-safe.
+`DurableContext.emit()` has been removed: its incomplete bus-notification
+feature neither dispatched Runner hooks nor delivered workflow signals. Use
+`durable.signal(executionId, Event, payload)` to deliver a workflow signal.
 
 ### `switch()` — Replay-Safe Branching
 
@@ -840,7 +842,7 @@ await d.sleep(60_000, { stepId: "cooldown" });
 
 Operators read the same record id-addressed via `durable.getState<Counter>(executionId)`, and break-glass tooling sees it in `operator.getExecutionDetail()`. The payload-free `DurableExecutionState` projection stays lean and excludes it.
 
-State carries across continue-as-new (override with `{ state }`) and never carries across restart. State calls are memoized by call order, like implicit-id `sleep()`/`emit()` (and checked by the same `implicitInternalStepIds` policy), so keep their order stable across deploys or pass `{ stepId }`. Operator `getState(executionId)` reads the live record and throws for unknown executions.
+State carries across continue-as-new (override with `{ state }`) and never carries across restart. State calls are memoized by call order, like implicit-id `sleep()`/`waitForSignal()` (and checked by the same `implicitInternalStepIds` policy), so keep their order stable across deploys or pass `{ stepId }`. Operator `getState(executionId)` reads the live record and throws for unknown executions.
 
 ---
 
@@ -1360,7 +1362,7 @@ Available events:
 | `durableEvents.signal.waiting`          | A workflow started waiting in `waitForSignal(...)`.                                                                                | `DurableAuditEntry` with `kind: "signal_waiting"`           |
 | `durableEvents.signal.delivered`        | A signal payload was delivered to a waiting workflow.                                                                              | `DurableAuditEntry` with `kind: "signal_delivered"`         |
 | `durableEvents.signal.timedOut`         | A `waitForSignal(...)` timeout fired before a matching signal arrived.                                                             | `DurableAuditEntry` with `kind: "signal_timed_out"`         |
-| `durableEvents.emit.published`          | `durableContext.emit(...)` published to the durable event bus in a replay-safe way.                                                | `DurableAuditEntry` with `kind: "emit_published"`           |
+| `durableEvents.emit.published`          | Historical compatibility event for the removed context emit feature; no longer produced by workflow execution.                    | `DurableAuditEntry` with `kind: "emit_published"`           |
 | `durableEvents.note.created`            | `durableContext.note(...)` recorded a user audit note.                                                                             | `DurableAuditEntry` with `kind: "note"`                     |
 
 > **Note:** `durableEvents.audit.appended` is the broad umbrella event. The others are typed convenience events derived from the same audit stream, which is a fancy way of saying "same pizza, different slices."

@@ -2,7 +2,6 @@ import { MemoryEventBus } from "../../../../durable/bus/MemoryEventBus";
 import { DurableContext } from "../../../../durable/core/DurableContext";
 import type { IDurableStore } from "../../../../durable/core/interfaces/store";
 import { SuspensionSignal } from "../../../../durable/core/interfaces/context";
-import { defineEvent } from "../../../../..";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
 import { genericError } from "../../../../../errors";
 import { createBareStore } from "../../helpers/DurableService.unit.helpers";
@@ -50,14 +49,5 @@ describe("durable: DurableContext audit branches", () => {
 
     await expect(ctx.step("s1", async () => "ok")).resolves.toBe("ok");
     await expect(ctx.note("still ok")).resolves.toBeUndefined();
-
-    const received: string[] = [];
-    await bus.subscribe("durable:events", async (evt) => {
-      received.push(evt.type);
-    });
-
-    const Evt1 = defineEvent<{ a: number }>({ id: "evt-1" });
-    await expect(ctx.emit(Evt1, { a: 1 })).resolves.toBeUndefined();
-    expect(received).toEqual(["evt-1"]);
   });
 });

@@ -33,6 +33,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Durable `workflowKey` is a persistence identity: tags may override the canonical task id.
   `core/managers/TaskRegistry.ts` resolves compatibility aliases and rejects collisions.
 - Execution, step, signal, timer, schedule, and lock ids have separate roles; preserve exact identities.
+- Durable event policy `key` separates event persistence identity from canonical addressing. Hook membership and backend identity remain independently validated; context bus emission is not a supported workflow API.
 - `resources/isolation.ts` encodes the complete namespace into default Redis prefixes and queue names.
 - Memory backends own state per instance. File persistence is for one process; Redis supports shared backend state.
 - Step `concurrency` derives pools from persisted workflow key + explicit step ID or an explicit shared key; full pools durably suspend and free workflow admission.

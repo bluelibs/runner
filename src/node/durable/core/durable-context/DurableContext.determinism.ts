@@ -28,8 +28,10 @@ export function createDurableContextDeterminism(params: {
     const policy = params.policy;
     if (policy === "allow") return;
 
+    const operation =
+      kind === "emit" ? "Runner event emission" : `DurableContext.${kind}()`;
     const message =
-      `DurableContext.${kind}() is using an implicit step id (call-order based). ` +
+      `${operation} is using an implicit step id (call-order based). ` +
       `This can break replay for in-flight executions after refactors. ` +
       `Provide a stable id via { stepId: "..." } (or set determinism.implicitInternalStepIds to "allow").`;
 

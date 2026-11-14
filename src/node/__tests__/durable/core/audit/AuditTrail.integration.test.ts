@@ -9,7 +9,7 @@ describe("durable: audit trail (integration)", () => {
     id: "durable-tests-audit-paid",
   });
 
-  it("records steps, emits, sleeps, and custom notes", async () => {
+  it("records steps, sleeps, and custom notes", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
@@ -29,11 +29,6 @@ describe("durable: audit trail (integration)", () => {
         await ctx.note("starting", { orderId: "o1" });
 
         const before = await ctx.step("before", async () => "before");
-        const AuditEvt = defineEvent<{ a: number }>({
-          id: "durable-tests-audit-event",
-        });
-        await ctx.emit(AuditEvt, { a: 1 });
-
         await ctx.sleep(1);
 
         const after = await ctx.step("after", async () => "after");
@@ -63,7 +58,6 @@ describe("durable: audit trail (integration)", () => {
         "execution_status_changed",
         "note",
         "step_completed",
-        "emit_published",
         "sleep_scheduled",
         "sleep_completed",
       ]),

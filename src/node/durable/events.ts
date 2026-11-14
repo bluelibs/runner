@@ -127,6 +127,7 @@ export const durableEvents = {
       .build(),
   },
 
+  /** Historical audit notification; the incomplete context emit API has been removed. */
   emit: {
     published: r
       .event<
@@ -138,7 +139,7 @@ export const durableEvents = {
       .meta({
         title: "Durable Emit Published",
         description:
-          "Emitted when durableContext.emit(...) publishes to the durable event bus (replay-safe).",
+          "Historical notification for the removed, incomplete durable context emit API. No longer produced by workflow execution.",
       })
       .tags([excludeFromGlobalHooksTag])
       .build(),

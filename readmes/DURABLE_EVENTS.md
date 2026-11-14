@@ -82,6 +82,35 @@ Without `stepId`, call order determines the identity and the parent workflow's i
 
 An optional `idempotencyKey` emission option deduplicates external retries within that event's identity. It is useful when a caller loses its response and submits again. Automatically generated identities cannot recognize independent calls as the same business operation.
 
+### Stable Event Identity
+
+By default, the event's canonical runtime id identifies it in saved executions,
+parent emission checkpoints, and emission deduplication. To keep that identity
+independent of the event's name or owning resource, set an optional persistence
+`key` on the event tag:
+
+```ts
+import { r } from "@bluelibs/runner";
+import { tags } from "@bluelibs/runner/node";
+
+const orderPlaced = r.event<{ orderId: string }>("orderPlaced")
+  .tags([tags.durableEvent.with({ key: "orders.placed" })])
+  .build();
+```
+
+The same key resolves the event's current definition after a move or rename.
+It also preserves automatic parent submission identities and scopes per-emission
+`idempotencyKey` values. The event key identifies the contract; `idempotencyKey`
+identifies one business emission. Identical payloads with no emission key still
+create independent executions.
+
+Keys must be non-empty and unique across selected events in one Runner runtime,
+including collisions with another event's canonical-id fallback. Changing or
+removing a configured key breaks recovery for executions that saved it. Existing
+executions admitted without a key still require their original canonical event id;
+configure the key before moving the event. Saved hook ids and backend identity
+must remain compatible independently of the event key.
+
 Aborting the caller's wait leaves accepted work running. Explicitly cancel the execution to request durable cancellation. Shutdown and pause park attempts for recovery.
 
 ## Compensate Hooks
@@ -118,4 +147,4 @@ Keep saved hooks registered for their original event until executions settle. Mi
 
 Event retention overrides bridge retention, which overrides the durable resource default. [Successful history collection](DURABLE_RETENTION.md) removes bulky completed history while preserving completion results. Failed and compensation-failed workflows retain their history.
 
-The bridge uses Runner's serializer resource to validate payloads and receipts. Custom serialized types must be registered there as well as supported by the durable backend's serializer. Ordinary `durableContext.emit()` continues to publish durable bus notifications; use injected Runner event dependencies to trigger this bridge.
+The bridge uses Runner's serializer resource to validate payloads and receipts. Custom serialized types must be registered there as well as supported by the durable backend's serializer. Use injected Runner event dependencies to trigger this bridge. The incomplete `DurableContext.emit()` bus-notification API has been removed; workflow signals use `durable.signal(...)` and `waitForSignal(...)`.

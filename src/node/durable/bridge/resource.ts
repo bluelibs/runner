@@ -17,12 +17,24 @@ import {
   assertNoLaneRoute,
 } from "./plan";
 import { executeEvent } from "./execute";
-import type { DurableEventBridgeConfig, DurableEventInput } from "./types";
+import type {
+  DurableEventBridgeConfig,
+  DurableEventConfig,
+  DurableEventInput,
+} from "./types";
 import type { ITask } from "../../../types/task";
 import { parseBridgeConfig } from "./validation";
 import { retentionDelay } from "../core/retention";
 
 type DurableEventRuntime = Pick<DurableResource, keyof DurableResource>;
+
+interface DurableEventRoute {
+  id: string;
+  eventId: string;
+  key: string;
+  durable: DurableEventRuntime;
+  policy: DurableEventConfig;
+}
 
 const eventTask: ITask<
   DurableEventInput,
@@ -44,14 +56,8 @@ const eventTask: ITask<
 /** Per-run bridge state; no process-wide workflow or routing state. */
 export class DurableEventBridge {
   private readonly hookScope = new AsyncLocalStorage<boolean>();
-  private readonly routes = new Map<
-    string,
-    {
-      id: string;
-      durable: DurableEventRuntime;
-      policy: NonNullable<ReturnType<typeof eventPolicy>>;
-    }
-  >();
+  private readonly routes = new Map<string, DurableEventRoute>();
+  private readonly routesByKey = new Map<string, DurableEventRoute>();
 
   constructor(
     private readonly deps: {
@@ -94,8 +100,16 @@ export class DurableEventBridge {
         event,
         policy.compensation === "required",
       );
-      this.routes.set(event.id, {
+      const key = policy.key ?? event.id;
+      const existing = this.routesByKey.get(key);
+      if (existing)
+        bridgeError(
+          `Durable event key '${key}' is already used by '${existing.eventId}' and cannot be reused by '${event.id}'.`,
+        );
+      const route: DurableEventRoute = {
         id: target!.definition.id,
+        eventId: event.id,
+        key,
         // Tag startup dependencies can be discovered before their values are initialized.
         // Resolve the value only when dispatch is admitted after resource initialization.
         get durable(): DurableEventRuntime {
@@ -108,7 +122,9 @@ export class DurableEventBridge {
           return value!;
         },
         policy,
-      });
+      };
+      this.routes.set(event.id, route);
+      this.routesByKey.set(key, route);
     }
     deps.eventManager.setDispatchAdapter(
       (definition, event, listeners, options) => {
@@ -142,6 +158,7 @@ export class DurableEventBridge {
             );
           const input: DurableEventInput = {
             eventId: definition.id,
+            eventKey: route.policy.key,
             resourceId: route.id,
             hookIds: hooks.map((hook) => hook.id!),
             data: event.data,
@@ -162,19 +179,19 @@ export class DurableEventBridge {
                   idempotencyKey:
                     options.idempotencyKey === undefined
                       ? undefined
-                      : JSON.stringify([definition.id, options.idempotencyKey]),
+                      : JSON.stringify([route.key, options.idempotencyKey]),
                 }),
                 event.signal,
               )
             ).data;
-          const stepId = parent._eventStepId(definition.id, options.stepId);
+          const stepId = parent._eventStepId(route.key, options.stepId);
           const childId = await parent.step(stepId, async () =>
             route.durable.start(eventTask, persisted, {
               parentExecutionId: parent.executionId,
               idempotencyKey:
                 options.idempotencyKey === undefined
                   ? JSON.stringify([parent.executionId, stepId])
-                  : JSON.stringify([definition.id, options.idempotencyKey]),
+                  : JSON.stringify([route.key, options.idempotencyKey]),
               retention: route.policy.retention ?? config.retention,
             }),
           );
@@ -191,23 +208,30 @@ export class DurableEventBridge {
 
   /** @internal Resumes the registered persisted event workflow. */
   async execute(input: DurableEventInput): Promise<IEventEmitReport> {
-    const route = this.routes.get(input.eventId);
+    const route =
+      input.eventKey === undefined
+        ? this.routes.get(input.eventId)
+        : this.routesByKey.get(input.eventKey);
     if (
       !route ||
+      (input.eventKey !== undefined && route.policy.key !== input.eventKey) ||
       route.id !== input.resourceId ||
       (route.policy.compensation === "required") !== input.compensation
     )
       bridgeError(
-        `Durable event '${input.eventId}' route changed; restore its original backend.`,
+        `Durable event '${input.eventId}' route changed; restore its original event identity, backend, and compensation policy.`,
       );
     const backend: IDurableStore = route!.durable.getStore();
-    return executeEvent(input, {
-      ...this.deps,
-      manager: this.deps.eventManager,
-      durable: route!.durable,
-      backend,
-      inHook: (fn) => this.hookScope.run(true, fn),
-    });
+    return executeEvent(
+      { ...input, eventId: route!.eventId },
+      {
+        ...this.deps,
+        manager: this.deps.eventManager,
+        durable: route!.durable,
+        backend,
+        inHook: (fn) => this.hookScope.run(true, fn),
+      },
+    );
   }
 }
 
