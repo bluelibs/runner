@@ -13,7 +13,11 @@ import {
 
 function createPollingManager(
   store: IDurableStore,
-  config: { interval?: number; concurrency?: number; claimTtlMs?: number } = {},
+  config: {
+    pollIntervalMs?: number;
+    concurrency?: number;
+    claimTtlMs?: number;
+  } = {},
 ) {
   const taskRegistry = new TaskRegistry();
   const auditLogger = new AuditLogger({}, store);
@@ -21,7 +25,7 @@ function createPollingManager(
 
   return new PollingManager(
     "worker-1",
-    { interval: 1, ...config },
+    { pollIntervalMs: 1, ...config },
     store,
     undefined,
     3,
@@ -113,18 +117,18 @@ describe("durable: PollingManager backpressure helpers (unit)", () => {
   });
 
   it.each([
-    [{ interval: 0 }, "polling.interval"],
-    [{ interval: -1 }, "polling.interval"],
-    [{ interval: 1.5 }, "polling.interval"],
-    [{ interval: Number.NaN }, "polling.interval"],
-    [{ concurrency: 0 }, "polling.concurrency"],
-    [{ concurrency: -1 }, "polling.concurrency"],
-    [{ concurrency: 1.5 }, "polling.concurrency"],
-    [{ concurrency: Number.NaN }, "polling.concurrency"],
-    [{ claimTtlMs: 0 }, "polling.claimTtlMs"],
-    [{ claimTtlMs: -1 }, "polling.claimTtlMs"],
-    [{ claimTtlMs: 1.5 }, "polling.claimTtlMs"],
-    [{ claimTtlMs: Number.NaN }, "polling.claimTtlMs"],
+    [{ pollIntervalMs: 0 }, "timers.pollIntervalMs"],
+    [{ pollIntervalMs: -1 }, "timers.pollIntervalMs"],
+    [{ pollIntervalMs: 1.5 }, "timers.pollIntervalMs"],
+    [{ pollIntervalMs: Number.NaN }, "timers.pollIntervalMs"],
+    [{ concurrency: 0 }, "timers.concurrency"],
+    [{ concurrency: -1 }, "timers.concurrency"],
+    [{ concurrency: 1.5 }, "timers.concurrency"],
+    [{ concurrency: Number.NaN }, "timers.concurrency"],
+    [{ claimTtlMs: 0 }, "timers.claimTtlMs"],
+    [{ claimTtlMs: -1 }, "timers.claimTtlMs"],
+    [{ claimTtlMs: 1.5 }, "timers.claimTtlMs"],
+    [{ claimTtlMs: Number.NaN }, "timers.claimTtlMs"],
   ])("fails fast for invalid polling config %j", (config, configName) => {
     const manager = createPollingManager(new MemoryStore(), config);
 

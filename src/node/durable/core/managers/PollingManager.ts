@@ -19,13 +19,10 @@ import {
 } from "./PollingManager.timerHeartbeat";
 import { Logger } from "../../../../models/Logger";
 import { durableExecutionInvariantError } from "../../../../errors";
+import type { DurableTimerConfig } from "../interfaces/timers";
 
-export interface PollingConfig {
-  enabled?: boolean;
-  interval?: number;
-  concurrency?: number;
-  claimTtlMs?: number;
-}
+/** Internal timer-driver configuration, normalized from public timer settings. */
+export type PollingConfig = DurableTimerConfig;
 
 export interface PollingManagerCallbacks {
   processExecution: (executionId: string) => Promise<void>;
@@ -382,7 +379,7 @@ export class PollingManager {
   }
 
   private getConcurrency(): number {
-    return this.getPositiveIntegerConfig("polling.concurrency", {
+    return this.getPositiveIntegerConfig("timers.concurrency", {
       configuredValue: this.config.concurrency,
       defaultValue: 10,
     });
@@ -390,24 +387,24 @@ export class PollingManager {
 
   private getClaimTtlMs(): number {
     const defaultClaimTtlMs = this.queue ? 5_000 : 30_000;
-    return this.getPositiveIntegerConfig("polling.claimTtlMs", {
+    return this.getPositiveIntegerConfig("timers.claimTtlMs", {
       configuredValue: this.config.claimTtlMs,
       defaultValue: defaultClaimTtlMs,
     });
   }
 
   private getPollingIntervalMs(): number {
-    return this.getPositiveIntegerConfig("polling.interval", {
-      configuredValue: this.config.interval,
+    return this.getPositiveIntegerConfig("timers.pollIntervalMs", {
+      configuredValue: this.config.pollIntervalMs,
       defaultValue: 1_000,
     });
   }
 
   private getPositiveIntegerConfig(
     configName:
-      | "polling.interval"
-      | "polling.concurrency"
-      | "polling.claimTtlMs",
+      | "timers.pollIntervalMs"
+      | "timers.concurrency"
+      | "timers.claimTtlMs",
     params: {
       configuredValue: number | undefined;
       defaultValue: number;
@@ -427,7 +424,7 @@ export class PollingManager {
     if (typeof this.store.claimReadyTimers !== "function") {
       durableExecutionInvariantError.throw({
         message:
-          "Durable polling requires store.claimReadyTimers() so ready timers can be claimed with bounded concurrency.",
+          "Durable timer processing requires store.claimReadyTimers() so ready timers can be claimed with bounded concurrency.",
       });
     }
   }

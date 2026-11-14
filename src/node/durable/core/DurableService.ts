@@ -18,6 +18,7 @@ import type { ITask } from "../../../types/task";
 import { createExecutionId } from "./utils";
 import { HistoryCollector } from "./HistoryCollector";
 import { ClusterRecovery } from "./managers/ClusterRecovery";
+import { resolveTimerConfig } from "./timerConfig";
 import { readExistingExecutionState } from "./durable-context/state";
 
 import {
@@ -163,7 +164,7 @@ export class DurableService implements IDurableService {
     // Initialize polling manager
     this.pollingManager = new PollingManager(
       this.workerId,
-      config.polling ?? {},
+      resolveTimerConfig(config),
       config.store,
       config.queue,
       config.execution?.maxAttempts ?? 3,
@@ -617,7 +618,7 @@ export async function initDurableService(
     if (config.recovery?.onStartup === true) {
       service.startRecoveryOnInit();
     }
-    if (config.polling?.enabled !== false) {
+    if (resolveTimerConfig(config).enabled !== false) {
       service.start();
     }
     return service;
