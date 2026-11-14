@@ -4,6 +4,7 @@ import { genericError } from "../../../errors";
 import { Match } from "../../../tools/check";
 import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask } from "../../../types/task";
+import { isTask } from "../../../definers/tools";
 
 export type DurableWorkflowSignalDefinition = Pick<
   IEventDefinition<unknown>,
@@ -29,6 +30,10 @@ export interface DurableWorkflowTagConfig {
    * When omitted, durable falls back to the canonical runtime task id.
    */
   key?: string;
+  /** Optional immutable implementation version. Omit to preserve legacy unversioned routing. */
+  version?: number;
+  /** Typed Runner tasks accepted as tracked commands by this workflow version. */
+  commands?: AnyTask[];
   /**
    * Optional domain/category to group workflows (eg. "orders", "billing").
    */
@@ -57,6 +62,10 @@ const positiveInteger = Match.Range({ min: 1, integer: true });
 
 const durableWorkflowConfigPattern = Match.compile({
   key: Match.Optional(Match.NonEmptyString),
+  version: Match.Optional(positiveInteger),
+  commands: Match.Optional(
+    Match.ArrayOf(Match.Where((value): value is AnyTask => isTask(value))),
+  ),
   category: Match.Optional(String),
   metadata: Match.Optional(Object),
   retention: Match.Optional({
@@ -109,6 +118,13 @@ export function getDurableWorkflowKey(
   if (!task) return canonicalTaskId;
   const config = durableWorkflowTag.extract(task.tags ?? []);
   return config?.key ?? canonicalTaskId ?? task.id;
+}
+
+/** Returns the explicitly declared implementation version, never inventing one for legacy tasks. */
+export function getDurableWorkflowVersion(
+  task: Pick<AnyTask, "tags">,
+): number | undefined {
+  return durableWorkflowTag.extract(task)?.version;
 }
 
 /** Returns the workflow's global attempt-admission policy, when configured. */

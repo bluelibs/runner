@@ -14,7 +14,10 @@ import type { ITask } from "../../../types/task";
 import { initDurableWorker } from "./DurableWorker";
 import { durableExecutionInvariantError } from "../../../errors";
 import { runtimeSource } from "../../../types/runtimeSource";
-import { getDurableWorkflowKey } from "../tags/durableWorkflow.tag";
+import {
+  getDurableWorkflowKey,
+  durableWorkflowTag,
+} from "../tags/durableWorkflow.tag";
 
 export type RunnerDurableRuntimeConfig = Omit<
   DurableServiceConfig,
@@ -42,14 +45,19 @@ export interface RunnerDurableDeps {
 function resolveRunnerTask(
   runnerStore: Store,
   workflowKey: string,
+  version?: number,
 ): ITask<any, Promise<any>, any, any, any, any> | undefined {
   const registeredTask = runnerStore.tasks.get(workflowKey)?.task;
-  if (registeredTask) {
+  if (
+    registeredTask &&
+    durableWorkflowTag.extract(registeredTask)?.version === version
+  ) {
     return registeredTask;
   }
 
   let legacyMatch: ITask<any, Promise<any>, any, any, any, any> | undefined;
   for (const [registeredId, entry] of runnerStore.tasks.entries()) {
+    if (durableWorkflowTag.extract(entry.task)?.version !== version) continue;
     const persistedWorkflowKey = getDurableWorkflowKey(
       entry.task,
       registeredId,
@@ -119,11 +127,13 @@ export async function createRunnerDurableRuntime(
       run: async <TInput, TResult>(
         task: ITask<TInput, Promise<TResult>, any, any, any, any>,
         input?: TInput,
+        options?: { signal: AbortSignal; kind?: "step" | "command" },
       ) => {
         const output = await deps.taskRunner.run(task, input, {
           source: durableCallSource,
+          signal: options?.signal,
         });
-        if (output === undefined) {
+        if (output === undefined && options?.kind === undefined) {
           durableExecutionInvariantError.throw({
             message: `Durable task '${task.id}' completed without a result promise.`,
           });
@@ -131,9 +141,10 @@ export async function createRunnerDurableRuntime(
         return output as TResult;
       },
     },
-    taskResolver: (workflowKey) => {
-      return resolveRunnerTask(deps.runnerStore, workflowKey);
+    taskResolver: (workflowKey, version) => {
+      return resolveRunnerTask(deps.runnerStore, workflowKey, version);
     },
+    taskKeyResolver: (task) => deps.runnerStore.findIdByDefinition(task),
     workflowKeyResolver: (task) => {
       const canonicalTaskId = deps.runnerStore.findIdByDefinition(task);
       return getDurableWorkflowKey(task, canonicalTaskId);

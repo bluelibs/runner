@@ -1,12 +1,8 @@
 import type { IDurableStore } from "../interfaces/store";
-import type { IEventBus, BusEvent } from "../interfaces/bus";
+import type { IEventBus } from "../interfaces/bus";
 import type { WaitOptions } from "../interfaces/service";
-import {
-  sleepMs,
-  assertFiniteDurationMs,
-  DurableExecutionError,
-} from "../utils";
-import { clearTimeout, setTimeout } from "node:timers";
+import { assertFiniteDurationMs, DurableExecutionError } from "../utils";
+import { waitForStoreResult } from "./waitForStoreResult";
 import { ExecutionStatus } from "../types";
 
 export interface WaitConfig {
@@ -55,14 +51,8 @@ export class WaitManager {
       );
     };
 
-    const throwIfTimedOut = async (): Promise<void> => {
-      if (timeoutMs !== undefined && Date.now() - startedAt >= timeoutMs) {
-        throw await buildTimeoutError();
-      }
-    };
-
     const check = async (): Promise<
-      { done: false; tipId: string } | { done: true; value: TResult }
+      { done: false; channel: string } | { done: true; value: TResult }
     > => {
       // Follow the continuation chain so waiting on a continued run resolves
       // with the live tip's outcome instead of stalling on a closed run.
@@ -136,200 +126,18 @@ export class WaitManager {
           );
         }
 
-        return { done: false, tipId: currentId };
+        return { done: false, channel: `execution:${currentId}` };
       }
     };
 
-    const pollingFallback = async (): Promise<TResult> =>
-      await this.pollUntilFinished({
-        check,
-        throwIfTimedOut,
-        pollEveryMs,
-      });
-
-    // Initial check
-    const initialResult = await check();
-    if (initialResult.done) return initialResult.value;
-
-    // Use EventBus if available
-    if (this.eventBus) {
-      const eventBus = this.eventBus;
-      return new Promise<TResult>((resolve, reject) => {
-        const channel = `execution:${executionId}`;
-        let timer: ReturnType<typeof setTimeout> | null = null;
-        let pollTimer: ReturnType<typeof setTimeout> | null = null;
-        let done = false;
-        let skipEventBusSubscription = false;
-        const channels = new Set([channel]);
-        const subscribedEvent: BusEvent = {
-          type: "subscribed",
-          payload: null,
-          timestamp: new Date(),
-        };
-
-        const handler = async (_event: BusEvent) => {
-          try {
-            const result = await check();
-            if (result.done) {
-              await finalize({ ok: true, value: result.value });
-              return;
-            }
-            await followTip(result.tipId);
-          } catch (err) {
-            await finalize({ ok: false, error: err });
-          }
-        };
-
-        // A continued run finishes on its tip, which publishes on its own
-        // channel, so the waiter listens there too once the chain moves.
-        const followTip = async (tipId: string): Promise<void> => {
-          const tipChannel = `execution:${tipId}`;
-          if (done || channels.has(tipChannel)) return;
-          channels.add(tipChannel);
-          try {
-            await eventBus.subscribe(tipChannel, handler);
-          } catch {
-            return; // Polling still covers the tip.
-          }
-          // The tip may have finished before the subscription was live.
-          await handler(subscribedEvent);
-        };
-
-        const safeUnsubscribe = async (): Promise<void> => {
-          for (const subscribed of channels) {
-            try {
-              await eventBus.unsubscribe(subscribed, handler);
-            } catch {
-              // ignore
-            }
-          }
-        };
-
-        const finalize = async (
-          out: { ok: true; value: TResult } | { ok: false; error: unknown },
-        ): Promise<void> => {
-          if (done) return;
-          done = true;
-          if (timer) {
-            clearTimeout(timer);
-            timer = null;
-          }
-          if (pollTimer) {
-            clearTimeout(pollTimer);
-            pollTimer = null;
-          }
-          await safeUnsubscribe();
-
-          if (out.ok) {
-            resolve(out.value);
-          } else {
-            reject(out.error);
-          }
-        };
-
-        // Preflight store check before wiring timers/subscriptions.
-        // This reduces race windows and keeps timeout metadata checks consistent.
-        void handler(subscribedEvent);
-
-        if (timeoutMs !== undefined) {
-          const elapsedMs = Date.now() - startedAt;
-          const remainingTimeoutMs = timeoutMs - elapsedMs;
-
-          const timeoutHandler = () => {
-            void (async () => {
-              try {
-                await finalize({
-                  ok: false,
-                  error: await buildTimeoutError(),
-                });
-              } catch (err) {
-                await finalize({ ok: false, error: err });
-              }
-            })();
-          };
-
-          if (remainingTimeoutMs <= 0) {
-            skipEventBusSubscription = true;
-            timeoutHandler();
-          } else {
-            timer = setTimeout(timeoutHandler, remainingTimeoutMs);
-            timer.unref();
-          }
-        }
-
-        const pollOnce = async (): Promise<void> => {
-          try {
-            const result = await check();
-            if (done) return;
-            if (result.done) {
-              await finalize({ ok: true, value: result.value });
-              return;
-            }
-            await throwIfTimedOut();
-            /* istanbul ignore next -- another completion path may settle the wait during the timeout microtask turn */
-            if (done) return;
-          } catch (err) {
-            await finalize({ ok: false, error: err });
-            return;
-          }
-
-          const nextPollTimer = setTimeout(() => {
-            pollTimer = null;
-            if (done) {
-              return;
-            }
-            void pollOnce();
-          }, pollEveryMs);
-          nextPollTimer.unref();
-
-          pollTimer = nextPollTimer;
-        };
-
-        void (async () => {
-          try {
-            if (skipEventBusSubscription) {
-              return;
-            }
-            await eventBus.subscribe(channel, handler);
-            if (done) {
-              return;
-            }
-            await handler(subscribedEvent);
-            if (done) {
-              return;
-            }
-            await pollOnce();
-          } catch {
-            // Fallback to polling if subscription fails
-            if (done) {
-              return;
-            }
-            if (timer) {
-              clearTimeout(timer);
-              timer = null;
-            }
-            void pollingFallback().then(resolve).catch(reject);
-          }
-        })();
-      });
-    }
-
-    return pollingFallback();
-  }
-
-  private async pollUntilFinished<TResult>(params: {
-    check: () => Promise<
-      { done: false; tipId: string } | { done: true; value: TResult }
-    >;
-    throwIfTimedOut: () => Promise<void>;
-    pollEveryMs: number;
-  }): Promise<TResult> {
-    while (true) {
-      const result = await params.check();
-      if (result.done) return result.value;
-      await params.throwIfTimedOut();
-
-      await sleepMs(params.pollEveryMs);
-    }
+    return waitForStoreResult({
+      check,
+      channel: `execution:${executionId}`,
+      eventBus: this.eventBus,
+      startedAt,
+      timeoutMs,
+      pollEveryMs,
+      buildTimeoutError,
+    });
   }
 }

@@ -26,7 +26,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `tags/`: workflow key/admission/signal metadata and durable runtime discovery.
 - `emitters/` and `events.ts`: translate audit records into Runner events.
 - `optionalDeps/`: lazy access to Redis/RabbitMQ dependencies.
-- `test-utils.ts`: disposable durable test setup and bounded polling helper.
+- `test-utils.ts`: unchanged disposable setup and bounded polling; `test-runtime.ts` adds Runner-backed virtual workflow timers, settled-worker restart, and structural replay checks.
 
 ## Contracts To Preserve
 

@@ -33,12 +33,13 @@ export function shouldRedriveAfterLockRelease(params: {
 }
 
 /**
- * Runs after the execution lock is released and re-kicks the execution when
- * {@link shouldRedriveAfterLockRelease} says a resume was lost to the lock.
+ * Re-kicks after lease release when resume or a new command lost the lock race.
+ * The same pending head is left to its timer so parked commands cannot spin.
  */
-export async function redriveIfResumedDuringLock(params: {
+export async function redriveAfterLockRelease(params: {
   store: IDurableStore;
   lockedSnapshot: Execution<unknown, unknown> | null;
+  commandAtStart: string | null;
   lockState: ExecutionLockState;
   shutdownInterruptionReason: string | null;
   kickoffExecution: (executionId: string) => Promise<void>;
@@ -55,7 +56,19 @@ export async function redriveIfResumedDuringLock(params: {
   }
 
   const latest = await params.store.getExecution(lockedSnapshot.id);
-  if (shouldRedriveAfterLockRelease({ lockedSnapshot, latest })) {
+  const pending = await params.store.getNextCommand?.(lockedSnapshot.id);
+  const commandArrived =
+    pending &&
+    (pending.id !== params.commandAtStart ||
+      lockedSnapshot.status === ExecutionStatus.Pending) &&
+    latest &&
+    !isExecutionTerminal(latest.status) &&
+    latest.status !== ExecutionStatus.Paused &&
+    latest.status !== ExecutionStatus.Pending;
+  if (
+    commandArrived ||
+    shouldRedriveAfterLockRelease({ lockedSnapshot, latest })
+  ) {
     await params.kickoffExecution(lockedSnapshot.id);
   }
 }

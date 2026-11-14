@@ -16,6 +16,8 @@ import { IndexedExecutions } from "./IndexedExecutions";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DurableExecutionOwnership } from "../../core/interfaces/ownership";
 import { IndexedTimers } from "./IndexedTimers";
+import type { DurableHistoryEntry } from "../../core/interfaces/history";
+import type { DurableCommandRecord } from "../../core/interfaces/commands";
 
 type MemoryStoreDurableMutationHooks = {
   captureSnapshot: () => MemoryStoreSnapshot | null;
@@ -23,6 +25,12 @@ type MemoryStoreDurableMutationHooks = {
 };
 
 export class MemoryStoreRuntime {
+  histories = new Map<
+    string,
+    { sequence: number; entries: Map<string, DurableHistoryEntry> }
+  >();
+  commands = new Map<string, DurableCommandRecord>();
+  commandQueues = new Map<string, string[]>();
   private readonly ownership =
     new AsyncLocalStorage<DurableExecutionOwnership>();
 

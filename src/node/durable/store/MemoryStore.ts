@@ -1,3 +1,5 @@
+import { createCheckpointExecution } from "./memory-store/checkpoint";
+import type { DurableCheckpointBranch } from "../core/interfaces/history";
 import { collectCompletedHistory } from "./memory-store/retention";
 import type { DurableAuditEntry } from "../core/audit";
 import type {
@@ -35,10 +37,72 @@ import { toDurableExecutionState } from "../core/executionIndex";
 import type { DurableExecutionOwnership } from "../core/interfaces/ownership";
 import { scopeExecutionStore } from "./ownership";
 import { cloneTimer } from "./memory-store/shared";
+import { updateHistory } from "./memory-store/history";
+import type {
+  DurableHistoryUpdate,
+  DurableHistoryEntry,
+} from "../core/interfaces/history";
+import * as commandOps from "./memory-store/commands";
+import type { DurableCommandRecord } from "../core/interfaces/commands";
+import { nextCommandWakeup } from "../core/commandWakeup";
 
 export type { MemoryStoreSnapshot } from "./memory-store/types";
 
 export class MemoryStore implements IDurableStore {
+  /** Atomically commits a checkpoint branch under source execution ownership. */
+  async createCheckpointExecution(
+    branch: DurableCheckpointBranch,
+  ): Promise<boolean> {
+    return createCheckpointExecution(this.runtime, branch);
+  }
+
+  /** Atomically admits a request into the target's FIFO. */
+  async enqueueCommand(
+    command: DurableCommandRecord,
+  ): Promise<DurableCommandRecord> {
+    return commandOps.enqueueCommand(
+      this.runtime,
+      command,
+      nextCommandWakeup(this),
+    );
+  }
+  /** Reschedules one shared wakeup without consuming its timer claim. */
+  async rescheduleCommandTimer(id: string, fireAt: Date): Promise<boolean> {
+    return commandOps.rescheduleCommandTimer(this.runtime, id, fireAt);
+  }
+  /** Reads a retained command receipt. */
+  async getCommand(id: string): Promise<DurableCommandRecord | null> {
+    return structuredClone(this.runtime.commands.get(id) ?? null);
+  }
+  /** Reads the FIFO head. */
+  async getNextCommand(id: string): Promise<DurableCommandRecord | null> {
+    return commandOps.nextCommand(this.runtime, id);
+  }
+  /** Persists only a live request under execution ownership. */
+  async saveCommand(command: DurableCommandRecord): Promise<boolean> {
+    return commandOps.saveCommand(this.runtime, command);
+  }
+  /** Commits staged state and its receipt as one mutation. */
+  async completeCommand(
+    command: DurableCommandRecord,
+    expected?: Execution,
+  ): Promise<boolean> {
+    return commandOps.completeCommand(this.runtime, command, expected);
+  }
+  /** Records operation order under the attempt's ownership token. */
+  async recordExecutionHistory(
+    id: string,
+    update: DurableHistoryUpdate,
+  ): Promise<void> {
+    if (updateHistory(this.runtime, id, update))
+      await this.runtime.persistDurableMutation();
+  }
+  /** Reads an isolated copy of the recorded prefix. */
+  async listExecutionHistory(id: string): Promise<DurableHistoryEntry[]> {
+    return structuredClone([
+      ...(this.runtime.histories.get(id)?.entries.values() ?? []),
+    ]);
+  }
   /** Scopes attempt writes without changing the operator or signal caller's store. */
   withExecutionOwnership(owner: DurableExecutionOwnership): IDurableStore {
     return scopeExecutionStore(this, (operation) =>

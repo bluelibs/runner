@@ -57,7 +57,11 @@ export async function createContinuedExecution(
   // and the backlog hand-off commit as one unit against signal buffering.
   return await runtime.withSignalStateMutation(() => {
     const current = runtime.executions.get(params.priorExecution.id);
-    if (!current || current.status !== ExecutionStatus.Running) {
+    if (
+      !current ||
+      current.status !== ExecutionStatus.Running ||
+      runtime.commandQueues.get(current.id)?.length
+    ) {
       return { result: false, changed: false };
     }
 
@@ -91,6 +95,12 @@ export async function saveExecutionIfStatus(
   if (!expectedStatuses.includes(current.status)) {
     return false;
   }
+  if (
+    (execution.status === "completed" ||
+      execution.status === "continued_as_new") &&
+    runtime.commandQueues.get(execution.id)?.length
+  )
+    return false;
 
   runtime.executions.set(execution.id, cloneExecution(execution));
   runtime.indexHistory(execution);

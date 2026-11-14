@@ -21,6 +21,7 @@ export interface SignalHopDeps {
   logger: Pick<Logger, "warn">;
   resolveTask: (
     workflowKey: string,
+    version?: number,
   ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
 }
 
@@ -238,7 +239,10 @@ export async function deliverSignalToHop(
   }
   if (isExecutionTerminal(execution.status)) return { kind: "dropped" };
 
-  const task = deps.resolveTask(execution.workflowKey);
+  const task = deps.resolveTask(
+    execution.workflowKey,
+    execution.workflowVersion,
+  );
   const declaredSignalIds = task
     ? getDeclaredDurableWorkflowSignalIds(task)
     : null;

@@ -23,7 +23,7 @@ export class ClusterRecovery {
     private readonly store: IDurableStore,
     private readonly config: DurableServiceConfig["recovery"],
     private readonly recover: (id: string) => Promise<void>,
-    private readonly knowsWorkflow: (key: string) => boolean,
+    private readonly knowsWorkflow: (key: string, version?: number) => boolean,
     private readonly logger: Logger,
   ) {
     this.interval = config?.intervalMs ?? 5_000;
@@ -86,7 +86,10 @@ export class ClusterRecovery {
         id: row.id,
         createdAt: row.createdAt.toISOString(),
       });
-      if (!this.knowsWorkflow(row.workflowKey) || this.inFlight.has(row.id))
+      if (
+        !this.knowsWorkflow(row.workflowKey, row.workflowVersion) ||
+        this.inFlight.has(row.id)
+      )
         continue;
       const pending = this.recoverCandidate(row.id)
         .catch((error) => this.report(error))
@@ -109,7 +112,7 @@ export class ClusterRecovery {
       const execution = await this.store.getExecution(id);
       if (
         !execution ||
-        !this.knowsWorkflow(execution.workflowKey) ||
+        !this.knowsWorkflow(execution.workflowKey, execution.workflowVersion) ||
         !(await needsClusterRecovery(this.store, execution)) ||
         this.stopped
       )

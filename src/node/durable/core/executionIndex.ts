@@ -31,6 +31,9 @@ export function toDurableExecutionState(
   return {
     id: execution.id,
     workflowKey: execution.workflowKey,
+    ...(execution.workflowVersion === undefined
+      ? {}
+      : { workflowVersion: execution.workflowVersion }),
     parentExecutionId: execution.parentExecutionId,
     status: execution.status,
     attempt: execution.attempt,
