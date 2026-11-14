@@ -170,6 +170,7 @@ export class CommandManager {
             provider(context, () =>
               this.config.taskExecutor!.run(task, request!.input, {
                 signal: cancellation.signal,
+                kind: "command",
               }),
             ),
           ),

@@ -22,7 +22,12 @@ export interface ITaskExecutor {
   run<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
-    options?: { signal: AbortSignal },
+    options?: {
+      /** Cooperative cancellation for the invocation. */
+      signal: AbortSignal;
+      /** Ordinary task invocation; omission retains the workflow result contract. */
+      kind?: "step" | "command";
+    },
   ): Promise<TResult>;
 }
 

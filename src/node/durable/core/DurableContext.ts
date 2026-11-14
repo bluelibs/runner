@@ -337,6 +337,7 @@ export class DurableContext implements IDurableWorkflowContext {
             });
           return await this.taskExecutor.run(task, fnOrInput, {
             signal: step.signal,
+            kind: "step",
           });
         },
         undefined,

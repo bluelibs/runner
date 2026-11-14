@@ -127,13 +127,13 @@ export async function createRunnerDurableRuntime(
       run: async <TInput, TResult>(
         task: ITask<TInput, Promise<TResult>, any, any, any, any>,
         input?: TInput,
-        options?: { signal: AbortSignal },
+        options?: { signal: AbortSignal; kind?: "step" | "command" },
       ) => {
         const output = await deps.taskRunner.run(task, input, {
           source: durableCallSource,
           signal: options?.signal,
         });
-        if (output === undefined) {
+        if (output === undefined && options?.kind === undefined) {
           durableExecutionInvariantError.throw({
             message: `Durable task '${task.id}' completed without a result promise.`,
           });

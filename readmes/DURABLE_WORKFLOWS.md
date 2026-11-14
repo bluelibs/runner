@@ -267,7 +267,7 @@ await d.step("import", { heartbeatTimeoutMs: 30_000 }, async (step) => {
 });
 ```
 
-Task steps use Runner's regular validation, dependencies, middleware, and cancellation. Inside that task or its dependencies, `durable.useStep()` exposes the same controls. It throws outside a live step. Task input and output are inferred; options follow the input: `d.step("charge", chargeCard, input, { retries: 3 })`.
+Task steps support ordinary task results, including `void`, and use Runner's regular validation, dependencies, middleware, and cancellation. Inside that task or its dependencies, `durable.useStep()` exposes the same controls. It throws outside a live step. Task input and output are inferred; options follow the input: `d.step("charge", chargeCard, input, { retries: 3 })`.
 
 The step idempotency key is stable across retries and worker takeover for the same execution and step. Pass it to external services that support deduplication; it does not make those services transactional. Progress is cloned and persists across retries and worker takeover. Always await `heartbeat()`; it fails after the callback stops owning progress. A heartbeat timeout aborts the callback's signal and fails that step as a timeout, following the existing step-timeout policy. Missing heartbeats do not renew the workflow execution lease: workers already renew that lease automatically. Each new execution, including a reset branch, has its own step identities.
 
