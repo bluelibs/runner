@@ -9,6 +9,69 @@ import {
 } from "../../helpers/DurableService.unit.helpers";
 
 describe("durable: ExecutionManager lock ownership", () => {
+  it("releases the execution lease if a custom ownership scope cannot be created", async () => {
+    const store = new MemoryStore();
+    const task = okTask("scope-failure");
+    await store.saveExecution(
+      pendingExecution({ id: "one", workflowKey: task.id }),
+    );
+    jest.spyOn(store, "withExecutionOwnership").mockImplementation(() => {
+      throw new Error("scope failed");
+    });
+    const service = new DurableService({ store, tasks: [task] });
+    await expect(service.processExecution("one")).rejects.toThrow(
+      "scope failed",
+    );
+    expect(await store.hasExecutionLease("one")).toBe(false);
+    await service.stop();
+  });
+  it("parks a lease lost between the ownership check and the initial state commit", async () => {
+    const store = new MemoryStore();
+    const task = okTask("atomic-gap");
+    await store.saveExecution(
+      pendingExecution({ id: "one", workflowKey: task.id }),
+    );
+    const save = store.saveExecutionIfStatus.bind(store);
+    jest
+      .spyOn(store, "saveExecutionIfStatus")
+      .mockImplementation(async (execution, expected) => {
+        // Simulate the lease expiring in the old check-then-write gap.
+        const locks = Reflect.get(store, "locks") as Map<
+          string,
+          { expires: number }
+        >;
+        locks.get("execution:one")!.expires = 0;
+        return save(execution, expected);
+      });
+    const run = jest.fn(async () => "unused");
+    const service = new DurableService({
+      store,
+      tasks: [task],
+      taskExecutor: createTaskExecutor({ [task.id]: run }),
+    });
+    await expect(service.processExecution("one")).resolves.toBeUndefined();
+    expect(run).not.toHaveBeenCalled();
+    expect((await store.getExecution("one"))?.status).toBe("pending");
+    await service.stop();
+  });
+  it("propagates unexpected store errors before ownership is lost", async () => {
+    const store = new MemoryStore();
+    const task = okTask("store-failure");
+    await store.saveExecution(
+      pendingExecution({ id: "one", workflowKey: task.id }),
+    );
+    const original = store.getExecution.bind(store);
+    jest
+      .spyOn(store, "getExecution")
+      .mockImplementationOnce(original)
+      .mockRejectedValueOnce(new Error("read failed"));
+    const service = new DurableService({ store, tasks: [task] });
+    await expect(service.processExecution("one")).rejects.toThrow(
+      "read failed",
+    );
+    expect(await store.hasExecutionLease("one")).toBe(false);
+    await service.stop();
+  });
   it("returns early when no persisted lock metadata exists", async () => {
     const service = new DurableService({
       store: new MemoryStore(),

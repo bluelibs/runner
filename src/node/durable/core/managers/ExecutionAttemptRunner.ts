@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { IDurableStore } from "../interfaces/store";
 import type { IEventBus } from "../interfaces/bus";
 import type {
@@ -17,6 +18,7 @@ import {
   createExecutionLockState,
   assertStoreLockOwnership,
   startLockHeartbeat,
+  markExecutionLockLost,
 } from "./ExecutionManager.locking";
 import {
   type ExecutionCancellationState,
@@ -82,10 +84,12 @@ export interface ExecutionAttemptRunnerDeps {
  * owns the public service API and wiring.
  */
 export class ExecutionAttemptRunner {
-  private readonly workflowAdmission: WorkflowAdmissionController;
+  private readonly executionStores = new AsyncLocalStorage<IDurableStore>();
 
-  constructor(private readonly deps: ExecutionAttemptRunnerDeps) {
-    this.workflowAdmission = new WorkflowAdmissionController(deps.store);
+  constructor(private readonly deps: ExecutionAttemptRunnerDeps) {}
+
+  private get store(): IDurableStore {
+    return this.executionStores.getStore() ?? this.deps.store;
   }
 
   async processExecution(executionId: string): Promise<void> {
@@ -119,9 +123,24 @@ export class ExecutionAttemptRunner {
       lockState,
     });
 
-    let lockedSnapshot: Execution<unknown, unknown> | null;
+    let lockedSnapshot: Execution<unknown, unknown> | null = null;
     try {
-      lockedSnapshot = await this.runUnderExecutionLock(executionId, lockState);
+      const store =
+        acquiredLock.lockId !== "no-lock" &&
+        this.deps.store.withExecutionOwnership
+          ? this.deps.store.withExecutionOwnership({
+              executionId,
+              lockId: acquiredLock.lockId,
+              onLost: () => {
+                throw markExecutionLockLost(lockState, lockResource);
+              },
+            })
+          : this.deps.store;
+      lockedSnapshot = await this.executionStores.run(store, () =>
+        this.runUnderExecutionLock(executionId, lockState),
+      );
+    } catch (error) {
+      if (!lockState.lost) throw error;
     } finally {
       stopHeartbeat();
       await acquiredLock.release();
@@ -146,7 +165,7 @@ export class ExecutionAttemptRunner {
     executionId: string,
     lockState: ExecutionLockState,
   ): Promise<Execution<unknown, unknown> | null> {
-    const snapshot = await this.deps.store.getExecution(executionId);
+    const snapshot = await this.store.getExecution(executionId);
     if (!snapshot) return null;
     if (isExecutionTerminal(snapshot.status)) return snapshot;
     if (snapshot.status === ExecutionStatus.Paused) return snapshot;
@@ -186,13 +205,14 @@ export class ExecutionAttemptRunner {
       execution = validated;
     }
 
-    const admission = await this.workflowAdmission.tryAdmit({
+    const workflowAdmission = new WorkflowAdmissionController(this.store);
+    const admission = await workflowAdmission.tryAdmit({
       task,
       workflowKey: execution.workflowKey,
       executionLockState: lockState,
     });
     if (admission.kind === "deferred") {
-      await this.workflowAdmission.defer(execution.id, admission.retryAfterMs);
+      await workflowAdmission.defer(execution.id, admission.retryAfterMs);
       return snapshot;
     }
 
@@ -305,7 +325,7 @@ export class ExecutionAttemptRunner {
   }
 
   async assertStoreLockOwnership(lockState: ExecutionLockState): Promise<void> {
-    await assertStoreLockOwnership({ store: this.deps.store, lockState });
+    await assertStoreLockOwnership({ store: this.store, lockState });
   }
 
   createExecutionContext(
@@ -316,7 +336,7 @@ export class ExecutionAttemptRunner {
     executionLockState?: ExecutionLockState,
   ): DurableContext {
     return createContextFn({
-      store: this.deps.store,
+      store: this.store,
       eventBus: this.deps.eventBus,
       execution,
       task,
@@ -353,7 +373,7 @@ export class ExecutionAttemptRunner {
     execution: Execution<unknown, unknown>,
   ): Promise<Execution<unknown, unknown> | null> {
     return transitionToRunningFn({
-      store: this.deps.store,
+      store: this.store,
       execution,
       logStatusChange: (p) => this.logStatusChange(p),
     });
@@ -394,9 +414,7 @@ export class ExecutionAttemptRunner {
       inputNeedsValidation: undefined,
       updatedAt: new Date(),
     };
-    await this.deps.store.saveExecutionIfStatus(cleared, [
-      params.execution.status,
-    ]);
+    await this.store.saveExecutionIfStatus(cleared, [params.execution.status]);
     return cleared;
   }
 
@@ -413,7 +431,7 @@ export class ExecutionAttemptRunner {
     error: { message: string; stack?: string; stepId?: string };
   }): Promise<void> {
     await transitionToFailedFn({
-      store: this.deps.store,
+      store: this.store,
       ...params,
       logStatusChange: (p) => this.logStatusChange(p),
       notifyFinished: (e) => this.deps.notifyFinished(e),
@@ -428,7 +446,7 @@ export class ExecutionAttemptRunner {
     canPersistOutcome?: () => Promise<boolean>,
   ): Promise<void> {
     await completeAttemptFn({
-      store: this.deps.store,
+      store: this.store,
       execution,
       result,
       canPersistOutcome,
@@ -445,7 +463,7 @@ export class ExecutionAttemptRunner {
     canPersistOutcome?: () => Promise<boolean>,
   ): Promise<void> {
     await suspendAttemptFn({
-      store: this.deps.store,
+      store: this.store,
       execution,
       reason,
       canPersistOutcome,
@@ -461,7 +479,7 @@ export class ExecutionAttemptRunner {
     canPersistOutcome?: () => Promise<boolean>;
   }): Promise<void> {
     await scheduleRetryFn({
-      store: this.deps.store,
+      store: this.store,
       ...params,
       logStatusChange: (p) => this.logStatusChange(p),
       finalizeCancellation: (exec, can) =>
@@ -477,7 +495,7 @@ export class ExecutionAttemptRunner {
   }): Promise<void> {
     await continueAsNewFlow({
       deps: {
-        persistence: this.deps.persistence,
+        persistence: { ...this.deps.persistence, store: this.store },
         notifyFinished: (e) => this.deps.notifyFinished(e),
       },
       ...params,
@@ -493,7 +511,7 @@ export class ExecutionAttemptRunner {
     canPersistOutcome?: () => Promise<boolean>;
   }): Promise<void> {
     await transitionRunningToCancelledFn({
-      store: this.deps.store,
+      store: this.store,
       ...params,
       logStatusChange: (p) => this.logStatusChange(p),
       notifyFinished: (e) => this.deps.notifyFinished(e),
@@ -505,7 +523,7 @@ export class ExecutionAttemptRunner {
     canPersistOutcome?: () => Promise<boolean>,
   ): Promise<boolean> {
     return finalizeCancellationIfRequested({
-      store: this.deps.store,
+      store: this.store,
       executionId: execution.id,
       canPersistOutcome,
       transitionToCancelled: (p) =>
@@ -521,7 +539,7 @@ export class ExecutionAttemptRunner {
     return createGuardsFn({
       executionId,
       lockState,
-      store: this.deps.store,
+      store: this.store,
       assertStoreLockOwnership: async (ls) => {
         await this.assertStoreLockOwnership(ls);
         await assertAdmissionOwnership?.();
@@ -545,7 +563,7 @@ export class ExecutionAttemptRunner {
     await handleAttemptErrorFn({
       ...params,
       settleCompensationFailure: async () => {
-        const execution = await this.deps.store.getExecution(
+        const execution = await this.store.getExecution(
           params.runningExecution.id,
         );
         if (execution?.status !== ExecutionStatus.CompensationFailed)

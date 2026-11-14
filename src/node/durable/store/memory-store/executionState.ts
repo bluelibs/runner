@@ -22,6 +22,7 @@ export async function createExecutionWithIdempotencyKey(
   | { created: true; executionId: string }
   | { created: false; executionId: string }
 > {
+  runtime.assertOwnership();
   const key = getIdempotencyMapKey(params.workflowKey, params.idempotencyKey);
   const existingExecutionId = runtime.executionIdByIdempotencyKey.get(key);
   if (existingExecutionId) {
@@ -39,6 +40,7 @@ export async function saveExecution(
   runtime: MemoryStoreRuntime,
   execution: Execution,
 ): Promise<void> {
+  runtime.assertOwnership();
   runtime.executions.set(execution.id, cloneExecution(execution));
   runtime.indexHistory(execution);
   await runtime.persistDurableMutation();
@@ -81,6 +83,7 @@ export async function saveExecutionIfStatus(
   execution: Execution,
   expectedStatuses: ExpectedExecutionStatuses,
 ): Promise<boolean> {
+  runtime.assertOwnership();
   const current = runtime.executions.get(execution.id);
   if (!current) {
     return false;
@@ -108,6 +111,7 @@ export async function updateExecution(
   id: string,
   updates: Partial<Execution>,
 ): Promise<void> {
+  runtime.assertOwnership();
   const execution = runtime.executions.get(id);
   if (!execution) {
     return;
@@ -152,6 +156,7 @@ export async function retryRollback(
   runtime: MemoryStoreRuntime,
   executionId: string,
 ): Promise<void> {
+  runtime.assertOwnership();
   const execution = runtime.executions.get(executionId);
   if (!execution) {
     return;
@@ -171,6 +176,7 @@ export async function forceFail(
   executionId: string,
   error: { message: string; stack?: string },
 ): Promise<void> {
+  runtime.assertOwnership();
   const execution = runtime.executions.get(executionId);
   if (!execution) {
     return;

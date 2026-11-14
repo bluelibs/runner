@@ -394,6 +394,27 @@ const report = await durableRuntime.recover();
 
 Runs automatically at startup when `recovery.onStartup: true`.
 
+Enable `recovery: { enabled: true, intervalMs: 5000, batchSize: 100,
+concurrency: 10, claimTtlMs: 30000 }` for continuous recovery without worker
+restarts. These are the defaults except `enabled` (off). Sweeps page active
+metadata, skip live leases/unknown workflows/healthy waits, repair missing wait
+timers and lost signal/child wakeups, and resume from saved checkpoints. Claims
+suppress repeated queue submissions until expiry; execution leases separately
+arbitrate attempts. Failover includes lease expiry (currently 30 seconds), page
+traversal, and delivery latency. Keep a timer poller running. Cooldown stops new
+admissions; disposal drains accepted submissions.
+
+Built-in stores fence attempt mutations atomically against the execution lease;
+late old workers cannot overwrite progress. External effects still need downstream
+idempotency. Redis supports cross-process recovery; memory requires the same store
+instance and file persistence remains single-process. Existing Redis deployments
+must finish execution-index backfill and upgrade all writers before enabling;
+the timer index backfills lazily with `HSCAN`. Custom clients need `hscan()`.
+Custom stores must implement `withExecutionOwnership`, `hasExecutionLease`,
+`getExecutionTimers`, `listExecutionStates`, and renewable locks to enable sweeps;
+otherwise construction fails. Legacy custom-store, manual and startup-drain
+behavior stays available. See the main guide for the ownership capability contract.
+
 ## Signals
 
 ```ts

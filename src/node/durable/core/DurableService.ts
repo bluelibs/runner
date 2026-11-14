@@ -17,6 +17,7 @@ import type { IEventDefinition } from "../../../types/event";
 import type { ITask } from "../../../types/task";
 import { createExecutionId } from "./utils";
 import { HistoryCollector } from "./HistoryCollector";
+import { ClusterRecovery } from "./managers/ClusterRecovery";
 import { readExistingExecutionState } from "./durable-context/state";
 
 import {
@@ -64,6 +65,7 @@ export class DurableService implements IDurableService {
   private readonly recoveryManager: RecoveryManager;
   private readonly logger: Logger;
   private readonly historyCollector: HistoryCollector;
+  private readonly clusterRecovery: ClusterRecovery;
   private readonly cooldownHandlers: Array<() => Promise<void> | void> = [];
   private readonly stopHandlers: Array<() => Promise<void>> = [];
   private recoveryStopRegistered = false;
@@ -182,6 +184,14 @@ export class DurableService implements IDurableService {
       this.logger,
       config.recovery,
     );
+    this.clusterRecovery = new ClusterRecovery(
+      config.store,
+      config.recovery,
+      (id) => this.executionManager.recoverExecution(id),
+      (key) => this.taskRegistry.find(key) !== undefined,
+      this.logger,
+    );
+    this.stopHandlers.push(() => this.clusterRecovery.stop());
 
     this.stopHandlers.push(async () => {
       await this.executionManager.stopLiveCancellationListener();
@@ -191,6 +201,7 @@ export class DurableService implements IDurableService {
   /** @internal Starts lifecycle-owned retention maintenance. */
   startHistoryCollection(): void {
     this.historyCollector.start();
+    this.clusterRecovery.start();
   }
 
   // ─── Public API (delegating to managers) ───────────────────────────────────
@@ -217,6 +228,7 @@ export class DurableService implements IDurableService {
     }
 
     this.lifecycleState = "cooldown";
+    this.clusterRecovery.cooldown();
     await this.historyCollector.stop();
     let firstError: unknown = null;
 
@@ -276,6 +288,7 @@ export class DurableService implements IDurableService {
       this.assertCanStartBackgroundProcessing("DurableService.start()");
       this.pollingManager.start();
       this.historyCollector.start();
+      this.clusterRecovery.start();
       return;
     }
 

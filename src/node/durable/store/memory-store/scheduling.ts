@@ -22,6 +22,7 @@ export async function createSchedule(
   runtime: MemoryStoreRuntime,
   schedule: Schedule,
 ): Promise<void> {
+  runtime.assertOwnership();
   runtime.schedules.set(schedule.id, cloneSchedule(schedule));
   await runtime.persistDurableMutation();
 }
@@ -39,6 +40,7 @@ export async function updateSchedule(
   id: string,
   updates: ScheduleUpdate,
 ): Promise<void> {
+  runtime.assertOwnership();
   const schedule = runtime.schedules.get(id);
   if (!schedule) {
     return;
@@ -54,6 +56,7 @@ export async function saveScheduleWithTimer(
   schedule: Schedule,
   timer: Timer,
 ): Promise<void> {
+  runtime.assertOwnership();
   runtime.schedules.set(schedule.id, cloneSchedule(schedule));
   runtime.timers.set(timer.id, cloneTimer(timer));
   await runtime.persistDurableMutation();
@@ -63,6 +66,7 @@ export async function deleteSchedule(
   runtime: MemoryStoreRuntime,
   id: string,
 ): Promise<void> {
+  runtime.assertOwnership();
   if (!runtime.schedules.delete(id)) {
     return;
   }

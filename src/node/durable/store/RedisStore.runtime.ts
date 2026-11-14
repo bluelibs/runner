@@ -1,5 +1,8 @@
 import { Serializer } from "../../../serializer";
 import { durableStoreShapeError } from "../../../errors";
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { DurableExecutionOwnership } from "../core/interfaces/ownership";
+import { ownershipRedisClient } from "./RedisStore.ownership";
 
 export interface RedisPipeline {
   get(key: string): RedisPipeline;
@@ -19,10 +22,15 @@ export interface RedisClient {
   hget(...args: unknown[]): Promise<unknown>;
   hdel(...args: unknown[]): Promise<unknown>;
   hgetall(...args: unknown[]): Promise<unknown>;
+  hscan?(...args: unknown[]): Promise<unknown>;
   zadd(...args: unknown[]): Promise<unknown>;
   zrangebyscore(...args: unknown[]): Promise<unknown>;
   zrem(...args: unknown[]): Promise<unknown>;
-  eval(...args: unknown[]): Promise<unknown>;
+  eval(
+    script: string,
+    numberOfKeys: number,
+    ...args: unknown[]
+  ): Promise<unknown>;
   quit(...args: unknown[]): Promise<unknown>;
 }
 
@@ -39,12 +47,30 @@ export interface RedisStoreConfig {
 }
 
 export class RedisStoreRuntime {
+  private readonly ownership =
+    new AsyncLocalStorage<DurableExecutionOwnership>();
+  readonly redis: RedisClient;
+
   constructor(
-    readonly redis: RedisClient,
+    redis: RedisClient,
     readonly prefix: string,
     readonly ownsRedisClient: boolean,
     readonly serializer: Serializer = new Serializer(),
-  ) {}
+  ) {
+    this.redis = ownershipRedisClient(
+      redis,
+      () => this.ownership.getStore(),
+      (executionId) => this.lockKey(`execution:${executionId}`),
+    );
+  }
+
+  withOwnership<T>(owner: DurableExecutionOwnership, operation: () => T): T {
+    return this.ownership.run(owner, operation);
+  }
+
+  withoutOwnership<T>(operation: () => T): T {
+    return this.ownership.exit(operation);
+  }
 
   k(key: string): string {
     return `${this.prefix}${key}`;

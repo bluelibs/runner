@@ -87,6 +87,7 @@ export async function appendAuditEntry(
   runtime: MemoryStoreRuntime,
   entry: DurableAuditEntry,
 ): Promise<void> {
+  runtime.assertOwnership();
   const list = runtime.auditEntries.get(entry.executionId) ?? [];
   list.push(cloneAuditEntry(entry));
   runtime.auditEntries.set(entry.executionId, list);
@@ -122,6 +123,7 @@ export function setStepResult(
   runtime: MemoryStoreRuntime,
   result: StepResult,
 ): void {
+  runtime.assertOwnership();
   getOrCreateExecutionStepResults(runtime, result.executionId).set(
     result.stepId,
     cloneStepResult(result),

@@ -7,6 +7,7 @@ export async function collectCompletedHistory(
   now: Date,
   limit: number,
 ): Promise<number> {
+  runtime.assertOwnership();
   let collected = 0;
   for (const [id, deadline] of runtime.historyDeadlines) {
     if (collected >= limit) break;

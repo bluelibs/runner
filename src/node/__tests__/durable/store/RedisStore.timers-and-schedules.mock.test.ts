@@ -178,6 +178,7 @@ describe("durable: RedisStore timers and schedules (mock)", () => {
       "t-atomic",
       expect.any(String),
       timer.fireAt.getTime(),
+      "",
     );
   });
 

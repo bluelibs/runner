@@ -182,6 +182,12 @@ export interface DurableServiceConfig {
     claimTtlMs?: number;
   };
   recovery?: {
+    /** Continuously sweep for orphaned executions. Opt-in; requires atomic ownership and indexed store capabilities. */
+    enabled?: boolean;
+    /** Continuous sweep interval in milliseconds. Default: 5000. */
+    intervalMs?: number;
+    /** Maximum metadata candidates inspected per continuous sweep (1–1000). Default: 100. */
+    batchSize?: number;
     /** Automatically starts background orphan recovery when the runtime boots. */
     onStartup?: boolean;
     /** Maximum number of concurrent recovery attempts per drain. Default: 10. */
