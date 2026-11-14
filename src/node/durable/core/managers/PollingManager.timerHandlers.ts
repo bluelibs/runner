@@ -359,6 +359,10 @@ export async function persistTaskTimerExecution(params: {
   const execution: Execution<unknown, unknown> = {
     id: executionId,
     workflowKey: params.workflowKey,
+    ...(params.timer.workflowVersion === undefined
+      ? {}
+      : { workflowVersion: params.timer.workflowVersion }),
+    ...(params.store.recordExecutionHistory ? { historyRecorded: true } : {}),
     input: params.timer.input,
     status: ExecutionStatus.Pending,
     attempt: 1,
@@ -468,7 +472,10 @@ export async function handleScheduledTaskTimer(params: {
     }
   }
 
-  const task = params.taskRegistry.find(params.timer.workflowKey);
+  const task = params.taskRegistry.find(
+    params.timer.workflowKey,
+    params.timer.workflowVersion,
+  );
   if (!task) {
     return {
       handled: false,
@@ -493,7 +500,7 @@ export async function handleScheduledTaskTimer(params: {
     params.assertTimerClaimIsStillOwned();
     if (schedule && schedule.status === "active") {
       await params.scheduleManager.reschedule(schedule, {
-        lastRunAt: new Date(),
+        lastRunAt: new Date(params.store.getWorkflowTime?.() ?? Date.now()),
       });
       params.assertTimerClaimIsStillOwned();
       return {

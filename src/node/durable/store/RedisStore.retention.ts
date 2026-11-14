@@ -3,6 +3,7 @@ import type { Execution, Timer } from "../core/types";
 import { check } from "../../../tools/check";
 import { collectionDeadline } from "../core/retention";
 import { executionTimerIndexKey } from "./RedisStore.recovery";
+import { historyKey, historySequenceKey } from "./RedisStore.history";
 
 /** One Lua commit serializes collection against lifecycle/operator writes. */
 export async function collectCompletedHistory(
@@ -42,6 +43,7 @@ export async function collectCompletedHistory(
       runtime.signalWaiterStepKey(id, signal),
     ]);
     detailKeys.push(executionTimerIndexKey(runtime, id));
+    detailKeys.push(historyKey(runtime, id), historySequenceKey(runtime, id));
     timersByExecution ??= await readTimersByExecution(runtime);
     const timerIds = timersByExecution.get(id) ?? [];
     const compacted = runtime.serializer.stringify({

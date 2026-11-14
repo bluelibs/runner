@@ -80,6 +80,7 @@ jobs:
           npm run test:serial --
           --runTestsByPath
           src/node/__tests__/durable/store/RedisStore.real.integration.test.ts
+          src/node/__tests__/durable/store/RedisStore.capabilities.real.integration.test.ts
           src/node/__tests__/durable/store/RedisStore.ownership.real.integration.test.ts
           src/node/__tests__/durable/store/RedisStore.retention.real.integration.test.ts
           src/node/__tests__/event-lanes/RabbitMQEventLaneQueue.real.integration.test.ts

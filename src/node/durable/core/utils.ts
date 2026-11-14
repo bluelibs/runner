@@ -44,7 +44,9 @@ type TimeoutExceededError = Error & {
   [timeoutExceededSymbol]: true;
 };
 
-function createTimeoutExceededError(message: string): TimeoutExceededError {
+export function createTimeoutExceededError(
+  message: string,
+): TimeoutExceededError {
   return Object.assign(genericError.new({ message }), {
     [timeoutExceededSymbol]: true as const,
   });

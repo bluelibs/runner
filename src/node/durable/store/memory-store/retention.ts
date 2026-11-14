@@ -28,6 +28,7 @@ export async function collectCompletedHistory(
     )
       continue;
     runtime.stepResults.delete(id);
+    runtime.histories.delete(id);
     runtime.signalStates.delete(id);
     runtime.signalWaiters.delete(id);
     runtime.workflowStates.delete(id);

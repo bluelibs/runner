@@ -67,3 +67,11 @@ export type {
   DurableEventResource,
 } from "./bridge/types";
 export type { ExecutionRetention } from "./core/retention";
+
+export * from "./core/interfaces/history";
+export * from "./core/interfaces/commands";
+export { createDurableTestRuntime } from "./test-runtime";
+export type {
+  DurableTestRuntime,
+  DurableTestRuntimeOptions,
+} from "./test-runtime";

@@ -3,6 +3,7 @@ import { ExecutionStatus, type Execution } from "../core/types";
 import type { ExpectedExecutionStatuses } from "../core/interfaces/store";
 import { durableStoreShapeError } from "../../../errors";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
+import { commandQueueKey } from "./RedisStore.commands";
 import { saveStepResult } from "./RedisStore.executionViews";
 import {
   executionIndexArgs,
@@ -217,6 +218,8 @@ export async function saveExecutionIfStatus(
         return 0
       end
 
+      if ARGV[10] == "1" and redis.call("llen", ARGV[9]) > 0 then return 0 end
+
       redis.call("set", KEYS[1], ARGV[1])
       ${saveExecutionIndexesScript()}
       return 1
@@ -235,6 +238,10 @@ export async function saveExecutionIfStatus(
     runtime.serializer.stringify(expectedStatuses),
     ...executionIndexArgs(runtime, execution),
     collectionDeadline(execution) ?? -1,
+    commandQueueKey(runtime, execution.id),
+    execution.status === "completed" || execution.status === "continued_as_new"
+      ? "1"
+      : "0",
   );
   runtime.assertEvalResultNotError(outcome);
   return outcome === 1;

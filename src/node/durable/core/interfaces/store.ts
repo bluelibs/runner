@@ -14,6 +14,12 @@ import type {
 } from "../types";
 import type { DurableAuditEntry } from "../audit";
 import type { DurableExecutionOwnership } from "./ownership";
+import type {
+  DurableHistoryEntry,
+  DurableHistoryUpdate,
+  DurableCheckpointBranch,
+} from "./history";
+import type { DurableCommandRecord } from "./commands";
 
 export type { DurableExecutionOwnership } from "./ownership";
 
@@ -54,6 +60,32 @@ export type ExpectedExecutionStatuses = readonly [
 export type ScheduleUpdate = Omit<Partial<Schedule>, "id">;
 
 export interface IDurableStore {
+  /** Atomically creates a branch and its completed prefix if the source snapshot still matches. */
+  createCheckpointExecution?(branch: DurableCheckpointBranch): Promise<boolean>;
+
+  /** Logical workflow-timer clock for isolated test adapters; leases always use backend real time. */
+  getWorkflowTime?(): number;
+
+  /** Atomically inserts one command and its per-execution FIFO membership; duplicates retain their receipt. */
+  enqueueCommand?(command: DurableCommandRecord): Promise<DurableCommandRecord>;
+  /** Reads a command receipt, including after workflow history collection. */
+  getCommand?(commandId: string): Promise<DurableCommandRecord | null>;
+  /** Reads the next pending request without removing it. */
+  getNextCommand?(executionId: string): Promise<DurableCommandRecord | null>;
+  /** Updates only a live FIFO head; terminal receipts cannot be overwritten. */
+  saveCommand?(command: DurableCommandRecord): Promise<boolean>;
+  /** Atomically commits a receipt, optional staged state, and FIFO removal. A target snapshot guards successful state application. */
+  completeCommand?(
+    command: DurableCommandRecord,
+    expectedExecution?: Execution,
+  ): Promise<boolean>;
+  /** Optional ordered history capability; legacy custom stores need not implement it. */
+  recordExecutionHistory?(
+    executionId: string,
+    operation: DurableHistoryUpdate,
+  ): Promise<void>;
+  /** Reads operation metadata without executing workflow code. */
+  listExecutionHistory?(executionId: string): Promise<DurableHistoryEntry[]>;
   /**
    * Returns a call-scoped store that atomically verifies the execution lease
    * with each mutation. Loss invokes ownership.onLost before exposing an error.

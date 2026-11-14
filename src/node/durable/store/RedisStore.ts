@@ -1,3 +1,5 @@
+import { createCheckpointExecution } from "./RedisStore.checkpoint";
+import type { DurableCheckpointBranch } from "../core/interfaces/history";
 import { createIORedisClient } from "../optionalDeps/ioredis";
 import { collectCompletedHistory } from "./RedisStore.retention";
 import type {
@@ -39,10 +41,60 @@ import * as workflowStateOps from "./RedisStore.workflowState";
 import type { DurableExecutionOwnership } from "../core/interfaces/ownership";
 import { scopeExecutionStore } from "./ownership";
 import { getExecutionTimers } from "./RedisStore.recovery";
+import * as historyOps from "./RedisStore.history";
+import type {
+  DurableHistoryEntry,
+  DurableHistoryUpdate,
+} from "../core/interfaces/history";
+import * as commandOps from "./RedisStore.commands";
+import type { DurableCommandRecord } from "../core/interfaces/commands";
 
 export type { RedisClient, RedisPipeline, RedisStoreConfig };
 
 export class RedisStore implements IDurableStore {
+  /** Atomically commits a checkpoint branch under source execution ownership. */
+  async createCheckpointExecution(
+    branch: DurableCheckpointBranch,
+  ): Promise<boolean> {
+    return createCheckpointExecution(this.runtime, branch);
+  }
+
+  /** Atomically admits a request and its FIFO membership. */
+  async enqueueCommand(
+    command: DurableCommandRecord,
+  ): Promise<DurableCommandRecord> {
+    return commandOps.enqueueCommand(this.runtime, command);
+  }
+  /** Reads a retained receipt. */
+  async getCommand(id: string): Promise<DurableCommandRecord | null> {
+    return commandOps.getCommand(this.runtime, id);
+  }
+  /** Reads the next request without removing it. */
+  async getNextCommand(id: string): Promise<DurableCommandRecord | null> {
+    return commandOps.getNextCommand(this.runtime, id);
+  }
+  /** Updates only the live head, fenced by the attempt's execution lease. */
+  async saveCommand(command: DurableCommandRecord): Promise<boolean> {
+    return commandOps.saveCommand(this.runtime, command);
+  }
+  /** Commits a receipt and optional staged state atomically. */
+  async completeCommand(
+    command: DurableCommandRecord,
+    expected?: Execution,
+  ): Promise<boolean> {
+    return commandOps.completeCommand(this.runtime, command, expected);
+  }
+  /** Atomically assigns operation order under the execution lease. */
+  async recordExecutionHistory(
+    id: string,
+    update: DurableHistoryUpdate,
+  ): Promise<void> {
+    await historyOps.recordExecutionHistory(this.runtime, id, update);
+  }
+  /** Reads captured operation metadata for reset and replay tooling. */
+  async listExecutionHistory(id: string): Promise<DurableHistoryEntry[]> {
+    return historyOps.listExecutionHistory(this.runtime, id);
+  }
   /** Scopes mutations to their execution lease without affecting other callers. */
   withExecutionOwnership(owner: DurableExecutionOwnership): IDurableStore {
     return scopeExecutionStore(this, (operation) =>

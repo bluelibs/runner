@@ -1,3 +1,4 @@
+import type { CommandManager } from "./CommandManager";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { IDurableStore } from "../interfaces/store";
 import type { IEventBus } from "../interfaces/bus";
@@ -12,7 +13,7 @@ import type { TaskRegistry } from "./TaskRegistry";
 import type { AuditLogger } from "./AuditLogger";
 import type { DurableContext } from "../DurableContext";
 import { acquireStoreLock } from "../locking";
-import { sleepMs } from "../utils";
+import { createExecutionId, sleepMs } from "../utils";
 import {
   type ExecutionLockState,
   createExecutionLockState,
@@ -84,6 +85,8 @@ export interface ExecutionAttemptRunnerDeps {
  * owns the public service API and wiring.
  */
 export class ExecutionAttemptRunner {
+  /** @internal Set once by the service after manager composition. */
+  commands?: CommandManager;
   private readonly executionStores = new AsyncLocalStorage<IDurableStore>();
 
   constructor(private readonly deps: ExecutionAttemptRunnerDeps) {}
@@ -109,7 +112,10 @@ export class ExecutionAttemptRunner {
       sleep: sleepMs,
     });
 
-    if (acquiredLock === null) return;
+    if (acquiredLock === null) {
+      await this.commands?.arm(executionId);
+      return;
+    }
 
     const lockState = createExecutionLockState();
     lockState.lockId = acquiredLock.lockId;
@@ -144,6 +150,7 @@ export class ExecutionAttemptRunner {
     } finally {
       stopHeartbeat();
       await acquiredLock.release();
+      await this.commands?.arm(executionId);
     }
 
     await redriveIfResumedDuringLock({
@@ -180,7 +187,20 @@ export class ExecutionAttemptRunner {
       return snapshot;
     }
 
-    const task = this.deps.taskRegistry.find(snapshot.workflowKey);
+    const task = this.deps.taskRegistry.find(
+      snapshot.workflowKey,
+      snapshot.workflowVersion,
+    );
+    if (!task && snapshot.workflowVersion !== undefined) {
+      await this.store.createTimer({
+        id: `version:${snapshot.id}:${createExecutionId()}`,
+        executionId: snapshot.id,
+        type: "retry",
+        status: "pending",
+        fireAt: new Date((this.store.getWorkflowTime?.() ?? Date.now()) + 1000),
+      });
+      return snapshot;
+    }
     if (!task) {
       await this.transitionExecutionToFailed({
         execution: snapshot,
@@ -203,6 +223,22 @@ export class ExecutionAttemptRunner {
         return snapshot;
       }
       execution = validated;
+    }
+
+    if (
+      execution.status !== ExecutionStatus.Pending &&
+      this.commands &&
+      (await this.store.getNextCommand?.(executionId))
+    ) {
+      await this.commands.drain(execution, task, this.store, lockState);
+      const afterCommands = await this.store.getExecution(executionId);
+      if (
+        !afterCommands ||
+        isExecutionTerminal(afterCommands.status) ||
+        afterCommands.status === ExecutionStatus.Paused
+      )
+        return snapshot;
+      execution = afterCommands;
     }
 
     const workflowAdmission = new WorkflowAdmissionController(this.store);
@@ -343,6 +379,8 @@ export class ExecutionAttemptRunner {
       assertLockOwnership,
       executionLockState,
       cancellationSignal,
+      taskExecutor: this.deps.taskExecutor,
+      getTaskKey: (task) => this.deps.taskRegistry.getTaskKey(task),
       auditConfig: this.deps.audit,
       determinismConfig: this.deps.determinism,
       startExecution: (childTask, input, options) =>

@@ -24,6 +24,10 @@ export async function runAdmittedStepCallback<T>(params: {
   const cancelled = new Promise<never>((_, reject) => {
     onAbort = () => {
       try {
+        if (isTimeoutExceededError(signal.reason)) {
+          reject(signal.reason);
+          return;
+        }
         if (signal.reason === EXECUTION_PAUSED_ABORT_REASON) {
           throwDurablePauseInterruption();
         }

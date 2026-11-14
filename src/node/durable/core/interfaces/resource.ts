@@ -1,5 +1,10 @@
+import type {
+  ExtractTaskInput,
+  ResolveTaskOutput,
+} from "../../../../types/utilities";
+import type { DurableCommandOptions } from "./commands";
 import type { AnyTask, ITask } from "../../../../types/task";
-import type { IDurableContext } from "./context";
+import type { IDurableContext, DurableStepContext } from "./context";
 import type {
   DurableStartAndWaitResult,
   ExecuteOptions,
@@ -168,6 +173,15 @@ export interface IDurableResource extends Pick<
    * Throws if called outside of a durable execution.
    */
   use(): IDurableContext;
+  /** Reads the active step's progress, cancellation, and idempotency controls. */
+  useStep?(): DurableStepContext;
+  /** Executes a declared task as a tracked, serialized workflow command. */
+  command?<TTask extends AnyTask>(
+    executionId: string,
+    task: TTask,
+    input: ExtractTaskInput<TTask>,
+    options?: DurableCommandOptions,
+  ): Promise<ResolveTaskOutput<TTask>>;
 
   /**
    * Returns a cached task-scoped repository for durable execution inspection.

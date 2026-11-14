@@ -64,6 +64,10 @@ export function createPendingExecution(
   return {
     id: executionId ?? createExecutionId(),
     workflowKey: deps.getTaskWorkflowKey(task),
+    ...(deps.store.recordExecutionHistory ? { historyRecorded: true } : {}),
+    ...(durableWorkflowTag.extract(task)?.version === undefined
+      ? {}
+      : { workflowVersion: durableWorkflowTag.extract(task)?.version }),
     parentExecutionId: options?.parentExecutionId,
     input,
     retention: policy,

@@ -150,6 +150,16 @@ export type DurableExecutionCurrent =
   | DurableExecutionCurrentSwitch;
 
 export interface Execution<TInput = unknown, TResult = unknown> {
+  /** Implementation version pinned at admission; absent for legacy workflows. */
+  workflowVersion?: number;
+  /** Ordered operation capture is available from the beginning of this run. */
+  historyRecorded?: boolean;
+  /** Source of an explicit checkpoint branch. */
+  resetFromExecutionId?: string;
+  /** First operation omitted from the retained checkpoint prefix. */
+  resetBeforeStep?: string;
+  /** Operator explanation for a checkpoint branch. */
+  resetReason?: string;
   id: string;
   workflowKey: string;
   /** Optional parent execution when this workflow was started by another durable workflow. */
@@ -258,6 +268,8 @@ export interface WorkflowState<TState = unknown> {
  * break-glass recovery, never for routine display.
  */
 export interface DurableExecutionState {
+  /** Pinned implementation version; absent for legacy workflows. */
+  workflowVersion?: number;
   id: string;
   workflowKey: string;
   /** Optional parent execution when this workflow was started by another durable workflow. */
@@ -364,6 +376,8 @@ export const TimerStatus = {
 export type TimerStatus = (typeof TimerStatus)[keyof typeof TimerStatus];
 
 export interface Timer {
+  /** Pinned scheduled workflow version, when declared. */
+  workflowVersion?: number;
   id: string;
   executionId?: string;
   stepId?: string;
@@ -391,6 +405,8 @@ export type ScheduleStatus =
   (typeof ScheduleStatus)[keyof typeof ScheduleStatus];
 
 export interface Schedule<TInput = unknown> {
+  /** Implementation version selected when this schedule was created. */
+  workflowVersion?: number;
   id: string;
   workflowKey: string;
   type: ScheduleType;

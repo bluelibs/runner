@@ -82,7 +82,8 @@ export async function sleepDurably(params: {
   }
 
   const timerId = `sleep:${params.executionId}:${sleepStepId}`;
-  const fireAtMs = Date.now() + params.durationMs;
+  const fireAtMs =
+    (params.store.getWorkflowTime?.() ?? Date.now()) + params.durationMs;
   const recordedAt = new Date();
 
   await params.store.createTimer({

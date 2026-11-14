@@ -116,6 +116,7 @@
       "createDurableRunnerAuditEmitter",
       "createDurableStepId",
       "createDurableTestSetup",
+      "createDurableTestRuntime",
       "createHttpMixedClient",
       "createHttpSmartClient",
       "createNodeFile",

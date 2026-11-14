@@ -3,9 +3,9 @@ import type { IEventBus } from "./interfaces/bus";
 import type {
   ContinueAsNewOptions,
   DurableInfo,
-  DurableStepRunContext,
-  IDurableContext,
-  IStepBuilder,
+  DurableStepContext,
+  IDurableWorkflowContext,
+  IDurableStepBuilder,
   SignalOptions,
   SleepOptions,
   StepOptions,
@@ -62,6 +62,20 @@ import {
 } from "../../../errors";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { throwDurablePauseInterruption } from "./pauseInterruption";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { isTask } from "../../../definers/tools";
+import type { ITaskExecutor } from "./interfaces/service";
+import {
+  OperationJournal,
+  type DurableReplayObserver,
+} from "./durable-context/operationJournal";
+import { createExecutionStepId } from "./durable-context/DurableContext.waitForExecutionState";
+import { createSignalWaitIdentity } from "./durable-context/operationIds";
+import { check, Match } from "../../../tools/check";
+
+function isStepTask(value: unknown): value is AnyTask {
+  return isTask(value);
+}
 
 /**
  * Per-execution workflow toolkit used by durable tasks.
@@ -75,7 +89,12 @@ import { throwDurablePauseInterruption } from "./pauseInterruption";
  * The durable store is the source of truth; this class is intentionally thin state
  * around indexes/guards to keep a single in-memory attempt deterministic.
  */
-export class DurableContext implements IDurableContext {
+export class DurableContext implements IDurableWorkflowContext {
+  private readonly stepContext = new AsyncLocalStorage<DurableStepContext>();
+  private readonly taskExecutor?: ITaskExecutor;
+  private readonly getTaskKey: (task: AnyTask) => string;
+  private readonly journal: OperationJournal;
+  private readonly stepIdentity?: string;
   private readonly executionLockState: ExecutionLockState | undefined;
   private readonly sleepIndexRef = { current: 0 };
   private readonly signalIndexes = new Map<string, number>();
@@ -141,9 +160,28 @@ export class DurableContext implements IDurableContext {
       /** Shares attempt ownership with store-coordinated step leases. */
       executionLockState?: ExecutionLockState;
       cancellationSignal?: AbortSignal;
+      /** Runner task execution for the additive task-step overload. */
+      taskExecutor?: ITaskExecutor;
+      /** Canonical task identity, independent of workflow persistence keys. */
+      getTaskKey?: (task: AnyTask) => string;
+      /** @internal Captures new runs; legacy contexts and executions omit this option. */
+      historyRecorded?: boolean;
+      /** @internal Read-only compatibility replay observer. */
+      replay?: DurableReplayObserver;
+      /** @internal Commands have distinct effect identities while sharing target state. */
+      stepIdentity?: string;
     } = {},
   ) {
     this.executionLockState = options.executionLockState;
+    this.taskExecutor = options.taskExecutor;
+    this.getTaskKey = options.getTaskKey ?? ((task) => task.id);
+    this.journal = new OperationJournal(
+      store,
+      executionId,
+      options.historyRecorded === true,
+      options.replay,
+    );
+    this.stepIdentity = options.stepIdentity;
     this.auditEnabled = options.auditEnabled ?? false;
     this.auditEmitter = options.auditEmitter ?? null;
     this.implicitInternalStepIdsPolicy =
@@ -228,6 +266,11 @@ export class DurableContext implements IDurableContext {
     return this.store;
   }
 
+  /** @internal Returns controls only within the active callback's async scope. */
+  _currentStep(): DurableStepContext | undefined {
+    return this.stepContext.getStore();
+  }
+
   private internalStep<T>(
     stepId: string,
     options: StepOptions = {},
@@ -248,23 +291,32 @@ export class DurableContext implements IDurableContext {
     };
   }
 
-  step<T>(stepId: string | DurableStepId<T>): IStepBuilder<T>;
+  step<T>(stepId: string | DurableStepId<T>): IDurableStepBuilder<T>;
   step<T>(
     stepId: string | DurableStepId<T>,
-    fn: (context: DurableStepRunContext) => Promise<T>,
+    fn: (context: DurableStepContext) => Promise<T>,
   ): Promise<T>;
   step<T>(
     stepId: string | DurableStepId<T>,
     options: StepOptions,
-    fn: (context: DurableStepRunContext) => Promise<T>,
+    fn: (context: DurableStepContext) => Promise<T>,
   ): Promise<T>;
+  step<TTask extends AnyTask>(
+    stepId: string,
+    task: TTask,
+    ...args: ExtractTaskInput<TTask> extends undefined | void
+      ? [input?: ExtractTaskInput<TTask>, options?: StepOptions]
+      : [input: ExtractTaskInput<TTask>, options?: StepOptions]
+  ): Promise<ResolveTaskOutput<TTask>>;
   step<T>(
     stepId: string | DurableStepId<T>,
     optionsOrFn?:
+      | AnyTask
       | StepOptions
-      | ((context: DurableStepRunContext) => Promise<T>),
-    fn?: (context: DurableStepRunContext) => Promise<T>,
-  ): IStepBuilder<T> | Promise<T> {
+      | ((context: DurableStepContext) => Promise<T>),
+    fnOrInput?: unknown,
+    taskOptions?: StepOptions,
+  ): IDurableStepBuilder<T> | Promise<any> {
     const resolvedStepId = this.getStepId(stepId);
     this.determinism.assertUserStepId(resolvedStepId);
     this.determinism.assertUniqueStepId(resolvedStepId);
@@ -273,55 +325,97 @@ export class DurableContext implements IDurableContext {
       return new StepBuilder<T>(this, resolvedStepId);
     }
 
-    const fnToExecute = typeof optionsOrFn === "function" ? optionsOrFn : fn!;
-    const options = typeof optionsOrFn === "function" ? {} : optionsOrFn;
+    if (isStepTask(optionsOrFn)) {
+      const task = optionsOrFn;
+      return this._executeStep(
+        resolvedStepId,
+        taskOptions ?? {},
+        async (step) => {
+          if (!this.taskExecutor)
+            return durableExecutionInvariantError.throw({
+              message: "Task steps require a configured task executor.",
+            });
+          return await this.taskExecutor.run(task, fnOrInput, {
+            signal: step.signal,
+          });
+        },
+        undefined,
+        undefined,
+        false,
+        this.getTaskKey(task),
+      );
+    }
 
-    return this._executeStep(resolvedStepId, options, fnToExecute);
+    const fnToExecute =
+      typeof optionsOrFn === "function" ? optionsOrFn : fnOrInput;
+    const options = typeof optionsOrFn === "function" ? {} : optionsOrFn;
+    if (typeof fnToExecute !== "function")
+      return durableExecutionInvariantError.throw({
+        message: "A durable step requires a callback or Runner task.",
+      });
+    return this._executeStep(resolvedStepId, options, (step) =>
+      fnToExecute(step),
+    );
   }
 
   async _executeStep<T>(
     stepId: string,
     options: StepOptions,
-    upFn: (context: DurableStepRunContext) => Promise<T>,
+    upFn: (context: DurableStepContext) => Promise<T>,
     downFn?: (result: T) => Promise<void>,
     currentMeta?: DurableExecutionCurrentWorkflowMeta,
     allowCancellationRequested = false,
+    historyTaskKey?: string,
   ): Promise<T> {
-    return await executeDurableStep({
-      workflowAttempt: this.attempt,
-      store: this.store,
-      executionId: this.executionId,
-      assertCanContinue: async () =>
-        await this.assertCanContinue({ allowCancellationRequested }),
-      assertCanPersistResult: async () =>
-        await this.assertCanContinue({
-          allowCancellationRequested,
-          allowPaused: true,
-        }),
-      appendAuditEntry: this.audit.append,
-      setCurrent: async () =>
-        await setExecutionCurrent(
-          this.store,
-          this.executionId,
-          currentMeta
-            ? createWorkflowStepCurrent({
-                stepId,
-                startedAt: new Date(),
-                meta: currentMeta,
-              })
-            : createStepCurrent({
-                stepId,
-                startedAt: new Date(),
-              }),
-        ),
+    return await this.journal.run(
+      currentMeta
+        ? "workflow"
+        : stepId.startsWith("__state:")
+          ? "state"
+          : "step",
       stepId,
-      options,
-      executionLockState: this.executionLockState,
-      upFn,
-      signal: this.cancellationSignal,
-      downFn,
-      compensations: this.compensations,
-    });
+      () =>
+        executeDurableStep({
+          workflowAttempt: this.attempt,
+          identityExecutionId: this.stepIdentity,
+          store: this.store,
+          executionId: this.executionId,
+          assertCanContinue: async () =>
+            await this.assertCanContinue({ allowCancellationRequested }),
+          assertCanPersistResult: async () =>
+            await this.assertCanContinue({
+              allowCancellationRequested,
+              allowPaused: true,
+            }),
+          appendAuditEntry: this.audit.append,
+          setCurrent: async () =>
+            await setExecutionCurrent(
+              this.store,
+              this.executionId,
+              currentMeta
+                ? createWorkflowStepCurrent({
+                    stepId,
+                    startedAt: new Date(),
+                    meta: currentMeta,
+                  })
+                : createStepCurrent({
+                    stepId,
+                    startedAt: new Date(),
+                  }),
+            ),
+          stepId,
+          options,
+          executionLockState: this.executionLockState,
+          upFn: (step) =>
+            this.journal.callback(stepId, () =>
+              this.stepContext.run(step, () => upFn(step)),
+            ),
+          signal: this.cancellationSignal,
+          downFn,
+          compensations: this.compensations,
+        }),
+      historyTaskKey ?? currentMeta?.childWorkflowKey,
+    );
   }
 
   /** @internal Names event call sites using the existing implicit-id policy. */
@@ -336,7 +430,7 @@ export class DurableContext implements IDurableContext {
   /** @internal Runs a named compensation checkpoint during teardown. */
   async _compensate<T>(
     stepId: string,
-    fn: (context: DurableStepRunContext) => Promise<T>,
+    fn: (context: DurableStepContext) => Promise<T>,
   ): Promise<T> {
     this.determinism.assertUniqueStepId(stepId);
     return await this.internalStep<T>(stepId).up(fn);
@@ -356,18 +450,23 @@ export class DurableContext implements IDurableContext {
     nextInput: TInput,
     options?: ContinueAsNewOptions,
   ): Promise<never> {
-    await this.assertCanContinue();
-    const execution = await this.store.getExecution(this.executionId);
-    if (!execution || execution.status !== ExecutionStatus.Running) {
-      return durableContinueAsNewRejectedError.throw({
-        executionId: this.executionId,
-        reason: execution
-          ? `execution is ${execution.status}`
-          : "execution does not exist",
-      });
-    }
+    if (options?.version !== undefined)
+      check(options.version, Match.Range({ min: 1, integer: true }));
+    return this.journal.run("continue", "__continue", async () => {
+      if (this.journal.replay) return this.journal.replay.effect();
+      await this.assertCanContinue();
+      const execution = await this.store.getExecution(this.executionId);
+      if (!execution || execution.status !== ExecutionStatus.Running) {
+        return durableContinueAsNewRejectedError.throw({
+          executionId: this.executionId,
+          reason: execution
+            ? `execution is ${execution.status}`
+            : "execution does not exist",
+        });
+      }
 
-    throw new ContinuationSignal(nextInput, options);
+      throw new ContinuationSignal(nextInput, options);
+    });
   }
 
   async setState<T extends object>(
@@ -395,18 +494,21 @@ export class DurableContext implements IDurableContext {
 
   async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
     assertFiniteDurationMs("sleep duration", durationMs);
-    return await sleepDurably({
-      store: this.store,
-      executionId: this.executionId,
-      assertCanContinue: this.assertCanContinue.bind(this),
-      appendAuditEntry: this.audit.append,
-      assertUniqueStepId: this.determinism.assertUniqueStepId,
-      assertOrWarnImplicitInternalStepId:
-        this.determinism.assertOrWarnImplicitInternalStepId,
-      sleepIndexRef: this.sleepIndexRef,
-      durationMs,
-      options,
-    });
+    const historyId = `__sleep:${options?.stepId ?? this.sleepIndexRef.current}`;
+    return await this.journal.run("sleep", historyId, () =>
+      sleepDurably({
+        store: this.store,
+        executionId: this.executionId,
+        assertCanContinue: this.assertCanContinue.bind(this),
+        appendAuditEntry: this.audit.append,
+        assertUniqueStepId: this.determinism.assertUniqueStepId,
+        assertOrWarnImplicitInternalStepId:
+          this.determinism.assertOrWarnImplicitInternalStepId,
+        sleepIndexRef: this.sleepIndexRef,
+        durationMs,
+        options,
+      }),
+    );
   }
 
   async workflow<TTask extends AnyTask>(
@@ -466,18 +568,25 @@ export class DurableContext implements IDurableContext {
     }
     assertFiniteDurationMs("signal timeout", options?.timeoutMs);
 
-    return await waitForSignalDurably({
-      store: this.store,
-      executionId: this.executionId,
-      assertCanContinue: this.assertCanContinue.bind(this),
-      appendAuditEntry: this.audit.append,
-      assertUniqueStepId: this.determinism.assertUniqueStepId,
-      assertOrWarnImplicitInternalStepId:
-        this.determinism.assertOrWarnImplicitInternalStepId,
-      signalIndexes: this.signalIndexes,
-      signal,
+    const historyId = createSignalWaitIdentity(
+      signal.id,
       options,
-    });
+      this.signalIndexes,
+    );
+    return await this.journal.run("signal", historyId, () =>
+      waitForSignalDurably({
+        store: this.store,
+        executionId: this.executionId,
+        assertCanContinue: this.assertCanContinue.bind(this),
+        appendAuditEntry: this.audit.append,
+        assertUniqueStepId: this.determinism.assertUniqueStepId,
+        assertOrWarnImplicitInternalStepId:
+          this.determinism.assertOrWarnImplicitInternalStepId,
+        signalIndexes: this.signalIndexes,
+        signal,
+        options,
+      }),
+    );
   }
 
   async waitForExecution<TTask extends AnyTask>(
@@ -502,15 +611,21 @@ export class DurableContext implements IDurableContext {
     options?: WaitForExecutionOptions,
   ): Promise<any> {
     assertFiniteDurationMs("execution-wait timeout", options?.timeoutMs);
-    return await waitForExecutionDurably<ResolveTaskOutput<TTask>>({
-      store: this.store,
-      executionId: this.executionId,
-      targetExecutionId: executionId,
-      expectedWorkflowKey: this.getTaskPersistenceId(_task),
-      assertCanContinue: this.assertCanContinue.bind(this),
-      assertUniqueStepId: this.determinism.assertUniqueStepId,
-      options,
-    });
+    return await this.journal.run(
+      "execution",
+      createExecutionStepId(executionId, options),
+      () =>
+        waitForExecutionDurably<ResolveTaskOutput<TTask>>({
+          store: this.store,
+          executionId: this.executionId,
+          targetExecutionId: executionId,
+          expectedWorkflowKey: this.getTaskPersistenceId(_task),
+          assertCanContinue: this.assertCanContinue.bind(this),
+          assertUniqueStepId: this.determinism.assertUniqueStepId,
+          options,
+        }),
+      this.getTaskPersistenceId(_task),
+    );
   }
 
   async switch<TValue, TResult>(
@@ -521,17 +636,29 @@ export class DurableContext implements IDurableContext {
   ): Promise<TResult> {
     this.determinism.assertUserStepId(stepId);
 
-    return await switchDurably({
-      store: this.store,
-      executionId: this.executionId,
-      assertCanContinue: this.assertCanContinue.bind(this),
-      appendAuditEntry: this.audit.append,
-      assertUniqueStepId: this.determinism.assertUniqueStepId,
-      stepId,
-      value,
-      branches,
-      fallbackBranch,
-    });
+    return await this.journal.run("switch", stepId, () =>
+      switchDurably({
+        store: this.store,
+        executionId: this.executionId,
+        assertCanContinue: this.assertCanContinue.bind(this),
+        appendAuditEntry: this.audit.append,
+        assertUniqueStepId: this.determinism.assertUniqueStepId,
+        stepId,
+        value,
+        branches: branches.map((branch) => ({
+          ...branch,
+          run: (value: TValue) =>
+            this.journal.callback(stepId, () => branch.run(value)),
+        })),
+        fallbackBranch: fallbackBranch
+          ? {
+              ...fallbackBranch,
+              run: (value: TValue) =>
+                this.journal.callback(stepId, () => fallbackBranch.run(value)),
+            }
+          : undefined,
+      }),
+    );
   }
 
   async note(message: string, meta?: Record<string, unknown>): Promise<void> {

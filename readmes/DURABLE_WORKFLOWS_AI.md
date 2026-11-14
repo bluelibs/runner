@@ -2,7 +2,7 @@
 
 Successful workflows support [history retention and collection](DURABLE_RETENTION.md). Runner events can trigger workflows through the [durable event bridge](DURABLE_EVENTS.md).
 
-← [Full documentation](./DURABLE_WORKFLOWS_FRESH.md)
+← [Full documentation](./DURABLE_WORKFLOWS.md)
 
 ---
 
@@ -27,8 +27,7 @@ import { r, run } from "@bluelibs/runner";
 import { resources, tags } from "@bluelibs/runner/node";
 
 const durable = resources.memoryWorkflow.fork("app-durable");
-const durableSerializer =
-  resources.serializer.fork("app-durable-serializer");
+const durableSerializer = resources.serializer.fork("app-durable-serializer");
 const durableRegistration = durable.with({
   serializer: durableSerializer, // optional resource, not instance
   timers: { enabled: true },
@@ -293,7 +292,9 @@ await durableRuntime.resumeExecution(executionId);
 
 // Restart terminal/paused run fresh (new id, optional new input)
 const rerunId = await durableRuntime.restartExecution(executionId);
-const rerunWithInputId = await durableRuntime.restartExecution(executionId, { input: next });
+const rerunWithInputId = await durableRuntime.restartExecution(executionId, {
+  input: next,
+});
 // { input: undefined } explicitly clears input; omitting input reuses the source input.
 
 // Typed live state read (undefined until first set; throws for unknown id)
@@ -555,11 +556,11 @@ Timer Processing (when timers.enabled: true)
 
 ### One-Time vs Recurring
 
-| Type               | API                                             | Use Case                      |
-| ------------------ | ----------------------------------------------- | ----------------------------- |
-| One-time           | `schedule(task, input, { at } \| { delay })`    | Reminders, delayed actions    |
+| Type               | API                                                    | Use Case                      |
+| ------------------ | ------------------------------------------------------ | ----------------------------- |
+| One-time           | `schedule(task, input, { at } \| { delay })`           | Reminders, delayed actions    |
 | Recurring cron     | `ensureSchedule(task, input, { id, cron, timezone? })` | Daily reports, weekly cleanup |
-| Recurring interval | `ensureSchedule(task, input, { id, interval })` | Health checks, polling        |
+| Recurring interval | `ensureSchedule(task, input, { id, interval })`        | Health checks, polling        |
 
 ### Interval Behavior
 
@@ -677,18 +678,18 @@ await runtime.dispose();
 
 ## Gotchas
 
-| Issue                  | Fix                                                    |
-| ---------------------- | ------------------------------------------------------ |
-| Side effect runs twice | Move inside `step()`                                   |
-| Replay diverges        | Keep step IDs stable                                   |
-| Signal not delivered   | Verify `executionId` matches stored                    |
-| Compensation fails     | Fix downstream, use `retryRollback()`                  |
-| Intervals overlap      | Use `d.sleep()` for completion-based spacing           |
+| Issue                  | Fix                                                   |
+| ---------------------- | ----------------------------------------------------- |
+| Side effect runs twice | Move inside `step()`                                  |
+| Replay diverges        | Keep step IDs stable                                  |
+| Signal not delivered   | Verify `executionId` matches stored                   |
+| Compensation fails     | Fix downstream, use `retryRollback()`                 |
+| Intervals overlap      | Use `d.sleep()` for completion-based spacing          |
 | Timers don't fire      | Ensure `timers.enabled: true` in at least one process |
-| Continue rejected      | Call only from a running attempt                       |
-| Restart rejected       | Wait for terminal state, or pause first                |
-| State grows per replay | Guard appends so writes are idempotent                 |
-| Store lacks lifecycle  | Implement the optional store methods                   |
+| Continue rejected      | Call only from a running attempt                      |
+| Restart rejected       | Wait for terminal state, or pause first               |
+| State grows per replay | Guard appends so writes are idempotent                |
+| Store lacks lifecycle  | Implement the optional store methods                  |
 
 ## Reserved Step IDs
 
@@ -753,3 +754,16 @@ interface Schedule<TInput = unknown> {
 ## Step Concurrency
 
 `d.step("charge", { concurrency: 5 }, fn)` limits live callbacks by persisted workflow key + explicit step ID. Use `{ concurrency: { key: "provider", limit: 5 } }` to share a pool across selected steps; every use of a shared key must have the same policy. `{ concurrency: { key?: string, windowMs: 60_000, max: 100 } }` limits callback starts per fixed window. Runner owns permits through the durable store; no separate semaphore is needed. Cached replay skips acquisition, live retries reacquire and retain their retry budget across suspension within the same workflow attempt, and full pools save a retry timer and suspend the attempt (releasing workflow admission). Enable polling for resumption. Pass the step signal to external work; on cancellation/timeout/ownership loss, renewal stops and numeric permits stay held until callbacks settle or leases expire; lease loss prevents result persistence. Step, workflow, and resilience pools have separate identities.
+
+## Step Controls, Commands, Versions, And Test Tools
+
+- Existing step retries remain: `retries: 3` means three additional attempts. Retry consumption and the next backoff deadline survive interruption within a workflow attempt, with or without concurrency.
+- `d.step("charge", chargeTask, input, { retries: 3 })` infers task IO and uses Runner DI/middleware/validation. Existing callback and builder forms remain.
+- Callback controls: `signal`, stable `idempotencyKey`, one-based `attempt`, `await heartbeat(progress)`, cloned `getProgress<T>()`. `durable.useStep()` accesses the same controls inside nested Runner tasks; outside a step it throws. Optional `heartbeatTimeoutMs` fails a stale callback as a timeout; it is separate from automatic execution-lease renewal. Await progress writes and use downstream idempotency.
+- Optional tag `{ key, version: 2 }` pins implementations at admission. Register older versions alongside newer tasks; missing explicit versions park with retry timers. Existing unversioned runs still need the unversioned task. Restarts/timers/schedules/signals retain the version. `continueAsNew(input)` keeps it; `{ version: 2 }` explicitly upgrades. No implicit latest-version routing.
+- Declare normal registered tasks with `tags.durableWorkflow.with({ commands: [changeAddress] })`. Call `await durable.command(id, changeAddress, input, { idempotencyKey: requestId, waitTimeoutMs: 5000 })`. Commands serialize under execution ownership, stage typed state, and atomically commit state/result receipt. Failure discards private state; checkpoints and progress survive takeover. They can use steps/state, but cannot suspend/start children/continue/rollback. A running workflow must release its lease before handling commands.
+- Request keys scope to the original address + canonical command task; changed input with the same key returns the original receipt. First submission follows continuation tips. Caller wait timeout leaves the request durable. Paused requests wait for resume, terminal targets fail pending requests. Receipts outlive successful detail collection. Keep a timer worker enabled for redrive; external effects remain at least once without downstream deduplication.
+- `createDurableTestRuntime()` returns `durable`, `durableRegistration`, `store`, `backend`, `run(app)`, `advanceTimeBy(ms)`, `restartWorker()`, `replay(task,fixture)`, `dispose()`. Register the returned definition and `resources.durable`. Virtual time drives workflow timers only; callback deadlines, backoff and leases use real time. Restart requires settled callbacks and creates a fresh Runner container. Existing `createDurableTestSetup()` is unchanged.
+- `durable.operator.exportReplay(id)` captures ordered checkpoint history under a lease. `test.replay(task,fixture)` returns `{ compatible, matched, issues }`, compares the saved prefix and never executes checkpoint effect callbacks. Effects outside checkpoints remain ordinary JavaScript; this is structural validation, not behavioral equivalence.
+- `durable.operator.reset(id,{beforeStep:"charge",reason:"Repair",idempotencyKey:requestId})` atomically creates and dispatches a new branch with the prefix/state/version. Source remains unchanged; selected/later effects run with new IDs. Pause live sources first. Exact recorded top-level IDs only; reject overlapping/unfinished prefixes. Legacy/collected history cannot be reset or exported. Standalone store operators persist pending branches without dispatch.
+- New backend capabilities are optional for custom adapters; existing calls, unversioned routing and snapshots remain compatible. Commands/reset fail clearly when requested on an unsupported store.

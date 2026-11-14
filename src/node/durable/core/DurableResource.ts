@@ -1,8 +1,18 @@
+import { followContinuedExecutionChain } from "./continuedChain";
+import type {
+  ExtractTaskInput,
+  ResolveTaskOutput,
+} from "../../../types/utilities";
+import type { DurableCommandOptions } from "./interfaces/commands";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Store } from "../../../models/store/Store";
 import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask, ITask } from "../../../types/task";
-import type { IDurableContext } from "./interfaces/context";
+import type {
+  IDurableContext,
+  IDurableWorkflowContext,
+  DurableStepContext,
+} from "./interfaces/context";
 import type {
   IDurableExecutionRepository,
   IDurableResource,
@@ -69,7 +79,10 @@ export class DurableResource implements IDurableResource {
       });
     }
     if (!this.operatorInstance) {
-      this.operatorInstance = new DurableOperator(this.store!);
+      this.operatorInstance = new DurableOperator(
+        this.store!,
+        this.service.kickoffExecution?.bind(this.service),
+      );
     }
     return this.operatorInstance;
   }
@@ -84,7 +97,7 @@ export class DurableResource implements IDurableResource {
     return this.contextStorage.getStore();
   }
 
-  use(): IDurableContext {
+  use(): IDurableWorkflowContext {
     const durableContext = this.contextStorage.getStore();
     if (!durableContext) {
       return durableExecutionInvariantError.throw({
@@ -92,7 +105,19 @@ export class DurableResource implements IDurableResource {
           "Durable context is not available. Did you call durable.use() outside a durable task execution?",
       });
     }
-    return durableContext;
+    // Built-in providers supply these controls; legacy adapter input contracts stay unchanged.
+    return durableContext as IDurableWorkflowContext;
+  }
+
+  /** Reads active step controls from callbacks or nested Runner tasks. */
+  useStep(): DurableStepContext {
+    const step = this.current()?._currentStep?.();
+    if (!step)
+      return durableExecutionInvariantError.throw({
+        message:
+          "Durable step context is only available inside an active step.",
+      });
+    return step;
   }
 
   getWorkflows(): AnyTask[] {
@@ -341,6 +366,37 @@ export class DurableResource implements IDurableResource {
 
   recover(): Promise<RecoverReportType> {
     return this.service.recover();
+  }
+
+  /** Submits a tracked command; duplicate request keys reuse the result. */
+  async command<TTask extends AnyTask>(
+    executionId: string,
+    task: TTask,
+    input: ExtractTaskInput<TTask>,
+    options?: DurableCommandOptions,
+  ): Promise<ResolveTaskOutput<TTask>> {
+    const active = this.current();
+    let targetId = executionId;
+    if (active && active.executionId !== executionId) {
+      const source = await this.getStore().getExecution(executionId);
+      if (source)
+        targetId = (
+          await followContinuedExecutionChain(this.getStore(), source)
+        ).id;
+    }
+    if (active?.executionId === targetId)
+      return durableExecutionInvariantError.throw({
+        message:
+          "A workflow cannot await a command targeting itself; call the task directly.",
+      });
+    if (!this.service.command)
+      return durableExecutionInvariantError.throw({
+        message: "This durable service does not support tracked commands.",
+      });
+    const canonical = this.runnerStore
+      ? toCanonicalDefinitionFromStore(this.runnerStore, task)
+      : task;
+    return this.service.command(executionId, canonical, input, options);
   }
 
   signal<TPayload>(

@@ -9,7 +9,7 @@ import type { DurableAuditEntryInput } from "../audit";
 import { DurableAuditEntryKind, isDurableInternalStepId } from "../audit";
 import { ContinuationSignal, SuspensionSignal } from "../interfaces/context";
 import type {
-  DurableStepRunContext,
+  DurableStepContext,
   IStepBuilder,
   StepOptions,
 } from "../interfaces/context";
@@ -51,6 +51,7 @@ export async function executeDurableStep<T>(params: {
   store: IDurableStore;
   executionId: string;
   workflowAttempt: number;
+  identityExecutionId?: string;
   assertCanContinue: () => Promise<void>;
   /** Gate before saving a finished body's result; tolerates a pause. */
   assertCanPersistResult: () => Promise<void>;
@@ -59,7 +60,7 @@ export async function executeDurableStep<T>(params: {
   stepId: string;
   options: StepOptions;
   executionLockState?: ExecutionLockState;
-  upFn: (context: DurableStepRunContext) => Promise<T>;
+  upFn: (context: DurableStepContext) => Promise<T>;
   signal: AbortSignal;
   downFn?: (result: T) => Promise<void>;
   compensations: DurableCompensation[];

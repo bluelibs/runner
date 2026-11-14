@@ -13,6 +13,7 @@ import {
   writeExecutionIndexScript,
 } from "./RedisStore.executionIndex";
 import { statusFlags, toRedisFlag } from "./RedisStore.executionState";
+import { commandQueueKey } from "./RedisStore.commands";
 
 const SIGNAL_SET_CHANGED = "__signal_set_changed__";
 const BACKLOG_FULL_PREFIX = "__backlog_full__:";
@@ -44,6 +45,7 @@ const createContinuedExecutionScript = `
   if currentExecution.status ~= ARGV[13] then
     return 0
   end
+  if redis.call("llen", ARGV[#ARGV]) > 0 then return 0 end
 
   local signalCount = tonumber(ARGV[14])
   if redis.call("scard", KEYS[8]) ~= signalCount then
@@ -178,6 +180,7 @@ async function evalCreateContinuedExecution(
     ExecutionStatus.Running,
     String(signalIds.length),
     ...signalIds,
+    commandQueueKey(runtime, prior.id),
   );
 }
 

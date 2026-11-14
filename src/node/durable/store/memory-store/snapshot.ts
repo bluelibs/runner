@@ -102,6 +102,20 @@ export function exportSnapshot(
 ): MemoryStoreSnapshot {
   return {
     version: 1,
+    ...(runtime.commands.size
+      ? {
+          commands: structuredClone([...runtime.commands.values()]),
+          commandQueues: structuredClone([...runtime.commandQueues]),
+        }
+      : {}),
+    ...(runtime.histories.size === 0
+      ? {}
+      : {
+          histories: [...runtime.histories].map(([executionId, history]) => ({
+            executionId,
+            ...structuredClone(history),
+          })),
+        }),
     executions: Array.from(runtime.executions.values()).map(cloneExecution),
     executionIdByIdempotencyKey: Array.from(
       runtime.executionIdByIdempotencyKey.entries(),
@@ -136,6 +150,21 @@ export function restoreSnapshot(
   runtime: MemoryStoreRuntime,
   snapshot: MemoryStoreSnapshot,
 ): void {
+  runtime.histories = new Map(
+    (snapshot.histories ?? []).map(({ executionId, ...history }) => [
+      executionId,
+      structuredClone(history),
+    ]),
+  );
+  runtime.commands = new Map(
+    (snapshot.commands ?? []).map((command) => [
+      command.id,
+      structuredClone(command),
+    ]),
+  );
+  runtime.commandQueues = new Map(
+    structuredClone(snapshot.commandQueues ?? []),
+  );
   runtime.executions = new Map(
     snapshot.executions.map((execution) => [
       execution.id,

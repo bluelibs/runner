@@ -243,7 +243,8 @@ export class ExecutionManager {
     return await restartExecutionFlow(
       {
         persistence: this.persistenceDeps,
-        resolveTask: (workflowKey) => this.taskRegistry.find(workflowKey),
+        resolveTask: (workflowKey, version) =>
+          this.taskRegistry.find(workflowKey, version),
       },
       executionId,
       options,
@@ -272,6 +273,10 @@ export class ExecutionManager {
   }
 
   async notifyExecutionFinished(execution: Execution): Promise<void> {
+    await this.attemptRunner.commands?.rejectPending(
+      execution.id,
+      "Target workflow is closed.",
+    );
     await resolveExecutionWaiters({
       store: this.config.store,
       execution,
@@ -350,7 +355,7 @@ export class ExecutionManager {
   ): AnyTask {
     if (typeof taskRef !== "string") return taskRef;
 
-    const resolved = this.taskRegistry.find(taskRef);
+    const resolved = this.taskRegistry.resolve(taskRef);
     if (!resolved) {
       durableExecutionInvariantError.throw({
         message: `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,

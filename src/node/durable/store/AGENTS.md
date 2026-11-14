@@ -13,6 +13,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `MemoryStore.ts`: facade over instance-owned `memory-store/` operations.
 - `PersistentMemoryStore.ts`: adds serialized snapshots and local restart persistence.
 - `RedisStore.ts`: facade delegating to `RedisStore.*` operations.
+- History, commands, and checkpoint modules: monotonic operation metadata, FIFO receipt queues, atomic staged state/result commits, and snapshot-conditional branch creation. History/state payloads retain the configured serializer; command receipts survive detail collection.
 - `RedisStore.runtime.ts`: keys, serialization, shared Redis transport, and client ownership.
 - Execution state/views/index modules: writes, idempotency, metadata queries, pagination, and backfill.
 - Signal state/waiter modules: journal, FIFO backlog, waiter ordering, and committed delivery.
