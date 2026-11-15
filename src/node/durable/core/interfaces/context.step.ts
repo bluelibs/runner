@@ -86,7 +86,10 @@ export interface IDurableWorkflowContext extends IDurableContext {
     options: StepOptions,
     fn: (context: DurableStepContext) => Promise<T>,
   ): Promise<T>;
-  /** Executes a typed Runner task as a memoized step, using the runtime's normal DI and middleware. */
+  /**
+   * Executes a typed Runner task as a memoized step, using the runtime's normal DI and middleware.
+   * @deprecated Inject the task as a dependency and call it inside a callback step. Retained for compatibility.
+   */
   step<TTask extends AnyTask>(
     stepId: string,
     task: TTask,

@@ -15,6 +15,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `DurableService.ts`: delegates starts, signals, schedules, recovery, waiting, and lifecycle to managers.
 - `DurableResource.ts`: Runner-facing facade and scoped `use()`; `createRunnerDurableRuntime.ts` owns runtime wiring.
 - `DurableContext.ts` and `StepBuilder.ts`: workflow-facing replayable actions and compensation.
+- Task-definition `step(id, task, input, options)` is deprecated in both concrete and interface overloads, with runtime/type support retained. Prefer injected task calls inside callback steps; `useStep()` remains optional. Callback history does not infer task identity, so preserve versioned replay metadata during migration.
 - `DurableOperator.ts` and `DurableExecutionRepository.ts`: operator queries and workflow-scoped repositories.
 - `DurableWorker.ts`: consumes execution messages, tracks in-flight work, and settles deliveries.
 - `managers/TaskRegistry.ts`: separates canonical task addressing from workflow storage keys and resolves exact optional workflow versions.

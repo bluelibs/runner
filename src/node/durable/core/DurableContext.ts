@@ -160,7 +160,7 @@ export class DurableContext implements IDurableWorkflowContext {
       /** Shares attempt ownership with store-coordinated step leases. */
       executionLockState?: ExecutionLockState;
       cancellationSignal?: AbortSignal;
-      /** Runner task execution for the additive task-step overload. */
+      /** Runner task execution retained for the deprecated task-definition step overload. */
       taskExecutor?: ITaskExecutor;
       /** Canonical task identity, independent of workflow persistence keys. */
       getTaskKey?: (task: AnyTask) => string;
@@ -301,6 +301,10 @@ export class DurableContext implements IDurableWorkflowContext {
     options: StepOptions,
     fn: (context: DurableStepContext) => Promise<T>,
   ): Promise<T>;
+  /**
+   * Executes a registered task definition as a memoized step.
+   * @deprecated Inject the task as a dependency and call it inside a callback step. Retained for compatibility.
+   */
   step<TTask extends AnyTask>(
     stepId: string,
     task: TTask,

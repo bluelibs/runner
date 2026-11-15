@@ -3,7 +3,7 @@ import type {
   IStepBuilder,
   StepOptions,
 } from "../../../../node";
-import { r } from "../../../../node";
+import { r, resources } from "../../../../node";
 import type {
   IDurableContext,
   IDurableWorkflowContext,
@@ -23,6 +23,7 @@ void (async (d: IDurableWorkflowContext, durable: DurableResource) => {
     .task("no-input")
     .run(async () => "done")
     .build();
+  // Deprecated task-definition overloads retain their input/output contracts.
   const amount: number = await d.step(
     "charge",
     task,
@@ -30,6 +31,25 @@ void (async (d: IDurableWorkflowContext, durable: DurableResource) => {
     { retries: 3 },
   );
   const result: string = await d.step("no-input", noInput);
+  r.task("injected-task-step")
+    .dependencies({
+      durable: resources.memoryWorkflow.fork("callback-types"),
+      charge: task,
+    })
+    .run(async (input: { amount: number }, { durable, charge }) => {
+      const d = durable.use();
+      const result: number = await d.step(
+        "charge",
+        { retries: 3 },
+        ({ signal }) => charge(input, { signal }),
+      );
+      // @ts-expect-error Injected task inputs remain inferred inside callbacks.
+      charge({ amount: "five" });
+      // @ts-expect-error An injected callable is not a task definition.
+      d.step("invalid-callable", charge, input);
+      return result;
+    })
+    .build();
   const commandResult: number = await durable.command("execution", task, {
     amount: 5,
   });

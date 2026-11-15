@@ -254,10 +254,35 @@ const reservation = await d
 
 Step callbacks receive `signal`, `idempotencyKey`, `attempt`, `heartbeat(progress)`, and `getProgress<T>()`. Existing callbacks that only destructure `signal` continue to work. For explicitly typed toolkit helpers, use `IDurableWorkflowContext` and `IDurableStepBuilder`; the older `IDurableContext` and `IStepBuilder` keep their custom-implementation contracts. `retries: 3` still means three additional attempts, with exponential backoff. Consumed retries and the next deadline are now persisted for every retrying step, so a worker restart preserves the remaining budget and delay within the same workflow attempt.
 
-Assuming `chargeCard` is a registered Runner task and `payments` is your injected client:
+Prefer injected task dependencies inside callback steps. Assuming `chargeCardTask` is a registered task accepting `{ orderId, idempotencyKey }`, and `durable` is your backend definition:
 
 ```ts
-const charged = await d.step("charge", chargeCard, { orderId });
+const checkout = r
+  .task("checkout")
+  .dependencies({ durable, chargeCard: chargeCardTask })
+  .tags([tags.durableWorkflow])
+  .run(async (input: { orderId: string }, { durable, chargeCard }) => {
+    const charged = await durable.use().step(
+      "charge",
+      { retries: 3, timeout: 30_000 },
+      ({ signal, idempotencyKey }) =>
+        chargeCard(
+          { orderId: input.orderId, idempotencyKey },
+          { signal },
+        ),
+    );
+    return { charged };
+  })
+  .build();
+```
+
+The task uses Runner's normal validation, dependencies, middleware, and task-run cancellation context. It can return a value or `void` and can run outside a workflow without depending on the durable backend. The surrounding step checkpoints its result; a direct task dependency call alone is not checkpointed.
+
+The task-definition overload `d.step("charge", chargeCardTask, input, options)` is deprecated and remains fully supported for compatibility, including typed input/output, automatic signal forwarding, and recorded task identity. Existing recorded workflow versions can retain it while their runs finish. Callback steps record the step boundary without inferring the invoked task's identity, so moving between the forms changes structural replay metadata; introduce the callback form in new workflow versions when preserving existing replay fixtures.
+
+For resumable work inside a callback, assuming `source` and `destination` are injected clients:
+
+```ts
 await d.step("import", { heartbeatTimeoutMs: 30_000 }, async (step) => {
   const saved = step.getProgress<{ cursor: string }>();
   for await (const page of source.pages(saved?.cursor)) {
@@ -267,7 +292,7 @@ await d.step("import", { heartbeatTimeoutMs: 30_000 }, async (step) => {
 });
 ```
 
-Task steps support ordinary task results, including `void`, and use Runner's regular validation, dependencies, middleware, and cancellation. Inside that task or its dependencies, `durable.useStep()` exposes the same controls. It throws outside a live step. Task input and output are inferred; options follow the input: `d.step("charge", chargeCard, input, { retries: 3 })`.
+`durable.useStep()` optionally exposes the active callback's controls inside nested Runner tasks or their dependencies. It works with callback steps as well as the deprecated task-definition form, and throws outside a live step. Use it for deliberate durable integrations; ordinary business tasks can receive the cancellation signal and downstream idempotency key explicitly, as above.
 
 The step idempotency key is stable across retries and worker takeover for the same execution and step. Pass it to external services that support deduplication; it does not make those services transactional. Progress is cloned and persists across retries and worker takeover. Always await `heartbeat()`; it fails after the callback stops owning progress. A heartbeat timeout aborts the callback's signal and fails that step as a timeout, following the existing step-timeout policy. Missing heartbeats do not renew the workflow execution lease: workers already renew that lease automatically. Each new execution, including a reset branch, has its own step identities.
 
