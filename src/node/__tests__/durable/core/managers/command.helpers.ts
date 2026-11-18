@@ -60,9 +60,9 @@ export async function commandFixture(
     liveCancellationEventBus: null,
   });
   const lock = createExecutionLockState();
-  const kickoff = jest.fn(async () =>
-    manager.drain(execution, workflow, store, lock),
-  );
+  const kickoff = jest.fn(async () => {
+    await manager.drain(execution, workflow, store, lock);
+  });
   const manager = new CommandManager(config, tasks, kickoff, cancellation);
   const enqueue = async (id = "request") =>
     store.enqueueCommand({

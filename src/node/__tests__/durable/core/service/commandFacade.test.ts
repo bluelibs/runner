@@ -117,6 +117,7 @@ describe("command facade integration boundaries", () => {
         if (status === "missing")
           jest.spyOn(f.store, "getExecution").mockResolvedValue(null);
         else await f.store.updateExecution("run", { status });
+        return "settled";
       });
       try {
         await expect(service.processExecution("run")).resolves.toBeUndefined();

@@ -1,4 +1,3 @@
-import type { SleepOptions } from "../interfaces/context";
 import { SuspensionSignal } from "../interfaces/context";
 import {
   clearExecutionCurrent,
@@ -17,28 +16,11 @@ export async function sleepDurably(params: {
   executionId: string;
   assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
-  assertUniqueStepId: (stepId: string) => void;
-  assertOrWarnImplicitInternalStepId: (
-    kind: "sleep" | "emit" | "waitForSignal",
-  ) => void;
-  sleepIndexRef: { current: number };
+  stepId: string;
   durationMs: number;
-  options?: SleepOptions;
 }): Promise<void> {
   await params.assertCanContinue();
-
-  let sleepStepId: string;
-
-  if (params.options?.stepId) {
-    sleepStepId = `__sleep:${params.options.stepId}`;
-  } else {
-    params.assertOrWarnImplicitInternalStepId("sleep");
-    const sleepStepIndex = params.sleepIndexRef.current;
-    params.sleepIndexRef.current += 1;
-    sleepStepId = `__sleep:${sleepStepIndex}`;
-  }
-
-  params.assertUniqueStepId(sleepStepId);
+  const sleepStepId = params.stepId;
 
   const existing = await params.store.getStepResult(
     params.executionId,

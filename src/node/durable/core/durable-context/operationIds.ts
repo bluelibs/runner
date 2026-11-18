@@ -1,15 +1,13 @@
 import type { SignalOptions } from "../interfaces/context";
 
-/** Peeks at the next signal slot; the wait implementation consumes the counter. */
-export function createSignalWaitIdentity(
+/** Reserves the signal slot in invocation order, before any asynchronous work. */
+export function reserveSignalWaitId(
   signalId: string,
   options: SignalOptions | undefined,
   indexes: Map<string, number>,
 ): string {
+  if (options?.stepId) return `__signal:${options.stepId}`;
   const index = indexes.get(signalId) ?? 0;
-  return options?.stepId
-    ? `__signal:${options.stepId}`
-    : index === 0
-      ? `__signal:${signalId}`
-      : `__signal:${signalId}:${index}`;
+  indexes.set(signalId, index + 1);
+  return index === 0 ? `__signal:${signalId}` : `__signal:${signalId}:${index}`;
 }

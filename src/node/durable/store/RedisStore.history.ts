@@ -21,6 +21,7 @@ const entryPattern = Match.compile({
   ),
   parentStepId: Match.Optional(String),
   taskKey: Match.Optional(String),
+  workflowVersion: Match.Optional(Number),
   startedOrder: Number,
   completedOrder: Match.Optional(Number),
   statePayload: Match.Optional(Match.OneOf(String, null)),
@@ -46,7 +47,8 @@ export const recordHistoryScript = `
     if update.phase == "started" or entry.completedOrder then return 1 end
   else
     entry = {stepId=update.stepId, kind=update.kind, parentStepId=update.parentStepId,
-      taskKey=update.taskKey, startedOrder=redis.call("incr", KEYS[2])}
+      taskKey=update.taskKey, workflowVersion=update.workflowVersion,
+      startedOrder=redis.call("incr", KEYS[2])}
   end
   if update.phase == "completed" and not entry.completedOrder then
     entry.completedOrder = redis.call("incr", KEYS[2])

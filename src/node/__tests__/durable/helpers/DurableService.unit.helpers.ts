@@ -1,3 +1,4 @@
+import * as timers from "node:timers";
 import { r } from "../../../..";
 import type {
   IDurableQueue,
@@ -58,6 +59,22 @@ export class SpyQueue implements IDurableQueue {
 export async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+export function fakeNodeTimers(): () => void {
+  jest.useFakeTimers();
+  // Jest patches the test global, while the waiter imports Node's timer module.
+  const schedule = jest
+    .spyOn(timers, "setTimeout")
+    .mockImplementation(setTimeout);
+  const cancel = jest
+    .spyOn(timers, "clearTimeout")
+    .mockImplementation(clearTimeout);
+  return () => {
+    schedule.mockRestore();
+    cancel.mockRestore();
+    jest.useRealTimers();
+  };
 }
 
 export async function advanceTimers(ms: number): Promise<void> {

@@ -169,4 +169,61 @@ describe("pinned workflow implementations", () => {
     expect(() => registry.register(second)).toThrow("a.tasks.process");
     expect(registry.find("shared", 1)).toBe(first);
   });
+
+  it("preserves pinned one-shot and recurring occurrences on an older timer worker", async () => {
+    const store = new MemoryStore();
+    const buildWorkflow = (id: string, version: number) =>
+      r
+        .task(id)
+        .tags([tags.durableWorkflow.with({ key: "reports", version })])
+        .run(async () => version)
+        .build();
+    const v1 = buildWorkflow("reports-one", 1);
+    const v2 = buildWorkflow("reports-two", 2);
+    const runV1 = jest.fn(async () => 1);
+    const runV2 = jest.fn(async () => 2);
+    const oldWorker = new DurableService({
+      store,
+      tasks: [v1],
+      timers: { enabled: false },
+      taskExecutor: createTaskExecutor({ [v1.id]: runV1 }),
+    });
+    const newWorker = new DurableService({
+      store,
+      tasks: [v2],
+      timers: { enabled: false },
+      taskExecutor: createTaskExecutor({ [v2.id]: runV2 }),
+    });
+    try {
+      await newWorker.schedule(v2, undefined, { id: "once", delay: 25 });
+      await newWorker.schedule(v2, undefined, {
+        id: "recurring",
+        interval: 50,
+      });
+      const previous = (await store.getSchedule("recurring"))!.nextRun;
+      const due = await store.getReadyTimers(new Date(Date.now() + 1000));
+      expect(due).toHaveLength(2);
+      for (const timer of due) await oldWorker.handleTimer(timer);
+      const runs = await store.listExecutions({ workflowKey: "reports" });
+      expect(
+        runs.map(({ status, workflowVersion }) => [status, workflowVersion]),
+      ).toEqual([
+        ["pending", 2],
+        ["pending", 2],
+      ]);
+      expect(
+        (await store.getSchedule("recurring"))!.nextRun!.getTime(),
+      ).toBeGreaterThan(previous!.getTime());
+      expect(runV1).not.toHaveBeenCalled();
+      expect(runV2).not.toHaveBeenCalled();
+      for (const run of runs) {
+        await newWorker.processExecution(run.id);
+        expect((await store.getExecution(run.id))?.result).toBe(2);
+      }
+      expect(runV2).toHaveBeenCalledTimes(2);
+    } finally {
+      await oldWorker.stop();
+      await newWorker.stop();
+    }
+  });
 });

@@ -33,9 +33,7 @@ describe("durable: DurableService signal buffering replay", () => {
         executionId: "e1",
         assertCanContinue: async () => undefined,
         appendAuditEntry: async () => undefined,
-        assertUniqueStepId: () => undefined,
-        assertOrWarnImplicitInternalStepId: () => undefined,
-        signalIndexes: new Map<string, number>(),
+        stepId: "__signal:paid",
         signal: Paid,
       }),
     ).resolves.toEqual({ kind: "signal", payload: { paidAt: 22 } });

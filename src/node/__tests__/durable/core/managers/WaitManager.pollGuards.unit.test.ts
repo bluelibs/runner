@@ -8,6 +8,7 @@ import { ExecutionStatus } from "../../../../durable/core/types";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
 import {
   advanceTimers,
+  fakeNodeTimers,
   flushMicrotasks,
 } from "../../helpers/DurableService.unit.helpers";
 import { genericError } from "../../../../../errors";
@@ -46,7 +47,7 @@ async function waitForCalls(
 
 describe("durable: WaitManager (poll guards)", () => {
   it("returns after an in-flight poll check when another path already settled the wait", async () => {
-    jest.useFakeTimers();
+    const restoreTimers = fakeNodeTimers();
     try {
       const store = new MemoryStore();
       const bus = new MemoryEventBus();
@@ -72,6 +73,7 @@ describe("durable: WaitManager (poll guards)", () => {
         waitPollIntervalMs: 10,
       });
 
+      await jest.advanceTimersByTimeAsync(10);
       await waitForCalls(() => calls, 4);
 
       await store.updateExecution(executionId, {
@@ -91,7 +93,7 @@ describe("durable: WaitManager (poll guards)", () => {
 
       await expect(waiting).resolves.toBe("ok");
     } finally {
-      jest.useRealTimers();
+      restoreTimers();
     }
   });
 

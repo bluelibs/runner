@@ -60,7 +60,10 @@ import {
   durableContinueAsNewRejectedError,
   durableExecutionInvariantError,
 } from "../../../errors";
-import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
+import {
+  durableWorkflowTag,
+  getDurableWorkflowVersion,
+} from "../tags/durableWorkflow.tag";
 import { throwDurablePauseInterruption } from "./pauseInterruption";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { isTask } from "../../../definers/tools";
@@ -70,7 +73,7 @@ import {
   type DurableReplayObserver,
 } from "./durable-context/operationJournal";
 import { createExecutionStepId } from "./durable-context/DurableContext.waitForExecutionState";
-import { createSignalWaitIdentity } from "./durable-context/operationIds";
+import { reserveSignalWaitId } from "./durable-context/operationIds";
 import { check, Match } from "../../../tools/check";
 
 function isStepTask(value: unknown): value is AnyTask {
@@ -96,7 +99,7 @@ export class DurableContext implements IDurableWorkflowContext {
   private readonly journal: OperationJournal;
   private readonly stepIdentity?: string;
   private readonly executionLockState: ExecutionLockState | undefined;
-  private readonly sleepIndexRef = { current: 0 };
+  private sleepIndex = 0;
   private readonly signalIndexes = new Map<string, number>();
   private readonly eventIndexes = new Map<string, number>();
   private noteIndex = 0;
@@ -371,6 +374,7 @@ export class DurableContext implements IDurableWorkflowContext {
     currentMeta?: DurableExecutionCurrentWorkflowMeta,
     allowCancellationRequested = false,
     historyTaskKey?: string,
+    historyWorkflowVersion?: number,
   ): Promise<T> {
     return await this.journal.run(
       currentMeta
@@ -419,7 +423,10 @@ export class DurableContext implements IDurableWorkflowContext {
           downFn,
           compensations: this.compensations,
         }),
-      historyTaskKey ?? currentMeta?.childWorkflowKey,
+      {
+        taskKey: historyTaskKey ?? currentMeta?.childWorkflowKey,
+        workflowVersion: historyWorkflowVersion,
+      },
     );
   }
 
@@ -499,19 +506,18 @@ export class DurableContext implements IDurableWorkflowContext {
 
   async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
     assertFiniteDurationMs("sleep duration", durationMs);
-    const historyId = `__sleep:${options?.stepId ?? this.sleepIndexRef.current}`;
-    return await this.journal.run("sleep", historyId, () =>
+    if (!options?.stepId)
+      this.determinism.assertOrWarnImplicitInternalStepId("sleep");
+    const stepId = `__sleep:${options?.stepId || this.sleepIndex++}`;
+    this.determinism.assertUniqueStepId(stepId);
+    return await this.journal.run("sleep", stepId, () =>
       sleepDurably({
         store: this.store,
         executionId: this.executionId,
         assertCanContinue: this.assertCanContinue.bind(this),
         appendAuditEntry: this.audit.append,
-        assertUniqueStepId: this.determinism.assertUniqueStepId,
-        assertOrWarnImplicitInternalStepId:
-          this.determinism.assertOrWarnImplicitInternalStepId,
-        sleepIndexRef: this.sleepIndexRef,
+        stepId,
         durationMs,
-        options,
       }),
     );
   }
@@ -531,6 +537,7 @@ export class DurableContext implements IDurableWorkflowContext {
       });
     }
 
+    const childWorkflowKey = this.getTaskPersistenceId(task);
     return await this._executeStep(
       stepId,
       {},
@@ -541,9 +548,10 @@ export class DurableContext implements IDurableWorkflowContext {
           this.resolveWorkflowStartOptions(stepId, options),
         ),
       undefined,
-      {
-        childWorkflowKey: this.getTaskPersistenceId(task),
-      },
+      { childWorkflowKey },
+      false,
+      childWorkflowKey,
+      getDurableWorkflowVersion(task),
     );
   }
 
@@ -573,21 +581,17 @@ export class DurableContext implements IDurableWorkflowContext {
     }
     assertFiniteDurationMs("signal timeout", options?.timeoutMs);
 
-    const historyId = createSignalWaitIdentity(
-      signal.id,
-      options,
-      this.signalIndexes,
-    );
-    return await this.journal.run("signal", historyId, () =>
+    if (!options?.stepId)
+      this.determinism.assertOrWarnImplicitInternalStepId("waitForSignal");
+    const stepId = reserveSignalWaitId(signal.id, options, this.signalIndexes);
+    this.determinism.assertUniqueStepId(stepId);
+    return await this.journal.run("signal", stepId, () =>
       waitForSignalDurably({
         store: this.store,
         executionId: this.executionId,
         assertCanContinue: this.assertCanContinue.bind(this),
         appendAuditEntry: this.audit.append,
-        assertUniqueStepId: this.determinism.assertUniqueStepId,
-        assertOrWarnImplicitInternalStepId:
-          this.determinism.assertOrWarnImplicitInternalStepId,
-        signalIndexes: this.signalIndexes,
+        stepId,
         signal,
         options,
       }),
@@ -616,6 +620,7 @@ export class DurableContext implements IDurableWorkflowContext {
     options?: WaitForExecutionOptions,
   ): Promise<any> {
     assertFiniteDurationMs("execution-wait timeout", options?.timeoutMs);
+    const workflowKey = this.getTaskPersistenceId(_task);
     return await this.journal.run(
       "execution",
       createExecutionStepId(executionId, options),
@@ -624,12 +629,15 @@ export class DurableContext implements IDurableWorkflowContext {
           store: this.store,
           executionId: this.executionId,
           targetExecutionId: executionId,
-          expectedWorkflowKey: this.getTaskPersistenceId(_task),
+          expectedWorkflowKey: workflowKey,
           assertCanContinue: this.assertCanContinue.bind(this),
           assertUniqueStepId: this.determinism.assertUniqueStepId,
           options,
         }),
-      this.getTaskPersistenceId(_task),
+      {
+        taskKey: workflowKey,
+        workflowVersion: getDurableWorkflowVersion(_task),
+      },
     );
   }
 

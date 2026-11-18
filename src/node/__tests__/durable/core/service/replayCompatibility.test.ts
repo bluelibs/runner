@@ -42,6 +42,50 @@ function executor(
 }
 
 describe("replay compatibility boundaries", () => {
+  it.each([
+    [undefined, 1, "unrecorded to 1"],
+    [1, undefined, "1 to unversioned"],
+  ])(
+    "reports a child version change from %s to %s",
+    async (saved, candidate, change) => {
+      const fixture = await replayFixture();
+      const child = r
+        .task("child")
+        .tags([
+          candidate === undefined
+            ? tags.durableWorkflow
+            : tags.durableWorkflow.with({ version: candidate }),
+        ])
+        .run(async () => 1)
+        .build();
+      const report = await replayWorkflow(
+        workflow,
+        {
+          ...fixture,
+          history: [
+            fixture.history[0],
+            {
+              kind: "workflow",
+              stepId: "start-child",
+              taskKey: child.id,
+              workflowVersion: saved,
+              startedOrder: 3,
+              completedOrder: 4,
+            },
+          ],
+        },
+        executor((d) => d.workflow("start-child", child)),
+      );
+      expect(report).toMatchObject({
+        compatible: false,
+        matched: 0,
+        issues: expect.arrayContaining([
+          `Workflow version for 'start-child' changed from ${change}.`,
+        ]),
+      });
+    },
+  );
+
   it("skips completed nested effects and stops when new code exceeds the saved prefix", async () => {
     const fixture = await replayFixture();
     const effect = jest.fn(async () => 99);

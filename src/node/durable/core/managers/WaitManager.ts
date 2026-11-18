@@ -16,7 +16,7 @@ export interface WaitConfig {
  * Strategy:
  * - if an event bus is configured, subscribe to `execution:<executionId>` for low-latency completion,
  *   and to each continuation tip's channel as the chain grows
- * - otherwise (or on bus issues) fall back to polling the store
+ * - poll the store independently so missed notifications or slow subscriptions cannot block progress
  *
  * The durable store remains the source of truth; this manager is purely a convenience layer
  * for callers that want `await durable.wait(...)` / `await durable.startAndWait(...)`.

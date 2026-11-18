@@ -1,7 +1,36 @@
 import { commandFixture } from "./command.helpers";
 import { MemoryEventBus } from "../../../../durable/bus/MemoryEventBus";
+import { fakeNodeTimers } from "../../helpers/DurableService.unit.helpers";
 
 describe("command receipt waiting", () => {
+  it.each([20, 1000])(
+    "reads a committed receipt without a live subscription within %i ms",
+    async (waitTimeoutMs) => {
+      const restoreTimers = fakeNodeTimers();
+      try {
+        const f = await commandFixture();
+        const bus = new MemoryEventBus();
+        f.config.eventBus = bus;
+        f.kickoff.mockResolvedValue(undefined);
+        const subscribe = jest
+          .spyOn(bus, "subscribe")
+          .mockImplementation(() => new Promise<void>(() => {}));
+        const unsubscribe = jest.spyOn(bus, "unsubscribe");
+        const outcome = f.manager
+          .command("run", f.command, 1, { waitTimeoutMs })
+          .catch((error: unknown) => error);
+        await jest.advanceTimersByTimeAsync(0);
+        expect(subscribe).toHaveBeenCalledTimes(1);
+        await f.manager.drain(f.execution, f.workflow, f.store, f.lock);
+        await jest.advanceTimersByTimeAsync(Math.min(waitTimeoutMs, 500));
+        expect(await outcome).toBe(7);
+        expect(unsubscribe).not.toHaveBeenCalled();
+      } finally {
+        restoreTimers();
+      }
+    },
+  );
+
   it("cleans up a subscription that becomes live after the caller timed out", async () => {
     jest.useFakeTimers();
     try {

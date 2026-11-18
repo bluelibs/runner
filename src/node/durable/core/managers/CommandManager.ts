@@ -95,8 +95,8 @@ export class CommandManager {
     workflow: AnyTask,
     owned: IDurableStore,
     lock: ExecutionLockState,
-  ): Promise<void> {
-    if (!owned.getNextCommand) return;
+  ): Promise<"settled" | "parked"> {
+    if (!owned.getNextCommand) return "settled";
     for (
       let request = await owned.getNextCommand(execution.id);
       request;
@@ -110,9 +110,9 @@ export class CommandManager {
         target.status === "cancelling"
       ) {
         await this.rejectPending(execution.id, "Target workflow is closed.");
-        return;
+        return "settled";
       }
-      if (target.status === "paused") return;
+      if (target.status === "paused") return "parked";
       const task = durableWorkflowTag
         .extract(workflow)
         ?.commands?.find(
@@ -184,7 +184,7 @@ export class CommandManager {
             reason: String(cancellation.signal.reason),
           });
         const latest = await owned.getExecution(execution.id);
-        if (latest?.status === "paused") return;
+        if (latest?.status === "paused") return "parked";
         if (
           !(await this.complete(
             owned,
@@ -198,7 +198,7 @@ export class CommandManager {
           ))
         ) {
           if ((await owned.getExecution(execution.id))?.status === "paused")
-            return;
+            return "parked";
           await this.complete(owned, {
             ...staged.record,
             status: "failed",
@@ -219,7 +219,7 @@ export class CommandManager {
           (error instanceof SuspensionSignal &&
             error.reason === "step-concurrency")
         )
-          return;
+          return "parked";
         await this.complete(owned, {
           ...staged.record,
           status: "failed",
@@ -233,5 +233,6 @@ export class CommandManager {
         cancellation.stop();
       }
     }
+    return "settled";
   }
 }

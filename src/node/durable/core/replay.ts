@@ -58,6 +58,12 @@ export async function replayWorkflow(
         );
         throw boundary;
       }
+      if (next.workflowVersion !== operation.workflowVersion) {
+        issues.push(
+          `Workflow version for '${next.stepId}' changed from ${next.workflowVersion ?? "unrecorded"} to ${operation.workflowVersion ?? "unversioned"}.`,
+        );
+        throw boundary;
+      }
       seen.add(next.stepId);
       matched++;
       if (next.completedOrder === undefined) throw boundary;

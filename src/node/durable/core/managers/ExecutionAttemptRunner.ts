@@ -232,7 +232,15 @@ export class ExecutionAttemptRunner {
       this.commands &&
       (await this.store.getNextCommand?.(executionId))
     ) {
-      await this.commands.drain(execution, task, this.store, lockState);
+      const commands = await this.commands.drain(
+        execution,
+        task,
+        this.store,
+        lockState,
+      );
+      // A parked head still owns a private state snapshot. Let it finish
+      // before workflow code can read or change the shared state.
+      if (commands === "parked") return snapshot;
       const afterCommands = await this.store.getExecution(executionId);
       if (
         !afterCommands ||

@@ -8,7 +8,10 @@ import type {
 /** Runtime-only hook used by the isolated compatibility replayer. */
 export interface DurableReplayObserver {
   before(
-    operation: Pick<DurableHistoryUpdate, "stepId" | "kind" | "taskKey">,
+    operation: Pick<
+      DurableHistoryUpdate,
+      "stepId" | "kind" | "taskKey" | "workflowVersion"
+    >,
   ): void;
   after(stepId: string): void;
   effect(): never;
@@ -35,16 +38,19 @@ export class OperationJournal {
     kind: DurableHistoryKind,
     stepId: string,
     fn: () => Promise<T>,
-    taskKey?: string,
+    target?: Pick<DurableHistoryUpdate, "taskKey" | "workflowVersion">,
   ): Promise<T> {
-    this.replay?.before({ kind, stepId, taskKey });
+    this.replay?.before({ kind, stepId, ...target });
     if (this.enabled && this.store.recordExecutionHistory) {
       this.origin ??= this.recordOrigin();
       await this.origin;
       await this.store.recordExecutionHistory(this.executionId, {
         kind,
         stepId,
-        taskKey,
+        taskKey: target?.taskKey,
+        ...(target?.workflowVersion === undefined
+          ? {}
+          : { workflowVersion: target.workflowVersion }),
         parentStepId: this.parents.getStore(),
         phase: "started",
       });

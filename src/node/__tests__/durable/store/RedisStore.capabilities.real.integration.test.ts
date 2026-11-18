@@ -148,6 +148,19 @@ const redisUrl =
       completedAt: new Date(),
     });
     await store.recordExecutionHistory(execution.id, {
+      kind: "workflow",
+      stepId: "start-child",
+      phase: "completed",
+      taskKey: "shipment",
+      workflowVersion: 3,
+    });
+    await store.saveStepResult({
+      executionId: execution.id,
+      stepId: "start-child",
+      result: "child-id",
+      completedAt: new Date(),
+    });
+    await store.recordExecutionHistory(execution.id, {
       kind: "step",
       stepId: "charge",
       phase: "completed",
@@ -177,9 +190,11 @@ const redisUrl =
         (entry) => entry.id === branch,
       ),
     ).toBe(true);
-    expect(
-      (await store.listExecutionHistory(branch)).map((entry) => entry.stepId),
-    ).toEqual(["__origin", "__state:initial"]);
+    expect(await store.listExecutionHistory(branch)).toMatchObject([
+      { stepId: "__origin" },
+      { stepId: "__state:initial" },
+      { stepId: "start-child", taskKey: "shipment", workflowVersion: 3 },
+    ]);
     expect((await store.getExecution(execution.id))?.status).toBe("completed");
   });
 

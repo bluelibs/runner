@@ -21,8 +21,10 @@ export interface DurableHistoryEntry {
   kind: DurableHistoryKind;
   /** Enclosing step when an operation was called inside a callback. */
   parentStepId?: string;
-  /** Canonical Runner task identity for task-based steps. */
+  /** Canonical task identity for task steps, or persisted workflow key for child operations. */
   taskKey?: string;
+  /** Pinned child workflow implementation observed at the call site. */
+  workflowVersion?: number;
   /** Monotonic invocation order within this execution. */
   startedOrder: number;
   /** Monotonic completion order; absent when interrupted or parked. */

@@ -476,7 +476,7 @@ export async function handleScheduledTaskTimer(params: {
     params.timer.workflowKey,
     params.timer.workflowVersion,
   );
-  if (!task) {
+  if (!task && params.timer.workflowVersion === undefined) {
     return {
       handled: false,
       finalizeCurrentTimer: false,
@@ -486,7 +486,11 @@ export async function handleScheduledTaskTimer(params: {
 
   const executionId = await params.persistTaskTimerExecution({
     timer: params.timer,
-    workflowKey: params.taskRegistry.getWorkflowKey(task),
+    // A shared timer worker need not have the pinned implementation. Queue
+    // the occurrence so the normal execution version routing can redrive it.
+    workflowKey: task
+      ? params.taskRegistry.getWorkflowKey(task)
+      : params.timer.workflowKey,
   });
   params.assertTimerClaimIsStillOwned();
   if (!params.timer.scheduleId) {
