@@ -19,7 +19,11 @@ async function hasProtectedDependenciesInTx(
        WHERE namespace = ? AND id = ?${forUpdate(tx.dialect)}`,
       [runtime.namespace, execution.parentExecutionId],
     );
-    if (!parentRow || parentRow.status !== ExecutionStatus.Completed) {
+    if (
+      parentRow
+        ? parentRow.status !== ExecutionStatus.Completed
+        : !execution.parentExecutionInStore
+    ) {
       return true;
     }
   }
@@ -43,6 +47,12 @@ async function deleteExecutionDetailRowsInTx(
   tx: SqlExecutor,
   executionId: string,
 ): Promise<void> {
+  // Preserve the timer-then-claim lock order used by timer workers.
+  await tx.all(
+    `SELECT id FROM runner_durable_timers
+     WHERE namespace = ? AND execution_id = ? ORDER BY id ASC${forUpdate(tx.dialect)}`,
+    [runtime.namespace, executionId],
+  );
   await tx.run(
     `DELETE FROM runner_durable_locks
      WHERE namespace = ? AND resource IN (

@@ -79,6 +79,7 @@ function buildRestartedExecution(
       ? { historyRecorded: true }
       : {}),
     parentExecutionId: source.parentExecutionId,
+    ...(source.parentExecutionInStore ? { parentExecutionInStore: true } : {}),
     ...resolveRestartInput(deps, source, options),
     status: ExecutionStatus.Pending,
     attempt: 1,

@@ -2,7 +2,11 @@ import { DatabaseSync } from "node:sqlite";
 import { r, run } from "../../../../public";
 import { resources, tags } from "../../../node";
 import { SqliteStore } from "../../../durable/store/SqliteStore";
-import { registerSqlExecContractTests } from "./sqlStoreContract.exec.helpers";
+import { createSqliteBackend } from "../../../durable/store/sql/sqliteBackend";
+import {
+  makeSqlExecution,
+  registerSqlExecContractTests,
+} from "./sqlStoreContract.exec.helpers";
 import { registerSqlViewsContractTests } from "./sqlStoreContract.viewsRetention.helpers";
 import { registerSqlRetentionContractTests } from "./sqlStoreContract.retention.helpers";
 import { registerSqlSignalContractTests } from "./sqlStoreContract.signals.helpers";
@@ -21,6 +25,56 @@ describe("durable: SqliteStore", () => {
   registerSqlRetentionContractTests("SqliteStore", factory);
   registerSqlSignalContractTests("SqliteStore", factory);
   registerSqlTimersAndCommandsContractTests("SqliteStore", factory);
+
+  it("serializes stores sharing the same injected connection", async () => {
+    const database = new DatabaseSync(":memory:");
+    const first = new SqliteStore({ database, namespace: "first" });
+    const second = new SqliteStore({ database, namespace: "second" });
+    try {
+      await Promise.all([first.init(), second.init()]);
+      await Promise.all([
+        first.saveExecution(makeSqlExecution("first")),
+        second.saveExecution(makeSqlExecution("second")),
+      ]);
+      expect(await first.getExecution("first")).not.toBeNull();
+      expect(await second.getExecution("second")).not.toBeNull();
+      expect(await second.getExecution("first")).toBeNull();
+    } finally {
+      await Promise.all([first.dispose(), second.dispose()]);
+      database.close();
+    }
+  });
+
+  it("waits for a shared connection transaction to settle before reading", async () => {
+    const database = new DatabaseSync(":memory:");
+    const writer = createSqliteBackend({ database });
+    const reader = createSqliteBackend({ database });
+    let notifyInserted!: () => void;
+    const inserted = new Promise<void>((resolve) => {
+      notifyInserted = resolve;
+    });
+    let triggerRollback!: () => void;
+    const rollback = new Promise<void>((resolve) => {
+      triggerRollback = resolve;
+    });
+    try {
+      await writer.init(["CREATE TABLE sample (value TEXT)"]);
+      const transaction = writer.transaction(async (tx) => {
+        await tx.run("INSERT INTO sample VALUES (?)", ["uncommitted"]);
+        notifyInserted();
+        await rollback;
+        throw new Error("rollback requested");
+      });
+      await inserted;
+      const observed = reader.get("SELECT value FROM sample");
+      triggerRollback();
+      await expect(transaction).rejects.toThrow("rollback requested");
+      await expect(observed).resolves.toBeNull();
+    } finally {
+      triggerRollback();
+      database.close();
+    }
+  });
 
   it("runs a durable workflow with steps, state, signals, and two-stage retention via sqliteWorkflow resource", async () => {
     const db = new DatabaseSync(":memory:");

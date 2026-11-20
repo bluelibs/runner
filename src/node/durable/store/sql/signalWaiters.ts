@@ -6,7 +6,10 @@ import type {
 import { parseSignalState } from "../../core/utils";
 import { saveStepResultInTx } from "./executionViews";
 import type { SqlStoreRuntime } from "./runtime";
-import { readSignalStateForUpdate, writeSignalStateInTx } from "./signalState";
+import {
+  ensureSignalStateForUpdate,
+  writeSignalStateInTx,
+} from "./signalState";
 import { forUpdate } from "./types";
 
 export async function upsertSignalWaiter(
@@ -87,17 +90,12 @@ export async function commitSignalDelivery(
     if (!waiterRow) return false;
 
     await saveStepResultInTx(runtime, tx, params.stepResult);
-    const journal = (await readSignalStateForUpdate(
+    const journal = await ensureSignalStateForUpdate(
       runtime,
       tx,
       params.executionId,
       params.signalId,
-    )) ?? {
-      executionId: params.executionId,
-      signalId: params.signalId,
-      history: [],
-      queued: [],
-    };
+    );
     journal.history.push({
       id: params.signalRecord.id,
       payload: params.signalRecord.payload,

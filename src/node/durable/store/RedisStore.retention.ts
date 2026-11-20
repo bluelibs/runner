@@ -71,7 +71,7 @@ export async function collectCompletedHistory(
       end
       if type(execution.parentExecutionId) == "string" then
         local parentRaw = redis.call("get", ARGV[4] .. execution.parentExecutionId)
-        if not parentRaw or cjson.decode(parentRaw).status ~= "completed" then
+        if (parentRaw and cjson.decode(parentRaw).status ~= "completed") or (not parentRaw and execution.parentExecutionInStore ~= true) then
           redis.call("zadd", KEYS[2], ARGV[7], ARGV[1]); return 0
         end
       end
@@ -158,7 +158,7 @@ export async function collectExpiredReceipts(
       end
       if type(execution.parentExecutionId) == "string" then
         local parentRaw = redis.call("get", ARGV[3] .. execution.parentExecutionId)
-        if not parentRaw or cjson.decode(parentRaw).status ~= "completed" then
+        if (parentRaw and cjson.decode(parentRaw).status ~= "completed") or (not parentRaw and execution.parentExecutionInStore ~= true) then
           redis.call("zadd", KEYS[2], ARGV[8], ARGV[1]); return 0
         end
       end

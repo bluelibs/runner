@@ -5,6 +5,7 @@ import {
 } from "../../../durable/store/RedisStore";
 import { createIORedisClient } from "../../../durable/optionalDeps/ioredis";
 import type { Execution } from "../../../durable/core/types";
+import { assertChildRetentionAfterParentExpiry } from "./receiptRetentionParent.helpers";
 
 const enabled = process.env.REAL_INFRASTRUCTURE_FAULT_INTEGRATION === "1";
 const redisUrl =
@@ -36,6 +37,15 @@ function completed(
 (enabled ? describe : describe.skip)(
   "Redis successful history collection",
   () => {
+    it("collects a local child after its parent's receipt expires", async () => {
+      await assertChildRetentionAfterParentExpiry(
+        new RedisStore({
+          redis: redisUrl,
+          prefix: `runner:retention:${randomUUID()}:`,
+        }),
+      );
+    });
+
     it("atomically compacts success history and preserves serializer values and idempotent results", async () => {
       const store = new RedisStore({
         redis: redisUrl,

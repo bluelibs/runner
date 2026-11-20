@@ -353,6 +353,8 @@ if (result.kind === "timeout") {
 
 Child failures (`failed`, `cancelled`, `compensation_failed`) throw `DurableExecutionError`.
 
+Pass the task definition for the version that started the execution you are waiting on. A typed wait checks that initial execution's workflow key and version, then follows any explicit continuation. Versions that continue into one another should share the result contract expected by their waiters.
+
 ### `workflow()` — Start Child Workflow
 
 ```ts

@@ -1,4 +1,5 @@
 import { MemoryStore } from "../../../durable/store/MemoryStore";
+import { assertChildRetentionAfterParentExpiry } from "./receiptRetentionParent.helpers";
 import {
   ExecutionStatus,
   TimerStatus,
@@ -30,6 +31,10 @@ function completedExecution(
 }
 
 describe("durable: MemoryStore receipt retention", () => {
+  it("collects a local child after its parent's receipt expires", async () => {
+    await assertChildRetentionAfterParentExpiry(new MemoryStore());
+  });
+
   it("supports two-stage cleanup and releases idempotency keys after expiry", async () => {
     const store = new MemoryStore();
     await expect(

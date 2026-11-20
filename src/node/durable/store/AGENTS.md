@@ -9,7 +9,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Entry Points And Layout
 
-- `RedisStore.retention.ts`, `memory-store/retention.ts`, and `sql/retention.ts` collect due success history (`collectCompletedHistory`) while preserving completion receipts, and expire completion receipts (`collectExpiredReceipts`) when configured. Collection must coordinate with execution ownership and preserve waiter/parent results. Redis groups timer metadata once per batch and reschedules blocked entries so they cannot starve later work.
+- `RedisStore.retention.ts`, `memory-store/retention.ts`, and `sql/retention.ts` collect due success history (`collectCompletedHistory`) while preserving completion receipts, and expire completion receipts (`collectExpiredReceipts`) when configured. Collection coordinates with execution ownership and waiter results. A missing parent blocks child collection unless the child verified it in the same store at admission. Redis groups timer metadata once per batch and reschedules blocked entries so they cannot starve later work.
 - `MemoryStore.ts`: facade over instance-owned `memory-store/` operations.
 - `PersistentMemoryStore.ts`: adds serialized snapshots and local restart persistence.
 - `RedisStore.ts`: facade delegating to `RedisStore.*` operations.
@@ -37,6 +37,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Signal backlog remains FIFO and retains repeated identical signals; history and backlog are different records.
 - Completing a waiter must commit the step, remove the waiter, and handle its timeout consistently.
 - Claimed timers and locks use owner tokens/leases; stale owners cannot renew or finalize another owner's work.
+- PostgreSQL schema creation uses one transaction and a shared advisory lock. Claim creation checks conflict ownership atomically, including the batch timer path. SQL command FIFO/timer writes lock the target execution before queue rows.
+- SQLite adapters sharing an injected connection also share its transaction and read serialization.
 - Attempt-owned writes must atomically compare the live execution lease before mutation. Never replace this with a read/renew followed by an unguarded write. Optional custom stores without this capability cannot enable continuous recovery.
 - Schedule cadence/payload can change, but `ScheduleUpdate` does not permit replacing its id.
 - Metadata queries use indexes without scanning payloads; cursors preserve stable ordering.

@@ -17,6 +17,16 @@ export interface SqliteBackendConfig {
   busyTimeoutMs?: number;
 }
 
+const databasePermits = new WeakMap<SqliteDatabaseLike, Semaphore>();
+
+function getDatabasePermit(database: SqliteDatabaseLike): Semaphore {
+  const existing = databasePermits.get(database);
+  if (existing) return existing;
+  const permit = new Semaphore(1);
+  databasePermits.set(database, permit);
+  return permit;
+}
+
 function createSqliteExecutor(db: SqliteDatabaseLike): SqlExecutor {
   return {
     dialect: "sqlite",
@@ -46,7 +56,10 @@ export function createSqliteBackend(
   const location = config.filename ?? ":memory:";
   const ownsDatabase = !config.database;
   const busyTimeoutMs = config.busyTimeoutMs ?? 5_000;
-  const txSemaphore = new Semaphore(1);
+  // Transaction state belongs to the connection, even across namespaces.
+  const txSemaphore = config.database
+    ? getDatabasePermit(config.database)
+    : new Semaphore(1);
   let db: SqliteDatabaseLike | null = config.database ?? null;
   let executor: SqlExecutor | null = db ? createSqliteExecutor(db) : null;
 
@@ -79,16 +92,16 @@ export function createSqliteBackend(
       sql: string,
       params: readonly SqlParam[] = [],
     ): Promise<TRow[]> {
-      return getExecutor().all<TRow>(sql, params);
+      return txSemaphore.withPermit(() => getExecutor().all<TRow>(sql, params));
     },
     async get<TRow extends SqlRow = SqlRow>(
       sql: string,
       params: readonly SqlParam[] = [],
     ): Promise<TRow | null> {
-      return getExecutor().get<TRow>(sql, params);
+      return txSemaphore.withPermit(() => getExecutor().get<TRow>(sql, params));
     },
     async run(sql: string, params: readonly SqlParam[] = []): Promise<void> {
-      await getExecutor().run(sql, params);
+      await txSemaphore.withPermit(() => getExecutor().run(sql, params));
     },
     async transaction<T>(
       operation: (tx: SqlExecutor) => Promise<T>,
@@ -108,11 +121,13 @@ export function createSqliteBackend(
       });
     },
     async dispose(): Promise<void> {
-      if (ownsDatabase && db) {
-        db.close();
-        db = null;
-        executor = null;
-      }
+      await txSemaphore.withPermit(async () => {
+        if (ownsDatabase && db) {
+          db.close();
+          db = null;
+          executor = null;
+        }
+      });
     },
   };
 }

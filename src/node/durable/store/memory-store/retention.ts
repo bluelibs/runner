@@ -13,7 +13,10 @@ function hasProtectedDependencies(
   // Child compensation can depend on its parent's later business outcome.
   if (execution.parentExecutionId) {
     const parent = runtime.executions.get(execution.parentExecutionId);
-    if (!parent || parent.status !== "completed") return true;
+    if (
+      parent ? parent.status !== "completed" : !execution.parentExecutionInStore
+    )
+      return true;
   }
   return Boolean(
     runtime.executionWaiters.get(execution.id)?.size ||

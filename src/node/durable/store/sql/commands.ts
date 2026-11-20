@@ -14,6 +14,18 @@ import type { SqlStoreRuntime } from "./runtime";
 import { deleteTimerInTx, upsertTimerInTx } from "./timers";
 import { forUpdate, type SqlExecutor } from "./types";
 
+async function lockCommandExecution(
+  runtime: SqlStoreRuntime,
+  tx: SqlExecutor,
+  executionId: string,
+): Promise<Execution | null> {
+  const row = await tx.get<{ payload: string }>(
+    `SELECT payload FROM runner_durable_executions WHERE namespace = ? AND id = ?${forUpdate(tx.dialect)}`,
+    [runtime.namespace, executionId],
+  );
+  return row ? runtime.parse<Execution>(row.payload) : null;
+}
+
 async function readHeadCommandInTx(
   runtime: SqlStoreRuntime,
   tx: SqlExecutor,
@@ -33,6 +45,8 @@ export async function rescheduleCommandTimer(
   fireAt: Date,
 ): Promise<boolean> {
   return runtime.withWriteTx(async (tx) => {
+    // An empty FIFO has no row to lock. Serialize with admission on its execution.
+    await lockCommandExecution(runtime, tx, executionId);
     const head = await readHeadCommandInTx(runtime, tx, executionId);
     if (!head) {
       await deleteTimerInTx(runtime, tx, commandWakeupId(executionId));
@@ -48,21 +62,19 @@ export async function enqueueCommand(
   command: DurableCommandRecord,
 ): Promise<DurableCommandRecord> {
   return runtime.withWriteTx(async (tx) => {
+    const execution = await lockCommandExecution(
+      runtime,
+      tx,
+      command.executionId,
+    );
     const existing = await tx.get<{ payload: string }>(
-      `SELECT payload FROM runner_durable_commands WHERE namespace = ? AND id = ?${forUpdate(tx.dialect)}`,
+      `SELECT payload FROM runner_durable_commands WHERE namespace = ? AND id = ?`,
       [runtime.namespace, command.id],
     );
     if (existing) {
       return runtime.parse<DurableCommandRecord>(existing.payload);
     }
 
-    const execRow = await tx.get<{ payload: string }>(
-      `SELECT payload FROM runner_durable_executions WHERE namespace = ? AND id = ?${forUpdate(tx.dialect)}`,
-      [runtime.namespace, command.executionId],
-    );
-    const execution = execRow
-      ? runtime.parse<Execution>(execRow.payload)
-      : null;
     if (
       !execution ||
       isExecutionTerminal(execution.status) ||
@@ -174,28 +186,22 @@ export async function completeCommand(
   check(command.status, Match.OneOf("completed", "failed"));
   const success = command.status === "completed";
   return runtime.withWriteTx(async (tx) => {
+    const target = await lockCommandExecution(runtime, tx, command.executionId);
     const head = await readHeadCommandInTx(runtime, tx, command.executionId);
     if (!head || head.id !== command.id) {
       return false;
     }
 
-    let target: Execution | null = null;
-    if (success) {
-      const execRow = await tx.get<{ payload: string }>(
-        `SELECT payload FROM runner_durable_executions WHERE namespace = ? AND id = ?${forUpdate(tx.dialect)}`,
-        [runtime.namespace, command.executionId],
-      );
-      target = execRow ? runtime.parse<Execution>(execRow.payload) : null;
-      if (
-        !expected ||
+    if (
+      success &&
+      (!expected ||
         !target ||
         isExecutionTerminal(target.status) ||
         target.status === "paused" ||
         target.status === "cancelling" ||
-        !isDeepStrictEqual(target, expected)
-      ) {
-        return false;
-      }
+        !isDeepStrictEqual(target, expected))
+    ) {
+      return false;
     }
 
     if (success && command.state !== undefined) {

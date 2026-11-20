@@ -9,7 +9,9 @@ import { registerSqlRetentionContractTests } from "./sqlStoreContract.retention.
 import { registerSqlSignalContractTests } from "./sqlStoreContract.signals.helpers";
 import { registerSqlTimersAndCommandsContractTests } from "./sqlStoreContract.timersCommands.helpers";
 
-function createSqliteBackedPgPool(): {
+function createSqliteBackedPgPool(
+  afterRead?: (text: string, db: DatabaseSync) => void,
+): {
   pool: PgPoolLike;
   close: () => void;
 } {
@@ -71,13 +73,18 @@ function createSqliteBackedPgPool(): {
     values: unknown[] = [],
   ): { rows: TRow[] } => {
     const upper = text.trim().toUpperCase();
+    if (upper.startsWith("SELECT PG_ADVISORY_XACT_LOCK(")) {
+      return { rows: [] };
+    }
     if (upper === "BEGIN" || upper === "COMMIT" || upper === "ROLLBACK") {
       db.exec(`${upper};`);
       return { rows: [] };
     }
     const { sql, params } = adaptSqlAndParams(text, values);
-    if (upper.startsWith("SELECT")) {
-      return { rows: db.prepare(sql).all(...params) as TRow[] };
+    if (upper.startsWith("SELECT") || upper.includes(" RETURNING ")) {
+      const rows = db.prepare(sql).all(...params) as TRow[];
+      afterRead?.(text, db);
+      return { rows };
     }
     db.prepare(sql).run(...params);
     return { rows: [] };
@@ -128,4 +135,35 @@ describe("durable: PostgresStore (SQLite-backed PgPool adapter)", () => {
   registerSqlRetentionContractTests("PostgresStore", factory);
   registerSqlSignalContractTests("PostgresStore", factory);
   registerSqlTimersAndCommandsContractTests("PostgresStore", factory);
+
+  it("does not return a timer when its conditional claim loses", async () => {
+    const namespace = "claim-lost";
+    const timerId = "due";
+    const now = new Date();
+    const adapter = createSqliteBackedPgPool((text, db) => {
+      if (!text.includes("FOR UPDATE OF t SKIP LOCKED")) return;
+      db.prepare(
+        `INSERT INTO runner_durable_locks (namespace, resource, lock_id, expires_at_ms)
+         VALUES (?, ?, ?, ?)`,
+      ).run(namespace, `timer:claim:${timerId}`, "winner", Date.now() + 60_000);
+    });
+    const store = new PostgresStore({ pool: adapter.pool, namespace });
+    try {
+      await store.createTimer({
+        id: timerId,
+        type: "retry",
+        status: "pending",
+        fireAt: now,
+      });
+      await expect(
+        store.claimReadyTimers(now, 1, "loser", 60_000),
+      ).resolves.toEqual([]);
+      await expect(
+        store.renewTimerClaim(timerId, "winner", 60_000),
+      ).resolves.toBe(true);
+    } finally {
+      await store.dispose();
+      adapter.close();
+    }
+  });
 });

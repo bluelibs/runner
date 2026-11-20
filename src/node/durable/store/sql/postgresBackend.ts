@@ -87,13 +87,31 @@ export function createPostgresBackend(
     return pool;
   };
 
+  async function transaction<T>(
+    operation: (tx: SqlExecutor) => Promise<T>,
+  ): Promise<T> {
+    const client = await ensurePool().connect();
+    try {
+      await client.query("BEGIN");
+      const result = await operation(createPgExecutor(client));
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   return {
     dialect: "postgres",
     async init(schemaStatements: readonly string[]): Promise<void> {
-      const executor = createPgExecutor(ensurePool());
-      for (const statement of schemaStatements) {
-        await executor.run(statement);
-      }
+      await transaction(async (tx) => {
+        // Concurrent IF NOT EXISTS DDL can still collide in the system catalogs.
+        await tx.run("SELECT pg_advisory_xact_lock(?, ?)", [0x72756e6e, 1]);
+        for (const statement of schemaStatements) await tx.run(statement);
+      });
     },
     async all<TRow extends SqlRow = SqlRow>(
       sql: string,
@@ -110,22 +128,7 @@ export function createPostgresBackend(
     async run(sql: string, params: readonly SqlParam[] = []): Promise<void> {
       await createPgExecutor(ensurePool()).run(sql, params);
     },
-    async transaction<T>(
-      operation: (tx: SqlExecutor) => Promise<T>,
-    ): Promise<T> {
-      const client = await ensurePool().connect();
-      try {
-        await client.query("BEGIN");
-        const result = await operation(createPgExecutor(client));
-        await client.query("COMMIT");
-        return result;
-      } catch (error) {
-        await client.query("ROLLBACK").catch(() => undefined);
-        throw error;
-      } finally {
-        client.release();
-      }
-    },
+    transaction,
     async dispose(): Promise<void> {
       if (ownsPool && pool?.end) {
         await pool.end();

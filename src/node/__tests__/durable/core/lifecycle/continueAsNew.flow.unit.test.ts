@@ -68,7 +68,10 @@ function createCallbacks() {
 describe("durable: continueExecutionAsNew", () => {
   it("closes the prior run and kicks off its successor", async () => {
     const store = new MemoryStore();
-    await store.saveExecution(runningExecution());
+    await store.saveExecution({
+      ...runningExecution(),
+      parentExecutionInStore: true,
+    });
     const { deps, kickoffExecution, notifyFinished } = createDeps(store);
     const callbacks = createCallbacks();
 
@@ -96,6 +99,7 @@ describe("durable: continueExecutionAsNew", () => {
       expect.objectContaining({
         workflowKey: "continue-task",
         parentExecutionId: "parent",
+        parentExecutionInStore: true,
         input: { orderId: "o2" },
         status: ExecutionStatus.Pending,
         attempt: 1,

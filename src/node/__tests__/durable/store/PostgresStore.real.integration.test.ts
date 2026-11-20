@@ -7,6 +7,7 @@ import { registerSqlViewsContractTests } from "./sqlStoreContract.viewsRetention
 import { registerSqlRetentionContractTests } from "./sqlStoreContract.retention.helpers";
 import { registerSqlSignalContractTests } from "./sqlStoreContract.signals.helpers";
 import { registerSqlTimersAndCommandsContractTests } from "./sqlStoreContract.timersCommands.helpers";
+import { registerPostgresConcurrencyTests } from "./postgresConcurrency.helpers";
 
 const postgresUrl =
   process.env.REAL_INFRASTRUCTURE_POSTGRES_URL ??
@@ -32,6 +33,7 @@ describeIfPostgres("durable: PostgresStore (real integration)", () => {
   registerSqlRetentionContractTests("PostgresStore(real)", factory);
   registerSqlSignalContractTests("PostgresStore(real)", factory);
   registerSqlTimersAndCommandsContractTests("PostgresStore(real)", factory);
+  registerPostgresConcurrencyTests(postgresUrl!);
 
   it("executes a real Postgres workflow via postgresWorkflow with two-stage receipt retention", async () => {
     const namespace = `${runNamespacePrefix}:e2e`;

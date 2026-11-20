@@ -65,6 +65,33 @@ export async function readSignalStateForUpdate(
   return row ? runtime.parse<DurableSignalState>(row.payload) : null;
 }
 
+export async function ensureSignalStateForUpdate(
+  runtime: SqlStoreRuntime,
+  tx: SqlExecutor,
+  executionId: string,
+  signalId: string,
+): Promise<DurableSignalState> {
+  const existing = await readSignalStateForUpdate(
+    runtime,
+    tx,
+    executionId,
+    signalId,
+  );
+  if (existing) return existing;
+
+  // PostgreSQL cannot lock a missing row. Claim the key before reading its value.
+  const state = createEmptySignalState(executionId, signalId);
+  const row = await tx.get<{ payload: string }>(
+    `INSERT INTO runner_durable_signal_states (namespace, execution_id, signal_id, payload)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT (namespace, execution_id, signal_id) DO UPDATE
+     SET payload = runner_durable_signal_states.payload
+     RETURNING payload`,
+    [runtime.namespace, executionId, signalId, runtime.stringify(state)],
+  );
+  return runtime.parse<DurableSignalState>(row!.payload);
+}
+
 export async function writeSignalStateInTx(
   runtime: SqlStoreRuntime,
   tx: SqlExecutor,
@@ -121,9 +148,12 @@ export async function appendSignalRecord(
   record: DurableSignalRecord,
 ): Promise<void> {
   await runtime.withWriteTx(async (tx) => {
-    const state =
-      (await readSignalStateForUpdate(runtime, tx, executionId, signalId)) ??
-      createEmptySignalState(executionId, signalId);
+    const state = await ensureSignalStateForUpdate(
+      runtime,
+      tx,
+      executionId,
+      signalId,
+    );
     state.history.push(toSignalRecord(record));
     trimHistory(state.history);
     await writeSignalStateInTx(runtime, tx, state);
@@ -137,9 +167,12 @@ export async function bufferSignalRecord(
   record: DurableQueuedSignalRecord,
 ): Promise<void> {
   await runtime.withWriteTx(async (tx) => {
-    const state =
-      (await readSignalStateForUpdate(runtime, tx, executionId, signalId)) ??
-      createEmptySignalState(executionId, signalId);
+    const state = await ensureSignalStateForUpdate(
+      runtime,
+      tx,
+      executionId,
+      signalId,
+    );
     assertQueueCapacity(executionId, signalId, state.queued.length);
     state.history.push(toSignalRecord(record));
     trimHistory(state.history);
@@ -155,9 +188,12 @@ export async function enqueueQueuedSignalRecord(
   record: DurableQueuedSignalRecord,
 ): Promise<void> {
   await runtime.withWriteTx(async (tx) => {
-    const state =
-      (await readSignalStateForUpdate(runtime, tx, executionId, signalId)) ??
-      createEmptySignalState(executionId, signalId);
+    const state = await ensureSignalStateForUpdate(
+      runtime,
+      tx,
+      executionId,
+      signalId,
+    );
     assertQueueCapacity(executionId, signalId, state.queued.length);
     state.queued.push(record);
     await writeSignalStateInTx(runtime, tx, state);
@@ -248,13 +284,12 @@ export async function transferQueuedSignalBacklogInTx(
 
   const targets = new Map<string, DurableSignalState>();
   for (const backlog of backlogs) {
-    const target =
-      (await readSignalStateForUpdate(
-        runtime,
-        tx,
-        toExecutionId,
-        backlog.signalId,
-      )) ?? createEmptySignalState(toExecutionId, backlog.signalId);
+    const target = await ensureSignalStateForUpdate(
+      runtime,
+      tx,
+      toExecutionId,
+      backlog.signalId,
+    );
     assertQueueCapacity(
       toExecutionId,
       backlog.signalId,

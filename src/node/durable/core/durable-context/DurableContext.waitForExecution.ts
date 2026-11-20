@@ -17,6 +17,7 @@ export async function waitForExecutionDurably<TResult>(params: {
   executionId: string;
   targetExecutionId: string;
   expectedWorkflowKey: string;
+  expectedWorkflowVersion?: number;
   assertCanContinue: () => Promise<void>;
   assertUniqueStepId: (stepId: string) => void;
   options?: WaitForExecutionOptions;
@@ -78,6 +79,7 @@ export async function waitForExecutionDurably<TResult>(params: {
           targetExecutionId: params.targetExecutionId,
           tipExecutionId,
           expectedWorkflowKey: params.expectedWorkflowKey,
+          expectedWorkflowVersion: params.expectedWorkflowVersion,
           stepId,
           hasTimeout,
           options: params.options,

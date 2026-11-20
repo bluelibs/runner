@@ -44,13 +44,13 @@ export interface ExecutionPersistenceDeps {
 }
 
 /** Builds a fresh `Pending` execution record from a task and start options. */
-export function createPendingExecution(
+export async function createPendingExecution(
   deps: ExecutionPersistenceDeps,
   task: AnyTask,
   input: unknown | undefined,
   options: ExecuteOptions | undefined,
   executionId?: string,
-): Execution<unknown, unknown> {
+): Promise<Execution<unknown, unknown>> {
   const policy =
     options?.retention ??
     durableWorkflowTag.extract(task)?.retention ??
@@ -72,6 +72,11 @@ export function createPendingExecution(
         "Configured receipts retention requires store.collectExpiredReceipts().",
     });
   }
+  const parentExecutionId = options?.parentExecutionId;
+  // A missing parent can only be treated as expired if the child knew it locally.
+  const localParent = parentExecutionId
+    ? await deps.store.getExecution(parentExecutionId)
+    : null;
   const now = new Date();
   return {
     id: executionId ?? createExecutionId(),
@@ -80,7 +85,8 @@ export function createPendingExecution(
     ...(durableWorkflowTag.extract(task)?.version === undefined
       ? {}
       : { workflowVersion: durableWorkflowTag.extract(task)?.version }),
-    parentExecutionId: options?.parentExecutionId,
+    parentExecutionId,
+    ...(localParent ? { parentExecutionInStore: true } : {}),
     input,
     retention: policy,
     status: ExecutionStatus.Pending,
@@ -137,7 +143,7 @@ export async function persistNewExecution(
   options: ExecuteOptions | undefined,
   executionId?: string,
 ): Promise<string> {
-  const execution = createPendingExecution(
+  const execution = await createPendingExecution(
     deps,
     task,
     input,
@@ -208,7 +214,7 @@ export async function startWithIdempotencyKey(
   idempotencyKey: string,
   options: ExecuteOptions | undefined,
 ): Promise<string> {
-  const execution = createPendingExecution(deps, task, input, options);
+  const execution = await createPendingExecution(deps, task, input, options);
   const created = await deps.store.createExecutionWithIdempotencyKey({
     execution,
     workflowKey: deps.getTaskWorkflowKey(task),

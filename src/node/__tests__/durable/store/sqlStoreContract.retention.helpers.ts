@@ -8,12 +8,18 @@ import {
   makeSqlExecution,
   type SqlContractFactory,
 } from "./sqlStoreContract.exec.helpers";
+import { assertChildRetentionAfterParentExpiry } from "./receiptRetentionParent.helpers";
 
 export function registerSqlRetentionContractTests(
   label: string,
   factory: SqlContractFactory,
 ): void {
   describe(`${label}: history, checkpoints, and retention`, () => {
+    it("collects a local child after its parent's receipt expires", async () => {
+      const store = await factory.createStore({ namespace: "parent-receipt" });
+      await assertChildRetentionAfterParentExpiry(store);
+    });
+
     it("handles ordered history, checkpoint branching, and two-stage receipt retention", async () => {
       const store = await factory.createStore({ namespace: "core-retention" });
       try {

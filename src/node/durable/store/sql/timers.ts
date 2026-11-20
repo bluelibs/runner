@@ -126,18 +126,19 @@ export async function claimReadyTimers(
        LIMIT ?${skipLocked}`,
       [nowMs, runtime.namespace, TimerStatus.Pending, now.getTime(), limit],
     );
-    const expiresAtMs = nowMs + ttlMs;
+    const claimed: Timer[] = [];
     for (const row of rows) {
-      await tx.run(
-        `INSERT INTO runner_durable_locks (namespace, resource, lock_id, expires_at_ms)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT (namespace, resource) DO UPDATE SET
-           lock_id = EXCLUDED.lock_id,
-           expires_at_ms = EXCLUDED.expires_at_ms`,
-        [runtime.namespace, timerClaimResource(row.id), workerId, expiresAtMs],
+      const acquired = await acquireOrRenewClaimInTx(
+        runtime,
+        tx,
+        timerClaimResource(row.id),
+        workerId,
+        ttlMs,
+        false,
       );
+      if (acquired) claimed.push(runtime.parse<Timer>(row.payload));
     }
-    return rows.map((row) => runtime.parse<Timer>(row.payload));
+    return claimed;
   });
 }
 
@@ -214,6 +215,11 @@ export async function finalizeClaimedTimer(
   workerId: string,
 ): Promise<boolean> {
   return runtime.withWriteTx(async (tx) => {
+    // Batch claiming locks the timer before its claim.
+    await tx.get(
+      `SELECT id FROM runner_durable_timers WHERE namespace = ? AND id = ?${forUpdate(tx.dialect)}`,
+      [runtime.namespace, timerId],
+    );
     const resource = timerClaimResource(timerId);
     const nowMs = Date.now();
     const row = await tx.get<{

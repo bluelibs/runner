@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SqlStoreRuntime } from "./runtime";
-import { forUpdate, type SqlExecutor } from "./types";
+import type { SqlExecutor } from "./types";
 
 export function timerClaimResource(timerId: string): string {
   return `timer:claim:${timerId}`;
@@ -15,27 +15,24 @@ export async function acquireOrRenewClaimInTx(
   requireExistingMatch: boolean,
 ): Promise<boolean> {
   const nowMs = Date.now();
-  const row = await tx.get<{ lock_id: string; expires_at_ms: number | string }>(
-    `SELECT lock_id, expires_at_ms FROM runner_durable_locks
-     WHERE namespace = ? AND resource = ?${forUpdate(tx.dialect)}`,
-    [runtime.namespace, resource],
-  );
-  if (requireExistingMatch) {
-    if (!row || row.lock_id !== lockId || Number(row.expires_at_ms) <= nowMs) {
-      return false;
-    }
-  } else if (row && Number(row.expires_at_ms) > nowMs) {
-    return false;
-  }
-  await tx.run(
-    `INSERT INTO runner_durable_locks (namespace, resource, lock_id, expires_at_ms)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT (namespace, resource) DO UPDATE SET
-       lock_id = EXCLUDED.lock_id,
-       expires_at_ms = EXCLUDED.expires_at_ms`,
-    [runtime.namespace, resource, lockId, nowMs + ttlMs],
-  );
-  return true;
+  const row = requireExistingMatch
+    ? await tx.get(
+        `UPDATE runner_durable_locks SET expires_at_ms = ?
+         WHERE namespace = ? AND resource = ? AND lock_id = ? AND expires_at_ms > ?
+         RETURNING lock_id`,
+        [nowMs + ttlMs, runtime.namespace, resource, lockId, nowMs],
+      )
+    : await tx.get(
+        `INSERT INTO runner_durable_locks (namespace, resource, lock_id, expires_at_ms)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (namespace, resource) DO UPDATE SET
+           lock_id = EXCLUDED.lock_id,
+           expires_at_ms = EXCLUDED.expires_at_ms
+         WHERE runner_durable_locks.expires_at_ms <= ?
+         RETURNING lock_id`,
+        [runtime.namespace, resource, lockId, nowMs + ttlMs, nowMs],
+      );
+  return row !== null;
 }
 
 export async function acquireLock(

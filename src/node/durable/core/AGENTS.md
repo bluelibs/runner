@@ -39,6 +39,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Keep durable state mutation, waiter completion, and timer handling consistent with store atomic contracts.
 - Continue-as-new links runs and migrates buffered signals atomically; pause/cancel races must win safely.
 - Followed execution waits distinguish the requested root from the current continuation tip.
+- A typed execution wait checks the requested root's workflow key and pinned version, then follows explicit continuations of that workflow.
+- Child admission records a parent verified in the same backend so retention can recognize its subsequent receipt expiry.
 - Persisted compensation failures notify execution waiters, including queued parents. Error text alone must not park an unrelated business failure.
 - Pause, shutdown interruption, business failure, and cancellation are distinct outcomes.
   Parking an attempt must not silently consume a retry or turn it into workflow failure.

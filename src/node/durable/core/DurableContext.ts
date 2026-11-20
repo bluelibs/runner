@@ -621,6 +621,7 @@ export class DurableContext implements IDurableWorkflowContext {
   ): Promise<any> {
     assertFiniteDurationMs("execution-wait timeout", options?.timeoutMs);
     const workflowKey = this.getTaskPersistenceId(_task);
+    const workflowVersion = getDurableWorkflowVersion(_task);
     return await this.journal.run(
       "execution",
       createExecutionStepId(executionId, options),
@@ -630,13 +631,14 @@ export class DurableContext implements IDurableWorkflowContext {
           executionId: this.executionId,
           targetExecutionId: executionId,
           expectedWorkflowKey: workflowKey,
+          expectedWorkflowVersion: workflowVersion,
           assertCanContinue: this.assertCanContinue.bind(this),
           assertUniqueStepId: this.determinism.assertUniqueStepId,
           options,
         }),
       {
         taskKey: workflowKey,
-        workflowVersion: getDurableWorkflowVersion(_task),
+        workflowVersion,
       },
     );
   }

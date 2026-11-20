@@ -164,6 +164,8 @@ export interface Execution<TInput = unknown, TResult = unknown> {
   workflowKey: string;
   /** Optional parent execution when this workflow was started by another durable workflow. */
   parentExecutionId?: string;
+  /** @internal The parent was present in this backend when this child was admitted. */
+  parentExecutionInStore?: true;
   input: TInput | undefined;
   status: ExecutionStatus;
   result?: TResult;

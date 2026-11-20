@@ -167,6 +167,7 @@ if (result.kind === "timeout") {
 ```
 
 Child failures (`failed`, `cancelled`, `compensation_failed`) throw `DurableExecutionError`.
+Use the task version that started the target execution. The wait follows explicit continuations after validating the initial workflow key and version.
 
 ### switch()
 

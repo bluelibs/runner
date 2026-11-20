@@ -13,6 +13,8 @@
 ### Fixes
 
 - Revalidate source execution ownership before returning replay fixtures in `withCheckpointLease`, release acquired step-concurrency permits if `createStepProgress` initialization fails, and verify candidate workflow version before falling back to `externalResolver` in `TaskRegistry.find()`.
+- Serialize PostgreSQL schema startup, first signal writes, and command FIFO wakeups. Preserve exclusive ownership during contested PostgreSQL lease and timer claims and serialize stores that share a SQLite connection.
+- Let a same-backend child's history and receipt expire after its verified parent's receipt expires. Reject a mismatched starting version in typed child execution waits.
 - Hoist compiled `Match` validators above `RedisResilience` instance methods instead of recompiling patterns on every Redis script reply.
 - Use a valid non-dotted task ID (`r.task("greet")`) in the `r` entry point JSDoc example (`src/public.ts`).
 

@@ -28,6 +28,7 @@ export type AttemptExecutionWaitHopParams = {
   /** Chain tip this hop registers on or resolves against. */
   tipExecutionId: string;
   expectedWorkflowKey: string;
+  expectedWorkflowVersion?: number;
   stepId: string;
   hasTimeout: boolean;
   options?: WaitForExecutionOptions;
@@ -142,6 +143,7 @@ async function resolveReplayedWait<TResult>(
     targetExecutionId: params.targetExecutionId,
     tipExecutionId: params.tipExecutionId,
     expectedWorkflowKey: params.expectedWorkflowKey,
+    expectedWorkflowVersion: params.expectedWorkflowVersion,
     stepId: params.stepId,
     hasTimeout: params.hasTimeout,
     timerId: waitingState.timerId,
@@ -216,6 +218,7 @@ export async function attemptExecutionWaitHop<TResult>(
     targetExecutionId: params.targetExecutionId,
     tipExecutionId: params.tipExecutionId,
     expectedWorkflowKey: params.expectedWorkflowKey,
+    expectedWorkflowVersion: params.expectedWorkflowVersion,
     stepId: params.stepId,
     hasTimeout: params.hasTimeout,
   });
