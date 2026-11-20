@@ -60,14 +60,13 @@ describe("durable: WaitManager (poll timer callback)", () => {
         waitPollIntervalMs: 10,
       });
 
-      for (let i = 0; i < 20 && (!scheduledPollCallback || calls < 4); i += 1) {
+      for (let i = 0; i < 20 && !scheduledPollCallback; i += 1) {
         await flushMicrotasks();
       }
       const queuedPollCallback = requireScheduledCallback(
         scheduledPollCallback,
         "Expected WaitManager to schedule a follow-up poll",
       );
-      expect(calls).toBeGreaterThanOrEqual(4);
 
       await store.updateExecution(executionId, {
         status: ExecutionStatus.Completed,

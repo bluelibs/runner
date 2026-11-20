@@ -1,4 +1,5 @@
 import type { IDurableStore } from "../interfaces/store";
+import { getDurableWorkflowVersion } from "../../tags/durableWorkflow.tag";
 import type {
   EnsureScheduleOptions,
   ScheduleOptions,
@@ -74,7 +75,10 @@ export class ScheduleManager {
         const timezone = options.cron ? options.timezone : undefined;
 
         if (existing) {
-          if (existing.workflowKey !== workflowKey) {
+          if (
+            existing.workflowKey !== workflowKey ||
+            existing.workflowVersion !== getDurableWorkflowVersion(task)
+          ) {
             durableScheduleConfigError.throw({
               message: `Schedule '${scheduleId}' already exists for workflow '${existing.workflowKey}', cannot rebind to '${workflowKey}'`,
             });
@@ -87,7 +91,7 @@ export class ScheduleManager {
             timezone,
             input,
             status: ScheduleStatus.Active,
-            updatedAt: new Date(),
+            updatedAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
           });
 
           return scheduleId;
@@ -96,13 +100,16 @@ export class ScheduleManager {
         const schedule: Schedule = {
           id: scheduleId,
           workflowKey,
+          ...(getDurableWorkflowVersion(task) === undefined
+            ? {}
+            : { workflowVersion: getDurableWorkflowVersion(task) }),
           input,
           pattern,
           timezone,
           type,
           status: ScheduleStatus.Active,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
+          updatedAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
         };
 
         await this.reschedule(schedule);
@@ -129,13 +136,16 @@ export class ScheduleManager {
       const schedule: Schedule = {
         id,
         workflowKey,
+        ...(getDurableWorkflowVersion(task) === undefined
+          ? {}
+          : { workflowVersion: getDurableWorkflowVersion(task) }),
         input,
         pattern: options.cron ?? String(options.interval),
         timezone: options.cron ? options.timezone : undefined,
         type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
         status: ScheduleStatus.Active,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
+        updatedAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
       };
 
       await this.reschedule(schedule);
@@ -143,11 +153,16 @@ export class ScheduleManager {
     }
 
     const delay = options.delay ?? 0;
-    const fireAt = options.at ?? new Date(Date.now() + delay);
+    const fireAt =
+      options.at ??
+      new Date((this.store.getWorkflowTime?.() ?? Date.now()) + delay);
 
     await this.store.createTimer({
       id: `once:${id}`,
       workflowKey: this.taskRegistry.getWorkflowKey(task),
+      ...(getDurableWorkflowVersion(task) === undefined
+        ? {}
+        : { workflowVersion: getDurableWorkflowVersion(task) }),
       input,
       type: TimerType.Scheduled,
       fireAt,
@@ -166,7 +181,7 @@ export class ScheduleManager {
       ...schedule,
       lastRun: options?.lastRunAt ?? schedule.lastRun,
       nextRun,
-      updatedAt: new Date(),
+      updatedAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
     });
   }
 
@@ -182,7 +197,7 @@ export class ScheduleManager {
     await this.reschedule({
       ...schedule,
       status: ScheduleStatus.Active,
-      updatedAt: new Date(),
+      updatedAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
     });
   }
 
@@ -212,7 +227,7 @@ export class ScheduleManager {
       updates,
     );
     const input = hasInputUpdate ? updates.input : existing.input;
-    const updatedAt = new Date();
+    const updatedAt = new Date(this.store.getWorkflowTime?.() ?? Date.now());
     const cadenceChanged =
       type !== existing.type ||
       pattern !== existing.pattern ||
@@ -275,7 +290,7 @@ export class ScheduleManager {
     if (schedule.type === ScheduleType.Cron) {
       return CronParser.getNextRun(
         schedule.pattern,
-        new Date(),
+        new Date(this.store.getWorkflowTime?.() ?? Date.now()),
         schedule.timezone,
       );
     }
@@ -287,7 +302,7 @@ export class ScheduleManager {
       });
     }
 
-    const nowMs = Date.now();
+    const nowMs = this.store.getWorkflowTime?.() ?? Date.now();
     const resolvedAnchorMs =
       anchorMs ??
       schedule.nextRun?.getTime() ??
@@ -315,6 +330,9 @@ export class ScheduleManager {
       id: `sched:${schedule.id}`,
       scheduleId: schedule.id,
       workflowKey: schedule.workflowKey,
+      ...(schedule.workflowVersion === undefined
+        ? {}
+        : { workflowVersion: schedule.workflowVersion }),
       input: schedule.input,
       type: TimerType.Scheduled,
       fireAt: nextRun,
@@ -382,7 +400,7 @@ export class ScheduleManager {
       return taskRef;
     }
 
-    const resolved = this.taskRegistry.find(taskRef);
+    const resolved = this.taskRegistry.resolve(taskRef);
     if (!resolved) {
       durableExecutionInvariantError.throw({
         message: `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,

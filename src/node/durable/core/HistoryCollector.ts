@@ -2,7 +2,7 @@ import type { DurableServiceConfig } from "./interfaces/service";
 import type { Logger } from "../../../models/Logger";
 import { check, Match } from "../../../tools/check";
 import { durableExecutionInvariantError } from "../../../errors";
-import { retentionDelay } from "./retention";
+import { receiptRetentionDelay, retentionDelay } from "./retention";
 
 /** Lifecycle-owned bounded history collection; stores own atomic deletion. */
 export class HistoryCollector {
@@ -29,6 +29,15 @@ export class HistoryCollector {
           "Configured retention requires store.collectCompletedHistory().",
       });
     }
+    if (
+      receiptRetentionDelay(config.retention) !== undefined &&
+      !config.store.collectExpiredReceipts
+    ) {
+      durableExecutionInvariantError.throw({
+        message:
+          "Configured receipts retention requires store.collectExpiredReceipts().",
+      });
+    }
   }
 
   start(): void {
@@ -36,7 +45,8 @@ export class HistoryCollector {
       this.timer ||
       this.stopped ||
       this.config.garbageCollection?.enabled === false ||
-      !this.config.store.collectCompletedHistory
+      (!this.config.store.collectCompletedHistory &&
+        !this.config.store.collectExpiredReceipts)
     )
       return;
     this.timer = setInterval(() => this.tick(), this.interval);
@@ -51,11 +61,14 @@ export class HistoryCollector {
   }
 
   private async collect(): Promise<void> {
+    const now = new Date();
     try {
-      await this.config.store.collectCompletedHistory!(
-        new Date(),
-        this.batchSize,
-      );
+      if (this.config.store.collectCompletedHistory) {
+        await this.config.store.collectCompletedHistory(now, this.batchSize);
+      }
+      if (this.config.store.collectExpiredReceipts) {
+        await this.config.store.collectExpiredReceipts(now, this.batchSize);
+      }
     } catch (error) {
       // Maintenance failure must never change the successful business outcome.
       await this.logger

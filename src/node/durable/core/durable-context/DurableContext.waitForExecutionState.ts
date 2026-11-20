@@ -242,6 +242,7 @@ export async function resolveTerminalTip<TResult>(params: {
   targetExecutionId: string;
   tipExecutionId: string;
   expectedWorkflowKey: string;
+  expectedWorkflowVersion?: number;
   stepId: string;
   hasTimeout: boolean;
   timerId?: string;
@@ -260,6 +261,14 @@ export async function resolveTerminalTip<TResult>(params: {
     actualWorkflowKey: targetExecution.workflowKey,
     targetExecutionId: targetExecution.id,
   });
+  if (
+    targetExecution.id === params.targetExecutionId &&
+    targetExecution.workflowVersion !== params.expectedWorkflowVersion
+  ) {
+    return durableExecutionInvariantError.throw({
+      message: `Cannot wait for execution '${targetExecution.id}' as workflow '${params.expectedWorkflowKey}' version ${params.expectedWorkflowVersion ?? "unversioned"}: the stored execution uses version ${targetExecution.workflowVersion ?? "unversioned"}.`,
+    });
+  }
 
   if (!isExecutionWaitTerminal(targetExecution)) {
     return null;

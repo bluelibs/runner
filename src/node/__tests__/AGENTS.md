@@ -13,7 +13,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `durable/core/lifecycle/`: pause, resume, cancel, restart, continuation, and workflow state replay.
 - `durable/core/managers/`: lock/admission ownership, timer polling, transitions, and signal races.
 - `durable/core/durable-context/`, `durable/core/audit/`: replayable actions and observability.
-- `durable/store/`: memory/file/Redis parity, snapshots, indexes, waiters, and atomic mutation.
+- `durable/store/`: memory/file/Redis/SQL parity, snapshots, indexes, waiters, and atomic mutation. Live PostgreSQL tests exercise concurrent boot, leases, signals, and commands.
 - `durable/resources/`, `durable/helpers/`: Runner backend wiring and shared focused helpers; deployment suites verify saved listener order and current handlers, while `durableEventBridge.keys.test.ts` covers event moves, parent replay, deduplication, compensation, and key collisions.
 - `durable/bus/`, `durable/queue/`, `durable/tags/`, `durable/emitters/`: adapter and discovery contracts.
 - `shell/`: socket safety, handshake, native REPL, read-only scope, app isolation, and shutdown.
@@ -31,6 +31,9 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Step concurrency tests cover obsolete window responses, callback settlement after ownership loss, and retry budgets restored by another worker.
 - Cluster recovery tests cover bounded metadata sweeps, healthy waits, claim contention, cooldown, and takeover with a late stale worker. Store ownership tests cover atomic fencing; `RedisStore.ownership.real.integration.test.ts` verifies Lua commits across independent clients under the fault-integration gate.
 - `durable/core/service/DurableService.timers.test.ts` covers preferred timer settings, legacy polling compatibility, field-wise precedence, cadence/claim limits, and explicit startup; existing polling suites retain legacy service coverage.
+- Capability suites cover legacy calls/types, task-step DI, progress/retry recovery, scheduled routing across versions, command state isolation when steps park, and replay/reset with parallel waits and pinned children. `RedisStore.capabilities.real.integration.test.ts` verifies atomic receipts, stale-owner fencing, and branch/index commits with child version metadata against live Redis.
+- Preserve deprecated task-definition step compatibility tests. `taskDependencySteps.test.ts` verifies the recommended injected-task callback pattern, explicit cancellation/idempotency forwarding, checkpoint replay after restart, and independent task invocation; type fixtures retain both call forms.
+- Command timer/waiting suites cover concurrent duplicate callers, final-drain admissions, polling while subscription is stalled, and new requests during older timer delivery. `RedisStore.commandTimers.real.integration.test.ts` checks shared FIFO/timer indexes across clients and uses Redis WATCH to prove repeated history phases do not write.
 - Test the public behavior and failure outcomes; use targeted internal tests for races and ownership.
 - Keep each `run(app)` isolated; dispose runtimes/backends, remove temporary files, and close sockets.
 - Preserve canonical runtime addressing versus durable persistence/delivery identities in fixtures.

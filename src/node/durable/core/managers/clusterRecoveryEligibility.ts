@@ -23,6 +23,7 @@ export async function needsClusterRecovery(
   )
     return false;
   if (execution.status === ExecutionStatus.Cancelling) return true;
+  if (await store.getNextCommand?.(execution.id)) return true;
   const timers = await store.getExecutionTimers!(execution.id);
   if (timers.some((timer) => timer.type === TimerType.Retry)) return false;
   if (execution.status !== ExecutionStatus.Sleeping) return true;

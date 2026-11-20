@@ -20,8 +20,37 @@ import * as waitForSignalModule from "../../../../durable/core/durable-context/D
 import * as waitForExecutionModule from "../../../../durable/core/durable-context/DurableContext.waitForExecution";
 import * as switchModule from "../../../../durable/core/durable-context/DurableContext.switch";
 import * as stepsModule from "../../../../durable/core/durable-context/DurableContext.steps";
+import { stepFixture } from "./stepConcurrency.helpers";
 
 describe("durable: DurableContext coverage", () => {
+  it("journals a distinct checkpoint for each parallel implicit sleep", async () => {
+    const { ctx, store, executionId } = await stepFixture({
+      contextOptions: { historyRecorded: true },
+    });
+    const sleepIds = ["__sleep:0", "__sleep:1"];
+    for (const stepId of sleepIds) {
+      await store.saveStepResult({
+        executionId,
+        stepId,
+        result: { state: "completed" },
+        completedAt: new Date(),
+      });
+    }
+    await Promise.all([ctx.sleep(10), ctx.sleep(10)]);
+    expect(
+      (await store.listExecutionHistory(executionId)).filter(
+        ({ kind }) => kind === "sleep",
+      ),
+    ).toEqual(
+      sleepIds.map((stepId) =>
+        expect.objectContaining({
+          stepId,
+          completedOrder: expect.any(Number),
+        }),
+      ),
+    );
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -314,9 +343,7 @@ describe("durable: DurableContext coverage", () => {
         executionId: "sleep-initial",
         assertCanContinue: async () => {},
         appendAuditEntry: async () => {},
-        assertUniqueStepId: () => {},
-        assertOrWarnImplicitInternalStepId: () => {},
-        sleepIndexRef: { current: 0 },
+        stepId: "__sleep:0",
         durationMs: 1000,
       }),
     ).rejects.toBeInstanceOf(SuspensionSignal);
@@ -355,9 +382,7 @@ describe("durable: DurableContext coverage", () => {
         executionId: "sleep-replay",
         assertCanContinue: async () => {},
         appendAuditEntry: async () => {},
-        assertUniqueStepId: () => {},
-        assertOrWarnImplicitInternalStepId: () => {},
-        sleepIndexRef: { current: 0 },
+        stepId: "__sleep:0",
         durationMs: 1000,
       }),
     ).rejects.toBeInstanceOf(SuspensionSignal);
@@ -399,11 +424,8 @@ describe("durable: DurableContext coverage", () => {
         executionId: "sleep-completed",
         assertCanContinue: async () => {},
         appendAuditEntry: async () => {},
-        assertUniqueStepId: () => {},
-        assertOrWarnImplicitInternalStepId: () => {},
-        sleepIndexRef: { current: 0 },
+        stepId: "__sleep:done",
         durationMs: 1000,
-        options: { stepId: "done" },
       }),
     ).resolves.toBeUndefined();
     expect(

@@ -38,3 +38,15 @@ export interface IDurableStateContext {
    */
   getState<T>(options?: DurableStateOptions): Promise<T | undefined>;
 }
+
+/** Options for `continueAsNew`. */
+export interface ContinueAsNewOptions<TState = unknown> {
+  /** Explicit version for the fresh run; omission retains this run's implementation version. */
+  version?: number;
+  /**
+   * Successor's workflow state. Omit the key to carry the current state;
+   * pass `undefined` to start without state. Steps, signal buffers, and
+   * waiters are never carried either way.
+   */
+  state?: TState;
+}

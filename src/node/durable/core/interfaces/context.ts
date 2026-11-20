@@ -1,12 +1,23 @@
-import type { StepOptions, DurableStepRunContext } from "./context.step";
+import type {
+  StepOptions,
+  DurableStepContext,
+  DurableStepRunContext,
+} from "./context.step";
 export type {
   StepOptions,
+  DurableStepContext,
   DurableStepRunContext,
+  IDurableStepBuilder,
+  IDurableWorkflowContext,
   DurableStepConcurrency,
   DurableStepConcurrencyLimit,
   DurableStepRateLimit,
 } from "./context.step";
-import type { IDurableStateContext } from "./context.state";
+import type {
+  IDurableStateContext,
+  ContinueAsNewOptions,
+} from "./context.state";
+export type { ContinueAsNewOptions } from "./context.state";
 import type { IEventDefinition } from "../../../../types/event";
 import type { AnyTask } from "../../../../types/task";
 import type {
@@ -82,16 +93,6 @@ export interface DurableInfo {
   stepCount: number;
 }
 
-/** Options for `continueAsNew`. */
-export interface ContinueAsNewOptions<TState = unknown> {
-  /**
-   * Successor's workflow state. Omit the key to carry the current state;
-   * pass `undefined` to start without state. Steps, signal buffers, and
-   * waiters are never carried either way.
-   */
-  state?: TState;
-}
-
 /**
  * A single branch in a durable switch expression.
  *
@@ -118,6 +119,8 @@ export interface IDurableContext extends IDurableStateContext {
 
   /** @internal Attempt-scoped backend for integrations that commit workflow progress. */
   _getStore(): IDurableStore;
+  /** @internal Active callback controls, if a step is currently executing. */
+  _currentStep?(): DurableStepContext | undefined;
 
   /**
    * Memoized save point: runs `fn` once and returns its persisted result on
@@ -157,7 +160,7 @@ export interface IDurableContext extends IDurableStateContext {
    * Accepted live-execution signals are retained at the execution level, while
    * consumed waits are memoized as durable steps under `__signal:<signalId>[:index]`.
    * Unawaited signals are queued per signal type and consumed in FIFO order.
-   * Duplicate queued payloads are de-duplicated using serialized payload identity.
+   * Repeated payloads remain separate queued deliveries.
    * Use options.stepId to provide a stable identifier for replay safety.
    */
   waitForSignal<TPayload>(

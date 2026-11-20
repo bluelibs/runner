@@ -99,6 +99,8 @@ export function createExecutionContext(params: {
   assertLockOwnership: () => void;
   executionLockState?: ExecutionLockState;
   cancellationSignal: AbortSignal;
+  taskExecutor?: ITaskExecutor;
+  getTaskKey?: (task: ITask<any, Promise<any>, any, any, any, any>) => string;
   auditConfig?: DurableServiceConfig["audit"];
   determinismConfig?: DurableServiceConfig["determinism"];
   startExecution: (
@@ -124,6 +126,9 @@ export function createExecutionContext(params: {
       assertLockOwnership: params.assertLockOwnership,
       executionLockState: params.executionLockState,
       cancellationSignal: params.cancellationSignal,
+      taskExecutor: params.taskExecutor,
+      getTaskKey: params.getTaskKey,
+      historyRecorded: params.execution.historyRecorded,
       startWorkflowExecution: async (childTask, input, options) =>
         await params.startExecution(childTask, input, options),
       getTaskPersistenceId: (childTask) => params.getTaskWorkflowKey(childTask),

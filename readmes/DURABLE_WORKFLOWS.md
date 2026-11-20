@@ -17,6 +17,7 @@ Successful workflows support [history retention and collection](DURABLE_RETENTIO
 - [DurableService API](#durableservice-api)
 - [Workflow Identity & Tagging](#workflow-identity--tagging)
 - [Signals](#signals)
+- [Tracked Commands](#tracked-commands)
 - [Child Workflows](#child-workflows)
 - [Lifecycle Control](#lifecycle-control)
 - [Workflow State](#workflow-state)
@@ -120,8 +121,9 @@ When you need a different durable payload contract, register a fork such as
 `resources.serializer.fork("app-durable-serializer").with({ ... })`, then pass
 the bare forked resource definition here.
 For `resources.memoryWorkflow`, that serializer is used for file-backed
-`persist.filePath` snapshots. For `resources.redisWorkflow`, it is used for the
-Redis durable store and Redis durable event bus payloads.
+`persist.filePath` snapshots. For `resources.sqliteWorkflow`, it is used for
+SQLite payloads; for `resources.postgresWorkflow` and `resources.redisWorkflow`,
+it is used for store and Redis bus payloads.
 
 ### 2. Define a durable workflow task
 
@@ -237,11 +239,12 @@ const reservation = await d
   .down(async (res) => inventory.release(res.reservationId));
 ```
 
-| Option    | Description                                              |
-| --------- | -------------------------------------------------------- |
-| `retries` | Retry attempts on non-cancellation failures (default: 0) |
-| `timeout` | Step-level timeout in ms                                 |
-| `concurrency` | Global callback cap or fixed-window limit; see [Step Concurrency](#step-concurrency) |
+| Option               | Description                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `retries`            | Retry attempts on non-cancellation failures (default: 0)                             |
+| `timeout`            | Step-level timeout in ms                                                             |
+| `concurrency`        | Global callback cap or fixed-window limit; see [Step Concurrency](#step-concurrency) |
+| `heartbeatTimeoutMs` | Optional deadline since the last persisted progress heartbeat                        |
 
 **Builder methods**:
 
@@ -250,7 +253,51 @@ const reservation = await d
 | `.up(fn)`   | Forward action (required)        |
 | `.down(fn)` | Compensation/rollback (optional) |
 
-Step callbacks receive `{ signal: AbortSignal }`.
+Step callbacks receive `signal`, `idempotencyKey`, `attempt`, `heartbeat(progress)`, and `getProgress<T>()`. Existing callbacks that only destructure `signal` continue to work. For explicitly typed toolkit helpers, use `IDurableWorkflowContext` and `IDurableStepBuilder`; the older `IDurableContext` and `IStepBuilder` keep their custom-implementation contracts. `retries: 3` still means three additional attempts, with exponential backoff. Consumed retries and the next deadline are now persisted for every retrying step, so a worker restart preserves the remaining budget and delay within the same workflow attempt.
+
+Prefer injected task dependencies inside callback steps. Assuming `chargeCardTask` is a registered task accepting `{ orderId, idempotencyKey }`, and `durable` is your backend definition:
+
+```ts
+const checkout = r
+  .task("checkout")
+  .dependencies({ durable, chargeCard: chargeCardTask })
+  .tags([tags.durableWorkflow])
+  .run(async (input: { orderId: string }, { durable, chargeCard }) => {
+    const charged = await durable.use().step(
+      "charge",
+      { retries: 3, timeout: 30_000 },
+      ({ signal, idempotencyKey }) =>
+        chargeCard(
+          { orderId: input.orderId, idempotencyKey },
+          { signal },
+        ),
+    );
+    return { charged };
+  })
+  .build();
+```
+
+The task uses Runner's normal validation, dependencies, middleware, and task-run cancellation context. It can return a value or `void` and can run outside a workflow without depending on the durable backend. The surrounding step checkpoints its result; a direct task dependency call alone is not checkpointed.
+
+The task-definition overload `d.step("charge", chargeCardTask, input, options)` is deprecated and remains fully supported for compatibility, including typed input/output, automatic signal forwarding, and recorded task identity. Existing recorded workflow versions can retain it while their runs finish. Callback steps record the step boundary without inferring the invoked task's identity, so moving between the forms changes structural replay metadata; introduce the callback form in new workflow versions when preserving existing replay fixtures.
+
+For resumable work inside a callback, assuming `source` and `destination` are injected clients:
+
+```ts
+await d.step("import", { heartbeatTimeoutMs: 30_000 }, async (step) => {
+  const saved = step.getProgress<{ cursor: string }>();
+  for await (const page of source.pages(saved?.cursor)) {
+    await destination.write(page, { idempotencyKey: step.idempotencyKey });
+    await step.heartbeat({ cursor: page.nextCursor });
+  }
+});
+```
+
+`durable.useStep()` optionally exposes the active callback's controls inside nested Runner tasks or their dependencies. It works with callback steps as well as the deprecated task-definition form, and throws outside a live step. Use it for deliberate durable integrations; ordinary business tasks can receive the cancellation signal and downstream idempotency key explicitly, as above.
+
+The step idempotency key is stable across retries and worker takeover for the same execution and step. Pass it to external services that support deduplication; it does not make those services transactional. Progress is cloned and persists across retries and worker takeover. Always await `heartbeat()`; it fails after the callback stops owning progress. A heartbeat timeout aborts the callback's signal and fails that step as a timeout, following the existing step-timeout policy. Missing heartbeats do not renew the workflow execution lease: workers already renew that lease automatically. Each new execution, including a reset branch, has its own step identities.
+
+Step `attempt` starts at one within each workflow attempt.
 Replay hits return the cached step result immediately, so the callback is not re-run and the signal is only relevant when the step executes live.
 Cancellation-driven aborts are treated as cooperative cancellation, not retryable step failures.
 
@@ -305,6 +352,8 @@ if (result.kind === "timeout") {
 ```
 
 Child failures (`failed`, `cancelled`, `compensation_failed`) throw `DurableExecutionError`.
+
+Pass the task definition for the version that started the execution you are waiting on. A typed wait checks that initial execution's workflow key and version, then follows any explicit continuation. Versions that continue into one another should share the result contract expected by their waiters.
 
 ### `workflow()` — Start Child Workflow
 
@@ -454,7 +503,9 @@ await durable.resumeExecution(executionId);
 
 // Restart a finished (or paused) run as a fresh linked execution
 const rerunId = await durable.restartExecution(executionId);
-const rerunWithInputId = await durable.restartExecution(executionId, { input: next });
+const rerunWithInputId = await durable.restartExecution(executionId, {
+  input: next,
+});
 
 // Read live typed workflow state (undefined until first set; throws for unknown id)
 const state = await durable.getState<Counter>(executionId);
@@ -612,11 +663,11 @@ All numeric options must be positive integers. Timer-handler concurrency is
 separate from workflow/step concurrency; claim duration is separate from
 execution ownership and workflow deadlines.
 
-| Setting | Responsibility |
-| --- | --- |
-| `queue.consume` | Execute workflows delivered through the configured queue |
-| `timers.enabled` | Process due persisted deadlines |
-| `recovery.enabled` | Find and redispatch abandoned executions |
+| Setting            | Responsibility                                           |
+| ------------------ | -------------------------------------------------------- |
+| `queue.consume`    | Execute workflows delivered through the configured queue |
+| `timers.enabled`   | Process due persisted deadlines                          |
+| `recovery.enabled` | Find and redispatch abandoned executions                 |
 
 For a combined application/worker process, consume the queue, leave timers
 enabled, and enable recovery. To split roles, API processes submit through a
@@ -711,11 +762,34 @@ r.task("payment").tags([
 | Field         | Description                                                                        |
 | ------------- | ---------------------------------------------------------------------------------- |
 | `key`         | Stable workflow identity persisted in executions. Falls back to canonical task ID. |
+| `version`     | Optional positive implementation version pinned at admission.                      |
+| `commands`    | Optional list of ordinary Runner tasks accepted as tracked commands.               |
 | `category`    | Optional grouping for dashboards                                                   |
 | `signals`     | Whitelist of allowed signals. Omit for backwards-compatible any-signal mode.       |
-| `concurrency` | Global concurrent-attempt cap or fixed-window attempt rate limit.                   |
+| `concurrency` | Global concurrent-attempt cap or fixed-window attempt rate limit.                  |
 
 **Why `key` matters**: The canonical task ID changes when you move/rename tasks. A stable `key` lets in-flight executions survive refactors.
+
+### Pinned Workflow Versions
+
+Set an optional positive integer `version` when incompatible workflow code needs to coexist under one stable `key`:
+
+```ts
+const checkoutV1 = r
+  .task("checkout-one")
+  .tags([tags.durableWorkflow.with({ key: "billing.checkout", version: 1 })])
+  .run(checkoutOne)
+  .build();
+const checkoutV2 = r
+  .task("checkout-two")
+  .tags([tags.durableWorkflow.with({ key: "billing.checkout", version: 2 })])
+  .run(checkoutTwo)
+  .build();
+```
+
+Register both implementations and start new work with the desired task definition. Admission saves the version on executions, timers, and schedules. Resume, recovery, restart, and signal delivery resolve that exact implementation. A shared timer worker can create a scheduled execution without having its implementation locally. An execution worker missing the pinned version parks the execution with a retry timer. Keep timer processing enabled and keep a worker with the pinned version available to run it.
+
+Continue-as-new keeps the version unless you explicitly upgrade: `await d.continueAsNew(nextInput, { version: 2 })`. The successor validates input against the selected implementation. Retain older versions until their executions and schedules finish. Existing executions without a version continue to use the unversioned implementation; retain that implementation when first adopting versions. Existing unversioned keys and starts retain their behavior. Upgrade all workflow writers before using versioned routing, commands, or collecting history for replay/reset. Older workers cannot enforce new contracts. Versioning routes implementations; it does not make arbitrary edits to one version replay-compatible.
 
 ### Global Workflow Admission
 
@@ -845,6 +919,45 @@ tags.durableWorkflow.with({
 When `signals` is omitted, any signal ID is accepted (backwards compatible).
 
 ---
+
+## Tracked Commands
+
+Use a command when a caller needs a durable result from a state change on a live workflow. Use a signal for queued information consumed by `waitForSignal()`.
+
+Assuming `durable` is your workflow resource, define and register an ordinary task:
+
+```ts
+const changeAddress = r
+  .task("change-address")
+  .dependencies({ durable })
+  .run(async (input: { address: string }, { durable }) => {
+    const d = durable.use();
+    await d.setState({ address: input.address });
+    return { accepted: true };
+  })
+  .build();
+
+// On the workflow task, whose state is initialized with replaceState():
+tags.durableWorkflow.with({ commands: [changeAddress] });
+
+// From the API, after obtaining the runtime resource value:
+const result = await durableRuntime.command(
+  executionId,
+  changeAddress,
+  { address: "New address" },
+  { idempotencyKey: requestId },
+);
+```
+
+Declare the command on each workflow version that accepts it, and register the task in the app. Commands run through Runner's normal task executor, under the target execution lease, in FIFO order. Workflow progress and command handlers do not run concurrently on that execution. A running workflow must reach a suspension or release its lease before a command can run. Commands admitted before the first attempt wait for the workflow to initialize and checkpoint before they execute. Commands can use steps, progress, and typed state; suspension, child workflows, continuation, and rollback fail explicitly. Durable Runner event emissions also create child workflows, so emit those from workflow code; ordinary Runner events remain available inside commands. A workflow cannot await a command targeting itself; call the task directly there.
+
+State is staged privately and committed with the successful result receipt as one atomic store operation. Handler failure discards its staged state. If a command step waits for a concurrency permit, the workflow stays parked until the command settles. Checkpointed effects and private state survive worker takeover. A retried handler must keep its durable call order stable. External effects still need idempotency. Command step identities include the command request, so two requests using the same step name stay distinct.
+
+An optional `idempotencyKey` is scoped by the originally addressed execution and canonical command task. Reusing it returns the original receipt, including after completion; changed input does not replace that request. Initial submission follows a continuation to its live tip. Without a key each call is a new request. `waitTimeoutMs` stops only the caller's wait; it does not cancel the accepted command. Paused workflows retain their queued commands until resume; closing the target fails outstanding requests. Keep a timer worker running to redrive interrupted requests. Command receipts remain available after successful workflow detail collection.
+
+Admission atomically saves one shared wakeup timer per execution alongside its command FIFO. Duplicate callers reuse it, and committing the final receipt removes it. A timer delivery reschedules and releases its claim instead of deleting the wakeup, so a request arriving during delivery stays recoverable. Enable `timers` on at least one process sharing the store. Callers wait using bus notifications with store polling as a fallback; the persisted receipt is always authoritative.
+
+Built-in stores support commands. Custom stores may omit the new capabilities and retain existing behavior; requesting a command without atomic receipt/ownership and command-timer support fails clearly. Command admission, completion, and `rescheduleCommandTimer()` must coordinate FIFO membership and wakeup indexes atomically.
 
 ## Child Workflows
 
@@ -1210,6 +1323,35 @@ const durableRegistration = durable.with({
 
 Resource IDs derive key prefixes. Use different `.fork("id")` values to run multiple durable apps on the same Redis/RabbitMQ.
 
+### SQLite Backend (Single-Process)
+
+`resources.sqliteWorkflow` (`SqliteStore`) persists durable state in Node >= 22 using built-in `node:sqlite` (`WAL` mode + serialized immediate write transactions) with zero external packages:
+
+```ts
+const durable = resources.sqliteWorkflow.fork("app-sqlite");
+
+const durableRegistration = durable.with({
+  persist: { filename: "./.runner/durable.sqlite" }, // Defaults to ":memory:"
+  timers: { enabled: true },
+  recovery: { onStartup: true },
+});
+```
+
+### PostgreSQL Backend (Multi-Worker)
+
+`resources.postgresWorkflow` (`PostgresStore`) persists durable state in PostgreSQL (requires optional `pg` or a structural `PgPoolLike` adapter) using row-level `FOR UPDATE` locking and `FOR UPDATE SKIP LOCKED` timer claiming. Omit `redis` for single-node polling or pass `redis` + `queue` for distributed event notifications and worker queues:
+
+```ts
+const durable = resources.postgresWorkflow.fork("app-postgres");
+
+const durableRegistration = durable.with({
+  postgres: { connectionString: process.env.DATABASE_URL! },
+  redis: { url: process.env.REDIS_URL! }, // Optional: falls back to MemoryEventBus
+  timers: { enabled: true, pollIntervalMs: 1000, concurrency: 10 },
+  recovery: { onStartup: true },
+});
+```
+
 ---
 
 ## Scaling & Topology
@@ -1291,6 +1433,67 @@ const result = await durableRuntime.wait(executionId);
 
 await runtime.dispose();
 ```
+
+### Virtual Time, Restart, And Replay
+
+`createDurableTestSetup()` keeps its existing behavior. For explicit virtual workflow timers and a fresh Runner container on restart:
+
+```ts
+import {
+  r,
+  resources,
+  tags,
+  createDurableTestRuntime,
+} from "@bluelibs/runner/node";
+
+const test = createDurableTestRuntime();
+const durable = test.durable;
+const workflow = r
+  .task("checkout")
+  .dependencies({ durable })
+  .tags([tags.durableWorkflow])
+  .run(async (_: undefined, { durable }) => {
+    const d = durable.use();
+    await d.step("prepare", async () => "ready");
+    await d.sleep(3_600_000, { stepId: "settlement" });
+    return d.step("charge", async () => "charged");
+  })
+  .build();
+const app = r
+  .resource("app")
+  .register([resources.durable, test.durableRegistration, workflow])
+  .build();
+
+await test.run(app);
+try {
+  const id = await test.backend.start(workflow);
+  await test.restartWorker();
+  await test.advanceTimeBy(3_600_000);
+  const fixture = await test.backend.operator.exportReplay(id);
+  const report = await test.replay(workflow, fixture);
+  if (!report.compatible) throw new Error(report.issues.join("\n"));
+} finally {
+  await test.dispose();
+}
+```
+
+The clock starts at the Unix epoch unless `now` is provided. `advanceTimeBy()` processes sleeps, wait deadlines, and schedules in deadline order, including timers created by resumed work. It leaves global time, execution leases, callback timeout/backoff delays, and heartbeat timers on real time. `restartWorker()` requires live callbacks to settle, preserves durable snapshots, and creates a new isolated Runner container; use `test.backend` again afterward. Real takeover and lease-expiry behavior still requires backend integration tests.
+
+Replay copies the fixture into an isolated memory store and invokes the workflow through normal Runner integration. It checks saved operation order, kind, task identities, and pinned versions on child starts and waits. It reuses completed results and stops at the recorded frontier before an uncached effect. Cached parent steps also skip their nested calls. Unreached or changed operations produce `compatible: false` and `issues`. Put external effects in steps so replay can reuse the saved result. Arbitrary JavaScript outside steps still runs.
+
+### Checkpoint Reset
+
+```ts
+const branchId = await durableRuntime.operator.reset(executionId, {
+  beforeStep: "charge",
+  reason: "Corrected payment provider",
+  idempotencyKey: requestId,
+});
+```
+
+Reset creates and dispatches a new execution with the completed prefix and state at the boundary. It preserves the original execution and its results, pins the original implementation version, and records source/boundary/reason on the branch. The selected operation and later work execute again with new execution/step identities. This can repeat external effects; choose the boundary deliberately. Earlier completed effects are reused, including when a later branch rollback compensates them.
+
+Pause live source workflows first and wait for active ownership to stop. Reset rejects nested, overlapping, or unfinished prefix boundaries. `beforeStep` is the exact recorded operation ID (for example `charge` or `__sleep:settlement`). Replay export and reset take the execution lease to capture consistent data. Built-in stores record ordered history for newly admitted executions; legacy executions and collected successful details cannot be reconstructed. `retention: { onComplete: "retain" }` preserves detail when tooling needs it. A standalone `new DurableOperator(store)` persists a pending branch; a runtime-bound operator dispatches it automatically. The optional reset key deduplicates a source/boundary pair.
 
 ### Real Backend Integration Tests
 
@@ -1451,7 +1654,7 @@ Available events:
 | `durableEvents.signal.waiting`          | A workflow started waiting in `waitForSignal(...)`.                                                                                | `DurableAuditEntry` with `kind: "signal_waiting"`           |
 | `durableEvents.signal.delivered`        | A signal payload was delivered to a waiting workflow.                                                                              | `DurableAuditEntry` with `kind: "signal_delivered"`         |
 | `durableEvents.signal.timedOut`         | A `waitForSignal(...)` timeout fired before a matching signal arrived.                                                             | `DurableAuditEntry` with `kind: "signal_timed_out"`         |
-| `durableEvents.emit.published`          | Historical compatibility event for the removed context emit feature; no longer produced by workflow execution.                    | `DurableAuditEntry` with `kind: "emit_published"`           |
+| `durableEvents.emit.published`          | Historical compatibility event for the removed context emit feature; no longer produced by workflow execution.                     | `DurableAuditEntry` with `kind: "emit_published"`           |
 | `durableEvents.note.created`            | `durableContext.note(...)` recorded a user audit note.                                                                             | `DurableAuditEntry` with `kind: "note"`                     |
 
 > **Note:** `durableEvents.audit.appended` is the broad umbrella event. The others are typed convenience events derived from the same audit stream, which is a fancy way of saying "same pizza, different slices."
@@ -1460,14 +1663,14 @@ Available events:
 
 ## Safety Guarantees
 
-| Guarantee               | Description                                                                   |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| Store is truth          | All state persists in `IDurableStore`. Queue/pub-sub are optimizations.       |
-| At-least-once execution | Executions retry on failure. Persisted step results are reused on replay.    |
-| Durable sleep           | Timers persist. Resume after process restart.                                 |
-| Signal buffering        | Early signals queue until workflow waits.                                     |
-| Signal bounds           | Queued backlog is capped per key (backpressure); history keeps newest 1000.   |
-| Recovery                | Startup/manual drains; optional continuous indexed orphan sweeps.            |
+| Guarantee               | Description                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| Store is truth          | All state persists in `IDurableStore`. Queue/pub-sub are optimizations.             |
+| At-least-once execution | Executions retry on failure. Persisted step results are reused on replay.           |
+| Durable sleep           | Timers persist. Resume after process restart.                                       |
+| Signal buffering        | Early signals queue until workflow waits.                                           |
+| Signal bounds           | Queued backlog is capped per key (backpressure); history keeps newest 1000.         |
+| Recovery                | Startup/manual drains; optional continuous indexed orphan sweeps.                   |
 | Ownership               | Built-in stores atomically reject attempt writes after lease expiry or replacement. |
 
 > **Note:** A step body can run again if the process crashes after an external action succeeds but before its result is persisted. For external side effects, use a stable idempotency key when the receiving service supports and enforces it; Runner cannot atomically commit an external action and its checkpoint.

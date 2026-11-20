@@ -30,7 +30,11 @@ describe("durable: concurrency retry journals", () => {
     expect(
       (await first.store.getStepResult("execution", '__step-retries:"charge"'))
         ?.result,
-    ).toEqual({ workflowAttempt: 2, count: 1 });
+    ).toMatchObject({
+      workflowAttempt: 2,
+      count: 1,
+      nextAttemptAtMs: expect.any(Number),
+    });
   });
 
   it("fails before acquiring capacity when persisted retry state is malformed", async () => {

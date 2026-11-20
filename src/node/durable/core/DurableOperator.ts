@@ -1,3 +1,9 @@
+import { withCheckpointLease } from "./checkpointLease";
+import type {
+  DurableReplayFixture,
+  DurableResetOptions,
+} from "./interfaces/history";
+import { resetCheckpoint, exportReplay } from "./checkpointReset";
 import { IDurableStore } from "./interfaces/store";
 import { DurableSignalState, Execution } from "./types";
 import type { DurableAuditEntry } from "./audit";
@@ -64,7 +70,27 @@ export interface ListExecutionStatesPage {
  * Used by dashboards / CLIs / tooling to inspect execution indexes and recover executions.
  */
 export class DurableOperator {
-  constructor(private readonly store: IDurableStore) {}
+  constructor(
+    private readonly store: IDurableStore,
+    private readonly kickoff?: (id: string) => Promise<void>,
+  ) {}
+
+  /** Exports application payloads and ordered operations for compatibility tests. Pause live work first for a consistent fixture. */
+  async exportReplay(executionId: string): Promise<DurableReplayFixture> {
+    return withCheckpointLease(this.store, executionId, (owned) =>
+      exportReplay(owned, executionId),
+    );
+  }
+
+  /** Branches from a completed, non-overlapping prefix without editing the source. */
+  async reset(
+    executionId: string,
+    options: DurableResetOptions,
+  ): Promise<string> {
+    const id = await resetCheckpoint(this.store, executionId, options);
+    await this.kickoff?.(id);
+    return id;
+  }
 
   /** Backfills one legacy index batch without blocking the store for a full scan. */
   async rebuildExecutionIndex(
