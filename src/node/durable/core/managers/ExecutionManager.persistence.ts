@@ -1,4 +1,8 @@
-import type { ExecutionRetention } from "../retention";
+import {
+  receiptRetentionDelay,
+  retentionDelay,
+  type ExecutionRetention,
+} from "../retention";
 import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
 import type { ExecuteOptions } from "../interfaces/service";
@@ -14,7 +18,6 @@ import {
 import { durableExecutionInvariantError } from "../../../../errors";
 import { createExecutionId } from "../utils";
 import { durableWorkflowTag } from "../../tags/durableWorkflow.tag";
-import { retentionDelay } from "../retention";
 
 type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
 
@@ -58,6 +61,15 @@ export function createPendingExecution(
   ) {
     durableExecutionInvariantError.throw({
       message: "Configured retention requires store.collectCompletedHistory().",
+    });
+  }
+  if (
+    receiptRetentionDelay(policy) !== undefined &&
+    !deps.store.collectExpiredReceipts
+  ) {
+    durableExecutionInvariantError.throw({
+      message:
+        "Configured receipts retention requires store.collectExpiredReceipts().",
     });
   }
   const now = new Date();

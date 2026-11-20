@@ -76,13 +76,18 @@ export class TaskRegistry {
     workflowKey: string,
     version?: number,
   ): ITask<any, Promise<any>, any, any, any, any> | undefined {
-    const task =
-      this.versions.get(JSON.stringify([workflowKey, version])) ??
-      this.tasks.get(workflowKey) ??
-      this.externalResolver?.(workflowKey, version);
-    return task && durableWorkflowTag.extract(task)?.version === version
-      ? task
-      : undefined;
+    const matchVersion = (
+      candidate: ITask<any, Promise<any>, any, any, any, any> | undefined,
+    ) =>
+      candidate && durableWorkflowTag.extract(candidate)?.version === version
+        ? candidate
+        : undefined;
+
+    return (
+      matchVersion(this.versions.get(JSON.stringify([workflowKey, version]))) ??
+      matchVersion(this.tasks.get(workflowKey)) ??
+      matchVersion(this.externalResolver?.(workflowKey, version))
+    );
   }
 
   /** Canonical task addressing is separate from an optional workflow storage key. */

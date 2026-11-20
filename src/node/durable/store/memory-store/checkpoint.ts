@@ -20,6 +20,7 @@ export async function createCheckpointExecution(
     branch.execution.id,
     structuredClone(branch.execution),
   );
+  runtime.indexRetention(branch.execution);
   runtime.stepResults.set(
     branch.execution.id,
     new Map(branch.steps.map((step) => [step.stepId, structuredClone(step)])),

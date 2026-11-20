@@ -101,6 +101,8 @@ export interface IDurableStore {
   getExecutionTimers?(executionId: string): Promise<Timer[]>;
   /** Atomically collects due successful history, retaining completion receipts for replay and waiters. */
   collectCompletedHistory?(now: Date, limit: number): Promise<number>;
+  /** Expire due completion receipts and dependent execution records, returning the number removed. */
+  collectExpiredReceipts?(now: Date, limit: number): Promise<number>;
   saveExecution(execution: Execution): Promise<void>;
   /**
    * Atomically replaces an execution when its current status still matches one

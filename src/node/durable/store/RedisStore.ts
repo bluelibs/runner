@@ -1,7 +1,10 @@
 import { createCheckpointExecution } from "./RedisStore.checkpoint";
 import type { DurableCheckpointBranch } from "../core/interfaces/history";
 import { createIORedisClient } from "../optionalDeps/ioredis";
-import { collectCompletedHistory } from "./RedisStore.retention";
+import {
+  collectCompletedHistory,
+  collectExpiredReceipts,
+} from "./RedisStore.retention";
 import type {
   DurableQueuedSignalRecord,
   DurableExecutionState,
@@ -125,6 +128,10 @@ export class RedisStore implements IDurableStore {
   /** Collects due successful history while preserving completion receipts. */
   async collectCompletedHistory(now: Date, limit: number): Promise<number> {
     return collectCompletedHistory(this.runtime, now, limit);
+  }
+  /** Expires due completion receipts and dependent execution records. */
+  async collectExpiredReceipts(now: Date, limit: number): Promise<number> {
+    return collectExpiredReceipts(this.runtime, now, limit);
   }
   /** Reads only metadata for an exact execution storage identity. */
   async getExecutionState(id: string): Promise<DurableExecutionState | null> {

@@ -248,5 +248,53 @@ function completed(
         }
       },
     );
+
+    it("expires completion receipts and preserves execution index parity", async () => {
+      const store = new RedisStore({
+        redis: redisUrl,
+        prefix: `runner:receipts:${randomUUID()}:`,
+      });
+      const now = new Date();
+      try {
+        await expect(
+          store.createExecutionWithIdempotencyKey({
+            execution: completed("r-1", now, {
+              retention: {
+                onComplete: { afterMs: 1_000 },
+                receipts: { afterMs: 5_000 },
+              },
+            }),
+            workflowKey: "wf",
+            idempotencyKey: "k-r1",
+          }),
+        ).resolves.toEqual({ created: true, executionId: "r-1" });
+        expect(
+          await store.collectCompletedHistory(
+            new Date(now.getTime() + 1_000),
+            10,
+          ),
+        ).toBe(1);
+        expect(await store.getExecution("r-1")).not.toBeNull();
+        expect(
+          await store.collectExpiredReceipts(
+            new Date(now.getTime() + 5_000),
+            10,
+          ),
+        ).toBe(1);
+        expect(await store.getExecution("r-1")).toBeNull();
+        expect(await store.listExecutionStates({})).toEqual([]);
+        await expect(
+          store.createExecutionWithIdempotencyKey({
+            execution: completed("r-2", now, {
+              retention: { onComplete: "retain", receipts: "delete" },
+            }),
+            workflowKey: "wf",
+            idempotencyKey: "k-r1",
+          }),
+        ).resolves.toEqual({ created: true, executionId: "r-2" });
+      } finally {
+        await store.dispose();
+      }
+    });
   },
 );

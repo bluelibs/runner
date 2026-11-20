@@ -44,7 +44,12 @@ export async function withCheckpointLease<T>(
           message: "Checkpoint operation lost source execution ownership.",
         }),
     });
-    return await action(owned);
+    const result = await action(owned);
+    if (lock.lost || !(await store.renewLock(resource, lockId, 30000)))
+      return durableExecutionInvariantError.throw({
+        message: "Checkpoint operation lost source execution ownership.",
+      });
+    return result;
   } finally {
     stop();
     await store.releaseLock(resource, lockId);

@@ -1,3 +1,5 @@
+import { r } from "../../../../../index";
+import { durableWorkflowTag } from "../../../../durable/tags/durableWorkflow.tag";
 import { TaskRegistry } from "../../../../durable/core/managers/TaskRegistry";
 
 describe("durable: TaskRegistry", () => {
@@ -58,5 +60,36 @@ describe("durable: TaskRegistry", () => {
       "collides with an existing workflow alias",
     );
     expect(registry.find("task-b")?.id).toBe("task-a");
+  });
+
+  it("falls back to externalResolver when local task version does not match", () => {
+    const localV2 = r
+      .task("checkout")
+      .tags([durableWorkflowTag.with({ key: "checkout", version: 2 })])
+      .run(async () => "v2")
+      .build();
+    const externalV1 = r
+      .task("checkout-v1")
+      .tags([durableWorkflowTag.with({ key: "checkout", version: 1 })])
+      .run(async () => "v1")
+      .build();
+    const externalV3 = r
+      .task("checkout-v3")
+      .tags([durableWorkflowTag.with({ key: "checkout", version: 3 })])
+      .run(async () => "v3")
+      .build();
+
+    let requestedExternal = externalV1;
+    const registry = new TaskRegistry(
+      (key, version) =>
+        key === "checkout" && version === 1 ? requestedExternal : undefined,
+      undefined,
+    );
+    registry.register(localV2);
+
+    expect(registry.find("checkout", 2)).toBe(localV2);
+    expect(registry.find("checkout", 1)).toBe(externalV1);
+    requestedExternal = externalV3;
+    expect(registry.find("checkout", 1)).toBeUndefined();
   });
 });

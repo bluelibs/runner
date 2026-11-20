@@ -66,7 +66,8 @@ const durableRuntime = runtime.getResourceValue(durable);
 - `serializer` expects a serializer resource definition
 - default is `resources.serializer`
 - for `memoryWorkflow`, it affects persisted `filePath` snapshots
-- for `redisWorkflow`, it affects Redis store + bus payloads
+- for `sqliteWorkflow`, it affects SQLite payloads
+- for `postgresWorkflow` and `redisWorkflow`, it affects store + bus payloads
 
 ## DurableContext API
 
@@ -647,6 +648,29 @@ fails fast at startup if that contract is missing.
 | Redis pub/sub | Notifications for `wait()` (fast path)                 |
 
 **Rule**: RabbitMQ makes it fast; Redis makes it correct.
+
+## SQL Backends (`sqliteWorkflow` & `postgresWorkflow`)
+
+- **SQLite (single-process, Node >= 22 built-in `node:sqlite`)**:
+
+```ts
+const durable = resources.sqliteWorkflow.fork("app-sqlite");
+const reg = durable.with({ persist: { filename: "./.runner/durable.sqlite" } });
+```
+
+- **PostgreSQL (multi-worker, optional `pg` or `PgPoolLike`)**:
+
+```ts
+const durable = resources.postgresWorkflow.fork("app-postgres");
+const reg = durable.with({
+  postgres: { connectionString: process.env.DATABASE_URL! },
+  redis: { url: process.env.REDIS_URL! }, // Optional: defaults to MemoryEventBus
+  timers: { enabled: true },
+  recovery: { onStartup: true },
+});
+```
+
+- Direct store classes `SqliteStore` and `PostgresStore` are exported from `@bluelibs/runner/node` and support both `retention.onComplete` and `retention.receipts`.
 
 ## Testing
 

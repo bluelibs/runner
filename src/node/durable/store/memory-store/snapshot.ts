@@ -183,6 +183,7 @@ export function restoreSnapshot(
   runtime.executionIdByIdempotencyKey = new Map(
     snapshot.executionIdByIdempotencyKey,
   );
+  runtime.rebuildIdempotencyIndex();
   runtime.stepResults = restoreStepResults(snapshot);
   runtime.signalStates = restoreSignalStates(snapshot);
   runtime.signalWaiters = restoreSignalWaiters(snapshot);

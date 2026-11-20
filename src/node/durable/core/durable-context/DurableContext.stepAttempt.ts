@@ -63,11 +63,17 @@ export async function runDurableStepAttempts<T>(params: {
       });
     }
 
-    const progress = await createStepProgress({
-      ...params,
-      attempt: attempts + 1,
-      heartbeatTimeoutMs: params.options.heartbeatTimeoutMs,
-    });
+    let progress: Awaited<ReturnType<typeof createStepProgress>>;
+    try {
+      progress = await createStepProgress({
+        ...params,
+        attempt: attempts + 1,
+        heartbeatTimeoutMs: params.options.heartbeatTimeoutMs,
+      });
+    } catch (error) {
+      await admission?.release();
+      throw error;
+    }
     const signal = AbortSignal.any([params.signal, progress.signal]);
     try {
       const acquired = admission;

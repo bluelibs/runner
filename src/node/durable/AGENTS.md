@@ -12,20 +12,20 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 1. `index.ts` for the public surface and `core/interfaces/` for backend/runtime contracts.
 2. [core/AGENTS.md](core/AGENTS.md) for execution, replay, admission, and lifecycle ownership.
 3. [store/AGENTS.md](store/AGENTS.md) for memory/file/Redis persistence and atomic operations.
-4. `resources/memoryDurableResource.ts` or `resources/redisDurableResource.ts` for Runner wiring.
+4. `resources/{memoryDurableResource,redisDurableResource,sqliteDurableResource,postgresDurableResource}.ts` for Runner wiring.
 5. `../../../readmes/DURABLE_WORKFLOWS_AI.md` for usage; the longer guide is `DURABLE_WORKFLOWS.md` alongside it.
 
 ## Directory Map
 
 - `bridge/`: durable event policy, per-run dispatch, persisted hook plans, compensation recovery, and parent linkage.
 - `core/`: service/resource/context/operator facades, typed interfaces, and focused managers.
-- `store/`: durable records, indexes, waiters, schedules, snapshots, and lock ownership.
+- `store/`: durable records, indexes, waiters, schedules, snapshots, SQL adapters (`SqliteStore`, `PostgresStore`), and lock ownership.
 - `queue/`: memory and RabbitMQ execution delivery; delegates shared transport to `../queue/`.
 - `bus/`: memory, Redis pub/sub, and no-op wakeup notifications.
-- `resources/`: built-in backend composition, isolation defaults, and shutdown abort hook.
+- `resources/`: built-in backend composition (`memoryWorkflow`, `redisWorkflow`, `sqliteWorkflow`, `postgresWorkflow`), isolation defaults, and shutdown abort hook.
 - `tags/`: workflow key/admission/signal metadata and durable runtime discovery.
 - `emitters/` and `events.ts`: translate audit records into Runner events.
-- `optionalDeps/`: lazy access to Redis/RabbitMQ dependencies.
+- `optionalDeps/`: lazy access to Redis, RabbitMQ, SQLite (`node:sqlite`), and PostgreSQL (`pg`) dependencies.
 - `test-utils.ts`: unchanged disposable setup and bounded polling; `test-runtime.ts` adds Runner-backed virtual workflow timers, settled-worker restart, and structural replay checks.
 
 ## Contracts To Preserve
@@ -35,7 +35,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Execution, step, signal, timer, schedule, and lock ids have separate roles; preserve exact identities.
 - Durable event policy `key` separates event persistence identity from canonical addressing. Hook membership and backend identity remain independently validated; context bus emission is not a supported workflow API.
 - `resources/isolation.ts` encodes the complete namespace into default Redis prefixes and queue names.
-- Memory backends own state per instance. File persistence is for one process; Redis supports shared backend state.
+- Memory backends own state per instance. File persistence and SQLite (`SqliteStore`) target single-process local deployments; Redis and PostgreSQL (`PostgresStore`) support shared multi-worker backend state.
 - Step `concurrency` derives pools from persisted workflow key + explicit step ID or an explicit shared key; full pools durably suspend and free workflow admission.
 - Store records determine correctness; bus messages wake waiters and do not replace durable state.
 - Queue creation and queue consumption are separate settings; built-ins consume only with `queue.consume: true`.

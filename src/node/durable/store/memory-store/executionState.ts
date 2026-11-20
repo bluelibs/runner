@@ -29,9 +29,9 @@ export async function createExecutionWithIdempotencyKey(
     return { created: false, executionId: existingExecutionId };
   }
 
-  runtime.executionIdByIdempotencyKey.set(key, params.execution.id);
+  runtime.recordIdempotencyKey(key, params.execution.id);
   runtime.executions.set(params.execution.id, cloneExecution(params.execution));
-  runtime.indexHistory(params.execution);
+  runtime.indexRetention(params.execution);
   await runtime.persistDurableMutation();
   return { created: true, executionId: params.execution.id };
 }
@@ -42,7 +42,7 @@ export async function saveExecution(
 ): Promise<void> {
   runtime.assertOwnership();
   runtime.executions.set(execution.id, cloneExecution(execution));
-  runtime.indexHistory(execution);
+  runtime.indexRetention(execution);
   await runtime.persistDurableMutation();
 }
 
@@ -74,10 +74,12 @@ export async function createContinuedExecution(
       params.priorExecution.id,
       cloneExecution(params.priorExecution),
     );
+    runtime.indexRetention(params.priorExecution);
     runtime.executions.set(
       params.successorExecution.id,
       cloneExecution(params.successorExecution),
     );
+    runtime.indexRetention(params.successorExecution);
     return { result: true, changed: true };
   });
 }
@@ -103,7 +105,7 @@ export async function saveExecutionIfStatus(
     return false;
 
   runtime.executions.set(execution.id, cloneExecution(execution));
-  runtime.indexHistory(execution);
+  runtime.indexRetention(execution);
   await runtime.persistDurableMutation();
   return true;
 }
@@ -133,7 +135,7 @@ export async function updateExecution(
     updatedAt: new Date(),
   });
   runtime.executions.set(id, updated);
-  runtime.indexHistory(updated);
+  runtime.indexRetention(updated);
   await runtime.persistDurableMutation();
 }
 
@@ -172,12 +174,14 @@ export async function retryRollback(
     return;
   }
 
-  runtime.executions.set(executionId, {
+  const updated = {
     ...execution,
     status: ExecutionStatus.Pending,
     error: undefined,
     updatedAt: new Date(),
-  });
+  };
+  runtime.executions.set(executionId, updated);
+  runtime.indexRetention(updated);
   await runtime.persistDurableMutation();
 }
 
@@ -192,11 +196,13 @@ export async function forceFail(
     return;
   }
 
-  runtime.executions.set(executionId, {
+  const updated = {
     ...execution,
     status: ExecutionStatus.Failed,
     error,
     updatedAt: new Date(),
-  });
+  };
+  runtime.executions.set(executionId, updated);
+  runtime.indexRetention(updated);
   await runtime.persistDurableMutation();
 }

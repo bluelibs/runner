@@ -106,4 +106,41 @@ describe("durable step progress and identity", () => {
       !signal.aborted;
     expect(await fixture.ctx.step("legacy", legacy)).toBe(true);
   });
+
+  it("releases concurrency permits when progress initialization fails", async () => {
+    const first = await stepFixture({ executionId: "first" });
+    const second = await stepFixture({
+      store: first.store,
+      executionId: "second",
+    });
+    const concurrency = { key: "pool", limit: 1 };
+
+    await expect(
+      first.ctx.step(
+        "bad-heartbeat",
+        { concurrency, heartbeatTimeoutMs: 0 },
+        async () => true,
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      second.ctx.step("after-invalid", { concurrency }, async () => "ok-1"),
+    ).resolves.toBe("ok-1");
+
+    const baseGetStep = first.store.getStepResult.bind(first.store);
+    jest
+      .spyOn(first.store, "getStepResult")
+      .mockImplementationOnce((executionId, stepId) =>
+        baseGetStep(executionId, stepId),
+      )
+      .mockRejectedValueOnce(new Error("progress-read-failed"));
+
+    await expect(
+      first.ctx.step("read-fail", { concurrency }, async () => true),
+    ).rejects.toThrow("progress-read-failed");
+
+    await expect(
+      second.ctx.step("after-read-fail", { concurrency }, async () => "ok-2"),
+    ).resolves.toBe("ok-2");
+  });
 });

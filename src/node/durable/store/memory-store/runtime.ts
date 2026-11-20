@@ -1,4 +1,7 @@
-import { collectionDeadline } from "../../core/retention";
+import {
+  collectionDeadline,
+  receiptExpiryDeadline,
+} from "../../core/retention";
 import type {
   DurableExecutionWaiter,
   DurableSignalState,
@@ -54,20 +57,47 @@ export class MemoryStoreRuntime {
   set executions(records: Map<string, Execution>) {
     this.executionRecords = new IndexedExecutions();
     this.historyDeadlines.clear();
+    this.receiptExpiryDeadlines.clear();
     for (const [id, execution] of records) {
       this.executionRecords.set(id, execution);
-      this.indexHistory(execution);
+      this.indexRetention(execution);
     }
   }
   readonly historyDeadlines = new Map<string, number>();
+  readonly receiptExpiryDeadlines = new Map<string, number>();
 
-  indexHistory(execution: Execution): void {
+  indexRetention(execution: Execution): void {
     const deadline = collectionDeadline(execution);
     if (deadline === undefined) this.historyDeadlines.delete(execution.id);
     else this.historyDeadlines.set(execution.id, deadline);
+
+    const receiptDeadline = receiptExpiryDeadline(execution);
+    if (receiptDeadline === undefined) {
+      this.receiptExpiryDeadlines.delete(execution.id);
+    } else {
+      this.receiptExpiryDeadlines.set(execution.id, receiptDeadline);
+    }
   }
 
   executionIdByIdempotencyKey = new Map<string, string>();
+  readonly idempotencyKeysByExecution = new Map<string, Set<string>>();
+
+  recordIdempotencyKey(key: string, executionId: string): void {
+    this.executionIdByIdempotencyKey.set(key, executionId);
+    let keys = this.idempotencyKeysByExecution.get(executionId);
+    if (!keys) {
+      keys = new Set<string>();
+      this.idempotencyKeysByExecution.set(executionId, keys);
+    }
+    keys.add(key);
+  }
+
+  rebuildIdempotencyIndex(): void {
+    this.idempotencyKeysByExecution.clear();
+    for (const [key, executionId] of this.executionIdByIdempotencyKey) {
+      this.recordIdempotencyKey(key, executionId);
+    }
+  }
   stepResults = new Map<string, Map<string, StepResult>>();
   signalStates = new Map<string, Map<string, DurableSignalState>>();
   signalWaiters = new Map<

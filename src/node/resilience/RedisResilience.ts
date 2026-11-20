@@ -31,6 +31,10 @@ export interface ResilienceRedisClient {
 }
 
 const circuitReply = Match.compile([Match.OneOf(Number, String)]);
+const numberArrayReply = Match.compile([Number]);
+const numberValue = Match.compile(Number);
+const circuitPhaseValue = Match.compile(Match.OneOf(0, 1, 2));
+const stringValue = Match.compile(String);
 
 /** Redis-backed coordination scoped by namespace and complete policy identity. */
 export class RedisResilience implements Resilience {
@@ -66,7 +70,7 @@ export class RedisResilience implements Resilience {
     windowMs: number,
     maxKeys?: number,
   ) {
-    const reply = Match.compile([Number]).parse(
+    const reply = numberArrayReply.parse(
       await this.redis.eval(
         rateLimitScript,
         2,
@@ -133,10 +137,10 @@ export class RedisResilience implements Resilience {
         randomUUID(),
       ),
     );
-    const allowed = Match.compile(Number).parse(reply[0]);
-    const phase = Match.compile(Match.OneOf(0, 1, 2)).parse(reply[1]);
-    const failures = Match.compile(Number).parse(reply[2]);
-    const token = Match.compile(String).parse(reply[3]);
+    const allowed = numberValue.parse(reply[0]);
+    const phase = circuitPhaseValue.parse(reply[1]);
+    const failures = numberValue.parse(reply[2]);
+    const token = stringValue.parse(reply[3]);
     this.assertPolicy(allowed);
     if (allowed === -2)
       resilienceError.throw({
@@ -164,7 +168,7 @@ export class RedisResilience implements Resilience {
     wait?: ConcurrencyWaitOptions,
   ): Promise<T> {
     const execute = async (operation: string, token: string) => {
-      const result = Match.compile(Number).parse(
+      const result = numberValue.parse(
         await this.redis.eval(
           permitScript,
           2,

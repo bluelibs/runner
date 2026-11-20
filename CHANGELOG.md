@@ -1,5 +1,26 @@
 # Changelog
 
+## 6.10.0 (unreleased)
+
+### Features
+
+- Add built-in SQL durable persistence backends and Runner resources:
+  - `SqliteStore` and `resources.sqliteWorkflow` (`sqliteDurableResource`) built on Node >= 22's native `node:sqlite` (`DatabaseSync`), using WAL mode for file databases, busy timeouts, and serialized immediate transactions for single-node local persistence.
+  - `PostgresStore` and `resources.postgresWorkflow` (`postgresDurableResource`) built on optional `pg` (or any structural `PgPoolLike`), using row-level `FOR UPDATE` fencing, `FOR UPDATE SKIP LOCKED` timer claiming, and namespace-scoped schemas for multi-worker deployments. When `redis` is omitted on `postgresWorkflow`, event notifications fall back to `MemoryEventBus`.
+- Add optional two-stage durable receipt expiry via `retention.receipts` (`"retain" | "delete" | { afterMs }`) and `IDurableStore.collectExpiredReceipts(now, limit)` across Memory, PersistentMemory, Redis, SQLite, and PostgreSQL stores. Validates at tag/resource/service admission that `receipts` cannot expire earlier than `onComplete`, while permitting one-stage full cleanup (`{ onComplete: "retain", receipts: { afterMs } }`) and atomically releasing idempotency keys, command receipts, execution indexes, timers, and dependent execution records.
+- Add a PostgreSQL 17 integration test suite and service container to `.github/workflows/real-infrastructure.yml`.
+
+### Fixes
+
+- Revalidate source execution ownership before returning replay fixtures in `withCheckpointLease`, release acquired step-concurrency permits if `createStepProgress` initialization fails, and verify candidate workflow version before falling back to `externalResolver` in `TaskRegistry.find()`.
+- Hoist compiled `Match` validators above `RedisResilience` instance methods instead of recompiling patterns on every Redis script reply.
+- Use a valid non-dotted task ID (`r.task("greet")`) in the `r` entry point JSDoc example (`src/public.ts`).
+
+### Operational limits
+
+- `PostgresStore` requires installing optional dependency `pg` or passing a compatible `PgPoolLike` adapter. `SqliteStore` requires Node >= 22 with `node:sqlite`.
+- Expiring an execution's receipt removes its completion record and idempotency mapping so subsequent starts with the same idempotency key create a new execution. Failures, cancellations, and executions with missing/incomplete parents, active locks, queued commands, or active waiters remain retained.
+
 ## 6.9.0 (unreleased)
 
 ### Migration

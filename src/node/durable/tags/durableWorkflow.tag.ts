@@ -1,4 +1,4 @@
-import type { ExecutionRetention } from "../core/retention";
+import { retentionDelay, type ExecutionRetention } from "../core/retention";
 import { defineTag } from "../../../definers/defineTag";
 import { genericError } from "../../../errors";
 import { Match } from "../../../tools/check";
@@ -72,6 +72,11 @@ const durableWorkflowConfigPattern = Match.compile({
     onComplete: Match.OneOf("retain", "delete", {
       afterMs: Match.Range({ min: 0 }),
     }),
+    receipts: Match.Optional(
+      Match.OneOf("retain", "delete", {
+        afterMs: Match.Range({ min: 0 }),
+      }),
+    ),
   }),
   signals: Match.Optional(
     Match.ArrayOf(Match.ObjectIncluding({ id: Match.NonEmptyString })),
@@ -87,6 +92,7 @@ const durableWorkflowConfigPattern = Match.compile({
 const durableWorkflowConfigSchema = {
   parse(input: unknown): DurableWorkflowTagConfig {
     const config = durableWorkflowConfigPattern.parse(input);
+    retentionDelay(config.retention);
     const signalIds = config.signals?.map((signal) => signal.id) ?? [];
     const uniqueSignalIds = new Set(signalIds);
 

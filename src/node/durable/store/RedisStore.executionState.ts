@@ -1,4 +1,4 @@
-import { collectionDeadline } from "../core/retention";
+import { collectionDeadline, receiptExpiryDeadline } from "../core/retention";
 import { ExecutionStatus, type Execution } from "../core/types";
 import type { ExpectedExecutionStatuses } from "../core/interfaces/store";
 import { durableStoreShapeError } from "../../../errors";
@@ -20,7 +20,7 @@ function isActiveExecutionStatus(status: ExecutionStatus): boolean {
   );
 }
 
-function saveExecutionIndexesScript(shift = 0): string {
+function saveExecutionIndexesScript(shift = 0, receiptArg = 9): string {
   return `
     redis.call("sadd", KEYS[${2 + shift}], ARGV[2])
 
@@ -42,6 +42,13 @@ function saveExecutionIndexesScript(shift = 0): string {
       redis.call("zadd", cleanupIndex, deleteAfter, ARGV[2])
     else
       redis.call("zrem", cleanupIndex, ARGV[2])
+    end
+    local receiptCleanupIndex = KEYS[${5 + shift}] .. ":receipt_cleanup"
+    local expireReceiptAfter = tonumber(ARGV[${receiptArg}])
+    if expireReceiptAfter and expireReceiptAfter >= 0 then
+      redis.call("zadd", receiptCleanupIndex, expireReceiptAfter, ARGV[2])
+    else
+      redis.call("zrem", receiptCleanupIndex, ARGV[2])
     end
   `;
 }
@@ -124,6 +131,7 @@ export async function createExecutionWithIdempotencyKey(
       end
 
       redis.call("set", KEYS[1], ARGV[2])
+      redis.call("sadd", KEYS[2] .. ":idem", KEYS[1])
       redis.call("set", KEYS[2], ARGV[1])
       ${saveExecutionIndexesScript(1)}
       return "__created__"
@@ -143,6 +151,7 @@ export async function createExecutionWithIdempotencyKey(
     "",
     ...executionIndexArgs(runtime, params.execution),
     collectionDeadline(params.execution) ?? -1,
+    receiptExpiryDeadline(params.execution) ?? -1,
   );
 
   if (outcome === "__created__") {
@@ -180,6 +189,7 @@ export async function saveExecution(
     "",
     ...executionIndexArgs(runtime, execution),
     collectionDeadline(execution) ?? -1,
+    receiptExpiryDeadline(execution) ?? -1,
   );
 }
 
@@ -221,7 +231,7 @@ export async function saveExecutionIfStatus(
       if ARGV[10] == "1" and redis.call("llen", ARGV[9]) > 0 then return 0 end
 
       redis.call("set", KEYS[1], ARGV[1])
-      ${saveExecutionIndexesScript()}
+      ${saveExecutionIndexesScript(0, 11)}
       return 1
     `,
     6,
@@ -242,6 +252,7 @@ export async function saveExecutionIfStatus(
     execution.status === "completed" || execution.status === "continued_as_new"
       ? "1"
       : "0",
+    receiptExpiryDeadline(execution) ?? -1,
   );
   runtime.assertEvalResultNotError(outcome);
   return outcome === 1;

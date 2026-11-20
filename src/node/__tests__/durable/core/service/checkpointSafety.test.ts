@@ -134,4 +134,39 @@ describe("checkpoint branch safety", () => {
     await store.saveExecution({ ...branch.expected, attempt: 2 });
     expect(await store.createCheckpointExecution(branch)).toBe(false);
   });
+
+  it("revalidates lease ownership before exportReplay returns", async () => {
+    const store = new MemoryStore();
+    await fixture(store);
+    const renew = jest.spyOn(store, "renewLock").mockResolvedValueOnce(false);
+    await expect(
+      new DurableOperator(store).exportReplay("source"),
+    ).rejects.toThrow("lost source");
+    expect(renew).toHaveBeenCalledTimes(1);
+
+    jest.useFakeTimers();
+    try {
+      const store2 = new MemoryStore();
+      await fixture(store2);
+      const renew2 = jest
+        .spyOn(store2, "renewLock")
+        .mockResolvedValueOnce(false);
+      const baseListHistory = store2.listExecutionHistory.bind(store2);
+      jest
+        .spyOn(store2, "listExecutionHistory")
+        .mockImplementationOnce(async (id) => {
+          await new Promise((resolve) => setTimeout(resolve, 11_000));
+          return baseListHistory(id);
+        });
+      const exporting = new DurableOperator(store2).exportReplay("source");
+      const caught = exporting.catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(11_000);
+      expect(await caught).toMatchObject({
+        message: expect.stringContaining("lost source"),
+      });
+      expect(renew2).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

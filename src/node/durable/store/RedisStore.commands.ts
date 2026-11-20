@@ -92,6 +92,7 @@ export async function enqueueCommand(
       if existing then return existing end
       if redis.call("get", KEYS[4]) ~= ARGV[3] then return nil end
       redis.call("hset", KEYS[1], ARGV[1], ARGV[2])
+      redis.call("sadd", KEYS[4] .. ":commands", ARGV[1])
       redis.call("hset", KEYS[2], ARGV[1], "pending")
       redis.call("rpush", KEYS[3], ARGV[1])
       do

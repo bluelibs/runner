@@ -121,8 +121,9 @@ When you need a different durable payload contract, register a fork such as
 `resources.serializer.fork("app-durable-serializer").with({ ... })`, then pass
 the bare forked resource definition here.
 For `resources.memoryWorkflow`, that serializer is used for file-backed
-`persist.filePath` snapshots. For `resources.redisWorkflow`, it is used for the
-Redis durable store and Redis durable event bus payloads.
+`persist.filePath` snapshots. For `resources.sqliteWorkflow`, it is used for
+SQLite payloads; for `resources.postgresWorkflow` and `resources.redisWorkflow`,
+it is used for store and Redis bus payloads.
 
 ### 2. Define a durable workflow task
 
@@ -1319,6 +1320,35 @@ const durableRegistration = durable.with({
 ### Isolation
 
 Resource IDs derive key prefixes. Use different `.fork("id")` values to run multiple durable apps on the same Redis/RabbitMQ.
+
+### SQLite Backend (Single-Process)
+
+`resources.sqliteWorkflow` (`SqliteStore`) persists durable state in Node >= 22 using built-in `node:sqlite` (`WAL` mode + serialized immediate write transactions) with zero external packages:
+
+```ts
+const durable = resources.sqliteWorkflow.fork("app-sqlite");
+
+const durableRegistration = durable.with({
+  persist: { filename: "./.runner/durable.sqlite" }, // Defaults to ":memory:"
+  timers: { enabled: true },
+  recovery: { onStartup: true },
+});
+```
+
+### PostgreSQL Backend (Multi-Worker)
+
+`resources.postgresWorkflow` (`PostgresStore`) persists durable state in PostgreSQL (requires optional `pg` or a structural `PgPoolLike` adapter) using row-level `FOR UPDATE` locking and `FOR UPDATE SKIP LOCKED` timer claiming. Omit `redis` for single-node polling or pass `redis` + `queue` for distributed event notifications and worker queues:
+
+```ts
+const durable = resources.postgresWorkflow.fork("app-postgres");
+
+const durableRegistration = durable.with({
+  postgres: { connectionString: process.env.DATABASE_URL! },
+  redis: { url: process.env.REDIS_URL! }, // Optional: falls back to MemoryEventBus
+  timers: { enabled: true, pollIntervalMs: 1000, concurrency: 10 },
+  recovery: { onStartup: true },
+});
+```
 
 ---
 

@@ -1,6 +1,9 @@
 import { createCheckpointExecution } from "./memory-store/checkpoint";
 import type { DurableCheckpointBranch } from "../core/interfaces/history";
-import { collectCompletedHistory } from "./memory-store/retention";
+import {
+  collectCompletedHistory,
+  collectExpiredReceipts,
+} from "./memory-store/retention";
 import type { DurableAuditEntry } from "../core/audit";
 import type {
   ExpectedExecutionStatuses,
@@ -123,6 +126,10 @@ export class MemoryStore implements IDurableStore {
   /** Collects due successful history while preserving completion receipts. */
   async collectCompletedHistory(now: Date, limit: number): Promise<number> {
     return collectCompletedHistory(this.runtime, now, limit);
+  }
+  /** Expires due completion receipts and dependent execution records. */
+  async collectExpiredReceipts(now: Date, limit: number): Promise<number> {
+    return collectExpiredReceipts(this.runtime, now, limit);
   }
   /** Reads only metadata for an exact execution storage identity. */
   async getExecutionState(id: string): Promise<DurableExecutionState | null> {

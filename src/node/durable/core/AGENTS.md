@@ -11,7 +11,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 - `interfaces/` and `types.ts`: public service, context, resource, store, bus, and queue contracts.
 - `interfaces/timers.ts` documents deadline processing and process roles. `timerConfig.ts` normalizes preferred `timers` settings with field-wise fallback to deprecated `polling`; `timers.pollIntervalMs` replaces `polling.interval`. Defaults and explicit false values must remain compatible.
-- `HistoryCollector.ts` owns lifecycle-bound successful-history collection; `retention.ts` defines admission-time policy and eligibility. `runnerContext.ts` shares one execution stack per Runner Store across durable backends.
+- `HistoryCollector.ts` owns lifecycle-bound history collection and receipt expiry (`collectCompletedHistory`, `collectExpiredReceipts`); `retention.ts` defines admission-time policy and eligibility (`onComplete`, optional `receipts`). `runnerContext.ts` shares one execution stack per Runner Store across durable backends.
 - `DurableService.ts`: delegates starts, signals, schedules, recovery, waiting, and lifecycle to managers.
 - `DurableResource.ts`: Runner-facing facade and scoped `use()`; `createRunnerDurableRuntime.ts` owns runtime wiring.
 - `DurableContext.ts` and `StepBuilder.ts`: workflow-facing replayable actions and compensation.
