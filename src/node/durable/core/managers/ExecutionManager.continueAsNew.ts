@@ -130,7 +130,12 @@ export async function continueExecutionAsNew(params: {
   const successor: Execution = {
     id: createExecutionId(),
     workflowKey: latest.workflowKey,
+    ...((params.options?.version ?? latest.workflowVersion) === undefined
+      ? {}
+      : { workflowVersion: params.options?.version ?? latest.workflowVersion }),
+    ...(store.recordExecutionHistory ? { historyRecorded: true } : {}),
     parentExecutionId: latest.parentExecutionId,
+    ...(latest.parentExecutionInStore ? { parentExecutionInStore: true } : {}),
     input: params.nextInput,
     // Workflow code supplies the next input without a boundary check here;
     // the first worker that runs the successor validates it instead.

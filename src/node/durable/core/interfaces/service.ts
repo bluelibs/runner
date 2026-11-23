@@ -1,3 +1,9 @@
+import type { AnyTask } from "../../../../types/task";
+import type {
+  ExtractTaskInput,
+  ResolveTaskOutput,
+} from "../../../../types/utilities";
+import type { DurableCommandOptions } from "./commands";
 import type { ExecutionRetention } from "../retention";
 import type { IEventDefinition } from "../../../../types/event";
 import type { ITask } from "../../../../types/task";
@@ -16,6 +22,12 @@ export interface ITaskExecutor {
   run<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
+    options?: {
+      /** Cooperative cancellation for the invocation. */
+      signal: AbortSignal;
+      /** Ordinary task invocation; omission retains the workflow result contract. */
+      kind?: "step" | "command";
+    },
   ): Promise<TResult>;
 }
 
@@ -143,6 +155,7 @@ export interface DurableServiceConfig {
    */
   taskResolver?: (
     workflowKey: string,
+    version?: number,
   ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
   /**
    * Resolves the durable persisted workflow key for a task definition.
@@ -152,6 +165,8 @@ export interface DurableServiceConfig {
   workflowKeyResolver?: (
     task: ITask<any, Promise<any>, any, any, any, any>,
   ) => string | undefined;
+  /** Canonical Runner task addressing for command and task-step identities. */
+  taskKeyResolver?: (task: AnyTask) => string;
   audit?: {
     enabled?: boolean;
     emitter?: DurableAuditEmitter;
@@ -319,6 +334,17 @@ export interface RecoverReportType {
 }
 
 export interface IDurableService {
+  /** @internal Dispatches persisted work through the configured queue or embedded worker. */
+  kickoffExecution?(executionId: string): Promise<void>;
+
+  /** Runs a declared command. Optional for compatibility with custom service adapters. */
+  command?<TTask extends AnyTask>(
+    executionId: string,
+    task: TTask,
+    input: ExtractTaskInput<TTask>,
+    options?: DurableCommandOptions,
+  ): Promise<ResolveTaskOutput<TTask>>;
+
   /**
    * Stops worker, polling, recovery, and other background durable ownership for
    * this runtime instance, closes new background durable admissions, and

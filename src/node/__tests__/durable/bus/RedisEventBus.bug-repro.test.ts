@@ -119,9 +119,35 @@ describe("durable: RedisEventBus Bug Repro", () => {
     await Promise.all([subscribePromise, unsubscribePromise]);
 
     expect(redisMock.subscribe).toHaveBeenCalledTimes(2);
-    expect(redisMock.unsubscribe).toHaveBeenCalledWith(
-      "durable:bus:state-race",
+    // The retried subscribe re-owned the channel before unsubscribe finished,
+    // so unsubscribe must NOT issue a late Redis UNSUBSCRIBE that drops it.
+    expect(redisMock.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it("serializes a new subscribe behind an in-flight Redis unsubscribe", async () => {
+    let resolveUnsubscribe!: () => void;
+    redisMock.subscribe.mockResolvedValue(1);
+    redisMock.unsubscribe.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve;
+        }),
     );
+
+    const h1 = jest.fn().mockResolvedValue(undefined);
+    const h2 = jest.fn().mockResolvedValue(undefined);
+    await bus.subscribe("serial-chan", h1);
+
+    const unsubPromise = bus.unsubscribe("serial-chan", h1);
+    await Promise.resolve();
+    const resubPromise = bus.subscribe("serial-chan", h2);
+    await Promise.resolve();
+    expect(redisMock.subscribe).toHaveBeenCalledTimes(1);
+
+    resolveUnsubscribe();
+    await Promise.all([unsubPromise, resubPromise]);
+    expect(redisMock.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(redisMock.subscribe).toHaveBeenCalledTimes(2);
   });
 
   it("continues unsubscribe cleanup when pending subscribe rejects", async () => {

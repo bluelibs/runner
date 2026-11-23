@@ -4,9 +4,9 @@ import type {
 } from "../../../../durable/core/interfaces/bus";
 import { WaitManager } from "../../../../durable/core/managers/WaitManager";
 import { ExecutionStatus } from "../../../../durable/core/types";
-import * as utils from "../../../../durable/core/utils";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
 import { genericError } from "../../../../../errors";
+import { fakeNodeTimers } from "../../helpers/DurableService.unit.helpers";
 
 async function savePendingExecution(
   store: MemoryStore,
@@ -35,8 +35,7 @@ function failingSubscribeBus(): IEventBus {
 }
 
 describe("durable: WaitManager (event bus fallback retry)", () => {
-  it("sleeps between fallback polling attempts after subscribe() fails", async () => {
-    const sleepSpy = jest.spyOn(utils, "sleepMs").mockResolvedValue(undefined);
+  it("honors the polling interval after subscribe() fails", async () => {
     const store = new MemoryStore();
     const manager = new WaitManager(store, failingSubscribeBus(), {
       defaultPollIntervalMs: 5,
@@ -49,7 +48,7 @@ describe("durable: WaitManager (event bus fallback retry)", () => {
     let calls = 0;
     jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
       calls += 1;
-      if (calls >= 4) {
+      if (calls >= 3) {
         await store.updateExecution(executionId, {
           status: ExecutionStatus.Completed,
           result: "ok",
@@ -59,21 +58,26 @@ describe("durable: WaitManager (event bus fallback retry)", () => {
       return await originalGet(id);
     });
 
+    const restoreTimers = fakeNodeTimers();
     try {
-      await expect(
-        manager.waitForResult<string>(executionId, {
-          waitPollIntervalMs: 5,
-        }),
-      ).resolves.toBe("ok");
-      expect(sleepSpy).toHaveBeenCalledWith(5);
+      const done = manager.waitForResult<string>(executionId, {
+        waitPollIntervalMs: 5,
+      });
+      await jest.advanceTimersByTimeAsync(4);
+      expect(calls).toBe(1);
+      await jest.advanceTimersByTimeAsync(1);
+      const callsAfterOnePoll = calls;
+      expect(callsAfterOnePoll).toBeGreaterThan(1);
+      await jest.advanceTimersByTimeAsync(4);
+      expect(calls).toBe(callsAfterOnePoll);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(await done).toBe("ok");
     } finally {
-      sleepSpy.mockRestore();
+      restoreTimers();
     }
   });
 
   it("still times out when subscribe() fails and fallback polling keeps seeing a pending execution", async () => {
-    const sleepSpy = jest.spyOn(utils, "sleepMs").mockResolvedValue(undefined);
-    const nowSpy = jest.spyOn(Date, "now");
     const store = new MemoryStore();
     const manager = new WaitManager(store, failingSubscribeBus(), {
       defaultPollIntervalMs: 5,
@@ -82,24 +86,20 @@ describe("durable: WaitManager (event bus fallback retry)", () => {
     const executionId = "e-fallback-timeout";
     await savePendingExecution(store, executionId);
 
-    let nowMs = 1_000;
-    nowSpy.mockImplementation(() => nowMs);
-    sleepSpy.mockImplementation(async (ms) => {
-      nowMs += ms;
-    });
-
+    const restoreTimers = fakeNodeTimers();
     try {
-      await expect(
-        manager.waitForResult<string>(executionId, {
+      const outcome = manager
+        .waitForResult<string>(executionId, {
           timeout: 10,
           waitPollIntervalMs: 5,
-        }),
-      ).rejects.toThrow("Timeout waiting for execution");
-
-      expect(sleepSpy).toHaveBeenCalledWith(5);
+        })
+        .catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(10);
+      expect(await outcome).toMatchObject({
+        message: `Timeout waiting for execution ${executionId}`,
+      });
     } finally {
-      sleepSpy.mockRestore();
-      nowSpy.mockRestore();
+      restoreTimers();
     }
   });
 });

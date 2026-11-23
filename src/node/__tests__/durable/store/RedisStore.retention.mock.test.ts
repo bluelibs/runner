@@ -60,42 +60,46 @@ describe("Redis history collector contract", () => {
     expect(redisMock.eval).not.toHaveBeenCalled();
   });
 
-  it("removes only the execution's signal and timer details", async () => {
+  it("removes only the execution's signal and timer details without global hgetall", async () => {
     const { store, redisMock } = harness;
     redisMock.zrangebyscore.mockResolvedValue(["one"]);
     redisMock.get.mockResolvedValue(serializer.stringify(execution));
-    redisMock.sscan.mockResolvedValue(["0", ["signal/one"]]);
-    redisMock.hgetall.mockResolvedValue({
-      timer: serializer.stringify({ id: "timer", executionId: "one" }),
-      other: serializer.stringify({ id: "other", executionId: "other" }),
-    });
+    redisMock.sscan
+      .mockResolvedValueOnce(["0", ["signal/one"]])
+      .mockResolvedValueOnce(["0", ["timer"]]);
     await store.collectCompletedHistory(now, 1);
+    expect(redisMock.hgetall).not.toHaveBeenCalled();
     const args = redisMock.eval.mock.calls[0];
     expect(args[16]).toContain("signal%2Fone");
     expect(JSON.parse(args[17] as string)).toEqual(["timer"]);
   });
 
-  it("reads timers once per batch and groups them by execution", async () => {
+  it("reads per-execution timer indexes without scanning the global timers hash", async () => {
     const { store, redisMock } = harness;
     redisMock.zrangebyscore.mockResolvedValue(["one", "two"]);
     redisMock.get
       .mockResolvedValueOnce(serializer.stringify(execution))
       .mockResolvedValueOnce(serializer.stringify({ ...execution, id: "two" }));
-    redisMock.hgetall.mockResolvedValue({
-      first: serializer.stringify({ id: "first", executionId: "one" }),
-      second: serializer.stringify({ id: "second", executionId: "one" }),
-      third: serializer.stringify({ id: "third", executionId: "two" }),
-      scheduled: serializer.stringify({ id: "scheduled", type: "scheduled" }),
-    });
+    redisMock.sscan
+      .mockResolvedValueOnce(["0", []])
+      .mockResolvedValueOnce(["0", ["first", "second"]])
+      .mockResolvedValueOnce(["0", []])
+      .mockResolvedValueOnce(["0", ["third"]]);
     expect(await store.collectCompletedHistory(now, 2)).toBe(2);
-    expect(redisMock.hgetall).toHaveBeenCalledTimes(1);
+    expect(redisMock.hgetall).not.toHaveBeenCalled();
     expect(
       redisMock.eval.mock.calls.map((args) => JSON.parse(args[17] as string)),
     ).toEqual([["first", "second"], ["third"]]);
   });
 
+  it("returns 0 when limit <= 0", async () => {
+    const { store, redisMock } = harness;
+    expect(await store.collectCompletedHistory(now, 0)).toBe(0);
+    expect(redisMock.zrangebyscore).not.toHaveBeenCalled();
+  });
+
   it.each(["retain", "postpone"])(
-    "rechecks a policy changed to %s after index selection",
+    "rechecks a policy changed to %s after index selection and updates the cleanup index",
     async (policy) => {
       const { store, redisMock } = harness;
       const current: Execution = {
@@ -109,7 +113,18 @@ describe("Redis history collector contract", () => {
       expect(await store.collectCompletedHistory(now, 1)).toBe(0);
       expect(redisMock.eval).not.toHaveBeenCalled();
       expect(redisMock.hgetall).not.toHaveBeenCalled();
-      expect(redisMock.zrem).not.toHaveBeenCalled();
+      if (policy === "retain") {
+        expect(redisMock.zrem).toHaveBeenCalledWith(
+          "durable:execution_index_metadata:cleanup",
+          "one",
+        );
+      } else {
+        expect(redisMock.zadd).toHaveBeenCalledWith(
+          "durable:execution_index_metadata:cleanup",
+          now.getTime() + 1000,
+          "one",
+        );
+      }
     },
   );
 });

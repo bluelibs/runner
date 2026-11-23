@@ -14,6 +14,12 @@ import type {
 } from "../types";
 import type { DurableAuditEntry } from "../audit";
 import type { DurableExecutionOwnership } from "./ownership";
+import type {
+  DurableHistoryEntry,
+  DurableHistoryUpdate,
+  DurableCheckpointBranch,
+} from "./history";
+import type { DurableCommandRecord } from "./commands";
 
 export type { DurableExecutionOwnership } from "./ownership";
 
@@ -54,6 +60,37 @@ export type ExpectedExecutionStatuses = readonly [
 export type ScheduleUpdate = Omit<Partial<Schedule>, "id">;
 
 export interface IDurableStore {
+  /** True when multiple worker processes can share this store backend (e.g. PostgreSQL or Redis). */
+  readonly isSharedAcrossProcesses?: boolean;
+
+  /** Atomically creates a branch and its completed prefix if the source snapshot still matches. */
+  createCheckpointExecution?(branch: DurableCheckpointBranch): Promise<boolean>;
+
+  /** Logical workflow-timer clock for isolated test adapters; leases always use backend real time. */
+  getWorkflowTime?(): number;
+
+  /** Atomically inserts one command, FIFO membership, and one shared command wakeup; duplicates retain their receipt. */
+  enqueueCommand?(command: DurableCommandRecord): Promise<DurableCommandRecord>;
+  /** Atomically reschedules the shared wakeup while the FIFO is nonempty, otherwise removes it. Returns whether commands remain; never releases a timer claim. */
+  rescheduleCommandTimer?(executionId: string, fireAt: Date): Promise<boolean>;
+  /** Reads a command receipt, including after workflow history collection. */
+  getCommand?(commandId: string): Promise<DurableCommandRecord | null>;
+  /** Reads the next pending request without removing it. */
+  getNextCommand?(executionId: string): Promise<DurableCommandRecord | null>;
+  /** Updates only a live FIFO head; terminal receipts cannot be overwritten. */
+  saveCommand?(command: DurableCommandRecord): Promise<boolean>;
+  /** Atomically commits a receipt, optional staged state, FIFO removal, and removal of the final command wakeup. A target snapshot guards successful state application. */
+  completeCommand?(
+    command: DurableCommandRecord,
+    expectedExecution?: Execution,
+  ): Promise<boolean>;
+  /** Optional ordered history capability; legacy custom stores need not implement it. */
+  recordExecutionHistory?(
+    executionId: string,
+    operation: DurableHistoryUpdate,
+  ): Promise<void>;
+  /** Reads operation metadata without executing workflow code. */
+  listExecutionHistory?(executionId: string): Promise<DurableHistoryEntry[]>;
   /**
    * Returns a call-scoped store that atomically verifies the execution lease
    * with each mutation. Loss invokes ownership.onLost before exposing an error.
@@ -67,6 +104,8 @@ export interface IDurableStore {
   getExecutionTimers?(executionId: string): Promise<Timer[]>;
   /** Atomically collects due successful history, retaining completion receipts for replay and waiters. */
   collectCompletedHistory?(now: Date, limit: number): Promise<number>;
+  /** Expire due completion receipts and dependent execution records, returning the number removed. */
+  collectExpiredReceipts?(now: Date, limit: number): Promise<number>;
   saveExecution(execution: Execution): Promise<void>;
   /**
    * Atomically replaces an execution when its current status still matches one

@@ -80,12 +80,6 @@ function parseSignalStepState(value: unknown): SignalStepState | null {
   return null;
 }
 
-function nextIndex(counter: Map<string, number>, key: string): number {
-  const current = counter.get(key) ?? 0;
-  counter.set(key, current + 1);
-  return current;
-}
-
 function createCompletedSignalState(stepId: string, signalId: string) {
   return shouldPersistStableSignalId(stepId, signalId)
     ? {
@@ -129,11 +123,7 @@ export async function waitForSignalDurably<TPayload>(params: {
   executionId: string;
   assertCanContinue: () => Promise<void>;
   appendAuditEntry: (entry: DurableAuditEntryInput) => Promise<void>;
-  assertUniqueStepId: (stepId: string) => void;
-  assertOrWarnImplicitInternalStepId: (
-    kind: "sleep" | "emit" | "waitForSignal",
-  ) => void;
-  signalIndexes: Map<string, number>;
+  stepId: string;
   signal: SignalInput<TPayload>;
   options?: SignalOptions;
 }): Promise<WaitForSignalResult<TPayload>> {
@@ -174,19 +164,7 @@ export async function waitForSignalDurably<TPayload>(params: {
     executionId: params.executionId,
     signalId,
     fn: async () => {
-      let stepId: string;
-      if (params.options?.stepId) {
-        stepId = `__signal:${params.options.stepId}`;
-      } else {
-        params.assertOrWarnImplicitInternalStepId("waitForSignal");
-        const signalStepIndex = nextIndex(params.signalIndexes, signalId);
-        stepId =
-          signalStepIndex === 0
-            ? `__signal:${signalId}`
-            : `__signal:${signalId}:${signalStepIndex}`;
-      }
-
-      params.assertUniqueStepId(stepId);
+      const { stepId } = params;
 
       const existing = await params.store.getStepResult(
         params.executionId,

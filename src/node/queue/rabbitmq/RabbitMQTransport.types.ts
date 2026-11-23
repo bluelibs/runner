@@ -81,6 +81,7 @@ export interface RabbitMQTransportConfig<TMessage> {
   decode: (message: ConsumeMessage) => TMessage | null;
   resolveMessageId: (message: TMessage) => string | undefined;
   throwNotInitialized: () => never;
+  onDisconnect?: () => void;
 }
 
 export const DEFAULT_RECONNECT: Required<RabbitMQTransportReconnectConfig> = {

@@ -43,6 +43,19 @@ jobs:
           --health-retries 30
         ports:
           - 6379:6379
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: runner
+          POSTGRES_PASSWORD: runner
+          POSTGRES_DB: runner_test
+        options: >-
+          --health-cmd "pg_isready -U runner -d runner_test || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+        ports:
+          - 5432:5432
       rabbitmq:
         image: rabbitmq:3.13-management-alpine
         options: >-
@@ -72,6 +85,7 @@ jobs:
           REAL_INFRASTRUCTURE_FAULT_INTEGRATION: "1"
           EVENT_LANES_INTEGRATION: "1"
           REAL_INFRASTRUCTURE_REDIS_URL: redis://127.0.0.1:6379
+          REAL_INFRASTRUCTURE_POSTGRES_URL: postgresql://runner:runner@127.0.0.1:5432/runner_test
           EVENT_LANES_TEST_RABBIT_URL: amqp://127.0.0.1:5672
           RABBITMQ_MANAGEMENT_URL: http://127.0.0.1:15672
           RABBITMQ_MANAGEMENT_USER: guest
@@ -80,8 +94,11 @@ jobs:
           npm run test:serial --
           --runTestsByPath
           src/node/__tests__/durable/store/RedisStore.real.integration.test.ts
+          src/node/__tests__/durable/store/RedisStore.capabilities.real.integration.test.ts
+          src/node/__tests__/durable/store/RedisStore.commandTimers.real.integration.test.ts
           src/node/__tests__/durable/store/RedisStore.ownership.real.integration.test.ts
           src/node/__tests__/durable/store/RedisStore.retention.real.integration.test.ts
+          src/node/__tests__/durable/store/PostgresStore.real.integration.test.ts
           src/node/__tests__/event-lanes/RabbitMQEventLaneQueue.real.integration.test.ts
           src/node/__tests__/event-lanes/RabbitMQEventLaneQueue.delivery.real.integration.test.ts
 

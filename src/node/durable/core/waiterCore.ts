@@ -107,7 +107,8 @@ export async function ensureDurableWaitTimer(params: {
   }
 
   const timerId = params.createTimerId();
-  const timeoutAtMs = Date.now() + params.timeoutMs;
+  const timeoutAtMs =
+    (params.store.getWorkflowTime?.() ?? Date.now()) + params.timeoutMs;
 
   await params.store.createTimer({
     id: timerId,

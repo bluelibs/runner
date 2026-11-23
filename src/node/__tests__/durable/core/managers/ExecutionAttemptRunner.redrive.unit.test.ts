@@ -1,5 +1,5 @@
 import {
-  redriveIfResumedDuringLock,
+  redriveAfterLockRelease,
   shouldRedriveAfterLockRelease,
 } from "../../../../durable/core/managers/ExecutionAttemptRunner.redrive";
 import { createExecutionLockState } from "../../../../durable/core/managers/ExecutionManager.locking";
@@ -79,7 +79,66 @@ describe("durable: redrive after lock release", () => {
   });
 });
 
-describe("durable: redriveIfResumedDuringLock", () => {
+describe("durable: redriveAfterLockRelease", () => {
+  it.each(["running", "pending", "paused", "completed", null] as const)(
+    "checks the latest target before redriving new commands: %s",
+    async (status) => {
+      const store = new MemoryStore();
+      const snapshot = createExecution();
+      await store.saveExecution(snapshot);
+      await store.enqueueCommand({
+        id: "new",
+        executionId: snapshot.id,
+        requestedExecutionId: snapshot.id,
+        taskKey: "change",
+        input: undefined,
+        status: "pending",
+        createdAt: new Date(),
+      });
+      if (status === null)
+        jest.spyOn(store, "getExecution").mockResolvedValue(null);
+      else await store.saveExecution({ ...snapshot, status });
+      const kickoffExecution = jest.fn(async () => {});
+      await redriveAfterLockRelease({
+        store,
+        lockedSnapshot: snapshot,
+        commandAtStart: null,
+        lockState: createExecutionLockState(),
+        shutdownInterruptionReason: null,
+        kickoffExecution,
+      });
+      expect(kickoffExecution).toHaveBeenCalledTimes(
+        status === "running" ? 1 : 0,
+      );
+    },
+  );
+
+  it("leaves an unchanged parked FIFO head to its timer", async () => {
+    const store = new MemoryStore();
+    const snapshot = createExecution();
+    await store.saveExecution(snapshot);
+    await store.enqueueCommand({
+      id: "parked",
+      executionId: snapshot.id,
+      requestedExecutionId: snapshot.id,
+      taskKey: "change",
+      input: undefined,
+      status: "running",
+      createdAt: new Date(),
+    });
+    const kickoffExecution = jest.fn(async () => {});
+    await redriveAfterLockRelease({
+      store,
+      lockedSnapshot: snapshot,
+      commandAtStart: "parked",
+      lockState: createExecutionLockState(),
+      shutdownInterruptionReason: null,
+      kickoffExecution,
+    });
+    expect(kickoffExecution).not.toHaveBeenCalled();
+    expect(await store.getExecutionTimers(snapshot.id)).toHaveLength(1);
+  });
+
   async function setup(params: {
     lost?: boolean;
     shutdownInterruptionReason?: string | null;
@@ -90,12 +149,13 @@ describe("durable: redriveIfResumedDuringLock", () => {
     const lockState = createExecutionLockState();
     lockState.lost = params.lost ?? false;
     const kickoffExecution = jest.fn(async (_executionId: string) => {});
-    await redriveIfResumedDuringLock({
+    await redriveAfterLockRelease({
       store,
       lockedSnapshot:
         params.lockedSnapshot === undefined
           ? createExecution()
           : params.lockedSnapshot,
+      commandAtStart: null,
       lockState,
       shutdownInterruptionReason: params.shutdownInterruptionReason ?? null,
       kickoffExecution,

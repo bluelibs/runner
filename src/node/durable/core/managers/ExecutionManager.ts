@@ -17,6 +17,7 @@ import type { WaitManager } from "./WaitManager";
 import { Logger } from "../../../../models/Logger";
 import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
 import { durableExecutionInvariantError } from "../../../../errors";
+import { MemoryEventBus } from "../../bus/MemoryEventBus";
 import { NoopEventBus } from "../../bus/NoopEventBus";
 import { resolveExecutionWaiters } from "./ExecutionManager.waiters";
 import { AttemptCancellationController } from "./AttemptCancellationController";
@@ -85,8 +86,13 @@ export class ExecutionManager {
   ) {
     assertExecutionTuningConfig(this.config.execution);
     this.eventBus = this.config.eventBus ?? new NoopEventBus();
+    const isLocalBusOnSharedStore =
+      this.config.eventBus instanceof MemoryEventBus &&
+      this.config.store.isSharedAcrossProcesses === true;
     const liveCancellationEventBus =
-      this.config.eventBus && !(this.config.eventBus instanceof NoopEventBus)
+      this.config.eventBus &&
+      !(this.config.eventBus instanceof NoopEventBus) &&
+      !isLocalBusOnSharedStore
         ? this.config.eventBus
         : null;
     const baseLogger =
@@ -243,7 +249,8 @@ export class ExecutionManager {
     return await restartExecutionFlow(
       {
         persistence: this.persistenceDeps,
-        resolveTask: (workflowKey) => this.taskRegistry.find(workflowKey),
+        resolveTask: (workflowKey, version) =>
+          this.taskRegistry.find(workflowKey, version),
       },
       executionId,
       options,
@@ -272,6 +279,10 @@ export class ExecutionManager {
   }
 
   async notifyExecutionFinished(execution: Execution): Promise<void> {
+    await this.attemptRunner.commands?.rejectPending(
+      execution.id,
+      "Target workflow is closed.",
+    );
     await resolveExecutionWaiters({
       store: this.config.store,
       execution,
@@ -350,7 +361,7 @@ export class ExecutionManager {
   ): AnyTask {
     if (typeof taskRef !== "string") return taskRef;
 
-    const resolved = this.taskRegistry.find(taskRef);
+    const resolved = this.taskRegistry.resolve(taskRef);
     if (!resolved) {
       durableExecutionInvariantError.throw({
         message: `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,

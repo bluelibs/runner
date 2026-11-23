@@ -197,6 +197,10 @@ export class AttemptCancellationController {
     pausedAt?: Date;
   }): Promise<{ signal: AbortSignal; stop: () => void }> {
     const controller = new AbortController();
+    if (this.shutdownInterruptionReason !== null) {
+      controller.abort(this.shutdownInterruptionReason);
+      return { signal: controller.signal, stop: () => {} };
+    }
     this.activeAttemptControllers.set(params.executionId, controller);
     if (params.pausedAt) {
       this.attemptStartPauseStamps.set(controller, params.pausedAt.getTime());

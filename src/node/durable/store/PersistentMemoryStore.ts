@@ -153,6 +153,15 @@ export class PersistentMemoryStore extends MemoryStore {
 
     return {
       version: 1,
+      histories: readArrayField<
+        NonNullable<MemoryStoreSnapshot["histories"]>[number]
+      >(parsed, "histories"),
+      commands: readArrayField<
+        NonNullable<MemoryStoreSnapshot["commands"]>[number]
+      >(parsed, "commands"),
+      commandQueues: readArrayField<
+        NonNullable<MemoryStoreSnapshot["commandQueues"]>[number]
+      >(parsed, "commandQueues"),
       executions: readArrayField<Execution>(parsed, "executions"),
       executionIdByIdempotencyKey: readArrayField<readonly [string, string]>(
         parsed,

@@ -64,7 +64,11 @@ describe("durable: RedisStore continuation (mock)", () => {
     expect(args[17]).toBe("1");
     // The commit is conditional on the prior run still running, and on the
     // scanned signal-key set (empty here) still being complete.
-    expect(args.slice(-2)).toEqual([ExecutionStatus.Running, "0"]);
+    expect(args.slice(-3)).toEqual([
+      ExecutionStatus.Running,
+      "0",
+      "durable:command_queue:root",
+    ]);
   });
 
   it("drops the commit when the prior run is no longer running", async () => {

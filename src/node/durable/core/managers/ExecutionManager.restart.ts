@@ -30,7 +30,7 @@ type AnyTask = ITask<any, Promise<any>, any, any, any, any>;
  */
 export interface ExecutionRestartDeps {
   persistence: ExecutionPersistenceDeps;
-  resolveTask: (workflowKey: string) => AnyTask | undefined;
+  resolveTask: (workflowKey: string, version?: number) => AnyTask | undefined;
 }
 
 /**
@@ -52,7 +52,7 @@ function resolveRestartInput(
     return { input, inputNeedsValidation: undefined };
   }
 
-  const task = deps.resolveTask(source.workflowKey);
+  const task = deps.resolveTask(source.workflowKey, source.workflowVersion);
   if (!task) return { input, inputNeedsValidation: true };
   ValidationHelper.validateInput(
     input,
@@ -72,7 +72,14 @@ function buildRestartedExecution(
   return {
     id: createExecutionId(),
     workflowKey: source.workflowKey,
+    ...(source.workflowVersion === undefined
+      ? {}
+      : { workflowVersion: source.workflowVersion }),
+    ...(deps.persistence.store.recordExecutionHistory
+      ? { historyRecorded: true }
+      : {}),
     parentExecutionId: source.parentExecutionId,
+    ...(source.parentExecutionInStore ? { parentExecutionInStore: true } : {}),
     ...resolveRestartInput(deps, source, options),
     status: ExecutionStatus.Pending,
     attempt: 1,

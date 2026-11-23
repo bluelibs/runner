@@ -8,6 +8,7 @@ import { WaitManager } from "../../../../durable/core/managers/WaitManager";
 import { ExecutionStatus } from "../../../../durable/core/types";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
 import { genericError } from "../../../../../errors";
+import { fakeNodeTimers } from "../../helpers/DurableService.unit.helpers";
 
 class SilentEventBus implements IEventBus {
   async publish(_channel: string, _event: BusEvent): Promise<void> {}
@@ -57,10 +58,10 @@ describe("durable: WaitManager (event bus cleanup)", () => {
         waitPollIntervalMs: 1,
       });
 
-      for (let i = 0; i < 10 && calls < 3; i += 1) {
+      for (let i = 0; i < 10 && calls < 2; i += 1) {
         await Promise.resolve();
       }
-      expect(calls).toBe(3);
+      expect(calls).toBe(2);
 
       await jest.advanceTimersByTimeAsync(10);
       await expect(waiting).rejects.toThrow("Timeout waiting for execution");
@@ -75,8 +76,8 @@ describe("durable: WaitManager (event bus cleanup)", () => {
   });
 
   it("does not schedule another poll after timeout has already settled the wait", async () => {
-    jest.useFakeTimers();
-    const setTimeoutSpy = jest.spyOn(timers, "setTimeout");
+    const restoreTimers = fakeNodeTimers();
+    const setTimeoutSpy = jest.mocked(timers.setTimeout);
     try {
       const store = new MemoryStore();
       const bus = new SilentEventBus();
@@ -94,7 +95,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
 
       jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
         calls += 1;
-        if (calls === 3) {
+        if (calls === 2) {
           await blockedCheck;
         }
         return await originalGet(id);
@@ -105,26 +106,28 @@ describe("durable: WaitManager (event bus cleanup)", () => {
         waitPollIntervalMs: 1_000,
       });
 
-      for (let i = 0; i < 10 && calls < 3; i += 1) {
+      for (let i = 0; i < 10 && calls < 2; i += 1) {
         await Promise.resolve();
       }
-      expect(calls).toBe(3);
+      expect(calls).toBe(2);
 
-      jest.advanceTimersByTime(10);
-      await Promise.resolve();
-      releaseBlockedCheck();
-      await Promise.resolve();
-      await Promise.resolve();
-
-      await expect(waiting).rejects.toThrow("Timeout waiting for execution");
-
-      const pollTimers = setTimeoutSpy.mock.calls.filter(
+      const pollTimersBeforeTimeout = setTimeoutSpy.mock.calls.filter(
         (_call) => _call[1] === 1_000,
-      );
-      expect(pollTimers).toHaveLength(0);
+      ).length;
+      const outcome = waiting.catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(10);
+      expect(await outcome).toMatchObject({
+        message: `Timeout waiting for execution ${executionId}`,
+      });
+      releaseBlockedCheck();
+      await jest.advanceTimersByTimeAsync(0);
+
+      const pollTimersAfterTimeout = setTimeoutSpy.mock.calls.filter(
+        (_call) => _call[1] === 1_000,
+      ).length;
+      expect(pollTimersAfterTimeout).toBe(pollTimersBeforeTimeout);
     } finally {
-      jest.useRealTimers();
-      setTimeoutSpy.mockRestore();
+      restoreTimers();
     }
   });
 
@@ -202,7 +205,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
   });
 
   it("stops a poll callback when the wait settles while the store check is still in flight", async () => {
-    jest.useFakeTimers();
+    const restoreTimers = fakeNodeTimers();
     try {
       const store = new MemoryStore();
       const bus = new MemoryEventBus();
@@ -216,7 +219,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
       let calls = 0;
       jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
         calls += 1;
-        if (calls === 4) {
+        if (calls === 3) {
           await new Promise<void>((resolve) => {
             releaseCheck = resolve;
           });
@@ -229,10 +232,8 @@ describe("durable: WaitManager (event bus cleanup)", () => {
         waitPollIntervalMs: 10,
       });
 
-      for (let i = 0; i < 20 && calls < 4; i += 1) {
-        await Promise.resolve();
-      }
-      expect(calls).toBe(4);
+      await jest.advanceTimersByTimeAsync(10);
+      expect(calls).toBe(3);
 
       await store.updateExecution(executionId, {
         status: ExecutionStatus.Completed,
@@ -248,7 +249,7 @@ describe("durable: WaitManager (event bus cleanup)", () => {
 
       await expect(waiting).resolves.toBe("ok");
     } finally {
-      jest.useRealTimers();
+      restoreTimers();
     }
   });
 

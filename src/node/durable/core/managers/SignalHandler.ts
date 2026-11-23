@@ -28,6 +28,7 @@ export interface SignalHandlerCallbacks {
   processExecution: (executionId: string) => Promise<void>;
   resolveTask: (
     workflowKey: string,
+    version?: number,
   ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
 }
 
@@ -62,7 +63,8 @@ export class SignalHandler {
     this.hopDeps = {
       store,
       logger,
-      resolveTask: (workflowKey) => callbacks.resolveTask(workflowKey),
+      resolveTask: (workflowKey, version) =>
+        callbacks.resolveTask(workflowKey, version),
     };
   }
 

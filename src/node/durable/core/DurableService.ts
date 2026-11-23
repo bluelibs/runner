@@ -1,3 +1,15 @@
+import { replayWorkflow } from "./replay";
+import type {
+  DurableReplayFixture,
+  DurableReplayReport,
+} from "./interfaces/history";
+import { CommandManager } from "./managers/CommandManager";
+import type { AnyTask } from "../../../types/task";
+import type {
+  ExtractTaskInput,
+  ResolveTaskOutput,
+} from "../../../types/utilities";
+import type { DurableCommandOptions } from "./interfaces/commands";
 import { NoopEventBus } from "../bus/NoopEventBus";
 import type {
   DurableStartAndWaitResult,
@@ -56,6 +68,7 @@ export { DurableExecutionError } from "./utils";
 export class DurableService implements IDurableService {
   private lifecycleState: "running" | "cooldown" | "disposing" | "disposed" =
     "running";
+  private readonly commandManager: CommandManager;
   private readonly taskRegistry: TaskRegistry;
   private readonly auditLogger: AuditLogger;
   private readonly waitManager: WaitManager;
@@ -91,6 +104,7 @@ export class DurableService implements IDurableService {
     this.taskRegistry = new TaskRegistry(
       config.taskResolver,
       config.workflowKeyResolver,
+      config.taskKeyResolver,
     );
 
     // Register initial tasks
@@ -148,6 +162,14 @@ export class DurableService implements IDurableService {
       this.waitManager,
     );
 
+    this.commandManager = new CommandManager(
+      config,
+      this.taskRegistry,
+      (id) => this.executionManager.recoverExecution(id),
+      this.executionManager.cancellation,
+    );
+    this.executionManager.attemptRunner.commands = this.commandManager;
+
     // Initialize signal handler
     this.signalHandler = new SignalHandler(
       config.store,
@@ -157,7 +179,8 @@ export class DurableService implements IDurableService {
       config.execution?.maxAttempts ?? 3,
       {
         processExecution: (id) => this.executionManager.processExecution(id),
-        resolveTask: (workflowKey) => this.taskRegistry.find(workflowKey),
+        resolveTask: (workflowKey, version) =>
+          this.taskRegistry.find(workflowKey, version),
       },
     );
 
@@ -189,14 +212,10 @@ export class DurableService implements IDurableService {
       config.store,
       config.recovery,
       (id) => this.executionManager.recoverExecution(id),
-      (key) => this.taskRegistry.find(key) !== undefined,
+      (key, version) => this.taskRegistry.find(key, version) !== undefined,
       this.logger,
     );
     this.stopHandlers.push(() => this.clusterRecovery.stop());
-
-    this.stopHandlers.push(async () => {
-      await this.executionManager.stopLiveCancellationListener();
-    });
   }
 
   /** @internal Starts lifecycle-owned retention maintenance. */
@@ -418,32 +437,35 @@ export class DurableService implements IDurableService {
 
       this.lifecycleState = "disposing";
 
-      while (this.stopHandlers.length > 0) {
-        const stop = this.stopHandlers.pop()!;
+      const runStopStep = async (
+        label: string,
+        fn: () => Promise<void>,
+      ): Promise<void> => {
         try {
-          await stop();
+          await fn();
         } catch (error) {
           firstError ??= error;
           try {
-            await this.logger.error("Durable stop handler failed.", { error });
+            await this.logger.error(label, { error });
           } catch {
             // Logging must not mask shutdown.
           }
         }
+      };
+
+      while (this.stopHandlers.length > 0) {
+        const stop = this.stopHandlers.pop()!;
+        await runStopStep("Durable stop handler failed.", stop);
       }
 
-      try {
-        await this.pollingManager.stop();
-      } catch (error) {
-        firstError ??= error;
-        try {
-          await this.logger.error("Durable polling shutdown failed.", {
-            error,
-          });
-        } catch {
-          // Logging must not mask shutdown.
-        }
-      }
+      await runStopStep("Durable polling shutdown failed.", () =>
+        this.pollingManager.stop(),
+      );
+
+      // Tear down live cancellation after timer-driven attempts have drained.
+      await runStopStep("Durable live cancellation shutdown failed.", () =>
+        this.executionManager.stopLiveCancellationListener(),
+      );
 
       this.lifecycleState = "disposed";
       if (firstError) {
@@ -504,6 +526,30 @@ export class DurableService implements IDurableService {
     await this.scheduleManager.remove(id);
   }
 
+  /** Checks proposed workflow code against copied history using this runtime's task integration. */
+  replay(
+    task: AnyTask,
+    fixture: DurableReplayFixture,
+  ): Promise<DurableReplayReport> {
+    return replayWorkflow(task, fixture, this.config);
+  }
+
+  /** Runs a declared command under the target workflow's ownership. */
+  command<TTask extends AnyTask>(
+    executionId: string,
+    task: TTask,
+    input: ExtractTaskInput<TTask>,
+    options?: DurableCommandOptions,
+  ): Promise<ResolveTaskOutput<TTask>> {
+    this.assertCanStartDurableExecution("DurableService.command()");
+    return this.commandManager.command(
+      executionId,
+      task,
+      input,
+      options,
+    ) as Promise<ResolveTaskOutput<TTask>>;
+  }
+
   async signal<TPayload>(
     executionId: string,
     signal: IEventDefinition<TPayload>,
@@ -514,6 +560,12 @@ export class DurableService implements IDurableService {
   }
 
   // ─── Internal access for DurableWorker ─────────────────────────────────────
+
+  /** @internal Used by operator branches after the atomic commit. */
+  async kickoffExecution(executionId: string): Promise<void> {
+    this.assertCanStartDurableExecution("DurableService.kickoffExecution()");
+    await this.executionManager.recoverExecution(executionId);
+  }
 
   async processExecution(executionId: string): Promise<void> {
     return this.executionManager.processExecution(executionId);

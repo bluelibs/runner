@@ -359,6 +359,10 @@ export async function persistTaskTimerExecution(params: {
   const execution: Execution<unknown, unknown> = {
     id: executionId,
     workflowKey: params.workflowKey,
+    ...(params.timer.workflowVersion === undefined
+      ? {}
+      : { workflowVersion: params.timer.workflowVersion }),
+    ...(params.store.recordExecutionHistory ? { historyRecorded: true } : {}),
     input: params.timer.input,
     status: ExecutionStatus.Pending,
     attempt: 1,
@@ -441,7 +445,7 @@ export async function handleScheduledTaskTimer(params: {
   if (!params.timer.workflowKey) {
     return {
       handled: false,
-      finalizeCurrentTimer: false,
+      finalizeCurrentTimer: true,
       releaseCurrentTimerClaim: false,
     };
   }
@@ -468,8 +472,11 @@ export async function handleScheduledTaskTimer(params: {
     }
   }
 
-  const task = params.taskRegistry.find(params.timer.workflowKey);
-  if (!task) {
+  const task = params.taskRegistry.find(
+    params.timer.workflowKey,
+    params.timer.workflowVersion,
+  );
+  if (!task && params.timer.workflowVersion === undefined) {
     return {
       handled: false,
       finalizeCurrentTimer: false,
@@ -479,7 +486,11 @@ export async function handleScheduledTaskTimer(params: {
 
   const executionId = await params.persistTaskTimerExecution({
     timer: params.timer,
-    workflowKey: params.taskRegistry.getWorkflowKey(task),
+    // A shared timer worker need not have the pinned implementation. Queue
+    // the occurrence so the normal execution version routing can redrive it.
+    workflowKey: task
+      ? params.taskRegistry.getWorkflowKey(task)
+      : params.timer.workflowKey,
   });
   params.assertTimerClaimIsStillOwned();
   if (!params.timer.scheduleId) {
@@ -493,7 +504,7 @@ export async function handleScheduledTaskTimer(params: {
     params.assertTimerClaimIsStillOwned();
     if (schedule && schedule.status === "active") {
       await params.scheduleManager.reschedule(schedule, {
-        lastRunAt: new Date(),
+        lastRunAt: new Date(params.store.getWorkflowTime?.() ?? Date.now()),
       });
       params.assertTimerClaimIsStillOwned();
       return {

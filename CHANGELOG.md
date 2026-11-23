@@ -1,8 +1,35 @@
 # Changelog
 
+## 6.10.0 (unreleased)
+
+### Features
+
+- Add built-in SQL durable persistence backends and Runner resources:
+  - `SqliteStore` and `resources.sqliteWorkflow` (`sqliteDurableResource`) built on Node >= 22's native `node:sqlite` (`DatabaseSync`), using WAL mode for file databases, busy timeouts, and serialized immediate transactions for single-node local persistence.
+  - `PostgresStore` and `resources.postgresWorkflow` (`postgresDurableResource`) built on optional `pg` (or any structural `PgPoolLike`), using row-level `FOR UPDATE` fencing, `FOR UPDATE SKIP LOCKED` timer claiming, and namespace-scoped schemas for multi-worker deployments. When `redis` is omitted on `postgresWorkflow`, event notifications fall back to `MemoryEventBus`.
+- Add optional two-stage durable receipt expiry via `retention.receipts` (`"retain" | "delete" | { afterMs }`) and `IDurableStore.collectExpiredReceipts(now, limit)` across Memory, PersistentMemory, Redis, SQLite, and PostgreSQL stores. Validates at tag/resource/service admission that `receipts` cannot expire earlier than `onComplete`, while permitting one-stage full cleanup (`{ onComplete: "retain", receipts: { afterMs } }`) and atomically releasing idempotency keys, command receipts, execution indexes, timers, and dependent execution records.
+- Add a PostgreSQL 17 integration test suite and service container to `.github/workflows/real-infrastructure.yml`.
+
+### Fixes
+
+- Revalidate source execution ownership before returning replay fixtures in `withCheckpointLease`, release acquired step-concurrency permits if `createStepProgress` initialization fails, and verify candidate workflow version before falling back to `externalResolver` in `TaskRegistry.find()`.
+- Serialize PostgreSQL schema startup, first signal writes, and command FIFO wakeups. Preserve exclusive ownership during contested PostgreSQL lease and timer claims and serialize stores that share a SQLite connection.
+- Let a same-backend child's history and receipt expire after its verified parent's receipt expires. Reject a mismatched starting version in typed child execution waits.
+- Hoist compiled `Match` validators above `RedisResilience` instance methods instead of recompiling patterns on every Redis script reply.
+- Use a valid non-dotted task ID (`r.task("greet")`) in the `r` entry point JSDoc example (`src/public.ts`).
+
+### Operational limits
+
+- `PostgresStore` requires installing optional dependency `pg` or passing a compatible `PgPoolLike` adapter. `SqliteStore` requires Node >= 22 with `node:sqlite`.
+- Expiring an execution's receipt removes its completion record and idempotency mapping so subsequent starts with the same idempotency key create a new execution. Failures, cancellations, and executions with missing/incomplete parents, active locks, queued commands, or active waiters remain retained.
+
 ## 6.9.0 (unreleased)
 
 ### Migration
+
+- Deprecate only the task-definition overload `d.step(id, taskDefinition, input, options)`. It remains fully typed and operational without runtime warnings. Prefer an injected task dependency inside the callback overload, forwarding its cancellation signal and downstream idempotency key explicitly. Existing callback and compensation-builder forms remain current; task-identity metadata is retained for deprecated calls, so preserve existing workflow versions when migrating recorded replay fixtures.
+
+- The workflow capability APIs in this change are additive. Existing step forms, retry defaults/counts, exported `DurableStepRunContext`, unversioned workflows, test setup helpers, and version-1 memory snapshots remain supported. New custom-store/service capabilities are optional; commands and checkpoint tooling fail clearly when explicitly requested on unsupported adapters. Keep older workflow implementations and timer workers available when adopting explicit versions or tracked commands.
 
 - Prefer `timers` for durable deadline processing; `polling` remains supported as a deprecated alias. Rename `polling.interval` to `timers.pollIntervalMs`; the other option names and defaults are unchanged. Defined `timers` fields override corresponding legacy fields, with omitted values falling back to `polling`, then defaults. Interface documentation now explains sleeps, retries, wait timeouts, schedules, process roles, claim leases, and automatic execution heartbeats.
 - Disable and remove the incomplete `DurableContext.emit()` bus-notification feature and its `EmitOptions` type. It did not dispatch Runner hooks or deliver workflow signals. Emit Runner events through injected event dependencies, or deliver workflow signals with `durable.signal(...)`. Historical `emit_published` audit records remain readable.
@@ -11,6 +38,13 @@
 - This minor release does not change existing support commitments for previous major versions.
 
 ### Features
+
+- Add stable downstream idempotency keys, resumable progress heartbeats, and optional `durable.useStep()` integration. Ordinary injected tasks can run inside callback steps; the typed task-definition overload remains available as deprecated compatibility support. Existing retries remain available with the same additional-attempt count; all retrying steps now preserve their consumed budget and remaining backoff across interruptions within a workflow attempt.
+- Add optional workflow implementation versions, pinned through recovery, restart, signals, timers, and schedules. Continue-as-new retains its version unless an explicit upgrade is requested; missing explicit versions wait for a capable worker. Existing unversioned workflows retain their routing.
+- Add declared, typed workflow commands using ordinary Runner tasks. Requests serialize under execution ownership, stage state privately, and atomically commit state with their durable result receipt. Request keys deduplicate retries; caller wait deadlines leave accepted requests durable.
+- Add ordered operation history for newly admitted executions, structural replay compatibility checks, and a Runner-backed test runtime with explicit virtual workflow timers and settled-worker restart. Add operator checkpoint reset as a new execution branch, with an atomic completed-prefix/state copy and source lineage. Legacy or collected histories cannot be reconstructed; overlapping and unfinished boundaries fail explicitly.
+- Simplify workflow capabilities: unchanged history phases skip writes, memory history uses step-ID indexes without changing snapshot format, and replay uses a cursor with indexed descendants. Commands use one atomically persisted wakeup per execution, preserve new admissions during timer delivery, infer staged-state initialization from its presence, and share execution waiting's bus notifications and polling fallback. Commands arriving during the final FIFO check are redriven after lease release.
+- Keep workflow progress parked while the head command waits for a step permit. Poll for committed receipts even when the event bus subscription stalls. Preserve due one-shot and recurring occurrences when a timer worker lacks their pinned implementation. Reserve distinct checkpoint IDs for parallel waits and validate pinned child workflow versions during replay.
 
 - Add opt-in continuous cluster recovery with `recovery.enabled`, bounded metadata pages, per-worker concurrency, recovery dispatch claims, and lifecycle shutdown handling. Built-in stores atomically fence attempt mutations against the execution lease; abandoned workflows resume from saved checkpoints without worker restarts. Recovery skips healthy waits and repairs missing wait timers or lost wakeups. Custom stores require explicit ownership/index capabilities; existing manual/startup recovery remains available.
 - Add optional `tags.durableEvent.with({ key })` persistence identities for event renames and resource moves. Stable keys preserve event recovery, parent-child submission checkpoints, and per-emission deduplication. Without a key, canonical-id addressing remains unchanged; existing saved hook and backend identities must remain compatible.
@@ -37,6 +71,8 @@
 
 ### Verification
 
+- Durable workflow capabilities, simplification, and task-overload deprecation: `npm run qa` passed with 5,902 tests passed, 65 tests skipped, zero failures, and 100% instrumented coverage. Legacy context/builder, adapter, and timer-type contracts, lint/type checks, platform builds, entry points, consumer bundles, benchmark-comparison tests, and documentation-generator tests passed. The recommended injected-task callback pattern preserves cancellation, downstream keys, restart replay, and standalone task calls. Language-service checks mark only task-definition calls deprecated on concrete and interface context types. Separate live Redis checks passed 13 tests across four suites, including cross-client serialization, command fencing/state receipts, shared-wakeup delivery races, unchanged-history write checks, checkpoint branches with pinned child metadata, takeover, and retention. The npm tarball includes the new declarations and materialized skill references; no release was published.
+
 - Timer configuration migration: `npm run qa` passed with 5,808 tests passed, 59 skipped, zero failures, and 100% instrumented coverage. Preferred and deprecated configurations, field-wise precedence, explicit false values, polling cadence, claim limits, validation, and resource type compatibility are covered; lint, type checks, platform builds, entry points, and consumer bundles passed.
 - Continuous recovery and atomic ownership: `npm run qa` passed with 5,794 tests passed, 59 skipped, zero failures, and 100% instrumented coverage. Lint, type checks, all platform builds, standalone entry points, and consumer bundles passed. Separate live Redis takeover/fencing, locking, retention, and cross-worker concurrency checks passed 15 tests across four suites; the dedicated infrastructure workflow now includes the takeover/fencing suite.
 - Dependency refresh: `npm run qa` passed with 5,752 source tests passed, 57 skipped, zero failed, and 100% instrumented coverage. All six documentation-generator tests passed, and the generated TypeDoc reflection data is identical before and after switching to patched minimatch. TypeDoc generation, the three durable-workflows example tests, a seven-test browser suite using the upgraded JUnit reporter, package inspection, and focused Handlebars/proxy-addr/qs security checks passed. Production and moderate-or-higher audit gates pass; the raw npm feed still reports the rejected deepmerge CVE noted above.
@@ -45,4 +81,3 @@
 - Separate live checks passed 96 tests across 17 suites with zero skips: Redis history collection and lifecycle races, Redis atomicity, memory/Redis step concurrency, RabbitMQ retry/recovery, overlapping duplicate delivery ownership, and the full Redis resilience test selection.
 - Fresh sequential benchmarks against the shipped 6.8.1 source passed all 11 workloads per revision and the unchanged local regression thresholds. Both revisions used identical dependencies, five measured runs, and two warmups; no significant regression was detected.
 - The production dependency audit reported zero vulnerabilities.
-

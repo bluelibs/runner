@@ -45,6 +45,7 @@ export class RedisEventBus implements IEventBus {
   private sub: RedisEventBusClient;
   private prefix: string;
   private readonly channels = new Map<string, ChannelState>();
+  private readonly pendingUnsubscribes = new Map<string, Promise<void>>();
   private readonly serializer: Serializer;
   private readonly logger: Logger;
   private readonly onHandlerError?: (error: unknown) => void | Promise<void>;
@@ -179,6 +180,10 @@ export class RedisEventBus implements IEventBus {
 
   async subscribe(channel: string, handler: BusEventHandler): Promise<void> {
     const fullChannel = this.k(channel);
+    const pendingUnsubscribe = this.pendingUnsubscribes.get(fullChannel);
+    if (pendingUnsubscribe) {
+      await pendingUnsubscribe;
+    }
 
     let state = this.channels.get(fullChannel);
 
@@ -196,7 +201,9 @@ export class RedisEventBus implements IEventBus {
           state!.subscriptionPromise = null;
         })
         .catch((err) => {
-          this.channels.delete(fullChannel);
+          if (this.channels.get(fullChannel) === state) {
+            this.channels.delete(fullChannel);
+          }
           throw err;
         });
 
@@ -239,13 +246,30 @@ export class RedisEventBus implements IEventBus {
         // If subscribe failed, there may be nothing to unsubscribe.
       }
     }
-    await this.sub.unsubscribe(fullChannel);
+    // A newer subscribe() may have re-registered this channel while we awaited.
+    if (this.channels.has(fullChannel)) {
+      return;
+    }
+    const unsubscribePromise = Promise.resolve(
+      this.sub.unsubscribe(fullChannel),
+    )
+      .then(() => undefined)
+      .finally(() => {
+        this.pendingUnsubscribes.delete(fullChannel);
+      });
+    this.pendingUnsubscribes.set(fullChannel, unsubscribePromise);
+    await unsubscribePromise;
   }
 
   async dispose(): Promise<void> {
-    if (this.ownsPublisherClient) {
-      await this.pub.quit();
+    this.channels.clear();
+    this.pendingUnsubscribes.clear();
+    try {
+      if (this.ownsPublisherClient) {
+        await this.pub.quit();
+      }
+    } finally {
+      await this.sub.quit();
     }
-    await this.sub.quit();
   }
 }

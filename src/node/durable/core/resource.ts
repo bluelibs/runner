@@ -5,7 +5,9 @@ import { createRunnerDurableRuntime } from "./createRunnerDurableRuntime";
 import { durableRuntimeTag } from "../tags/durableRuntime.tag";
 export type DurableResourceRuntimeConfig = RunnerDurableRuntimeConfig;
 
-interface DurableResourceContext {
+/** Lifecycle-owned configuration retained for backend disposal. */
+export interface DurableResourceContext {
+  /** Configuration used to create this runtime, or null before initialization. */
   runtimeConfig: RunnerDurableRuntimeConfig | null;
 }
 

@@ -24,7 +24,15 @@ export async function needsClusterRecovery(
     return false;
   if (execution.status === ExecutionStatus.Cancelling) return true;
   const timers = await store.getExecutionTimers!(execution.id);
-  if (timers.some((timer) => timer.type === TimerType.Retry)) return false;
+  // Step-concurrency and workflow retry timers already schedule their own wakeup.
+  if (
+    timers.some(
+      (timer) => timer.type === TimerType.Retry && !timer.commandWakeup,
+    )
+  ) {
+    return false;
+  }
+  if (await store.getNextCommand?.(execution.id)) return true;
   if (execution.status !== ExecutionStatus.Sleeping) return true;
   const current = execution.current;
   if (!current) return true;
@@ -51,7 +59,9 @@ export async function needsClusterRecovery(
   }
   if (current.kind === "waitForExecution") {
     const state = parseExecutionWaitState(step?.result);
-    if (!state || state.state !== "waiting") return true;
+    if (!state || (state.state !== "waiting" && state.state !== "continued")) {
+      return true;
+    }
     const target = await store.getExecution(state.targetExecutionId);
     if (!target) return true;
     const tip = await followContinuedExecutionChain(store, target);

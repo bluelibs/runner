@@ -97,7 +97,8 @@ export async function setupRabbitMQWithRetry(options: {
         delayMs,
         error: normalizedError,
       });
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const waitMs = Math.round(delayMs * (0.75 + Math.random() * 0.5));
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
       delayMs = Math.min(delayMs * 2, reconnect.maxDelayMs);
     }
   }

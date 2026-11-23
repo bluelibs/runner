@@ -1,0 +1,182 @@
+import { DatabaseSync } from "node:sqlite";
+import {
+  PostgresStore,
+  type PgPoolLike,
+} from "../../../durable/store/PostgresStore";
+import { registerSqlExecContractTests } from "./sqlStoreContract.exec.helpers";
+import { registerSqlViewsContractTests } from "./sqlStoreContract.viewsRetention.helpers";
+import { registerSqlRetentionContractTests } from "./sqlStoreContract.retention.helpers";
+import { registerSqlSignalContractTests } from "./sqlStoreContract.signals.helpers";
+import { registerSqlTimersAndCommandsContractTests } from "./sqlStoreContract.timersCommands.helpers";
+
+function createSqliteBackedPgPool(
+  afterRead?: (text: string, db: DatabaseSync) => void,
+): {
+  pool: PgPoolLike;
+  close: () => void;
+} {
+  const db = new DatabaseSync(":memory:");
+
+  const adaptSqlAndParams = (
+    text: string,
+    values: unknown[] = [],
+  ): { sql: string; params: Array<string | number | null> } => {
+    const params: Array<string | number | null> = [];
+    let sql = "";
+    let inSingleQuote = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (ch === "'") {
+        sql += ch;
+        if (inSingleQuote && text[i + 1] === "'") {
+          sql += "'";
+          i += 1;
+        } else {
+          inSingleQuote = !inSingleQuote;
+        }
+        continue;
+      }
+      if (ch === "$" && !inSingleQuote) {
+        const match = /^\$(\d+)/.exec(text.slice(i));
+        if (match) {
+          const idx = Number(match[1]) - 1;
+          const val = values[idx];
+          params.push(
+            val === undefined ? null : (val as string | number | null),
+          );
+          sql += "?";
+          i += match[0].length - 1;
+          continue;
+        }
+      }
+      sql += ch;
+    }
+
+    sql = sql
+      .replace(/ COLLATE "C"/g, "")
+      .replace(/ FOR UPDATE OF t SKIP LOCKED/g, "")
+      .replace(/ FOR UPDATE SKIP LOCKED/g, "")
+      .replace(/ FOR UPDATE/g, "")
+      .replace(
+        /\(FLOOR\(EXTRACT\(EPOCH FROM clock_timestamp\(\)\) \* 1000\)\)::BIGINT/g,
+        "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      )
+      .replace(
+        /id BIGSERIAL PRIMARY KEY/g,
+        "id INTEGER PRIMARY KEY AUTOINCREMENT",
+      )
+      .replace(
+        /ORDER BY id ASC OFFSET \?/g,
+        "ORDER BY id ASC LIMIT -1 OFFSET ?",
+      );
+
+    return { sql, params };
+  };
+
+  const runQuery = <TRow extends Record<string, unknown>>(
+    text: string,
+    values: unknown[] = [],
+  ): { rows: TRow[] } => {
+    const upper = text.trim().toUpperCase();
+    if (upper.startsWith("SELECT PG_ADVISORY_XACT_LOCK(")) {
+      return { rows: [] };
+    }
+    if (upper.includes("FROM PG_TABLES")) {
+      const rows = db
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type IN ('table', 'index')`,
+        )
+        .all() as TRow[];
+      return { rows };
+    }
+    if (upper === "BEGIN" || upper === "COMMIT" || upper === "ROLLBACK") {
+      db.exec(`${upper};`);
+      return { rows: [] };
+    }
+    const { sql, params } = adaptSqlAndParams(text, values);
+    if (upper.startsWith("SELECT") || upper.includes(" RETURNING ")) {
+      const rows = db.prepare(sql).all(...params) as TRow[];
+      afterRead?.(text, db);
+      return { rows };
+    }
+    db.prepare(sql).run(...params);
+    return { rows: [] };
+  };
+
+  const pool: PgPoolLike = {
+    async query<TRow extends Record<string, unknown> = Record<string, unknown>>(
+      text: string,
+      values?: unknown[],
+    ) {
+      return runQuery<TRow>(text, values);
+    },
+    async connect() {
+      return {
+        async query<
+          TRow extends Record<string, unknown> = Record<string, unknown>,
+        >(text: string, values?: unknown[]) {
+          return runQuery<TRow>(text, values);
+        },
+        release() {},
+      };
+    },
+  };
+
+  return { pool, close: () => db.close() };
+}
+
+describe("durable: PostgresStore (SQLite-backed PgPool adapter)", () => {
+  const handles: Array<() => void> = [];
+
+  afterAll(() => {
+    for (const close of handles) close();
+  });
+
+  const factory = {
+    createStore: async (config?: {
+      namespace?: string;
+      autoCreateTables?: boolean;
+    }) => {
+      const adapter = createSqliteBackedPgPool();
+      handles.push(adapter.close);
+      return new PostgresStore({ pool: adapter.pool, ...config });
+    },
+  };
+
+  registerSqlExecContractTests("PostgresStore", factory);
+  registerSqlViewsContractTests("PostgresStore", factory);
+  registerSqlRetentionContractTests("PostgresStore", factory);
+  registerSqlSignalContractTests("PostgresStore", factory);
+  registerSqlTimersAndCommandsContractTests("PostgresStore", factory);
+
+  it("does not return a timer when its conditional claim loses", async () => {
+    const namespace = "claim-lost";
+    const timerId = "due";
+    const now = new Date();
+    const adapter = createSqliteBackedPgPool((text, db) => {
+      if (!text.includes("FOR UPDATE OF t SKIP LOCKED")) return;
+      db.prepare(
+        `INSERT INTO runner_durable_locks (namespace, resource, lock_id, expires_at_ms)
+         VALUES (?, ?, ?, ?)`,
+      ).run(namespace, `timer:claim:${timerId}`, "winner", Date.now() + 60_000);
+    });
+    const store = new PostgresStore({ pool: adapter.pool, namespace });
+    try {
+      await store.createTimer({
+        id: timerId,
+        type: "retry",
+        status: "pending",
+        fireAt: now,
+      });
+      await expect(
+        store.claimReadyTimers(now, 1, "loser", 60_000),
+      ).resolves.toEqual([]);
+      await expect(
+        store.renewTimerClaim(timerId, "winner", 60_000),
+      ).resolves.toBe(true);
+    } finally {
+      await store.dispose();
+      adapter.close();
+    }
+  });
+});

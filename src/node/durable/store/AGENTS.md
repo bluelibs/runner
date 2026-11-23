@@ -9,10 +9,13 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Entry Points And Layout
 
-- `RedisStore.retention.ts` and `memory-store/retention.ts` collect due success history while retaining completion receipts. Collection must coordinate with execution ownership and preserve waiter/parent results. Redis groups timer metadata once per batch and reschedules blocked entries so they cannot starve later work.
+- `RedisStore.retention.ts`, `memory-store/retention.ts`, and `sql/retention.ts` collect due success history (`collectCompletedHistory`) while preserving completion receipts, and expire completion receipts (`collectExpiredReceipts`) when configured. Collection coordinates with execution ownership and waiter results. A missing parent blocks child collection unless the child verified it in the same store at admission. Redis reads per-execution `execution_timers:<id>` (never global `HGETALL durable:timers`) and updates/prunes stale ZSET deadlines so blocked/postponed entries cannot starve later work. SQL retention uses bounded `LIMIT` + `FOR UPDATE SKIP LOCKED`, batched detail deletes, and expired lock sweeps; PostgreSQL uses server `clock_timestamp()` for leases and skips DDL locks when schema objects already exist.
 - `MemoryStore.ts`: facade over instance-owned `memory-store/` operations.
 - `PersistentMemoryStore.ts`: adds serialized snapshots and local restart persistence.
 - `RedisStore.ts`: facade delegating to `RedisStore.*` operations.
+- `SqliteStore.ts` & `PostgresStore.ts`: public SQL facades extending `sql/SqlDurableStore.ts` + `sql/SqlDurableStoreBase.ts` over dialect adapters `sql/sqliteBackend.ts` (`node:sqlite`, WAL, serialized `BEGIN IMMEDIATE`) and `sql/postgresBackend.ts` (`pg` pool / `PgPoolLike`, `FOR UPDATE` & `FOR UPDATE SKIP LOCKED`, placeholder rewriting). All SQL tables are namespace-scoped and omit foreign keys on `parent_execution_id` so orphaned child tests remain portable.
+- History, commands, and checkpoint modules: monotonic operation metadata, FIFO receipt queues, atomic staged state/result commits, and snapshot-conditional branch creation. Memory history indexes exact step IDs while snapshots retain entry arrays. Repeated history phases skip mutation/persistence. Preserve optional child workflow versions across history reads and branch copies. History/state payloads retain the configured serializer; command receipts survive detail collection.
+- `RedisStore.commandTimer.ts` and memory command operations coordinate the FIFO with one shared wakeup and all timer indexes. Admission creates it atomically; final completion removes it. Rescheduling reconciles queue membership without deleting timer claims, so an older delivery cannot erase a new admission.
 - `RedisStore.runtime.ts`: keys, serialization, shared Redis transport, and client ownership.
 - Execution state/views/index modules: writes, idempotency, metadata queries, pagination, and backfill.
 - Signal state/waiter modules: journal, FIFO backlog, waiter ordering, and committed delivery.
@@ -34,6 +37,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Signal backlog remains FIFO and retains repeated identical signals; history and backlog are different records.
 - Completing a waiter must commit the step, remove the waiter, and handle its timeout consistently.
 - Claimed timers and locks use owner tokens/leases; stale owners cannot renew or finalize another owner's work.
+- PostgreSQL schema creation uses one transaction and a shared advisory lock. Claim creation checks conflict ownership atomically, including the batch timer path. SQL command FIFO/timer writes lock the target execution before queue rows.
+- SQLite adapters sharing an injected connection also share its transaction and read serialization.
 - Attempt-owned writes must atomically compare the live execution lease before mutation. Never replace this with a read/renew followed by an unguarded write. Optional custom stores without this capability cannot enable continuous recovery.
 - Schedule cadence/payload can change, but `ScheduleUpdate` does not permit replacing its id.
 - Metadata queries use indexes without scanning payloads; cursors preserve stable ordering.
@@ -48,9 +53,10 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 Tests mirror this folder in `../../__tests__/durable/store/`.
 Start with `MemoryStore.snapshot.test.ts`, `MemoryStore.continuation.test.ts`,
-`PersistentMemoryStore.test.ts`, `RedisStore.continuation.mock.test.ts`,
-`RedisStore.executionIndex.test.ts`, and signal/waiter/lock suites for the affected record.
-Exercise both memory and Redis implementations when changing shared store semantics.
-Real Redis suites have explicit infrastructure gates; mocked tests alone do not verify live atomicity.
+`PersistentMemoryStore.test.ts`, `SqliteStore.test.ts`, `PostgresStore.test.ts`,
+`RedisStore.continuation.mock.test.ts`, `RedisStore.executionIndex.test.ts`,
+and signal/waiter/lock/retention suites for the affected record.
+Exercise memory, Redis, and SQL implementations when changing shared store semantics.
+Real Redis and Postgres suites (`PostgresStore.real.integration.test.ts`) have explicit infrastructure gates; mocked/adapter tests alone do not verify live concurrency.
 `RedisStore.retention.real.integration.test.ts` covers operator races, ownership/waiter/parent protection, and collection fairness.
 For code changes run focused tests then root QA; guide-only edits follow the docs exception.

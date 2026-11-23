@@ -8,6 +8,8 @@ import { durableEventTag } from "./durable/bridge/tag";
 import { durableWorkflowTag } from "./durable/tags/durableWorkflow.tag";
 import { memoryDurableResource } from "./durable/resources/memoryDurableResource";
 import { redisDurableResource } from "./durable/resources/redisDurableResource";
+import { sqliteDurableResource } from "./durable/resources/sqliteDurableResource";
+import { postgresDurableResource } from "./durable/resources/postgresDurableResource";
 import { redisCacheProviderResource } from "./cache/redisCacheProvider.resource";
 import { resilienceResource } from "./resilience/resource";
 import { shellResource } from "./shell/shell.resource";
@@ -25,6 +27,8 @@ export const resources = Object.freeze({
   durableEventBridge: durableEventBridgeResource,
   memoryWorkflow: memoryDurableResource,
   redisWorkflow: redisDurableResource,
+  sqliteWorkflow: sqliteDurableResource,
+  postgresWorkflow: postgresDurableResource,
   redisCacheProvider: redisCacheProviderResource,
 });
 

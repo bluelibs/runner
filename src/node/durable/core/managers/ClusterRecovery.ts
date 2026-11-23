@@ -23,7 +23,7 @@ export class ClusterRecovery {
     private readonly store: IDurableStore,
     private readonly config: DurableServiceConfig["recovery"],
     private readonly recover: (id: string) => Promise<void>,
-    private readonly knowsWorkflow: (key: string) => boolean,
+    private readonly knowsWorkflow: (key: string, version?: number) => boolean,
     private readonly logger: Logger,
   ) {
     this.interval = config?.intervalMs ?? 5_000;
@@ -79,14 +79,20 @@ export class ClusterRecovery {
       limit: this.batchSize,
       cursor: this.cursor,
     });
-    // Advance only past inspected rows so a full admission window cannot starve a page.
+    // Drain the full fetched page with bounded concurrency instead of discarding excess rows.
     for (const row of rows) {
-      if (this.stopped || this.inFlight.size >= this.concurrency) return;
+      while (!this.stopped && this.inFlight.size >= this.concurrency) {
+        await Promise.race(this.inFlight.values());
+      }
+      if (this.stopped) return;
       this.cursor = encodeExecutionCursor({
         id: row.id,
         createdAt: row.createdAt.toISOString(),
       });
-      if (!this.knowsWorkflow(row.workflowKey) || this.inFlight.has(row.id))
+      if (
+        !this.knowsWorkflow(row.workflowKey, row.workflowVersion) ||
+        this.inFlight.has(row.id)
+      )
         continue;
       const pending = this.recoverCandidate(row.id)
         .catch((error) => this.report(error))
@@ -109,7 +115,7 @@ export class ClusterRecovery {
       const execution = await this.store.getExecution(id);
       if (
         !execution ||
-        !this.knowsWorkflow(execution.workflowKey) ||
+        !this.knowsWorkflow(execution.workflowKey, execution.workflowVersion) ||
         !(await needsClusterRecovery(this.store, execution)) ||
         this.stopped
       )

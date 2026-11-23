@@ -1,6 +1,6 @@
 {
   "name": "@bluelibs/runner",
-  "version": "6.9.0",
+  "version": "6.10.0",
   "description": "BlueLibs Runner",
   "sideEffects": false,
   "main": "dist/universal/index.cjs",
@@ -196,7 +196,8 @@
   "optionalDependencies": {
     "amqplib": "^2.0.1",
     "busboy": "^1.6.0",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "pg": "^8.23.1"
   },
   "overrides": {
     "esbuild": "$esbuild",

@@ -20,6 +20,7 @@ import {
 import { Logger } from "../../../../models/Logger";
 import { durableExecutionInvariantError } from "../../../../errors";
 import type { DurableTimerConfig } from "../interfaces/timers";
+import { nextCommandWakeup } from "../commandWakeup";
 
 /** Internal timer-driver configuration, normalized from public timer settings. */
 export type PollingConfig = DurableTimerConfig;
@@ -216,6 +217,31 @@ export class PollingManager {
     try {
       assertTimerClaimIsStillOwned();
 
+      if (timer.commandWakeup) {
+        if (!timer.executionId || !this.store.rescheduleCommandTimer)
+          throw durableExecutionInvariantError.new({
+            message:
+              "Command timers require an execution and atomic command timer support.",
+          });
+        if (
+          await this.store.rescheduleCommandTimer(
+            timer.executionId,
+            nextCommandWakeup(this.store),
+          )
+        ) {
+          await handleExecutionTimer({
+            timer,
+            queue: this.queue,
+            maxAttempts: this.maxAttempts,
+            processExecution: this.callbacks.processExecution,
+          });
+        }
+        assertTimerClaimIsStillOwned();
+        // FIFO commits own deletion; finalizing this older delivery could erase a new admission.
+        await releaseTimerClaim();
+        return;
+      }
+
       if (timer.type === TimerType.Sleep && timer.executionId && timer.stepId) {
         const completedSleep = await handleSleepTimer({
           store: this.store,
@@ -306,17 +332,16 @@ export class PollingManager {
           safeToFinalizeCurrentTimer = true;
         },
       });
-      if (!scheduledTimerResult.handled) {
-        await finalizeTimer();
-        return;
-      }
-
       if (scheduledTimerResult.finalizeCurrentTimer) {
         await finalizeTimer();
         return;
       }
 
-      await releaseTimerClaim();
+      if (scheduledTimerResult.releaseCurrentTimerClaim) {
+        await releaseTimerClaim();
+        return;
+      }
+
       return;
     } catch (error) {
       let cleanupError: unknown = null;

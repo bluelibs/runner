@@ -35,6 +35,19 @@ export type { MemoryStoreSnapshot } from "./store/MemoryStore";
 export { PersistentMemoryStore } from "./store/PersistentMemoryStore";
 export type { PersistentMemoryStoreConfig } from "./store/PersistentMemoryStore";
 export { RedisStore } from "./store/RedisStore";
+export { SqliteStore } from "./store/SqliteStore";
+export type {
+  SqliteDatabaseLike,
+  SqliteStatementLike,
+  SqliteStoreConfig,
+} from "./store/SqliteStore";
+export { PostgresStore } from "./store/PostgresStore";
+export type {
+  PgClientLike,
+  PgPoolLike,
+  PgQueryResultLike,
+  PostgresStoreConfig,
+} from "./store/PostgresStore";
 
 export { MemoryQueue } from "./queue/MemoryQueue";
 export { RabbitMQQueue } from "./queue/RabbitMQQueue";
@@ -58,6 +71,10 @@ export { memoryDurableResource } from "./resources/memoryDurableResource";
 export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";
 export { redisDurableResource } from "./resources/redisDurableResource";
 export type { RedisDurableResourceConfig } from "./resources/redisDurableResource";
+export { sqliteDurableResource } from "./resources/sqliteDurableResource";
+export type { SqliteDurableResourceConfig } from "./resources/sqliteDurableResource";
+export { postgresDurableResource } from "./resources/postgresDurableResource";
+export type { PostgresDurableResourceConfig } from "./resources/postgresDurableResource";
 
 export { durableEventBridgeResource } from "./bridge/resource";
 export { durableEventTag } from "./bridge/tag";
@@ -66,4 +83,15 @@ export type {
   DurableEventConfig,
   DurableEventResource,
 } from "./bridge/types";
-export type { ExecutionRetention } from "./core/retention";
+export type {
+  ExecutionRetention,
+  ExecutionRetentionSchedule,
+} from "./core/retention";
+
+export * from "./core/interfaces/history";
+export * from "./core/interfaces/commands";
+export { createDurableTestRuntime } from "./test-runtime";
+export type {
+  DurableTestRuntime,
+  DurableTestRuntimeOptions,
+} from "./test-runtime";

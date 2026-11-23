@@ -127,8 +127,10 @@ export async function claimReadyTimers(
       local pendingStatus = ARGV[8]
       local claimed = {}
       local offset = 0
+      local scanned = 0
+      local maxScanned = math.max(limit * 20, 500)
 
-      while #claimed < limit do
+      while #claimed < limit and scanned < maxScanned do
         local timerIds = redis.call(
           "zrangebyscore",
           KEYS[1],
@@ -143,7 +145,8 @@ export async function claimReadyTimers(
           break
         end
 
-        offset = offset + #timerIds
+        scanned = scanned + #timerIds
+        local removed = 0
 
         for _, timerId in ipairs(timerIds) do
           if #claimed >= limit then
@@ -170,12 +173,20 @@ export async function claimReadyTimers(
                 table.insert(claimed, current)
               else
                 redis.call("del", claimKey)
+                if timer.status ~= pendingStatus then
+                  redis.call("zrem", KEYS[1], timerId)
+                  removed = removed + 1
+                end
               end
             else
               redis.call("del", claimKey)
+              redis.call("zrem", KEYS[1], timerId)
+              removed = removed + 1
             end
           end
         end
+
+        offset = offset + #timerIds - removed
       end
 
       return claimed
@@ -314,12 +325,10 @@ export async function finalizeClaimedTimer(
 
       local current = redis.call("hget", KEYS[1], ARGV[1])
       if current then
-        local okTimer, timer = pcall(cjson.decode, current)
+        local okTimer = pcall(cjson.decode, current)
         if not okTimer then
           return "__error__:Corrupted durable timer payload"
         end
-        timer.status = ARGV[3]
-        redis.call("hset", KEYS[1], ARGV[1], cjson.encode(timer))
       end
 
       redis.call("hdel", KEYS[1], ARGV[1])

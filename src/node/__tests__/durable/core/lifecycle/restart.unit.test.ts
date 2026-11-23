@@ -80,6 +80,8 @@ describe("durable: restart execution", () => {
     await store.saveExecution(
       createExecution({
         input: { v: 1 },
+        parentExecutionId: "parent",
+        parentExecutionInStore: true,
         attempt: 3,
         result: { v: 1 },
         current: {
@@ -106,6 +108,8 @@ describe("durable: restart execution", () => {
     expect(restarted?.input).toEqual({ v: 1 });
     expect(restarted?.attempt).toBe(1);
     expect(restarted?.restartedFromExecutionId).toBe("e-restart");
+    expect(restarted?.parentExecutionId).toBe("parent");
+    expect(restarted?.parentExecutionInStore).toBe(true);
     expect(restarted?.current).toBeUndefined();
     expect(restarted?.pausedAt).toBeUndefined();
     const source = await store.getExecution("e-restart");

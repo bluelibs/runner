@@ -54,7 +54,12 @@ describe("durable: RedisStore continuation signal backlog (mock)", () => {
       expect.stringContaining("signal:root:a%20b"),
       expect.stringContaining("signal:tip:a%20b"),
     ]);
-    expect(args.slice(-3)).toEqual(["2", "paid", "a b"]);
+    expect(args.slice(-4)).toEqual([
+      "2",
+      "paid",
+      "a b",
+      "durable:command_queue:root",
+    ]);
   });
 
   it("rescans when a new signal key appeared between the scan and the commit", async () => {
@@ -69,9 +74,10 @@ describe("durable: RedisStore continuation signal backlog (mock)", () => {
     await expect(continueRoot()).resolves.toBe(true);
 
     expect(redisMock.eval).toHaveBeenCalledTimes(2);
-    expect((redisMock.eval.mock.calls[1] as unknown[]).slice(-2)).toEqual([
+    expect((redisMock.eval.mock.calls[1] as unknown[]).slice(-3)).toEqual([
       "1",
       "paid",
+      "durable:command_queue:root",
     ]);
   });
 
@@ -85,9 +91,10 @@ describe("durable: RedisStore continuation signal backlog (mock)", () => {
 
     await expect(continueRoot()).resolves.toBe(true);
 
-    expect((redisMock.eval.mock.calls[0] as unknown[]).slice(-2)).toEqual([
+    expect((redisMock.eval.mock.calls[0] as unknown[]).slice(-3)).toEqual([
       "1",
       "paid",
+      "durable:command_queue:root",
     ]);
   });
 
