@@ -22,6 +22,9 @@ export interface PostgresStoreConfig
  * `FOR UPDATE SKIP LOCKED` timer claiming, and namespace-scoped schemas.
  */
 export class PostgresStore extends SqlDurableStore {
+  /** PostgreSQL stores can be shared concurrently across multiple worker processes. */
+  readonly isSharedAcrossProcesses = true;
+
   /** Creates a new PostgreSQL durable store backed by `pool`, `connectionString`, or `poolConfig`. */
   constructor(config: PostgresStoreConfig) {
     super(createPostgresBackend(config), config);

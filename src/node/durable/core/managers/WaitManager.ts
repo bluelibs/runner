@@ -51,12 +51,12 @@ export class WaitManager {
       );
     };
 
+    let tipId = executionId;
     const check = async (): Promise<
       { done: false; channel: string } | { done: true; value: TResult }
     > => {
-      // Follow the continuation chain so waiting on a continued run resolves
-      // with the live tip's outcome instead of stalling on a closed run.
-      let currentId = executionId;
+      // Advance the cached continuation tip so polls stay O(1) on long chains.
+      let currentId = tipId;
       const visited = new Set<string>();
       for (;;) {
         if (visited.has(currentId)) {
@@ -89,6 +89,7 @@ export class WaitManager {
             );
           }
           currentId = exec.continuedAsExecutionId;
+          tipId = currentId;
           continue;
         }
 

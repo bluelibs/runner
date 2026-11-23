@@ -51,7 +51,26 @@ export interface SqlStoreBaseConfig {
   autoCreateTables?: boolean;
 }
 
+/** PostgreSQL server-clock epoch milliseconds expression (avoids cross-worker clock skew). */
+export const PG_NOW_MS_SQL =
+  "(FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000))::BIGINT";
+
 /** Returns ` FOR UPDATE` for PostgreSQL row-level locking, empty string for SQLite. */
 export function forUpdate(dialect: SqlDialect): string {
   return dialect === "postgres" ? " FOR UPDATE" : "";
+}
+
+/** Returns ` FOR UPDATE SKIP LOCKED` for PostgreSQL non-blocking batch claims, empty string for SQLite. */
+export function forUpdateSkipLocked(dialect: SqlDialect): string {
+  return dialect === "postgres" ? " FOR UPDATE SKIP LOCKED" : "";
+}
+
+/** Returns a SQL expression and bound params for the backend's authoritative real-time clock in ms. */
+export function nowMsSql(dialect: SqlDialect): {
+  expr: string;
+  params: SqlParam[];
+} {
+  return dialect === "postgres"
+    ? { expr: PG_NOW_MS_SQL, params: [] }
+    : { expr: "?", params: [Date.now()] };
 }

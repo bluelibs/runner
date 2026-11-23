@@ -17,6 +17,7 @@ import type { WaitManager } from "./WaitManager";
 import { Logger } from "../../../../models/Logger";
 import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
 import { durableExecutionInvariantError } from "../../../../errors";
+import { MemoryEventBus } from "../../bus/MemoryEventBus";
 import { NoopEventBus } from "../../bus/NoopEventBus";
 import { resolveExecutionWaiters } from "./ExecutionManager.waiters";
 import { AttemptCancellationController } from "./AttemptCancellationController";
@@ -85,8 +86,13 @@ export class ExecutionManager {
   ) {
     assertExecutionTuningConfig(this.config.execution);
     this.eventBus = this.config.eventBus ?? new NoopEventBus();
+    const isLocalBusOnSharedStore =
+      this.config.eventBus instanceof MemoryEventBus &&
+      this.config.store.isSharedAcrossProcesses === true;
     const liveCancellationEventBus =
-      this.config.eventBus && !(this.config.eventBus instanceof NoopEventBus)
+      this.config.eventBus &&
+      !(this.config.eventBus instanceof NoopEventBus) &&
+      !isLocalBusOnSharedStore
         ? this.config.eventBus
         : null;
     const baseLogger =

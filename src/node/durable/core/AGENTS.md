@@ -18,13 +18,13 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Task-definition `step(id, task, input, options)` is deprecated in both concrete and interface overloads, with runtime/type support retained. Prefer injected task calls inside callback steps; `useStep()` remains optional. Callback history does not infer task identity, so preserve versioned replay metadata during migration.
 - `DurableOperator.ts` and `DurableExecutionRepository.ts`: operator queries and workflow-scoped repositories.
 - `DurableWorker.ts`: consumes execution messages, tracks in-flight work, and settles deliveries.
-- `managers/TaskRegistry.ts`: separates canonical task addressing from workflow storage keys and resolves exact optional workflow versions.
+- `managers/TaskRegistry.ts`: separates canonical task addressing from workflow storage keys, resolves exact optional workflow versions, and looks up declared commands for both admission and execution.
 - `managers/CommandManager.ts`, `commandClient.ts`, and `commandContext.ts`: FIFO tracked requests under execution ownership, resumable private state/checkpoints, and atomic result/state commits. State presence distinguishes uninitialized requests from initialized empty state. If a command step parks for admission, the workflow yields until that command settles. Command handlers cannot use workflow waits or start children.
 - `durable-context/operationJournal.ts`, `replay.ts`, and `checkpointReset.ts`: ordered metadata for new runs, copied-prefix compatibility checks, and explicit non-overlapping checkpoint branches. Reserve wait IDs before journaling and record pinned child versions. `checkpointLease.ts` captures tooling snapshots under the worker lease.
 - `managers/ExecutionManager.*`: execution transitions, locks, cancellation, pause/resume, restart, and continuation.
 - `managers/ExecutionAttemptRunner*`: live attempts, replay outcomes, and recovery redrive.
 - `managers/SignalHandler*`, `WaitManager*`: durable delivery and result waiting. `managers/waitForStoreResult.ts` keeps store polling and deadlines independent of bus subscription for execution and command waits.
-- `managers/PollingManager*`, `ScheduleManager`, `RecoveryManager`: timers, recurrence, and crash recovery. Persist pinned occurrences even when the timer worker lacks that version; execution routing handles the retry.
+- `managers/PollingManager*`, `ScheduleManager`, `RecoveryManager`: timers, recurrence, and crash recovery. `schedule()` and `ensureSchedule()` share recurring record construction, with rebinding checks and the schedule lock owned by `ensureSchedule()`. Persist pinned occurrences even when the timer worker lacks that version; execution routing handles the retry.
 - `managers/ClusterRecovery.ts` owns opt-in bounded continuous metadata sweeps; `clusterRecoveryEligibility.ts` distinguishes orphaned progress from healthy parked waits. Recovery dispatch claims are separate from execution leases.
 - `managers/WorkflowAdmissionController.ts`: workflow admission; `StoreAdmissionController.ts` shares store-backed policies with `StepAdmissionController.ts`. Renewal and cancellable acquisition reuse Node resilience helpers.
 - `durable-context/`: focused steps, waits, sleep, state, switch, and determinism operations. Runner events use injected dependencies; the incomplete context bus-emission API is removed.
@@ -42,8 +42,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - A typed execution wait checks the requested root's workflow key and pinned version, then follows explicit continuations of that workflow.
 - Child admission records a parent verified in the same backend so retention can recognize its subsequent receipt expiry.
 - Persisted compensation failures notify execution waiters, including queued parents. Error text alone must not park an unrelated business failure.
-- Pause, shutdown interruption, business failure, and cancellation are distinct outcomes.
-  Parking an attempt must not silently consume a retry or turn it into workflow failure.
+- Pause, shutdown interruption, execution lock loss, business failure, and cancellation are distinct outcomes.
+  Parking an attempt (including during `durable.rollback()` or step retry backoff) must not silently consume a retry or turn it into workflow/compensation failure. On shared stores (`isSharedAcrossProcesses: true`), a local `MemoryEventBus` keeps cancellation polling active so remote cancel/pause still aborts live attempts.
 - Step saturation saves a retry timer and releases workflow admission; interrupted callbacks stop renewal and retain numeric capacity until settlement or lease expiry, including execution-lock loss.
 - `durable-context/DurableContext.stepAttempt.ts` journals step retry consumption by workflow attempt so concurrency replay preserves its budget. Obsolete fixed-window grants defer, and callback entry checks expiry synchronously before user code.
 - Renew and check ownership around long-running work; do not commit after a lease is lost.

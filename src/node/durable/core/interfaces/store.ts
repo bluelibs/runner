@@ -60,6 +60,9 @@ export type ExpectedExecutionStatuses = readonly [
 export type ScheduleUpdate = Omit<Partial<Schedule>, "id">;
 
 export interface IDurableStore {
+  /** True when multiple worker processes can share this store backend (e.g. PostgreSQL or Redis). */
+  readonly isSharedAcrossProcesses?: boolean;
+
   /** Atomically creates a branch and its completed prefix if the source snapshot still matches. */
   createCheckpointExecution?(branch: DurableCheckpointBranch): Promise<boolean>;
 

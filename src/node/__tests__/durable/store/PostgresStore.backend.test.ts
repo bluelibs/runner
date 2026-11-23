@@ -93,8 +93,63 @@ describe("durable: Postgres backend & placeholder rewriting", () => {
     ).rejects.toThrow("tx-failure");
     expect(clientQuery).toHaveBeenCalledWith("BEGIN");
     expect(clientQuery).toHaveBeenCalledWith("ROLLBACK");
-    expect(release).toHaveBeenCalledTimes(1);
+    expect(release).toHaveBeenCalledWith(true);
     await backend.dispose();
     expect(end).not.toHaveBeenCalled();
+  });
+
+  it("merges connectionString with poolConfig, attaches pool error listener, destroys broken BEGIN clients, and skips existing DDL", async () => {
+    const errorListeners: Array<(err: Error) => void> = [];
+    const release = jest.fn();
+    let failBegin = false;
+    const clientQuery = jest.fn(async (sql: string) => {
+      if (sql === "BEGIN" && failBegin) throw new Error("begin-broken");
+      return { rows: [] };
+    });
+    const poolQuery = jest.fn(async (sql: string) => {
+      if (sql.includes("FROM pg_tables")) {
+        return { rows: [{ name: "t_one" }, { name: "idx_one" }] };
+      }
+      return { rows: [] };
+    });
+    const fakePool: PgPoolLike = {
+      query: poolQuery as never,
+      connect: jest.fn(async () => ({ query: clientQuery as never, release })),
+      end: jest.fn(async () => {}),
+      on: jest.fn((_event, listener) => {
+        errorListeners.push(listener);
+      }),
+    };
+    const spy = jest
+      .spyOn(pgOptional, "createPgPool")
+      .mockReturnValue(fakePool);
+
+    const backend = createPostgresBackend({
+      connectionString: "postgres://local/db",
+      poolConfig: { max: 25 },
+    });
+
+    // All DDL objects already exist -> init skips advisory-locked DDL transaction.
+    await backend.init([
+      "CREATE TABLE IF NOT EXISTS t_one (id TEXT)",
+      "CREATE INDEX IF NOT EXISTS idx_one ON t_one (id)",
+    ]);
+    expect(spy).toHaveBeenCalledWith({
+      max: 25,
+      connectionString: "postgres://local/db",
+    });
+    expect(errorListeners).toHaveLength(1);
+    expect(() => errorListeners[0]!(new Error("idle-drop"))).not.toThrow();
+    expect(clientQuery).not.toHaveBeenCalled();
+
+    // BEGIN failure destroys the client without attempting ROLLBACK.
+    failBegin = true;
+    await expect(backend.transaction(async () => "nope")).rejects.toThrow(
+      "begin-broken",
+    );
+    expect(release).toHaveBeenCalledWith(true);
+    expect(clientQuery).not.toHaveBeenCalledWith("ROLLBACK");
+
+    await backend.dispose();
   });
 });

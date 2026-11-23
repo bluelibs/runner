@@ -1,7 +1,8 @@
-import type {
-  DurableSignalRecord,
-  DurableSignalWaiter,
-  StepResult,
+import {
+  MAX_SIGNAL_HISTORY_PER_KEY,
+  type DurableSignalRecord,
+  type DurableSignalWaiter,
+  type StepResult,
 } from "../core/types";
 import type { RedisStoreRuntime } from "./RedisStore.runtime";
 import { createRedisSignalState } from "./RedisStore.signalState";
@@ -21,18 +22,21 @@ export async function upsertSignalWaiter(
     redis.call("zadd", KEYS[1], 0, ARGV[2])
     redis.call("hset", KEYS[2], ARGV[2], ARGV[3])
     redis.call("hset", KEYS[3], ARGV[1], ARGV[2])
+    redis.call("sadd", KEYS[4], ARGV[4])
     return "OK"
   `;
 
   await runtime.redis.eval(
     script,
-    3,
+    4,
     runtime.signalWaiterOrderKey(waiter.executionId, waiter.signalId),
     runtime.signalWaiterPayloadKey(waiter.executionId, waiter.signalId),
     runtime.signalWaiterStepKey(waiter.executionId, waiter.signalId),
+    runtime.signalIdsKey(waiter.executionId),
     waiter.stepId,
     member,
     runtime.serializer.stringify(waiter),
+    waiter.signalId,
   );
 }
 
@@ -106,6 +110,10 @@ export async function commitSignalDelivery(
       end
 
       table.insert(state.history, record)
+      local maxHistory = tonumber(ARGV[7]) or 0
+      while maxHistory > 0 and #state.history > maxHistory do
+        table.remove(state.history, 1)
+      end
       redis.call("set", KEYS[1], cjson.encode(state))
       redis.call("sadd", KEYS[8], ARGV[2])
       -- Stored verbatim: a cjson round-trip would rewrite the user payload.
@@ -138,6 +146,7 @@ export async function commitSignalDelivery(
     ),
     encodeSignalRecord(runtime, params.signalRecord),
     params.timerId ?? "",
+    `${MAX_SIGNAL_HISTORY_PER_KEY}`,
   );
   runtime.assertEvalResultNotError(result);
   return Number(result) === 1;

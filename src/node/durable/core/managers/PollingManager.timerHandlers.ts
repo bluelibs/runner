@@ -445,7 +445,7 @@ export async function handleScheduledTaskTimer(params: {
   if (!params.timer.workflowKey) {
     return {
       handled: false,
-      finalizeCurrentTimer: false,
+      finalizeCurrentTimer: true,
       releaseCurrentTimerClaim: false,
     };
   }

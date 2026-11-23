@@ -35,7 +35,8 @@ function buildExecutionWhere(
   if (options.cursor !== undefined) {
     const cursor = decodeExecutionCursor(options.cursor);
     const cursorMs = new Date(cursor.createdAt).getTime();
-    clauses.push("(created_at_ms < ? OR (created_at_ms = ? AND id > ?))");
+    // Leading `created_at_ms <= ?` enables a B-tree seek in DESC/ASC order.
+    clauses.push("created_at_ms <= ? AND (created_at_ms < ? OR id > ?)");
     params.push(cursorMs, cursorMs, cursor.id);
   }
 

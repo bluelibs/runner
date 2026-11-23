@@ -389,6 +389,8 @@ export class ExecutionAttemptRunner {
       assertLockOwnership,
       executionLockState,
       cancellationSignal,
+      getShutdownInterruptionReason: () =>
+        this.deps.cancellation.getShutdownInterruptionReason(),
       taskExecutor: this.deps.taskExecutor,
       getTaskKey: (task) => this.deps.taskRegistry.getTaskKey(task),
       auditConfig: this.deps.audit,

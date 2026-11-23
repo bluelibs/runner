@@ -28,14 +28,15 @@ function completedExecution(
 }
 
 describe("durable: RedisStore receipt retention (mock)", () => {
-  it("returns 0 when no receipt cleanup ids are due", async () => {
+  it("returns 0 when limit <= 0 or no receipt cleanup ids are due", async () => {
     const { redisMock, store } = harness;
+    await expect(store.collectExpiredReceipts(new Date(), 0)).resolves.toBe(0);
     redisMock.zrangebyscore.mockResolvedValueOnce([]);
     await expect(store.collectExpiredReceipts(new Date(), 10)).resolves.toBe(0);
     expect(redisMock.eval).not.toHaveBeenCalled();
   });
 
-  it("prunes missing keys, removed policies, and future deadlines without eval", async () => {
+  it("prunes missing keys, removed policies, and reschedules future deadlines without eval", async () => {
     const { redisMock, store } = harness;
     const now = new Date("2025-01-01T00:00:05.000Z");
     const t0 = new Date("2025-01-01T00:00:00.000Z");
@@ -63,10 +64,15 @@ describe("durable: RedisStore receipt retention (mock)", () => {
 
     await expect(store.collectExpiredReceipts(now, 10)).resolves.toBe(0);
     expect(redisMock.zrem).toHaveBeenCalledTimes(2);
+    expect(redisMock.zadd).toHaveBeenCalledWith(
+      "durable:execution_index_metadata:receipt_cleanup",
+      t0.getTime() + 60_000,
+      "future",
+    );
     expect(redisMock.eval).not.toHaveBeenCalled();
   });
 
-  it("collects due receipts with signals, timers, idempotency keys, and commands", async () => {
+  it("collects due receipts with signals, timers, idempotency keys, and commands without global hgetall", async () => {
     const { redisMock, store } = harness;
     const now = new Date("2025-01-01T00:00:10.000Z");
     const t0 = new Date("2025-01-01T00:00:00.000Z");
@@ -79,24 +85,17 @@ describe("durable: RedisStore receipt retention (mock)", () => {
       .mockResolvedValueOnce(serializer.stringify(exec2));
     redisMock.sscan
       .mockResolvedValueOnce(["0", ["sig-1"]])
+      .mockResolvedValueOnce(["0", ["t-1"]])
       .mockResolvedValueOnce(["0", ["durable:idem:wf:k1"]])
       .mockResolvedValueOnce(["0", ["cmd-1"]])
       .mockResolvedValueOnce(["0", []])
       .mockResolvedValueOnce(["0", []])
+      .mockResolvedValueOnce(["0", []])
       .mockResolvedValueOnce(["0", []]);
-    redisMock.hgetall.mockResolvedValueOnce({
-      "t-1": serializer.stringify({
-        id: "t-1",
-        executionId: "exec-1",
-        fireAt: t0,
-        status: "pending",
-        type: "sleep",
-      }),
-    });
     redisMock.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
 
     await expect(store.collectExpiredReceipts(now, 5)).resolves.toBe(1);
-    expect(redisMock.hgetall).toHaveBeenCalledTimes(1);
+    expect(redisMock.hgetall).not.toHaveBeenCalled();
     expect(redisMock.eval).toHaveBeenCalledTimes(2);
 
     const firstCall = redisMock.eval.mock.calls[0] as unknown[];

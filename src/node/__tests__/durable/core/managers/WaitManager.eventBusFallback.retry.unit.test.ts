@@ -48,7 +48,7 @@ describe("durable: WaitManager (event bus fallback retry)", () => {
     let calls = 0;
     jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
       calls += 1;
-      if (calls >= 4) {
+      if (calls >= 3) {
         await store.updateExecution(executionId, {
           status: ExecutionStatus.Completed,
           result: "ok",
@@ -64,10 +64,10 @@ describe("durable: WaitManager (event bus fallback retry)", () => {
         waitPollIntervalMs: 5,
       });
       await jest.advanceTimersByTimeAsync(4);
-      expect(calls).toBe(2);
+      expect(calls).toBe(1);
       await jest.advanceTimersByTimeAsync(1);
       const callsAfterOnePoll = calls;
-      expect(callsAfterOnePoll).toBeGreaterThan(2);
+      expect(callsAfterOnePoll).toBeGreaterThan(1);
       await jest.advanceTimersByTimeAsync(4);
       expect(calls).toBe(callsAfterOnePoll);
       await jest.advanceTimersByTimeAsync(1);

@@ -56,6 +56,9 @@ import { rescheduleCommandTimer } from "./RedisStore.commandTimer";
 export type { RedisClient, RedisPipeline, RedisStoreConfig };
 
 export class RedisStore implements IDurableStore {
+  /** Redis stores can be shared concurrently across multiple worker processes. */
+  readonly isSharedAcrossProcesses = true;
+
   /** Atomically commits a checkpoint branch under source execution ownership. */
   async createCheckpointExecution(
     branch: DurableCheckpointBranch,

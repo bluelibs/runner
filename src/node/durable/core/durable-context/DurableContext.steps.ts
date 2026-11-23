@@ -18,6 +18,7 @@ import { clearExecutionCurrent } from "../current";
 import { ExecutionStatus, isExecutionTerminal } from "../types";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { isDurablePauseInterruptionError } from "../pauseInterruption";
+import { isDurableShutdownInterruptionError } from "../shutdownInterruption";
 
 export type DurableCompensation = {
   stepId: string;
@@ -177,6 +178,8 @@ export async function rollbackDurableCompensations(params: {
   compensations: DurableCompensation[];
   assertUniqueStepId: (stepId: string) => void;
   internalStep: <T>(stepId: string, options?: StepOptions) => IStepBuilder<T>;
+  lockState?: ExecutionLockState;
+  getShutdownInterruptionReason?: () => string | null;
 }): Promise<void> {
   const reversed = [...params.compensations].reverse();
   try {
@@ -192,9 +195,17 @@ export async function rollbackDurableCompensations(params: {
         });
     }
   } catch (error) {
-    // A pause interruption parks the rollback so resume can finish it; it
-    // is not a compensation failure.
-    if (isControlFlowSignal(error) || isDurablePauseInterruptionError(error)) {
+    // Pause, shutdown interruption, and execution lock loss park the rollback
+    // so another worker or resume can finish it; they are not compensation failures.
+    if (
+      isControlFlowSignal(error) ||
+      isDurablePauseInterruptionError(error) ||
+      params.lockState?.lost ||
+      isDurableShutdownInterruptionError(
+        error,
+        params.getShutdownInterruptionReason?.() ?? null,
+      )
+    ) {
       throw error;
     }
 

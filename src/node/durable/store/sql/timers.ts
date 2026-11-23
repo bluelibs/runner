@@ -1,7 +1,7 @@
 import { TimerStatus, type Timer } from "../../core/types";
 import { acquireOrRenewClaimInTx, timerClaimResource } from "./locks";
 import type { SqlStoreRuntime } from "./runtime";
-import { forUpdate, type SqlExecutor } from "./types";
+import { forUpdate, nowMsSql, type SqlExecutor } from "./types";
 
 export async function upsertTimerInTx(
   runtime: SqlStoreRuntime,
@@ -112,7 +112,7 @@ export async function claimReadyTimers(
 ): Promise<Timer[]> {
   if (limit <= 0) return [];
   return runtime.withRawTx(async (tx) => {
-    const nowMs = Date.now();
+    const nowClock = nowMsSql(tx.dialect);
     const skipLocked =
       tx.dialect === "postgres" ? " FOR UPDATE OF t SKIP LOCKED" : "";
     const rows = await tx.all<{ id: string; payload: string }>(
@@ -120,11 +120,17 @@ export async function claimReadyTimers(
        LEFT JOIN runner_durable_locks l
          ON l.namespace = t.namespace
         AND l.resource = ('timer:claim:' || t.id)
-        AND l.expires_at_ms > ?
+        AND l.expires_at_ms > ${nowClock.expr}
        WHERE t.namespace = ? AND t.status = ? AND t.fire_at_ms <= ? AND l.resource IS NULL
        ORDER BY t.fire_at_ms ASC, t.id ASC
        LIMIT ?${skipLocked}`,
-      [nowMs, runtime.namespace, TimerStatus.Pending, now.getTime(), limit],
+      [
+        ...nowClock.params,
+        runtime.namespace,
+        TimerStatus.Pending,
+        now.getTime(),
+        limit,
+      ],
     );
     const claimed: Timer[] = [];
     for (const row of rows) {
@@ -185,20 +191,16 @@ export async function releaseTimerClaim(
 ): Promise<boolean> {
   return runtime.withWriteTx(async (tx) => {
     const resource = timerClaimResource(timerId);
-    const nowMs = Date.now();
+    const nowClock = nowMsSql(tx.dialect);
     const row = await tx.get<{
       lock_id: string;
-      expires_at_ms: number | string;
+      active: boolean | number;
     }>(
-      `SELECT lock_id, expires_at_ms FROM runner_durable_locks
+      `SELECT lock_id, (expires_at_ms > ${nowClock.expr}) AS active FROM runner_durable_locks
        WHERE namespace = ? AND resource = ?${forUpdate(tx.dialect)}`,
-      [runtime.namespace, resource],
+      [...nowClock.params, runtime.namespace, resource],
     );
-    if (
-      !row ||
-      row.lock_id !== workerId ||
-      Number(row.expires_at_ms) <= nowMs
-    ) {
+    if (!row || row.lock_id !== workerId || !row.active) {
       return false;
     }
     await tx.run(
@@ -221,20 +223,16 @@ export async function finalizeClaimedTimer(
       [runtime.namespace, timerId],
     );
     const resource = timerClaimResource(timerId);
-    const nowMs = Date.now();
+    const nowClock = nowMsSql(tx.dialect);
     const row = await tx.get<{
       lock_id: string;
-      expires_at_ms: number | string;
+      active: boolean | number;
     }>(
-      `SELECT lock_id, expires_at_ms FROM runner_durable_locks
+      `SELECT lock_id, (expires_at_ms > ${nowClock.expr}) AS active FROM runner_durable_locks
        WHERE namespace = ? AND resource = ?${forUpdate(tx.dialect)}`,
-      [runtime.namespace, resource],
+      [...nowClock.params, runtime.namespace, resource],
     );
-    if (
-      !row ||
-      row.lock_id !== workerId ||
-      Number(row.expires_at_ms) <= nowMs
-    ) {
+    if (!row || row.lock_id !== workerId || !row.active) {
       return false;
     }
     await tx.run(

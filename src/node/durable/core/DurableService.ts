@@ -216,10 +216,6 @@ export class DurableService implements IDurableService {
       this.logger,
     );
     this.stopHandlers.push(() => this.clusterRecovery.stop());
-
-    this.stopHandlers.push(async () => {
-      await this.executionManager.stopLiveCancellationListener();
-    });
   }
 
   /** @internal Starts lifecycle-owned retention maintenance. */
@@ -441,32 +437,35 @@ export class DurableService implements IDurableService {
 
       this.lifecycleState = "disposing";
 
-      while (this.stopHandlers.length > 0) {
-        const stop = this.stopHandlers.pop()!;
+      const runStopStep = async (
+        label: string,
+        fn: () => Promise<void>,
+      ): Promise<void> => {
         try {
-          await stop();
+          await fn();
         } catch (error) {
           firstError ??= error;
           try {
-            await this.logger.error("Durable stop handler failed.", { error });
+            await this.logger.error(label, { error });
           } catch {
             // Logging must not mask shutdown.
           }
         }
+      };
+
+      while (this.stopHandlers.length > 0) {
+        const stop = this.stopHandlers.pop()!;
+        await runStopStep("Durable stop handler failed.", stop);
       }
 
-      try {
-        await this.pollingManager.stop();
-      } catch (error) {
-        firstError ??= error;
-        try {
-          await this.logger.error("Durable polling shutdown failed.", {
-            error,
-          });
-        } catch {
-          // Logging must not mask shutdown.
-        }
-      }
+      await runStopStep("Durable polling shutdown failed.", () =>
+        this.pollingManager.stop(),
+      );
+
+      // Tear down live cancellation after timer-driven attempts have drained.
+      await runStopStep("Durable live cancellation shutdown failed.", () =>
+        this.executionManager.stopLiveCancellationListener(),
+      );
 
       this.lifecycleState = "disposed";
       if (firstError) {

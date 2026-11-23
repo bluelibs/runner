@@ -82,6 +82,7 @@ export function createSqliteBackend(
         );
         if (location !== ":memory:") {
           db.exec("PRAGMA journal_mode = WAL;");
+          db.exec("PRAGMA synchronous = NORMAL;");
         }
         for (const statement of schemaStatements) {
           db.exec(statement);
@@ -115,7 +116,11 @@ export function createSqliteBackend(
           database.exec("COMMIT;");
           return result;
         } catch (error) {
-          database.exec("ROLLBACK;");
+          try {
+            database.exec("ROLLBACK;");
+          } catch {
+            // Preserve the original failure if SQLite already rolled back the transaction.
+          }
           throw error;
         }
       });

@@ -134,6 +134,7 @@ export class DurableContext implements IDurableWorkflowContext {
     task: ITask<any, Promise<any>, any, any, any, any>,
   ) => string;
   private readonly cancellationSignal: AbortSignal;
+  private readonly getShutdownInterruptionReason: () => string | null;
 
   constructor(
     private readonly store: IDurableStore,
@@ -173,6 +174,8 @@ export class DurableContext implements IDurableWorkflowContext {
       replay?: DurableReplayObserver;
       /** @internal Commands have distinct effect identities while sharing target state. */
       stepIdentity?: string;
+      /** @internal Returns the latched shutdown interruption reason when shutting down. */
+      getShutdownInterruptionReason?: () => string | null;
     } = {},
   ) {
     this.executionLockState = options.executionLockState;
@@ -201,6 +204,8 @@ export class DurableContext implements IDurableWorkflowContext {
       options.getTaskPersistenceId ?? ((task) => task.id);
     this.cancellationSignal =
       options.cancellationSignal ?? new AbortController().signal;
+    this.getShutdownInterruptionReason =
+      options.getShutdownInterruptionReason ?? (() => null);
 
     this.audit = createDurableContextAudit({
       store: this.store,
@@ -455,6 +460,8 @@ export class DurableContext implements IDurableWorkflowContext {
       compensations: this.compensations,
       assertUniqueStepId: this.determinism.assertUniqueStepId,
       internalStep: this.internalStep.bind(this),
+      lockState: this.executionLockState,
+      getShutdownInterruptionReason: this.getShutdownInterruptionReason,
     });
   }
 

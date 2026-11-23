@@ -5,10 +5,9 @@ import type { TaskRegistry } from "./TaskRegistry";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { check, Match } from "../../../../tools/check";
 import { ValidationHelper } from "../../../../models/middleware/ValidationHelper";
-import { durableWorkflowTag } from "../../tags/durableWorkflow.tag";
 import { createExecutionId } from "../utils";
 import { followContinuedExecutionChain } from "../continuedChain";
-import { isExecutionTerminal } from "../types";
+import { ExecutionStatus, isExecutionTerminal } from "../types";
 import { waitForStoreResult } from "./waitForStoreResult";
 
 interface CommandClientDeps {
@@ -51,39 +50,58 @@ export async function submitCommand(
     taskKey,
     options.idempotencyKey ?? createExecutionId(),
   ]);
-  let receipt = await store.getCommand(id);
-  if (!receipt) {
-    const source = await store.getExecution(executionId);
-    if (!source)
-      return durableExecutionInvariantError.throw({
-        message: `Execution '${executionId}' does not exist.`,
-      });
-    const target = await followContinuedExecutionChain(store, source);
-    const workflow = deps.tasks.find(
-      target.workflowKey,
-      target.workflowVersion,
-    );
-    const allowed = workflow
-      ? (durableWorkflowTag.extract(workflow)?.commands ?? [])
-      : [];
-    if (!allowed.some((entry) => deps.tasks.getTaskKey(entry) === taskKey))
-      return durableExecutionInvariantError.throw({
-        message: `Command '${taskKey}' is not declared by this workflow version.`,
-      });
-    ValidationHelper.validateInput(input, task.inputSchema, taskKey, "Task");
-    receipt = await store.enqueueCommand({
-      id,
-      executionId: target.id,
-      requestedExecutionId: executionId,
-      taskKey,
-      ...(target.workflowVersion === undefined
-        ? {}
-        : { workflowVersion: target.workflowVersion }),
-      input,
-      status: "pending",
-      createdAt: new Date(),
-    });
-  }
+  const existingReceipt = await store.getCommand(id);
+  const receipt =
+    existingReceipt ??
+    (await (async () => {
+      let source = await store.getExecution(executionId);
+      if (!source)
+        return durableExecutionInvariantError.throw({
+          message: `Execution '${executionId}' does not exist.`,
+        });
+      for (let attempt = 0; ; attempt += 1) {
+        const target = await followContinuedExecutionChain(store, source);
+        const workflow = deps.tasks.find(
+          target.workflowKey,
+          target.workflowVersion,
+        );
+        if (!deps.tasks.findCommand(workflow, taskKey))
+          return durableExecutionInvariantError.throw({
+            message: `Command '${taskKey}' is not declared by this workflow version.`,
+          });
+        ValidationHelper.validateInput(
+          input,
+          task.inputSchema,
+          taskKey,
+          "Task",
+        );
+        try {
+          return await store.enqueueCommand!({
+            id,
+            executionId: target.id,
+            requestedExecutionId: executionId,
+            taskKey,
+            ...(target.workflowVersion === undefined
+              ? {}
+              : { workflowVersion: target.workflowVersion }),
+            input,
+            status: "pending",
+            createdAt: new Date(),
+          });
+        } catch (error) {
+          const refreshed = await store.getExecution(target.id);
+          if (
+            refreshed?.status === ExecutionStatus.ContinuedAsNew &&
+            refreshed.continuedAsExecutionId &&
+            attempt < 4
+          ) {
+            source = refreshed;
+            continue;
+          }
+          throw error;
+        }
+      }
+    })());
   if (receipt.status === "pending" || receipt.status === "running") {
     void deps.kickoff(receipt.executionId).catch(() => {
       /* The persisted timer retries failed dispatch. */

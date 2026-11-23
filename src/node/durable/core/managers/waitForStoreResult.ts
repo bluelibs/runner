@@ -16,7 +16,6 @@ export async function waitForStoreResult<TResult>(params: {
 }): Promise<TResult> {
   const {
     check,
-    channel,
     eventBus,
     startedAt,
     timeoutMs,
@@ -87,6 +86,13 @@ export async function waitForStoreResult<TResult>(params: {
           return;
         }
         subscribedChannels.add(nextChannel);
+        // Release obsolete continuation-hop channels once subscribed to the latest tip.
+        for (const previous of [...subscribedChannels]) {
+          if (previous !== nextChannel) {
+            subscribedChannels.delete(previous);
+            void unsubscribe(previous);
+          }
+        }
         // Close the read/subscribe gap, including when following a continuation.
         await refresh();
       };
@@ -102,11 +108,15 @@ export async function waitForStoreResult<TResult>(params: {
         }
       }
 
-      const pollOnce = async (): Promise<void> => {
-        await refresh();
+      const schedulePoll = (): void => {
         if (done) return;
         pollTimer = setTimeout(() => void pollOnce(), pollEveryMs);
         pollTimer.unref();
+      };
+
+      const pollOnce = async (): Promise<void> => {
+        await refresh();
+        schedulePoll();
       };
 
       if (timeoutMs !== undefined) {
@@ -128,8 +138,9 @@ export async function waitForStoreResult<TResult>(params: {
         deadlineTimer.unref();
       }
 
-      void subscribe(channel);
-      void pollOnce();
+      void subscribe(initialResult.channel);
+      // Initial check() already ran; schedule the fallback poll after pollEveryMs.
+      schedulePoll();
     });
   }
 

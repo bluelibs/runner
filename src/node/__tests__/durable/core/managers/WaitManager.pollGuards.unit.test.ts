@@ -60,7 +60,7 @@ describe("durable: WaitManager (poll guards)", () => {
       let calls = 0;
       jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
         calls += 1;
-        if (calls === 4) {
+        if (calls === 3) {
           await new Promise<void>((resolve) => {
             releaseCheck = resolve;
           });
@@ -74,7 +74,7 @@ describe("durable: WaitManager (poll guards)", () => {
       });
 
       await jest.advanceTimersByTimeAsync(10);
-      await waitForCalls(() => calls, 4);
+      await waitForCalls(() => calls, 3);
 
       await store.updateExecution(executionId, {
         status: ExecutionStatus.Completed,

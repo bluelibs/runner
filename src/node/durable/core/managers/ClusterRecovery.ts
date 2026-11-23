@@ -79,9 +79,12 @@ export class ClusterRecovery {
       limit: this.batchSize,
       cursor: this.cursor,
     });
-    // Advance only past inspected rows so a full admission window cannot starve a page.
+    // Drain the full fetched page with bounded concurrency instead of discarding excess rows.
     for (const row of rows) {
-      if (this.stopped || this.inFlight.size >= this.concurrency) return;
+      while (!this.stopped && this.inFlight.size >= this.concurrency) {
+        await Promise.race(this.inFlight.values());
+      }
+      if (this.stopped) return;
       this.cursor = encodeExecutionCursor({
         id: row.id,
         createdAt: row.createdAt.toISOString(),

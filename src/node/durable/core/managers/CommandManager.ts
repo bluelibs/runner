@@ -9,7 +9,6 @@ import type {
 import type { Execution } from "../types";
 import { isExecutionTerminal } from "../types";
 import { durableExecutionInvariantError } from "../../../../errors";
-import { durableWorkflowTag } from "../../tags/durableWorkflow.tag";
 import { DurableContext } from "../DurableContext";
 import { NoopEventBus } from "../../bus/NoopEventBus";
 import { commandContext, createCommandStore } from "./commandContext";
@@ -113,11 +112,7 @@ export class CommandManager {
         return "settled";
       }
       if (target.status === "paused") return "parked";
-      const task = durableWorkflowTag
-        .extract(workflow)
-        ?.commands?.find(
-          (entry) => this.tasks.getTaskKey(entry) === request!.taskKey,
-        );
+      const task = this.tasks.findCommand(workflow, request.taskKey);
       if (!task) {
         await this.complete(owned, {
           ...request,
@@ -145,7 +140,7 @@ export class CommandManager {
       const staged = createCommandStore(owned, request);
       const cancellation = await this.cancellation.registerAttemptCancellation({
         executionId: execution.id,
-        pausedAt: execution.pausedAt,
+        pausedAt: target.pausedAt,
       });
       const context = commandContext(
         new DurableContext(
@@ -183,10 +178,20 @@ export class CommandManager {
           throw cancellationError.new({
             reason: String(cancellation.signal.reason),
           });
-        const latest = await owned.getExecution(execution.id);
-        if (latest?.status === "paused") return "parked";
-        if (
-          !(await this.complete(
+        let latest = await owned.getExecution(execution.id);
+        let committed = false;
+        for (let commitAttempt = 0; commitAttempt < 5; commitAttempt += 1) {
+          if (latest?.status === "paused") return "parked";
+          if (
+            !latest ||
+            isExecutionTerminal(latest.status) ||
+            latest.status === "cancelling" ||
+            latest.attempt !== target.attempt ||
+            latest.workflowVersion !== target.workflowVersion
+          ) {
+            break;
+          }
+          committed = await this.complete(
             owned,
             {
               ...staged.record,
@@ -194,11 +199,25 @@ export class CommandManager {
               result,
               completedAt: new Date(),
             },
-            latest ?? undefined,
-          ))
-        ) {
-          if ((await owned.getExecution(execution.id))?.status === "paused")
-            return "parked";
+            latest,
+          );
+          if (committed) break;
+          const refreshed = await owned.getExecution(execution.id);
+          if (refreshed?.status === "paused") return "parked";
+          // Only retry when an unrelated background write (e.g. sleep/signal clearing
+          // `current`) updated `current`/`updatedAt` without changing execution lifecycle.
+          const benignChange =
+            refreshed !== null &&
+            refreshed.status === latest.status &&
+            refreshed.attempt === latest.attempt &&
+            refreshed.workflowVersion === latest.workflowVersion &&
+            refreshed.pausedAt?.getTime() === latest.pausedAt?.getTime() &&
+            (refreshed.updatedAt.getTime() !== latest.updatedAt.getTime() ||
+              refreshed.current !== latest.current);
+          if (!benignChange) break;
+          latest = refreshed;
+        }
+        if (!committed) {
           await this.complete(owned, {
             ...staged.record,
             status: "failed",

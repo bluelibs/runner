@@ -45,7 +45,7 @@ function assertQueueCapacity(
   }
 }
 
-function trimHistory(history: DurableSignalRecord[]): void {
+export function trimHistory(history: DurableSignalRecord[]): void {
   if (history.length > MAX_SIGNAL_HISTORY_PER_KEY) {
     history.splice(0, history.length - MAX_SIGNAL_HISTORY_PER_KEY);
   }
@@ -274,7 +274,8 @@ export async function transferQueuedSignalBacklogInTx(
 ): Promise<void> {
   const rows = await tx.all<{ payload: string }>(
     `SELECT payload FROM runner_durable_signal_states
-     WHERE namespace = ? AND execution_id = ?${forUpdate(tx.dialect)}`,
+     WHERE namespace = ? AND execution_id = ?
+     ORDER BY signal_id ASC${forUpdate(tx.dialect)}`,
     [runtime.namespace, fromExecutionId],
   );
   const backlogs = rows

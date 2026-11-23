@@ -38,12 +38,14 @@ export async function createCheckpointExecution(
           }),
     }),
   ]);
-  const sequence = Math.max(
-    ...branch.history.flatMap((entry) => [
+  let sequence = 0;
+  for (const entry of branch.history) {
+    sequence = Math.max(
+      sequence,
       entry.startedOrder,
       entry.completedOrder ?? 0,
-    ]),
-  );
+    );
+  }
   const result = await runtime.redis.eval(
     `
     if redis.call("get", KEYS[1]) ~= ARGV[1] or redis.call("exists", KEYS[2]) == 1 then return 0 end

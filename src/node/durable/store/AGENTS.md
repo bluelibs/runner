@@ -9,7 +9,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Entry Points And Layout
 
-- `RedisStore.retention.ts`, `memory-store/retention.ts`, and `sql/retention.ts` collect due success history (`collectCompletedHistory`) while preserving completion receipts, and expire completion receipts (`collectExpiredReceipts`) when configured. Collection coordinates with execution ownership and waiter results. A missing parent blocks child collection unless the child verified it in the same store at admission. Redis groups timer metadata once per batch and reschedules blocked entries so they cannot starve later work.
+- `RedisStore.retention.ts`, `memory-store/retention.ts`, and `sql/retention.ts` collect due success history (`collectCompletedHistory`) while preserving completion receipts, and expire completion receipts (`collectExpiredReceipts`) when configured. Collection coordinates with execution ownership and waiter results. A missing parent blocks child collection unless the child verified it in the same store at admission. Redis reads per-execution `execution_timers:<id>` (never global `HGETALL durable:timers`) and updates/prunes stale ZSET deadlines so blocked/postponed entries cannot starve later work. SQL retention uses bounded `LIMIT` + `FOR UPDATE SKIP LOCKED`, batched detail deletes, and expired lock sweeps; PostgreSQL uses server `clock_timestamp()` for leases and skips DDL locks when schema objects already exist.
 - `MemoryStore.ts`: facade over instance-owned `memory-store/` operations.
 - `PersistentMemoryStore.ts`: adds serialized snapshots and local restart persistence.
 - `RedisStore.ts`: facade delegating to `RedisStore.*` operations.

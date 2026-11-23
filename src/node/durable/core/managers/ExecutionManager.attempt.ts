@@ -99,6 +99,7 @@ export function createExecutionContext(params: {
   assertLockOwnership: () => void;
   executionLockState?: ExecutionLockState;
   cancellationSignal: AbortSignal;
+  getShutdownInterruptionReason?: () => string | null;
   taskExecutor?: ITaskExecutor;
   getTaskKey?: (task: ITask<any, Promise<any>, any, any, any, any>) => string;
   auditConfig?: DurableServiceConfig["audit"];
@@ -126,6 +127,7 @@ export function createExecutionContext(params: {
       assertLockOwnership: params.assertLockOwnership,
       executionLockState: params.executionLockState,
       cancellationSignal: params.cancellationSignal,
+      getShutdownInterruptionReason: params.getShutdownInterruptionReason,
       taskExecutor: params.taskExecutor,
       getTaskKey: params.getTaskKey,
       historyRecorded: params.execution.historyRecorded,

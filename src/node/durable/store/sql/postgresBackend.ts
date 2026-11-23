@@ -67,6 +67,14 @@ function createPgExecutor(queryable: Pick<PgPoolLike, "query">): SqlExecutor {
   };
 }
 
+function extractDdlObjectName(statement: string): string | null {
+  const match =
+    /^\s*CREATE\s+(?:TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\s+([a-zA-Z0-9_]+)/i.exec(
+      statement,
+    );
+  return match ? match[1].toLowerCase() : null;
+}
+
 /** Creates a transactional PostgreSQL backend over `pg.Pool` or a custom pool adapter. */
 export function createPostgresBackend(
   config: PostgresBackendConfig,
@@ -82,7 +90,13 @@ export function createPostgresBackend(
   let pool: PgPoolLike | null = config.pool ?? null;
   const ensurePool = (): PgPoolLike => {
     if (!pool) {
-      pool = createPgPool(config.connectionString ?? config.poolConfig!);
+      const poolInput =
+        config.connectionString && config.poolConfig
+          ? { ...config.poolConfig, connectionString: config.connectionString }
+          : (config.connectionString ?? config.poolConfig!);
+      pool = createPgPool(poolInput);
+      // Prevent unhandled `'error'` crashes when an idle pooled client drops on failover/restart.
+      pool.on?.("error", () => undefined);
     }
     return pool;
   };
@@ -91,26 +105,56 @@ export function createPostgresBackend(
     operation: (tx: SqlExecutor) => Promise<T>,
   ): Promise<T> {
     const client = await ensurePool().connect();
+    let destroyClient = false;
     try {
-      await client.query("BEGIN");
+      try {
+        await client.query("BEGIN");
+      } catch (beginError) {
+        destroyClient = true;
+        throw beginError;
+      }
       const result = await operation(createPgExecutor(client));
       await client.query("COMMIT");
       return result;
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
+      if (!destroyClient) {
+        await client.query("ROLLBACK").catch(() => {
+          destroyClient = true;
+        });
+      }
       throw error;
     } finally {
-      client.release();
+      client.release(destroyClient);
     }
   }
 
   return {
     dialect: "postgres",
     async init(schemaStatements: readonly string[]): Promise<void> {
+      const ddlObjects = schemaStatements.map(extractDdlObjectName);
+      let pendingStatements: readonly string[] = schemaStatements;
+      if (ddlObjects.every((name) => name !== null)) {
+        const existingRows = await createPgExecutor(ensurePool()).all<{
+          name: string;
+        }>(
+          `SELECT tablename AS name FROM pg_tables WHERE schemaname = current_schema()
+           UNION ALL
+           SELECT indexname AS name FROM pg_indexes WHERE schemaname = current_schema()`,
+        );
+        const existing = new Set(
+          existingRows.map((row) => String(row.name).toLowerCase()),
+        );
+        // Skip CREATE TABLE/INDEX IF NOT EXISTS when already present so worker boots
+        // do not acquire table-wide ShareLocks on existing production indexes.
+        pendingStatements = schemaStatements.filter(
+          (_statement, idx) => !existing.has(ddlObjects[idx]!),
+        );
+        if (pendingStatements.length === 0) return;
+      }
       await transaction(async (tx) => {
         // Concurrent IF NOT EXISTS DDL can still collide in the system catalogs.
         await tx.run("SELECT pg_advisory_xact_lock(?, ?)", [0x72756e6e, 1]);
-        for (const statement of schemaStatements) await tx.run(statement);
+        for (const statement of pendingStatements) await tx.run(statement);
       });
     },
     async all<TRow extends SqlRow = SqlRow>(

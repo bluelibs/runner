@@ -59,22 +59,19 @@ export async function createExecutionWithIdempotencyKey(
   | { created: false; executionId: string }
 > {
   return runtime.withWriteTx(async (tx) => {
-    await tx.run(
+    const row = await tx.get<{ execution_id: string }>(
       `INSERT INTO runner_durable_idempotency (
         namespace, workflow_key, idempotency_key, execution_id
       ) VALUES (?, ?, ?, ?)
-      ON CONFLICT (namespace, workflow_key, idempotency_key) DO NOTHING`,
+      ON CONFLICT (namespace, workflow_key, idempotency_key) DO UPDATE SET
+        execution_id = runner_durable_idempotency.execution_id
+      RETURNING execution_id`,
       [
         runtime.namespace,
         params.workflowKey,
         params.idempotencyKey,
         params.execution.id,
       ],
-    );
-    const row = await tx.get<{ execution_id: string }>(
-      `SELECT execution_id FROM runner_durable_idempotency
-       WHERE namespace = ? AND workflow_key = ? AND idempotency_key = ?`,
-      [runtime.namespace, params.workflowKey, params.idempotencyKey],
     );
     if (row!.execution_id !== params.execution.id) {
       return { created: false, executionId: String(row!.execution_id) };

@@ -24,14 +24,24 @@ export function createSchemaStatements(dialect: SqlDialect): string[] {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_cursor
       ON runner_durable_executions (namespace, created_at_ms DESC, id ASC)`,
-    `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_status
-      ON runner_durable_executions (namespace, status)`,
-    `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_wf_status
-      ON runner_durable_executions (namespace, workflow_key, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_status_cursor
+      ON runner_durable_executions (namespace, status, created_at_ms DESC, id ASC)`,
+    `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_wf_cursor
+      ON runner_durable_executions (namespace, workflow_key, created_at_ms DESC, id ASC)`,
+    `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_wf_status_cursor
+      ON runner_durable_executions (namespace, workflow_key, status, created_at_ms DESC, id ASC)`,
+    `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_parent_cursor
+      ON runner_durable_executions (namespace, parent_execution_id, created_at_ms DESC, id ASC)
+      WHERE parent_execution_id IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_active_cursor
+      ON runner_durable_executions (namespace, created_at_ms DESC, id ASC)
+      WHERE status NOT IN ('completed', 'failed', 'compensation_failed', 'cancelled', 'continued_as_new')`,
     `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_history_due
-      ON runner_durable_executions (namespace, history_deadline_ms)`,
+      ON runner_durable_executions (namespace, history_deadline_ms ASC, id ASC)
+      WHERE history_deadline_ms IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_runner_durable_executions_receipt_due
-      ON runner_durable_executions (namespace, receipt_deadline_ms)`,
+      ON runner_durable_executions (namespace, receipt_deadline_ms ASC, id ASC)
+      WHERE receipt_deadline_ms IS NOT NULL`,
 
     `CREATE TABLE IF NOT EXISTS runner_durable_idempotency (
       namespace TEXT NOT NULL,
@@ -147,16 +157,19 @@ export function createSchemaStatements(dialect: SqlDialect): string[] {
       PRIMARY KEY (namespace, id)
     )`,
     `CREATE INDEX IF NOT EXISTS idx_runner_durable_commands_fifo
-      ON runner_durable_commands (namespace, execution_id, queue_seq)`,
+      ON runner_durable_commands (namespace, execution_id, queue_seq)
+      WHERE queue_seq IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_runner_durable_commands_exec
       ON runner_durable_commands (namespace, execution_id)`,
 
     `CREATE TABLE IF NOT EXISTS runner_durable_locks (
       namespace TEXT NOT NULL,
-      resource TEXT NOT NULL,
+      resource TEXT${c} NOT NULL,
       lock_id TEXT NOT NULL,
       expires_at_ms BIGINT NOT NULL,
       PRIMARY KEY (namespace, resource)
     )`,
+    `CREATE INDEX IF NOT EXISTS idx_runner_durable_locks_expires
+      ON runner_durable_locks (namespace, expires_at_ms)`,
   ];
 }

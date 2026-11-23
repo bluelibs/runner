@@ -1,4 +1,4 @@
-import type { ITask } from "../../../../types/task";
+import type { AnyTask, ITask } from "../../../../types/task";
 import { check, Match } from "../../../../tools/check";
 import { durableExecutionInvariantError } from "../../../../errors";
 import { durableWorkflowTag } from "../../tags/durableWorkflow.tag";
@@ -6,8 +6,8 @@ import { durableWorkflowTag } from "../../tags/durableWorkflow.tag";
 /**
  * In-memory durable task registry.
  *
- * Durable executions persist only a `workflowKey` in the store, so the runtime needs a way
- * to resolve `workflowKey -> ITask` when resuming. This registry holds tasks that
+ * Durable executions persist a workflow key and an optional implementation version.
+ * This registry resolves those to the task when resuming. It holds tasks that
  * were registered on the current process and optionally delegates to an external
  * resolver for tasks defined elsewhere (useful for modular apps).
  */
@@ -93,6 +93,19 @@ export class TaskRegistry {
   /** Canonical task addressing is separate from an optional workflow storage key. */
   getTaskKey(task: ITask<any, Promise<any>, any, any, any, any>): string {
     return this.taskKeyResolver?.(task) ?? task.id;
+  }
+
+  /** Resolves a declared command using its canonical task key. */
+  findCommand(
+    workflow: AnyTask | undefined,
+    taskKey: string,
+  ): AnyTask | undefined {
+    return (
+      workflow &&
+      durableWorkflowTag
+        .extract(workflow)
+        ?.commands?.find((task) => this.getTaskKey(task) === taskKey)
+    );
   }
 
   /** Resolves an explicit task reference for a new start; existing executions use find(). */

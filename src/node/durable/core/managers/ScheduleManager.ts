@@ -23,6 +23,8 @@ import {
   durableScheduleConfigError,
 } from "../../../../errors";
 
+type ScheduleTarget = Pick<Schedule, "workflowKey" | "workflowVersion">;
+
 /**
  * Creates and maintains durable schedules.
  *
@@ -68,51 +70,24 @@ export class ScheduleManager {
         }),
       fn: async () => {
         const existing = await this.store.getSchedule(scheduleId);
-        const workflowKey = this.taskRegistry.getWorkflowKey(task);
-
-        const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
-        const pattern = options.cron ?? String(options.interval);
-        const timezone = options.cron ? options.timezone : undefined;
-
-        if (existing) {
-          if (
-            existing.workflowKey !== workflowKey ||
-            existing.workflowVersion !== getDurableWorkflowVersion(task)
-          ) {
-            durableScheduleConfigError.throw({
-              message: `Schedule '${scheduleId}' already exists for workflow '${existing.workflowKey}', cannot rebind to '${workflowKey}'`,
-            });
-          }
-
-          await this.reschedule({
-            ...existing,
-            type,
-            pattern,
-            timezone,
-            input,
-            status: ScheduleStatus.Active,
-            updatedAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
+        const target = this.getScheduleTarget(task);
+        if (
+          existing &&
+          (existing.workflowKey !== target.workflowKey ||
+            existing.workflowVersion !== target.workflowVersion)
+        ) {
+          durableScheduleConfigError.throw({
+            message: `Schedule '${scheduleId}' already exists for workflow '${existing.workflowKey}', cannot rebind to '${target.workflowKey}'`,
           });
-
-          return scheduleId;
         }
 
-        const schedule: Schedule = {
-          id: scheduleId,
-          workflowKey,
-          ...(getDurableWorkflowVersion(task) === undefined
-            ? {}
-            : { workflowVersion: getDurableWorkflowVersion(task) }),
+        await this.saveRecurringSchedule(
+          scheduleId,
+          target,
           input,
-          pattern,
-          timezone,
-          type,
-          status: ScheduleStatus.Active,
-          createdAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
-          updatedAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
-        };
-
-        await this.reschedule(schedule);
+          options,
+          existing,
+        );
         return scheduleId;
       },
     });
@@ -130,25 +105,10 @@ export class ScheduleManager {
     ValidationHelper.validateInput(input, task.inputSchema, task.id, "Task");
 
     const id = options.id ?? createExecutionId();
+    const target = this.getScheduleTarget(task);
 
     if (options.cron || options.interval !== undefined) {
-      const workflowKey = this.taskRegistry.getWorkflowKey(task);
-      const schedule: Schedule = {
-        id,
-        workflowKey,
-        ...(getDurableWorkflowVersion(task) === undefined
-          ? {}
-          : { workflowVersion: getDurableWorkflowVersion(task) }),
-        input,
-        pattern: options.cron ?? String(options.interval),
-        timezone: options.cron ? options.timezone : undefined,
-        type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
-        status: ScheduleStatus.Active,
-        createdAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
-        updatedAt: new Date(this.store.getWorkflowTime?.() ?? Date.now()),
-      };
-
-      await this.reschedule(schedule);
+      await this.saveRecurringSchedule(id, target, input, options);
       return id;
     }
 
@@ -159,10 +119,7 @@ export class ScheduleManager {
 
     await this.store.createTimer({
       id: `once:${id}`,
-      workflowKey: this.taskRegistry.getWorkflowKey(task),
-      ...(getDurableWorkflowVersion(task) === undefined
-        ? {}
-        : { workflowVersion: getDurableWorkflowVersion(task) }),
+      ...target,
       input,
       type: TimerType.Scheduled,
       fireAt,
@@ -170,6 +127,38 @@ export class ScheduleManager {
     });
 
     return id;
+  }
+
+  private getScheduleTarget(
+    task: ITask<any, Promise<any>, any, any, any, any>,
+  ): ScheduleTarget {
+    const workflowVersion = getDurableWorkflowVersion(task);
+    return {
+      workflowKey: this.taskRegistry.getWorkflowKey(task),
+      ...(workflowVersion === undefined ? {} : { workflowVersion }),
+    };
+  }
+
+  private async saveRecurringSchedule(
+    id: string,
+    target: ScheduleTarget,
+    input: unknown,
+    options: EnsureScheduleOptions,
+    existing?: Schedule | null,
+  ): Promise<void> {
+    const updatedAt = new Date(this.store.getWorkflowTime?.() ?? Date.now());
+    await this.reschedule({
+      ...existing,
+      ...target,
+      id,
+      input,
+      type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
+      pattern: options.cron ?? String(options.interval),
+      timezone: options.cron ? options.timezone : undefined,
+      status: ScheduleStatus.Active,
+      createdAt: existing?.createdAt ?? updatedAt,
+      updatedAt,
+    });
   }
 
   async reschedule(

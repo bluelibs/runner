@@ -8,6 +8,7 @@ import { saveStepResultInTx } from "./executionViews";
 import type { SqlStoreRuntime } from "./runtime";
 import {
   ensureSignalStateForUpdate,
+  trimHistory,
   writeSignalStateInTx,
 } from "./signalState";
 import { forUpdate } from "./types";
@@ -101,6 +102,7 @@ export async function commitSignalDelivery(
       payload: params.signalRecord.payload,
       receivedAt: params.signalRecord.receivedAt,
     });
+    trimHistory(journal.history);
     await writeSignalStateInTx(runtime, tx, journal);
 
     await tx.run(

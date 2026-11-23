@@ -55,7 +55,12 @@ function createSqliteBackedPgPool(
     sql = sql
       .replace(/ COLLATE "C"/g, "")
       .replace(/ FOR UPDATE OF t SKIP LOCKED/g, "")
+      .replace(/ FOR UPDATE SKIP LOCKED/g, "")
       .replace(/ FOR UPDATE/g, "")
+      .replace(
+        /\(FLOOR\(EXTRACT\(EPOCH FROM clock_timestamp\(\)\) \* 1000\)\)::BIGINT/g,
+        "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      )
       .replace(
         /id BIGSERIAL PRIMARY KEY/g,
         "id INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -75,6 +80,14 @@ function createSqliteBackedPgPool(
     const upper = text.trim().toUpperCase();
     if (upper.startsWith("SELECT PG_ADVISORY_XACT_LOCK(")) {
       return { rows: [] };
+    }
+    if (upper.includes("FROM PG_TABLES")) {
+      const rows = db
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type IN ('table', 'index')`,
+        )
+        .all() as TRow[];
+      return { rows };
     }
     if (upper === "BEGIN" || upper === "COMMIT" || upper === "ROLLBACK") {
       db.exec(`${upper};`);

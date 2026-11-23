@@ -76,6 +76,7 @@ export class RabbitMQQueue implements IDurableQueue {
       decode: (message) => this.decode(message),
       resolveMessageId: (message) => message.id,
       throwNotInitialized: () => durableQueueNotInitializedError.throw(),
+      onDisconnect: () => this.attemptsByMessageId.clear(),
     });
   }
 
@@ -151,6 +152,7 @@ export class RabbitMQQueue implements IDurableQueue {
    * Cancels the active consumer registration while leaving the queue intact.
    */
   async cancelConsumer(): Promise<void> {
+    this.attemptsByMessageId.clear();
     await this.transport.cancelConsumer();
   }
 

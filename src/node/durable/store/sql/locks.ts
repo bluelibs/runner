@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SqlStoreRuntime } from "./runtime";
-import type { SqlExecutor } from "./types";
+import { nowMsSql, type SqlExecutor } from "./types";
 
 export function timerClaimResource(timerId: string): string {
   return `timer:claim:${timerId}`;
@@ -14,23 +14,37 @@ export async function acquireOrRenewClaimInTx(
   ttlMs: number,
   requireExistingMatch: boolean,
 ): Promise<boolean> {
-  const nowMs = Date.now();
+  const now = nowMsSql(tx.dialect);
   const row = requireExistingMatch
     ? await tx.get(
-        `UPDATE runner_durable_locks SET expires_at_ms = ?
-         WHERE namespace = ? AND resource = ? AND lock_id = ? AND expires_at_ms > ?
+        `UPDATE runner_durable_locks SET expires_at_ms = (${now.expr}) + ?
+         WHERE namespace = ? AND resource = ? AND lock_id = ? AND expires_at_ms > ${now.expr}
          RETURNING lock_id`,
-        [nowMs + ttlMs, runtime.namespace, resource, lockId, nowMs],
+        [
+          ...now.params,
+          ttlMs,
+          runtime.namespace,
+          resource,
+          lockId,
+          ...now.params,
+        ],
       )
     : await tx.get(
         `INSERT INTO runner_durable_locks (namespace, resource, lock_id, expires_at_ms)
-         VALUES (?, ?, ?, ?)
+         VALUES (?, ?, ?, (${now.expr}) + ?)
          ON CONFLICT (namespace, resource) DO UPDATE SET
            lock_id = EXCLUDED.lock_id,
            expires_at_ms = EXCLUDED.expires_at_ms
-         WHERE runner_durable_locks.expires_at_ms <= ?
+         WHERE runner_durable_locks.expires_at_ms <= ${now.expr}
          RETURNING lock_id`,
-        [runtime.namespace, resource, lockId, nowMs + ttlMs, nowMs],
+        [
+          runtime.namespace,
+          resource,
+          lockId,
+          ...now.params,
+          ttlMs,
+          ...now.params,
+        ],
       );
   return row !== null;
 }
@@ -84,11 +98,12 @@ export async function hasExecutionLease(
   executionId: string,
 ): Promise<boolean> {
   return runtime.withRead(async (exec) => {
-    const row = await exec.get<{ expires_at_ms: number | string }>(
-      `SELECT expires_at_ms FROM runner_durable_locks
-       WHERE namespace = ? AND resource = ?`,
-      [runtime.namespace, `execution:${executionId}`],
+    const now = nowMsSql(exec.dialect);
+    const row = await exec.get(
+      `SELECT 1 AS ok FROM runner_durable_locks
+       WHERE namespace = ? AND resource = ? AND expires_at_ms > ${now.expr}`,
+      [runtime.namespace, `execution:${executionId}`, ...now.params],
     );
-    return Boolean(row && Number(row.expires_at_ms) > Date.now());
+    return row !== null;
   });
 }

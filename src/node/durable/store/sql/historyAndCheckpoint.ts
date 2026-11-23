@@ -55,6 +55,18 @@ export async function recordExecutionHistoryInTx(
   executionId: string,
   update: DurableHistoryUpdate,
 ): Promise<boolean> {
+  // Claim/lock the per-execution sequence row first so concurrent writes cannot
+  // observe a missing row or emit duplicate startedOrder values under Postgres.
+  const seqRow = await tx.get<{ seq: number | string }>(
+    `INSERT INTO runner_durable_history_seq (namespace, execution_id, seq)
+     VALUES (?, ?, 0)
+     ON CONFLICT (namespace, execution_id) DO UPDATE SET
+       seq = runner_durable_history_seq.seq
+     RETURNING seq`,
+    [runtime.namespace, executionId],
+  );
+  let seq = Number(seqRow!.seq);
+
   const existingRow = await tx.get<{ payload: string }>(
     `SELECT payload FROM runner_durable_history
      WHERE namespace = ? AND execution_id = ? AND step_id = ?${forUpdate(tx.dialect)}`,
@@ -69,13 +81,6 @@ export async function recordExecutionHistoryInTx(
   ) {
     return false;
   }
-
-  const seqRow = await tx.get<{ seq: number | string }>(
-    `SELECT seq FROM runner_durable_history_seq
-     WHERE namespace = ? AND execution_id = ?${forUpdate(tx.dialect)}`,
-    [runtime.namespace, executionId],
-  );
-  let seq = seqRow ? Number(seqRow.seq) : 0;
 
   if (!entry) {
     const { phase: _phase, stateAfter: _state, ...identity } = update;
@@ -151,13 +156,14 @@ export async function createCheckpointExecution(
     for (const step of branch.steps) {
       await saveStepResultInTx(runtime, tx, step);
     }
-    const maxOrder = Math.max(
-      0,
-      ...branch.history.flatMap((entry) => [
+    let maxOrder = 0;
+    for (const entry of branch.history) {
+      maxOrder = Math.max(
+        maxOrder,
         entry.startedOrder,
         entry.completedOrder ?? 0,
-      ]),
-    );
+      );
+    }
     await upsertHistorySeqInTx(runtime, tx, branch.execution.id, maxOrder);
     for (const entry of branch.history) {
       await upsertHistoryEntryInTx(runtime, tx, branch.execution.id, entry);

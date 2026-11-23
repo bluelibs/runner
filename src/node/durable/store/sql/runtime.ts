@@ -11,6 +11,7 @@ import type { Execution } from "../../core/types";
 import { createSchemaStatements } from "./schema";
 import {
   forUpdate,
+  nowMsSql,
   type SqlBackend,
   type SqlExecutor,
   type SqlStoreBaseConfig,
@@ -91,18 +92,15 @@ export class SqlStoreRuntime {
   async assertOwnershipInTx(tx: SqlExecutor): Promise<void> {
     const owner = this.ownership.getStore();
     if (!owner) return;
+    const now = nowMsSql(tx.dialect);
     const row = await tx.get<{
       lock_id: string;
-      expires_at_ms: number | string;
+      active: boolean | number;
     }>(
-      `SELECT lock_id, expires_at_ms FROM runner_durable_locks WHERE namespace = ? AND resource = ?${forUpdate(tx.dialect)}`,
-      [this.namespace, `execution:${owner.executionId}`],
+      `SELECT lock_id, (expires_at_ms > ${now.expr}) AS active FROM runner_durable_locks WHERE namespace = ? AND resource = ?${forUpdate(tx.dialect)}`,
+      [...now.params, this.namespace, `execution:${owner.executionId}`],
     );
-    if (
-      !row ||
-      row.lock_id !== owner.lockId ||
-      Number(row.expires_at_ms) <= Date.now()
-    ) {
+    if (!row || row.lock_id !== owner.lockId || !row.active) {
       owner.onLost();
     }
   }

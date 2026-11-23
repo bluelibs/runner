@@ -332,17 +332,16 @@ export class PollingManager {
           safeToFinalizeCurrentTimer = true;
         },
       });
-      if (!scheduledTimerResult.handled) {
-        await finalizeTimer();
-        return;
-      }
-
       if (scheduledTimerResult.finalizeCurrentTimer) {
         await finalizeTimer();
         return;
       }
 
-      await releaseTimerClaim();
+      if (scheduledTimerResult.releaseCurrentTimerClaim) {
+        await releaseTimerClaim();
+        return;
+      }
+
       return;
     } catch (error) {
       let cleanupError: unknown = null;

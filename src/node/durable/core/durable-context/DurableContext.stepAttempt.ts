@@ -14,7 +14,7 @@ import {
   EXECUTION_PAUSED_ABORT_REASON,
   throwDurablePauseInterruption,
 } from "../pauseInterruption";
-import { isTimeoutExceededError, sleepMs, withTimeout } from "../utils";
+import { isTimeoutExceededError, withTimeout } from "../utils";
 import { runAdmittedStepCallback } from "./DurableContext.stepCallback";
 import {
   loadStepRetryState,
@@ -22,6 +22,47 @@ import {
 } from "./DurableContext.stepRetryState";
 import { createStepProgress } from "./stepProgress";
 import type { DurableStepContext } from "../interfaces/context.step";
+
+const MAX_STEP_RETRY_BACKOFF_MS = 30_000;
+
+function createSignalStopError(signal: AbortSignal, stepId: string): Error {
+  if (signal.reason === EXECUTION_PAUSED_ABORT_REASON) {
+    try {
+      throwDurablePauseInterruption();
+    } catch (pauseError) {
+      return pauseError as Error;
+    }
+  }
+  return createCancellationErrorFromSignal(
+    signal,
+    `Durable step '${stepId}' cancelled`,
+  );
+}
+
+async function sleepStepBackoff(
+  delayMs: number,
+  signal: AbortSignal,
+  lockState: ExecutionLockState,
+  stepId: string,
+): Promise<void> {
+  if (lockState.lost) throw lockState.lossError;
+  if (signal.aborted) throw createSignalStopError(signal, stepId);
+
+  let timer!: ReturnType<typeof setTimeout>;
+  let onAbort!: () => void;
+  const wait = new Promise<void>((resolve, reject) => {
+    onAbort = () => reject(createSignalStopError(signal, stepId));
+    timer = setTimeout(resolve, delayMs);
+    timer.unref();
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([wait, lockState.waitForLoss]);
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", onAbort);
+  }
+}
 
 /** Runs bounded callback retries, retaining the successful lease through checkpointing. */
 export async function runDurableStepAttempts<T>(params: {
@@ -47,7 +88,12 @@ export async function runDurableStepAttempts<T>(params: {
     retry.nextAttemptAtMs !== undefined &&
     retry.nextAttemptAtMs > Date.now()
   ) {
-    await sleepMs(retry.nextAttemptAtMs - Date.now());
+    await sleepStepBackoff(
+      retry.nextAttemptAtMs - Date.now(),
+      params.signal,
+      params.lockState,
+      params.stepId,
+    );
     await params.assertCanContinue();
   }
   let admission: StepAdmission | undefined;
@@ -121,9 +167,18 @@ export async function runDurableStepAttempts<T>(params: {
       if (isTimeoutExceededError(error) || attempts >= maxRetries) throw error;
       attempts += 1;
       await params.assertCanContinue();
-      const nextAttemptAtMs = Date.now() + Math.pow(2, attempts) * 100;
+      const backoffMs = Math.min(
+        MAX_STEP_RETRY_BACKOFF_MS,
+        Math.pow(2, attempts) * 100,
+      );
+      const nextAttemptAtMs = Date.now() + backoffMs;
       await saveStepRetryCount({ ...params, count: attempts, nextAttemptAtMs });
-      await sleepMs(Math.max(0, nextAttemptAtMs - Date.now()));
+      await sleepStepBackoff(
+        Math.max(1, nextAttemptAtMs - Date.now()),
+        params.signal,
+        params.lockState,
+        params.stepId,
+      );
       await params.assertCanContinue();
     } finally {
       progress.close();

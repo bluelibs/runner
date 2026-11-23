@@ -125,9 +125,17 @@ export class RabbitMQTransport<TMessage> {
     this.connection = null;
     this.consumerTag = null;
     this.deliveries.clear();
+    this.config.onDisconnect?.();
 
     if (this.activeConsumerHandler) {
-      void this.ensureRecoveredAndResumed(`disconnect:${source}`);
+      void this.ensureRecoveredAndResumed(`disconnect:${source}`).catch(
+        (recoveryError) => {
+          this.reportError("RabbitMQ transport recovery failed.", {
+            source,
+            error: normalizeError(recoveryError),
+          });
+        },
+      );
     }
   }
 

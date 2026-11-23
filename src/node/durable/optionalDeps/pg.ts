@@ -35,6 +35,8 @@ export interface PgPoolLike {
   connect(): Promise<PgClientLike>;
   /** Closes every connection in the pool when owned by the store. */
   end?(): Promise<void>;
+  /** Registers an event listener (e.g. `"error"` on idle pool clients). */
+  on?(event: "error", listener: (error: Error) => void): unknown;
 }
 
 type PgPoolConstructor = new (config?: Record<string, unknown>) => PgPoolLike;
