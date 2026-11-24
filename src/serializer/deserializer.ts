@@ -10,7 +10,7 @@ import {
 } from "./errors";
 import type { SerializedValue, DeserializationContext } from "./types";
 import {
-  isObjectReference,
+  isJsonObjectReference,
   isSerializedTypeRecord,
   isUnsafeKey,
   assertDepth,
@@ -126,7 +126,7 @@ export const deserializeValue = (
   }
 
   if (hasOwn.call(value, "__ref")) {
-    if (!isObjectReference(value)) {
+    if (!isJsonObjectReference(value)) {
       throw invalidPayloadError("Invalid object reference payload");
     }
     return resolveReference(value.__ref, context, depth + 1, options);
@@ -170,11 +170,12 @@ export const resolveReference = (
   if (isUnsafeKey(id, options.unsafeKeys)) {
     throw referenceResolutionError(`Unresolved reference id "${id}"`);
   }
-  if (context.resolved.has(id)) {
-    if (context.resolving.has(id)) {
+  const cached = context.resolved.get(id);
+  if (cached !== undefined || context.resolved.has(id)) {
+    if (context.resolving.size > 0 && context.resolving.has(id)) {
       context.resolvingRefs.add(id);
     }
-    return context.resolved.get(id);
+    return cached;
   }
 
   const node = context.nodes[id];

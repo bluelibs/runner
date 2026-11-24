@@ -43,6 +43,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Scoped cache keys include identity namespaces. `invalidateKeys()` uses raw
   supplied keys by default; explicit `identityScope` transforms base keys.
   Semantic reference invalidation is a separate path.
+- Shared in-memory budget entries stay ordered by recency across tasks.
+  Cache invalidation reuses the target list after the runtime store locks.
 - Key capacity checks prune first and retain existing keys. Cleanup timers,
   waiting calls, pending temporal work, and semaphores need lifecycle cleanup.
 - Preserve typed Runner errors and cancellation propagation across policy layers.

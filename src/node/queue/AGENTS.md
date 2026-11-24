@@ -23,6 +23,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Message ids are transport correlation identities, not canonical task/event or workflow ids. RabbitMQ retries may preserve the same message id across independent broker deliveries.
 - Delivery increments attempts; requeue and handler-error policy are overridable by each domain adapter.
 - Preserve sequential memory processing and scheduling after enqueue/ack/nack.
+- The in-memory queue releases consumed slots and compacts its pending buffer as it drains.
 - RabbitMQ tracks each raw broker delivery with its originating channel in a per-transport async scope. Settle inside the handler; outside it, an id must identify at most one pending delivery or settlement fails as ambiguous. Invalidation prevents stale handlers from settling newer deliveries.
 - Invalid payloads or missing ids are nacked without requeue; throwing handlers also settle without requeue.
 - Successful handlers own ack/nack through the adapter; do not acknowledge before durable work commits.

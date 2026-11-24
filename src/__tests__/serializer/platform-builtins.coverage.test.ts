@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { Serializer } from "../../serializer";
 import {
   ErrorType,
   URLSearchParamsType,
@@ -226,6 +227,14 @@ describe("Serializer platform built-ins coverage", () => {
       expect(() => int8Type.deserialize([1, 2, 3])).toThrow(
         "Int8Array is not available in this runtime",
       );
+      const serializer = new Serializer();
+      expect(
+        serializer.deserialize(serializer.serialize(originalInt8)),
+      ).toEqual({
+        0: 1,
+        1: 2,
+        2: 3,
+      });
     });
 
     const uint8Type = getTypeById("Uint8Array");

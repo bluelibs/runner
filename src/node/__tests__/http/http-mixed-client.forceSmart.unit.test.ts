@@ -3,6 +3,7 @@ import { Readable, Writable } from "stream";
 import { createHttpMixedClient } from "../../http/http-mixed-client";
 import { Serializer } from "../../../serializer";
 import { genericError } from "../../../errors";
+import { defineInternalRequestMetadata } from "../../../remote-lanes/http/requestMetadata";
 
 function asIncoming(
   res: Readable,
@@ -64,7 +65,16 @@ describe("createHttpMixedClient.forceSmart (unit)", () => {
 
     const out = await client.task("plain.task", { a: 1 });
     expect(out).toBe(42);
-    expect(reqSpy).toHaveBeenCalled();
+    const payload = { a: 2 };
+    const options = {};
+    defineInternalRequestMetadata(options, {
+      kind: "task",
+      id: "plain.task",
+      payload,
+      hasNodeFile: false,
+    });
+    await expect(client.task("plain.task", payload, options)).resolves.toBe(42);
+    expect(reqSpy).toHaveBeenCalledTimes(2);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

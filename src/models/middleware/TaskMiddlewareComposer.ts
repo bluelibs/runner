@@ -11,7 +11,6 @@ import type { ExecutionJournal } from "../../types/executionJournal";
 import type { TaskMiddlewareInterceptor } from "./types";
 import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
-import { runWithRuntimeCallSource } from "../RuntimeCallSourceStore";
 import type { TaskCallOptions } from "../../types/utilities";
 import { composeReverseLayers } from "./composeLayers";
 import {
@@ -29,6 +28,30 @@ import {
 const internalTaskRunnerSource: RuntimeCallSource = runtimeSource.runtime(
   "runtime-internal-taskRunner",
 );
+
+/**
+ * Builds the public `next()` handed to middleware. `next()` replays the
+ * current input while `next(undefined)` forwards an explicit undefined, so the
+ * argument count (not the value) decides — without allocating a rest array.
+ */
+function createNext<TInput, TOutput extends Promise<any>>(
+  nextFunction: (
+    input: TInput,
+    journal: ExecutionJournal,
+    source: RuntimeCallSource,
+  ) => TOutput,
+  input: TInput,
+  journal: ExecutionJournal,
+  source: RuntimeCallSource,
+): (nextInput?: TInput) => Promise<Awaited<TOutput>> {
+  return function next(nextInput?: TInput) {
+    return nextFunction(
+      arguments.length > 0 ? (nextInput as TInput) : input,
+      journal,
+      source,
+    ) as Promise<Awaited<TOutput>>;
+  };
+}
 
 /**
  * Composes task execution chains with validation, interceptors, and middlewares.
@@ -274,17 +297,9 @@ export class TaskMiddlewareComposer {
           journal: ExecutionJournal,
           source: RuntimeCallSource,
         ) => {
-          const wrappedNextForInterceptor = (
-            ...args: [inp?: TInput]
-          ): Promise<Awaited<TOutput>> =>
-            nextFunction(
-              args.length > 0 ? (args[0] as TInput) : input,
-              journal,
-              source,
-            ) as Promise<Awaited<TOutput>>;
           const executionInput = createExecutionInput(
             input,
-            wrappedNextForInterceptor,
+            createNext(nextFunction, input, journal, source),
             journal,
           );
           const wrappedNext = (
@@ -362,24 +377,17 @@ export class TaskMiddlewareComposer {
           return this.lifecycleAdmissionController.trackMiddlewareExecution(
             middlewareSource,
             () =>
-              runWithRuntimeCallSource(middlewareSource, () =>
-                scopedMiddleware.run(
-                  {
-                    task: {
-                      definition: canonicalTaskDefinition,
-                      input,
-                    },
-                    next: (...args: [TInput?]) =>
-                      nextFunction(
-                        args.length > 0 ? (args[0] as TInput) : input,
-                        journal,
-                        source,
-                      ),
-                    journal,
+              scopedMiddleware.run(
+                {
+                  task: {
+                    definition: canonicalTaskDefinition,
+                    input,
                   },
-                  storeMiddleware.computedDependencies,
-                  middleware.config,
-                ),
+                  next: createNext(nextFunction, input, journal, source),
+                  journal,
+                },
+                storeMiddleware.computedDependencies,
+                middleware.config,
               ),
           );
         };
@@ -443,12 +451,7 @@ export class TaskMiddlewareComposer {
               definition: canonicalTaskDefinition,
               input: input,
             },
-            next: (...args: [TInput?]) =>
-              nextFunction(
-                args.length > 0 ? (args[0] as TInput) : input,
-                journal,
-                source,
-              ),
+            next: createNext(nextFunction, input, journal, source),
             journal,
           };
 

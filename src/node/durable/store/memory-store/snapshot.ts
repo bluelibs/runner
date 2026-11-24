@@ -206,5 +206,5 @@ export function restoreSnapshot(
       cloneSchedule(schedule),
     ]),
   );
-  runtime.locks = new Map();
+  runtime.resetLocks();
 }

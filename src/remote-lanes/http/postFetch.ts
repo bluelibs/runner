@@ -68,36 +68,14 @@ export async function postFetch<T = any>(options: {
       typeof (res as { status?: unknown }).status === "number"
         ? (res as { status: number }).status
         : 200;
-    const statusText =
-      typeof (res as { statusText?: unknown }).statusText === "string"
-        ? (res as { statusText: string }).statusText
-        : "";
     const ok =
       typeof (res as { ok?: unknown }).ok === "boolean"
         ? (res as { ok: boolean }).ok
         : status >= 200 && status < 300;
-    const contentType =
-      typeof (res as { headers?: { get?: (name: string) => string | null } })
-        .headers?.get === "function"
-        ? ((
-            res as { headers: { get: (name: string) => string | null } }
-          ).headers.get("content-type") ?? undefined)
-        : undefined;
-
-    const retryAfterMs = parseRetryAfterMs(
-      res.headers?.get?.("retry-after") ?? undefined,
-    );
 
     if (!text) {
       if (!ok) {
-        throw new RemoteLaneTransportError(
-          "HTTP_ERROR",
-          statusText
-            ? `Remote lane HTTP ${status} ${statusText}`
-            : `Remote lane HTTP ${status}`,
-          { statusCode: status, statusText, contentType },
-          { httpCode: status, retryAfterMs },
-        );
+        throw toHttpResponseError(res, status);
       }
       // The endpoint returned an empty 2xx body — no payload to parse.
       // Callers that expect void/undefined return are safe; typed return T requires the cast.
@@ -109,23 +87,42 @@ export async function postFetch<T = any>(options: {
       return json;
     } catch (error) {
       if (!ok) {
-        throw new RemoteLaneTransportError(
-          "HTTP_ERROR",
-          statusText
-            ? `Remote lane HTTP ${status} ${statusText}`
-            : `Remote lane HTTP ${status}`,
-          {
-            statusCode: status,
-            statusText,
-            contentType,
-            bodyPreview: text.slice(0, 512),
-          },
-          { httpCode: status, retryAfterMs },
-        );
+        throw toHttpResponseError(res, status, text.slice(0, 512));
       }
       throw error;
     }
   } finally {
     signalLink.cleanup();
   }
+}
+
+function toHttpResponseError(
+  res: Response,
+  status: number,
+  bodyPreview?: string,
+): RemoteLaneTransportError {
+  const statusText =
+    typeof (res as { statusText?: unknown }).statusText === "string"
+      ? (res as { statusText: string }).statusText
+      : "";
+  const contentType =
+    typeof (res as { headers?: { get?: (name: string) => string | null } })
+      .headers?.get === "function"
+      ? ((
+          res as { headers: { get: (name: string) => string | null } }
+        ).headers.get("content-type") ?? undefined)
+      : undefined;
+  const retryAfterMs = parseRetryAfterMs(
+    res.headers?.get?.("retry-after") ?? undefined,
+  );
+  return new RemoteLaneTransportError(
+    "HTTP_ERROR",
+    statusText
+      ? `Remote lane HTTP ${status} ${statusText}`
+      : `Remote lane HTTP ${status}`,
+    bodyPreview === undefined
+      ? { statusCode: status, statusText, contentType }
+      : { statusCode: status, statusText, contentType, bodyPreview },
+    { httpCode: status, retryAfterMs },
+  );
 }

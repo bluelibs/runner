@@ -1,16 +1,23 @@
 const ESCAPE_PREFIX = "$runner.escape::";
-
-const ESCAPED_MARKER_KEYS = new Set(["__type", "__graph"]);
+const UNDERSCORE_CHAR_CODE = 95; // '_'
+const DOLLAR_CHAR_CODE = 36; // '$'
 
 export const escapeReservedMarkerKey = (key: string): string => {
-  if (ESCAPED_MARKER_KEYS.has(key) || key.startsWith(ESCAPE_PREFIX)) {
+  const firstCode = key.charCodeAt(0);
+  if (firstCode === UNDERSCORE_CHAR_CODE) {
+    if (key === "__type" || key === "__graph") {
+      return `${ESCAPE_PREFIX}${key}`;
+    }
+    return key;
+  }
+  if (firstCode === DOLLAR_CHAR_CODE && key.startsWith(ESCAPE_PREFIX)) {
     return `${ESCAPE_PREFIX}${key}`;
   }
   return key;
 };
 
 export const unescapeReservedMarkerKey = (key: string): string => {
-  if (key.startsWith(ESCAPE_PREFIX)) {
+  if (key.charCodeAt(0) === DOLLAR_CHAR_CODE && key.startsWith(ESCAPE_PREFIX)) {
     return key.slice(ESCAPE_PREFIX.length);
   }
   return key;

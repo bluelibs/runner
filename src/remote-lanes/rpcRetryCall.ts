@@ -10,6 +10,7 @@ import {
   createRequestSignal,
   remoteLaneTimeoutError,
 } from "./http/requestSignal";
+import { copyInternalRequestMetadata } from "./http/requestMetadata";
 import { RemoteLaneTransportError } from "./http/protocol";
 
 /** Applies one overall cancellation budget while preserving per-attempt options. */
@@ -25,9 +26,13 @@ export async function callWithRpcLaneRetry<T>(
   try {
     if (request.signal!.aborted)
       throw createCancellationErrorFromSignal(request.signal!);
-    const pending = attemptRpcLaneCall(policy, request.signal, () =>
-      call({ ...options, signal: request.signal }),
-    );
+    const pending = attemptRpcLaneCall(policy, request.signal, () => {
+      const attemptOptions = { ...options, signal: request.signal };
+      if (options) {
+        copyInternalRequestMetadata(options, attemptOptions);
+      }
+      return call(attemptOptions);
+    });
     return await raceWithAbortSignal(pending, request.signal);
   } catch (error) {
     if (request.isTimedOut())

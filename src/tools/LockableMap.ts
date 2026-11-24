@@ -47,8 +47,11 @@ export class LockableMap<K, V> extends Map<K, V> {
   }
 
   override get(key: K): V | undefined {
-    if (super.has(key)) {
-      return super.get(key);
+    // Single probe on the hot hit path; `has` only disambiguates stored
+    // `undefined` values from misses.
+    const value = super.get(key);
+    if (value !== undefined || super.has(key)) {
+      return value;
     }
 
     const resolvedKey = this.resolveLookupKey(key);
@@ -57,6 +60,11 @@ export class LockableMap<K, V> extends Map<K, V> {
     }
 
     return super.get(resolvedKey);
+  }
+
+  /** Reads the stored key without resolving aliases. */
+  getExact(key: K): V | undefined {
+    return super.get(key);
   }
 
   override has(key: K): boolean {

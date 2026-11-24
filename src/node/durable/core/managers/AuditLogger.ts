@@ -32,6 +32,14 @@ export class AuditLogger {
     private readonly store: IDurableStore,
   ) {}
 
+  /** True when log() would persist or emit; lets hot paths skip building audit context. */
+  isEnabled(): boolean {
+    return (
+      (this.config.enabled === true && !!this.store.appendAuditEntry) ||
+      !!this.config.emitter
+    );
+  }
+
   async log(params: DurableAuditEntryInput & { at?: Date }): Promise<void> {
     const shouldPersist =
       this.config.enabled === true && !!this.store.appendAuditEntry;

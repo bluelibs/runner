@@ -18,13 +18,12 @@ import { RuntimeCallSource, runtimeSource } from "../types/runtimeSource";
 import type { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
 import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import { ExecutionContextStore } from "./ExecutionContextStore";
-import { runWithRuntimeCallSource } from "./RuntimeCallSourceStore";
 import { raceWithAbortSignal } from "../tools/abortSignals";
 
-type CachedTaskRunner = (
-  input: unknown,
-  options?: TaskCallOptions,
-) => Promise<unknown>;
+type CachedTaskRunner = {
+  readonly run: (input: unknown, options?: TaskCallOptions) => Promise<unknown>;
+  readonly source: RuntimeCallSource;
+};
 
 const defaultTaskSource = runtimeSource.runtime("runtime-internal-taskRunner");
 
@@ -100,7 +99,17 @@ export class TaskRunner {
     input?: TInput,
     options?: TaskCallOptions,
   ): Promise<TOutput | undefined> {
-    const taskId = this.store.findIdByDefinition(task);
+    const canCacheRunner = this.store.isLocked;
+    const requestedId = task?.id;
+    // Runtime API calls already pass the registered definition. Check its
+    // identity before skipping resolution so aliases still use normal lookup.
+    const taskId =
+      canCacheRunner &&
+      typeof requestedId === "string" &&
+      requestedId.length > 0 &&
+      this.store.tasks.getExact(requestedId)?.task === task
+        ? requestedId
+        : this.store.findIdByDefinition(task);
     const source = options?.source ?? defaultTaskSource;
     const signal = this.executionContextStore.resolveSignal(options?.signal);
     if (!this.lifecycleAdmissionController.canAdmitTask(source)) {
@@ -118,18 +127,23 @@ export class TaskRunner {
     // a composed runner would silently freeze a partial chain. After store.lock(),
     // no new interceptors can be added, making the composition stable and safe to
     // memoize. This is lazy — we only compose on first post-lock call per task.
-    const canCacheRunner = this.store.isLocked;
-    let runner = canCacheRunner
-      ? (this.runnerStore.get(taskId) as
-          | ((input: TInput, options?: TaskCallOptions) => Promise<TOutput>)
-          | undefined)
-      : undefined;
-    if (!runner) {
-      runner = this.createRunnerWithMiddleware<TInput, TOutput, TDeps>(task);
+    let cached = canCacheRunner ? this.runnerStore.get(taskId) : undefined;
+    if (!cached) {
+      cached = {
+        run: this.createRunnerWithMiddleware<TInput, TOutput, TDeps>(
+          task,
+        ) as CachedTaskRunner["run"],
+        source: runtimeSource.task(taskId),
+      };
       if (canCacheRunner) {
-        this.runnerStore.set(taskId, runner as CachedTaskRunner);
+        this.runnerStore.set(taskId, cached);
       }
     }
+    const runner = cached.run as (
+      input: TInput,
+      options?: TaskCallOptions,
+    ) => Promise<TOutput>;
+    const executionSource = cached.source;
 
     const executeTask = async () => {
       const healthPolicyCheck = this.healthPolicyChecker.assertHealthy(
@@ -143,22 +157,15 @@ export class TaskRunner {
       const taskPromise = runner(input as TInput, runnerOptions);
       return signal ? raceWithAbortSignal(taskPromise, signal) : taskPromise;
     };
-    const executionSource = runtimeSource.task(taskId);
-
     return this.lifecycleAdmissionController.trackTaskExecution(
       executionSource,
       () =>
-        runWithRuntimeCallSource(executionSource, () =>
-          this.executionContextStore.runWithFrameFactory(
-            () => ({
-              kind: "task",
-              id: taskId as string,
-              source: executionSource,
-              timestamp: Date.now(),
-            }),
-            executeTask,
-            { signal },
-          ),
+        this.executionContextStore.runInFrame(
+          "task",
+          taskId,
+          executionSource,
+          executeTask,
+          signal,
         ),
     );
   }

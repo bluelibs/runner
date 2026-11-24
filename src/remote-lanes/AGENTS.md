@@ -20,6 +20,7 @@ Node topology, JWT authentication, queues, and HTTP exposure belong in `src/node
   transport errors, rejection normalization, and envelope assertions.
 - [http/types.ts](http/types.ts): fetch client/config contracts.
 - [http/constants.ts](http/constants.ts): async-context header name.
+- [http/requestMetadata.ts](http/requestMetadata.ts): request-scoped hints for built-in HTTP clients.
 - [Fetch transport](../http-fetch-remote-lane.resource.ts): portable client consumer.
 - [Node RPC routing](../node/rpc-lanes/rpcLanes.network.ts): binding retries and
   replayability decisions at runtime.
@@ -38,6 +39,8 @@ Node topology, JWT authentication, queues, and HTTP exposure belong in `src/node
   Retried inputs must be replayable; Node routing restricts stream/uploads to one attempt while retaining the budget.
 - Request rejection normalization preserves cancellation and typed error identity;
   otherwise it creates `NETWORK_ERROR` with the original cause.
+- Built-in HTTP clients reuse the signed JSON when request identity and serializer match.
+  Custom communicators continue to receive the original input and standard options.
 - Events requesting a result send `returnPayload: true`. Preserve the difference
   between an acknowledged event and a server-returned final payload.
 

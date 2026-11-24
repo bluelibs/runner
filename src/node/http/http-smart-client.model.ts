@@ -13,6 +13,10 @@ import { buildNodeManifest } from "../upload/manifest";
 import { httpBaseUrlRequiredError } from "../../errors";
 import { isReadable, hasNodeFile } from "./nodeFileDetection";
 import {
+  readInternalRequestMetadata,
+  readPreSerializedBody,
+} from "../../remote-lanes/http/requestMetadata";
+import {
   parseMaybeJsonResponse,
   postJson,
   postMultipart,
@@ -111,7 +115,9 @@ export function createHttpSmartClient(
       }
 
       // B) Multipart: detect File sentinels with local Node sources
-      if (hasNodeFile(input)) {
+      const metadata = readInternalRequestMetadata(options, "task", id, input);
+      const hasFile = metadata?.hasNodeFile ?? hasNodeFile(input);
+      if (hasFile) {
         const manifest = buildNodeManifest(input);
         const manifestText = serializer.stringify({
           input: manifest.input,
@@ -146,6 +152,7 @@ export function createHttpSmartClient(
           { input },
           options?.headers,
           options?.signal,
+          readPreSerializedBody(metadata, serializer),
         );
         return assertOkEnvelope<O>(r, {
           fallbackMessage: "Remote lane task error",
@@ -168,6 +175,10 @@ export function createHttpSmartClient(
           buildEventRequestBody(payload),
           options?.headers,
           options?.signal,
+          readPreSerializedBody(
+            readInternalRequestMetadata(options, "event", id, payload),
+            serializer,
+          ),
         );
         assertOkEnvelope<void>(r, {
           fallbackMessage: "Remote lane event error",
@@ -190,6 +201,15 @@ export function createHttpSmartClient(
           buildEventRequestBody(payload, { returnPayload: true }),
           options?.headers,
           options?.signal,
+          readPreSerializedBody(
+            readInternalRequestMetadata(
+              options,
+              "eventWithResult",
+              id,
+              payload,
+            ),
+            serializer,
+          ),
         );
         if (r && typeof r === "object" && r.ok && !("result" in r)) {
           throw new RemoteLaneTransportError(

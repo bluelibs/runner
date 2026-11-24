@@ -293,4 +293,35 @@ describe("GraphSerializer coverage", () => {
       value: { id: "u1" },
     });
   });
+
+  it("handles cached undefined type node references and non-cyclic shared refs while resolving a type", () => {
+    const context: DeserializationContext = {
+      nodes: {
+        sharedUndef: { kind: "type", type: "Undefined", value: null },
+        sharedObj: { kind: "object", value: { ok: true } },
+        mapNode: {
+          kind: "type",
+          type: "Map",
+          value: [
+            ["a", { __ref: "sharedObj" }],
+            ["b", { __ref: "sharedObj" }],
+          ],
+        },
+      },
+      resolved: new Map(),
+      resolving: new Set<string>(),
+      resolvingRefs: new Set<string>(),
+    };
+
+    const opts = deserializerOptions();
+    expect(resolveReference("sharedUndef", context, 0, opts)).toBeUndefined();
+    expect(resolveReference("sharedUndef", context, 0, opts)).toBeUndefined();
+
+    const restoredMap = resolveReference("mapNode", context, 0, opts) as Map<
+      string,
+      unknown
+    >;
+    expect(restoredMap.get("a")).toBe(restoredMap.get("b"));
+    expect(restoredMap.get("a")).toEqual({ ok: true });
+  });
 });

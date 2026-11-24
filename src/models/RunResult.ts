@@ -42,6 +42,9 @@ import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
 import { RuntimeInspector } from "./runtime-inspector/RuntimeInspector";
 
 const runtimeApiSource = runtimeSource.runtime("runtime.api");
+const runtimeApiTaskOptions: TaskCallOptions = Object.freeze({
+  source: runtimeApiSource,
+});
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -269,6 +272,8 @@ export class RunResult<V> implements IInspectableRuntime<V> {
     /* istanbul ignore next */
     if (!rootId) return;
 
+    if (!this.store.hasExportsDeclaration(rootId)) return;
+
     const { accessible, exportedIds } = this.store.getRootAccessInfo(
       targetId,
       rootId,
@@ -280,7 +285,7 @@ export class RunResult<V> implements IInspectableRuntime<V> {
         targetType,
         rootId,
         exportedIds,
-        exportsDeclared: this.store.hasExportsDeclaration(rootId),
+        exportsDeclared: true,
       });
     }
   }
@@ -358,10 +363,11 @@ export class RunResult<V> implements IInspectableRuntime<V> {
     this.ensureRuntimeAvailableForBusinessCalls();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
     const taskId = this.store.findIdByDefinition(task);
-    if (!this.store.tasks.has(taskId)) {
+    const taskEntry = this.store.tasks.get(taskId);
+    if (!taskEntry) {
       runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
     }
-    const resolvedTask = this.store.tasks.get(taskId)!.task;
+    const resolvedTask = taskEntry!.task;
 
     // Violations return a rejected Promise rather than throwing synchronously
     // so callers can always use .catch() / await idioms on the returned Promise.
@@ -373,10 +379,13 @@ export class RunResult<V> implements IInspectableRuntime<V> {
         : Promise<any>;
     }
 
-    return this.taskRunner.run(resolvedTask, input, {
-      ...(options || {}),
-      source: runtimeApiSource,
-    }) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
+    return this.taskRunner.run(
+      resolvedTask,
+      input,
+      options
+        ? { ...options, source: runtimeApiSource }
+        : runtimeApiTaskOptions,
+    ) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
   };
 
   /**

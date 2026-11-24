@@ -10,7 +10,11 @@ import {
   transactionalParallelConflictError,
   validationError,
 } from "../../errors";
-import { EventDispatchAdapter, EventEmissionInterceptor } from "./types";
+import {
+  EventDispatchAdapter,
+  EventEmissionInterceptor,
+  IListenerStorage,
+} from "./types";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 import {
   createEmptyReport,
@@ -70,21 +74,60 @@ function assertPropagationMethodsUnchanged(
   }
 }
 
+/**
+ * Runs the base listener execution strategy for an event. Shared by the
+ * interceptor-aware `EmissionContext` and by the interceptor-free fast path.
+ */
+export function executeEventListeners(
+  eventDefinition: IEvent<any>,
+  listeners: IListenerStorage[],
+  event: IEventEmission<any>,
+  failureMode: EventEmissionFailureMode,
+): Promise<IEventEmitReport> {
+  if (eventDefinition.transactional && eventDefinition.parallel) {
+    transactionalParallelConflictError.throw({ eventId: eventDefinition.id });
+  }
+
+  if (eventDefinition.transactional) {
+    return executeTransactionally({
+      listeners,
+      event,
+      isPropagationStopped: event.isPropagationStopped,
+    });
+  }
+
+  if (eventDefinition.parallel) {
+    return executeInParallel({ listeners, event, failureMode });
+  }
+
+  return executeSequentially({
+    listeners,
+    event,
+    isPropagationStopped: event.isPropagationStopped,
+    failureMode,
+  });
+}
+
 export class EmissionContext<TInput> {
   public deepestEvent: IEventEmission<any>;
-  public executionReport: IEventEmitReport;
+  // Lazily created: the common path replaces it with the executor's report,
+  // so eagerly allocating one here would be wasted work.
+  private currentReport: IEventEmitReport | undefined;
 
   constructor(
     private readonly eventDefinition: IEvent<TInput>,
-    private readonly allListeners: any[],
+    private readonly allListeners: IListenerStorage[],
     private readonly failureMode: EventEmissionFailureMode,
-    private readonly emissionInterceptors: EventEmissionInterceptor[],
+    private readonly emissionInterceptors: readonly EventEmissionInterceptor[],
     initialEvent: IEventEmission<TInput>,
     private readonly dispatchAdapter?: EventDispatchAdapter,
     private readonly emitOptions: IEventEmitOptions = {},
   ) {
     this.deepestEvent = initialEvent;
-    this.executionReport = createEmptyReport(allListeners.length);
+  }
+
+  get executionReport(): IEventEmitReport {
+    return (this.currentReport ??= createEmptyReport(this.allListeners.length));
   }
 
   async baseEmit(eventToEmit: IEventEmission<any>): Promise<IEventEmitReport> {
@@ -101,34 +144,12 @@ export class EmissionContext<TInput> {
       return this.executionReport;
     }
 
-    if (this.eventDefinition.transactional && this.eventDefinition.parallel) {
-      transactionalParallelConflictError.throw({
-        eventId: this.eventDefinition.id,
-      });
-    }
-
-    if (this.eventDefinition.transactional) {
-      return executeTransactionally({
-        listeners: this.allListeners,
-        event: eventToEmit,
-        isPropagationStopped: eventToEmit.isPropagationStopped,
-      });
-    }
-
-    if (this.eventDefinition.parallel) {
-      return executeInParallel({
-        listeners: this.allListeners,
-        event: eventToEmit,
-        failureMode: this.failureMode,
-      });
-    } else {
-      return executeSequentially({
-        listeners: this.allListeners,
-        event: eventToEmit,
-        isPropagationStopped: eventToEmit.isPropagationStopped,
-        failureMode: this.failureMode,
-      });
-    }
+    return executeEventListeners(
+      this.eventDefinition,
+      this.allListeners,
+      eventToEmit,
+      this.failureMode,
+    );
   }
 
   async runInterceptor(
@@ -138,7 +159,7 @@ export class EmissionContext<TInput> {
     this.deepestEvent = eventToEmit;
     const interceptor = this.emissionInterceptors[index];
     if (!interceptor) {
-      this.executionReport = await this.baseEmit(eventToEmit);
+      this.currentReport = await this.baseEmit(eventToEmit);
       return;
     }
     let didCallNext = false;

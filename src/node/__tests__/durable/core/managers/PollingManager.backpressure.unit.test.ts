@@ -5,6 +5,7 @@ import {
   TaskRegistry,
 } from "../../../../durable/core/managers";
 import type { IDurableStore } from "../../../../durable/core/interfaces/store";
+import { TimerType } from "../../../../durable/core/types";
 import { MemoryStore } from "../../../../durable/store/MemoryStore";
 import {
   captureScheduledTimeout,
@@ -60,6 +61,65 @@ describe("durable: PollingManager backpressure helpers (unit)", () => {
     ).fillAvailableTimerSlots();
 
     expect(claimReadyTimersSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 2])(
+    "refills immediately only when the previous claim filled %i slots",
+    async (concurrency) => {
+      jest.useFakeTimers();
+      const store = new MemoryStore();
+      const manager = createPollingManager(store, {
+        concurrency,
+        pollIntervalMs: 100,
+      });
+      const claim = jest
+        .spyOn(store, "claimReadyTimers")
+        .mockResolvedValueOnce([
+          { id: "r1", type: "retry", status: "pending", fireAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+
+      try {
+        manager.start();
+        await jest.advanceTimersByTimeAsync(0);
+        expect(claim).toHaveBeenCalledTimes(concurrency === 1 ? 2 : 1);
+        await jest.advanceTimersByTimeAsync(100);
+        expect(claim).toHaveBeenCalledTimes(concurrency === 1 ? 3 : 2);
+      } finally {
+        await manager.stop();
+        jest.useRealTimers();
+      }
+    },
+  );
+
+  it("does not read execution metadata for an unaudited signal timeout", async () => {
+    const store = new MemoryStore();
+    const manager = createPollingManager(store);
+    const getExecution = jest.spyOn(store, "getExecution");
+    const now = new Date();
+
+    await store.saveStepResult({
+      executionId: "execution",
+      stepId: "approval:wait",
+      result: { state: "waiting", signalId: "approval" },
+      completedAt: now,
+    });
+    await manager.handleTimer({
+      id: "approval:timeout",
+      type: TimerType.SignalTimeout,
+      executionId: "execution",
+      stepId: "approval:wait",
+      status: "pending",
+      fireAt: now,
+    });
+
+    // The wait still needs a read to clear its suspended current position.
+    expect(getExecution).toHaveBeenCalledTimes(1);
+    await expect(
+      store.getStepResult("execution", "approval:wait"),
+    ).resolves.toMatchObject({
+      result: { state: "timed_out", signalId: "approval" },
+    });
   });
 
   it("fails fast when bounded claim-ready polling is unavailable", () => {

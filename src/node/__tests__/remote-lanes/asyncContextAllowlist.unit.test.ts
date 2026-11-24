@@ -170,6 +170,41 @@ describe("asyncContext allowlist helpers", () => {
     ]);
   });
 
+  it("deduplicates direct keys and aliases in a map-like registry", () => {
+    const context = r.asyncContext<unknown>("map-like-context").build();
+    const contexts = new Map([[context.id, context]]);
+    const registry = {
+      keys: () => contexts.keys(),
+      get: (id: string) => contexts.get(id === "alias" ? context.id : id),
+    } as ReadonlyMap<string, typeof context>;
+
+    expect(
+      resolveRegistryAsyncContextIds(registry, [context.id, "alias"]),
+    ).toEqual([context.id]);
+  });
+
+  it("skips registry iteration and decoding for an explicitly empty context list", async () => {
+    const registry = new Map();
+    const keys = jest.spyOn(registry, "keys");
+    const serializer = { parse: jest.fn(), stringify: jest.fn() };
+
+    expect(resolveRegistryAsyncContextIds(registry, [])).toEqual([]);
+    expect(
+      buildAsyncContextHeader({ allowList: [], registry, serializer }),
+    ).toBeUndefined();
+    await expect(
+      withSerializedAsyncContexts({
+        serializedContexts: "unused",
+        registry,
+        serializer,
+        fn: async () => "ok",
+        allowedAsyncContextIds: [],
+      }),
+    ).resolves.toBe("ok");
+    expect(keys).not.toHaveBeenCalled();
+    expect(serializer.parse).not.toHaveBeenCalled();
+  });
+
   it("hydrates serialized async contexts while tolerating malformed input", async () => {
     const serializer = {
       stringify: (value: unknown) => JSON.stringify(value),

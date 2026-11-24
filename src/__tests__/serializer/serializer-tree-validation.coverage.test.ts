@@ -55,6 +55,7 @@ describe("Serializer tree validation coverage", () => {
     });
 
     it("stringify handles undefined, Infinity, and circular objects", () => {
+      expect(serializer.stringify(null)).toBe("null");
       expect(JSON.parse(serializer.stringify(undefined))).toEqual({
         __type: "Undefined",
         value: null,
@@ -78,6 +79,11 @@ describe("Serializer tree validation coverage", () => {
       const selfMap = new Map<string, unknown>();
       selfMap.set("self", selfMap);
       expect(() => serializer.stringify(selfMap)).toThrow("circular");
+    });
+
+    it("ignores inherited enumerable fields in tree serialization", () => {
+      const value = Object.assign(Object.create({ inherited: 1 }), { own: 2 });
+      expect(serializer.stringify(value)).toBe('{"own":2}');
     });
 
     it("stringify rejects unsupported JS primitives in tree mode", () => {

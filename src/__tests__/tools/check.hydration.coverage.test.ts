@@ -55,6 +55,11 @@ describe("tools/check hydration coverage", () => {
     const selfObject: Record<string, unknown> = {};
     selfObject.self = selfObject;
     expect(patternCanHydrate(selfObject)).toBe(false);
+
+    const recursiveShape: Record<string, unknown> = {};
+    const recursivePattern = Match.ObjectIncluding(recursiveShape);
+    recursiveShape.self = recursivePattern;
+    expect(patternCanHydrate(recursivePattern)).toBe(false);
   });
 
   it("covers wrapper, union, array, map, and plain-object hydration branches", () => {

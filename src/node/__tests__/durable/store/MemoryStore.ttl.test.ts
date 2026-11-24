@@ -23,6 +23,36 @@ describe("durable: MemoryStore TTL behavior", () => {
     expect(claimKeys).toEqual(["timer:claim:t-2"]);
   });
 
+  it.each([false, true])(
+    "keeps later locks alive while pruning expired entries (custom map: %s)",
+    async (useCustomMap) => {
+      class CustomLockStore extends MemoryStore {
+        constructor() {
+          super();
+          this.locks = new Map();
+        }
+      }
+
+      jest.useFakeTimers();
+      const store = useCustomMap ? new CustomLockStore() : new MemoryStore();
+      await store.claimTimer("first", "worker", 5);
+      await store.claimTimer("second", "worker", 10);
+      await store.claimTimer("third", "worker", 20);
+
+      jest.advanceTimersByTime(5);
+      await expect(store.renewTimerClaim("first", "worker", 20)).resolves.toBe(
+        false,
+      );
+      jest.advanceTimersByTime(5);
+      await expect(store.renewTimerClaim("second", "worker", 20)).resolves.toBe(
+        false,
+      );
+      await expect(store.renewTimerClaim("third", "worker", 20)).resolves.toBe(
+        true,
+      );
+    },
+  );
+
   it("renews lock TTL only when the lock owner still matches", async () => {
     jest.useFakeTimers();
     const store = new MemoryStore();

@@ -88,6 +88,22 @@ describe("http-fetch-remote-lane.resource - HTTP status handling", () => {
     );
   });
 
+  it("does not add a body preview for an empty HTTP failure without response headers", async () => {
+    const fetchImpl = async () =>
+      ({ ok: false, status: 503, text: async () => "" }) as Response;
+    const client = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer: new Serializer(),
+    });
+
+    await expect(client.task("t.id", {})).rejects.toMatchObject({
+      code: "HTTP_ERROR",
+      httpCode: 503,
+      details: { statusCode: 503, statusText: "", contentType: undefined },
+    });
+  });
+
   it("rethrows serializer parse errors for successful 2xx malformed payloads", async () => {
     const fetchImpl: typeof fetch = (async () =>
       ({

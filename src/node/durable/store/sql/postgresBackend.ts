@@ -41,14 +41,30 @@ export function rewritePgPlaceholders(sql: string): string {
   return out;
 }
 
-function createPgExecutor(queryable: Pick<PgPoolLike, "query">): SqlExecutor {
+const MAX_CACHED_REWRITES = 512;
+
+/** Per-backend memo: statements are a small fixed set, so rewriting once avoids per-query string scans. */
+function createPlaceholderRewriter(): (sql: string) => string {
+  const rewrites = new Map<string, string>();
+  return (sql) => {
+    const cached = rewrites.get(sql);
+    if (cached !== undefined) return cached;
+    if (rewrites.size >= MAX_CACHED_REWRITES) rewrites.clear();
+    const rewritten = rewritePgPlaceholders(sql);
+    rewrites.set(sql, rewritten);
+    return rewritten;
+  };
+}
+
+function createPgExecutor(
+  queryable: Pick<PgPoolLike, "query">,
+  rewrite: (sql: string) => string,
+): SqlExecutor {
   const all = async <TRow extends SqlRow = SqlRow>(
     sql: string,
     params: readonly SqlParam[] = [],
   ): Promise<TRow[]> => {
-    const result = await queryable.query<TRow>(rewritePgPlaceholders(sql), [
-      ...params,
-    ]);
+    const result = await queryable.query<TRow>(rewrite(sql), [...params]);
     return result.rows;
   };
   return {
@@ -62,7 +78,7 @@ function createPgExecutor(queryable: Pick<PgPoolLike, "query">): SqlExecutor {
       return rows[0] ?? null;
     },
     async run(sql: string, params: readonly SqlParam[] = []): Promise<void> {
-      await queryable.query(rewritePgPlaceholders(sql), [...params]);
+      await queryable.query(rewrite(sql), [...params]);
     },
   };
 }
@@ -86,8 +102,10 @@ export function createPostgresBackend(
     });
   }
 
+  const rewrite = createPlaceholderRewriter();
   const ownsPool = !config.pool;
   let pool: PgPoolLike | null = config.pool ?? null;
+  let poolExecutor: SqlExecutor | undefined;
   const ensurePool = (): PgPoolLike => {
     if (!pool) {
       const poolInput =
@@ -100,6 +118,8 @@ export function createPostgresBackend(
     }
     return pool;
   };
+  const ensurePoolExecutor = (): SqlExecutor =>
+    (poolExecutor ??= createPgExecutor(ensurePool(), rewrite));
 
   async function transaction<T>(
     operation: (tx: SqlExecutor) => Promise<T>,
@@ -113,7 +133,7 @@ export function createPostgresBackend(
         destroyClient = true;
         throw beginError;
       }
-      const result = await operation(createPgExecutor(client));
+      const result = await operation(createPgExecutor(client, rewrite));
       await client.query("COMMIT");
       return result;
     } catch (error) {
@@ -134,7 +154,7 @@ export function createPostgresBackend(
       const ddlObjects = schemaStatements.map(extractDdlObjectName);
       let pendingStatements: readonly string[] = schemaStatements;
       if (ddlObjects.every((name) => name !== null)) {
-        const existingRows = await createPgExecutor(ensurePool()).all<{
+        const existingRows = await ensurePoolExecutor().all<{
           name: string;
         }>(
           `SELECT tablename AS name FROM pg_tables WHERE schemaname = current_schema()
@@ -161,22 +181,23 @@ export function createPostgresBackend(
       sql: string,
       params: readonly SqlParam[] = [],
     ): Promise<TRow[]> {
-      return createPgExecutor(ensurePool()).all<TRow>(sql, params);
+      return ensurePoolExecutor().all<TRow>(sql, params);
     },
     async get<TRow extends SqlRow = SqlRow>(
       sql: string,
       params: readonly SqlParam[] = [],
     ): Promise<TRow | null> {
-      return createPgExecutor(ensurePool()).get<TRow>(sql, params);
+      return ensurePoolExecutor().get<TRow>(sql, params);
     },
     async run(sql: string, params: readonly SqlParam[] = []): Promise<void> {
-      await createPgExecutor(ensurePool()).run(sql, params);
+      await ensurePoolExecutor().run(sql, params);
     },
     transaction,
     async dispose(): Promise<void> {
       if (ownsPool && pool?.end) {
         await pool.end();
         pool = null;
+        poolExecutor = undefined;
       }
     },
   };

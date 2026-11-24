@@ -62,28 +62,34 @@ export function resolveRegistryAsyncContextIds(
   if (allowList === undefined) {
     return undefined;
   }
+  if (allowList.length === 0) {
+    return allowList;
+  }
 
-  const registeredIds = Array.from(registry.keys());
+  // Stored keys are only needed when an id (or alias) is actually registered.
+  let storedIds: string[] | undefined;
   const resolvedIds = new Set<string>();
+  const nativeMap = registry instanceof Map;
 
   for (const requestedId of allowList) {
-    if (registeredIds.includes(requestedId)) {
+    if (nativeMap && Map.prototype.has.call(registry, requestedId)) {
+      resolvedIds.add(requestedId);
+      continue;
+    }
+    const resolvedContext = registry.get(requestedId);
+    if (!resolvedContext) {
       resolvedIds.add(requestedId);
       continue;
     }
 
-    const resolvedContext = registry.get(requestedId);
-    if (resolvedContext) {
-      const resolvedRegistryId = registeredIds.find(
-        (registeredId) => registry.get(registeredId) === resolvedContext,
-      );
-      if (resolvedRegistryId) {
-        resolvedIds.add(resolvedRegistryId);
-        continue;
-      }
-    }
-
-    resolvedIds.add(requestedId);
+    storedIds ??= Array.from(registry.keys());
+    const resolvedRegistryId =
+      !nativeMap && storedIds.includes(requestedId)
+        ? requestedId
+        : storedIds.find(
+            (storedId) => registry.get(storedId) === resolvedContext,
+          );
+    resolvedIds.add(resolvedRegistryId ?? requestedId);
   }
 
   return Array.from(resolvedIds);
@@ -95,6 +101,9 @@ export function buildAsyncContextHeader(options: {
   serializer: SerializerLike;
 }): string | undefined {
   const { registry, serializer } = options;
+  if (options.allowList?.length === 0) {
+    return undefined;
+  }
   const allowList = resolveRegistryAsyncContextIds(registry, options.allowList);
   const map: Record<string, string> = {};
 
@@ -147,7 +156,11 @@ export async function withSerializedAsyncContexts<T>(options: {
     allowedAsyncContextIds,
   } = options;
 
-  if (!allowAsyncContext || !serializedContexts) {
+  if (
+    !allowAsyncContext ||
+    !serializedContexts ||
+    allowedAsyncContextIds?.length === 0
+  ) {
     return fn();
   }
 

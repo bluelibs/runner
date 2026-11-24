@@ -10,29 +10,30 @@ import { journalDuplicateKeyError } from "../errors";
  * Created per task execution and passed through the middleware chain.
  */
 export class ExecutionJournalImpl implements ExecutionJournal {
-  private readonly store = new Map<object, unknown>();
+  private store: Map<object, unknown> | undefined;
 
   /**
    * Store a value in the journal.
    * Throws an error if the key already exists unless { override: true } is passed.
    */
   set<T>(key: JournalKey<T>, value: T, options?: JournalSetOptions): void {
-    if (this.store.has(key) && !options?.override) {
+    const store = (this.store ??= new Map<object, unknown>());
+    if (store.has(key) && !options?.override) {
       journalDuplicateKeyError.throw({ keyId: key.id });
     }
-    this.store.set(key, value);
+    store.set(key, value);
   }
 
   get<T>(key: JournalKey<T>): T | undefined {
-    return this.store.get(key) as T | undefined;
+    return this.store?.get(key) as T | undefined;
   }
 
   has<T>(key: JournalKey<T>): boolean {
-    return this.store.has(key);
+    return this.store?.has(key) ?? false;
   }
 
   delete<T>(key: JournalKey<T>): void {
-    this.store.delete(key);
+    this.store?.delete(key);
   }
 }
 

@@ -5,19 +5,17 @@
  */
 
 import { genericError } from "../errors";
-import { assertDepth } from "./validation";
+import { assertDepth, isUnsafeKey } from "./validation";
 import type { TypeRegistry } from "./type-registry";
 import {
   serializeBigInt,
   serializeNonFiniteNumber,
   serializeUndefined,
 } from "./special-values";
-import {
-  serializeArrayItems,
-  serializeRecordEntries,
-  serializeSymbolValue,
-} from "./serialize-utils";
+import { serializeSymbolValue } from "./serialize-utils";
 import { escapeReservedMarkerKey } from "./marker-key-escapes";
+
+const hasOwn = Object.prototype.hasOwnProperty;
 
 export interface TreeSerializeContext {
   stack: WeakSet<object>;
@@ -31,6 +29,31 @@ export interface TreeSerializerOptions {
   typeRegistry: TypeRegistry;
   mapObjectForSerialization?: (value: object) => Record<string, unknown>;
 }
+
+const serializeTreeRecord = (
+  source: Record<string, unknown>,
+  context: TreeSerializeContext,
+  nextDepth: number,
+  options: TreeSerializerOptions,
+): Record<string, unknown> => {
+  const record: Record<string, unknown> = {};
+  for (const key in source) {
+    if (!hasOwn.call(source, key)) {
+      continue;
+    }
+    if (isUnsafeKey(key, options.unsafeKeys)) {
+      continue;
+    }
+    const outputKey = escapeReservedMarkerKey(key);
+    record[outputKey] = serializeTreeValue(
+      source[key],
+      context,
+      nextDepth,
+      options,
+    );
+  }
+  return record;
+};
 
 /**
  * Serialize a value in tree mode (throws on circular references).
@@ -120,14 +143,13 @@ export const serializeTreeValue = (
           }
           const payload =
             serializedPayload === objectValue
-              ? serializeRecordEntries(
+              ? serializeTreeRecord(
                   options.mapObjectForSerialization
                     ? options.mapObjectForSerialization(objectValue)
                     : (objectValue as Record<string, unknown>),
-                  options.unsafeKeys,
-                  (nested) =>
-                    serializeTreeValue(nested, context, depth + 1, options),
-                  escapeReservedMarkerKey,
+                  context,
+                  depth + 1,
+                  options,
                 )
               : serializeTreeValue(
                   serializedPayload,
@@ -149,21 +171,25 @@ export const serializeTreeValue = (
     }
 
     if (Array.isArray(objectValue)) {
-      return serializeArrayItems(objectValue, (nested) =>
-        serializeTreeValue(nested, context, depth + 1, options),
-      );
+      const length = objectValue.length;
+      const items: unknown[] = new Array(length);
+      const nextDepth = depth + 1;
+      for (let index = 0; index < length; index += 1) {
+        items[index] = serializeTreeValue(
+          objectValue[index],
+          context,
+          nextDepth,
+          options,
+        );
+      }
+      return items;
     }
 
     const recordSource = options.mapObjectForSerialization
       ? options.mapObjectForSerialization(objectValue)
       : (objectValue as Record<string, unknown>);
 
-    return serializeRecordEntries(
-      recordSource,
-      options.unsafeKeys,
-      (nested) => serializeTreeValue(nested, context, depth + 1, options),
-      escapeReservedMarkerKey,
-    );
+    return serializeTreeRecord(recordSource, context, depth + 1, options);
   } finally {
     context.stack.delete(objectValue);
   }

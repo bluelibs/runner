@@ -193,17 +193,21 @@ export const cacheResource = defineResource<
       sharedBudget,
       defaultOptions,
     };
+    let lockedTargets: CacheInvalidationTarget[] | undefined;
     const invalidationCoordinator = new CacheInvalidationCoordinator({
       cache: cacheState,
       createCacheInstance: (target) =>
         Promise.resolve(
           createCacheInstance({
             cache: cacheState,
-            cacheOptions: target.cacheOptions,
+            cacheOptions: { ...target.cacheOptions },
             taskId: target.taskId,
           }),
         ),
-      getTargets: () => getCacheEnabledTaskIds(store, defaultOptions),
+      getTargets: () =>
+        store.isLocked
+          ? (lockedTargets ??= getCacheEnabledTaskIds(store, defaultOptions))
+          : getCacheEnabledTaskIds(store, defaultOptions),
       logger,
       readIdentity: identityContext.tryUse,
     });

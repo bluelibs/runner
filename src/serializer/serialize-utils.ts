@@ -2,39 +2,6 @@ import { genericError } from "../errors";
 import type { TypeDefinition } from "./types";
 import type { SerializedValue } from "./types";
 import type { TypeRegistry } from "./type-registry";
-import { isUnsafeKey } from "./validation";
-
-export const serializeArrayItems = <TSerializedValue>(
-  source: readonly unknown[],
-  serializeNested: (value: unknown) => TSerializedValue,
-): TSerializedValue[] => {
-  const length = source.length;
-  const items: TSerializedValue[] = new Array(length);
-  for (let index = 0; index < length; index += 1) {
-    items[index] = serializeNested(source[index]);
-  }
-  return items;
-};
-
-export const serializeRecordEntries = <TSerializedValue>(
-  source: Record<string, unknown>,
-  unsafeKeys: ReadonlySet<string>,
-  serializeNested: (value: unknown) => TSerializedValue,
-  mapKey: (key: string) => string = (key) => key,
-): Record<string, TSerializedValue> => {
-  const record: Record<string, TSerializedValue> = {};
-  for (const key in source) {
-    if (!Object.prototype.hasOwnProperty.call(source, key)) {
-      continue;
-    }
-    if (isUnsafeKey(key, unsafeKeys)) {
-      continue;
-    }
-    const outputKey = mapKey(key);
-    record[outputKey] = serializeNested(source[key]);
-  }
-  return record;
-};
 
 export function serializeTypeRecord<TSerializedValue = SerializedValue>(
   typeDef: TypeDefinition<unknown, unknown>,

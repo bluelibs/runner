@@ -53,6 +53,17 @@ describe("nodeFileDetection", () => {
     expect(hasNodeFile({ left: shared, right: shared })).toBe(false);
   });
 
+  it("finds a file in enumerable properties on typed arrays", () => {
+    const file = {
+      $runnerFile: "File",
+      id: "attached-file",
+      _node: { buffer: Buffer.from("file") },
+    };
+    const decoratedView = Object.assign(new Uint8Array([1, 2]), { file });
+
+    expect(hasNodeFile({ decoratedView })).toBe(true);
+  });
+
   it("detects Readable streams by duck-typing", () => {
     expect(isReadable(Readable.from(["chunk"]))).toBe(true);
     expect(isReadable({ hello: "world" })).toBe(false);

@@ -1,4 +1,4 @@
-import { defineEvent } from "../../define";
+import { defineEvent, defineHook, defineResource } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { EventManager } from "../../models/EventManager";
 import { ExecutionContextStore } from "../../models/ExecutionContextStore";
@@ -81,6 +81,54 @@ describe("EventManager regressions", () => {
       "listener",
       "interceptor-1-end",
     ]);
+  });
+
+  it("keeps hook dependencies per execution when a cached pipeline is replaced", async () => {
+    const eventManager = new EventManager();
+    const event = defineEvent<string>({ id: "reg-hook-pipeline" });
+    const source = runtimeSource.runtime("src");
+    const seen: string[] = [];
+    const dependency = defineResource({ id: "dep", init: async () => "" });
+    const hook = defineHook({
+      id: "reg-hook",
+      on: event,
+      dependencies: { dependency },
+      run: async ({ data }, deps) => {
+        seen.push(`${data}:${deps.dependency}`);
+      },
+    });
+    let markFirstEntered!: () => void;
+    const firstEntered = new Promise<void>((resolve) => {
+      markFirstEntered = resolve;
+    });
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    eventManager.interceptHook(async (next, currentHook, emission) => {
+      if (emission.data === "first") {
+        markFirstEntered();
+        await firstGate;
+      }
+      return next(currentHook, emission);
+    });
+    eventManager.addListener(event, (emission) =>
+      eventManager.executeHookWithInterceptors(hook, emission, {
+        dependency: emission.data,
+      }),
+    );
+
+    const first = eventManager.emit(event, "first", source);
+    await firstEntered;
+    eventManager.interceptHook((next, currentHook, emission) =>
+      next(currentHook, { ...emission, data: `${emission.data}-updated` }),
+    );
+    await eventManager.emit(event, "second", source);
+    releaseFirst();
+    await first;
+
+    expect(seen).toEqual(["second-updated:second", "first:first"]);
   });
 
   it("rejects new emissions when shutdown lockdown is active", async () => {
@@ -245,21 +293,31 @@ describe("EventManager regressions", () => {
     expect(secondHook.run).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the hook definition id as the hook source id", async () => {
+  it("uses the current hook definition id as the hook source id", async () => {
+    const executionContextStore = new ExecutionContextStore({
+      maxDepth: 100,
+      maxRepetitions: 2,
+    });
     const eventManager = new EventManager({
-      executionContextStore: new ExecutionContextStore({
-        maxDepth: 100,
-        maxRepetitions: 2,
-      }),
+      executionContextStore,
     });
 
     const hook = {
       id: "pathless-hook",
-      run: jest.fn(async () => undefined),
+      run: jest.fn(async () => executionContextStore.getSnapshot()),
     };
 
     await expect(
       eventManager.executeHookWithInterceptors(hook as any, {} as any, {}),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({
+      currentFrame: { source: { id: "pathless-hook" } },
+    });
+
+    hook.id = "changed-hook";
+    await expect(
+      eventManager.executeHookWithInterceptors(hook as any, {} as any, {}),
+    ).resolves.toMatchObject({
+      currentFrame: { source: { id: "changed-hook" } },
+    });
   });
 });

@@ -363,7 +363,7 @@ function enforceTotalBudget(sharedBudget: SharedCacheBudgetState) {
   }
 
   while (sharedBudget.totalBytesUsed > sharedBudget.totalBudgetBytes) {
-    const oldest = findOldestBudgetEntry(sharedBudget.entries);
+    const oldest = sharedBudget.entries.values().next().value;
 
     if (!oldest) {
       sharedBudget.totalBytesUsed = 0;
@@ -385,18 +385,6 @@ function enforceTotalBudget(sharedBudget: SharedCacheBudgetState) {
   }
 }
 
-function findOldestBudgetEntry(entries: Map<string, BudgetEntry>) {
-  let oldest: BudgetEntry | undefined;
-
-  for (const entry of entries.values()) {
-    if (!oldest || entry.order < oldest.order) {
-      oldest = entry;
-    }
-  }
-
-  return oldest;
-}
-
 function upsertBudgetEntry(
   sharedBudget: SharedCacheBudgetState,
   taskId: string,
@@ -407,6 +395,7 @@ function upsertBudgetEntry(
   const current = sharedBudget.entries.get(entryId);
 
   if (current) {
+    sharedBudget.entries.delete(entryId);
     sharedBudget.totalBytesUsed -= current.size;
   }
 
@@ -426,13 +415,17 @@ function touchBudgetEntry(
   taskId: string,
   key: string,
 ) {
-  const entry = sharedBudget.entries.get(getBudgetEntryId(taskId, key));
+  const entryId = getBudgetEntryId(taskId, key);
+  const entry = sharedBudget.entries.get(entryId);
 
   if (!entry) {
     return;
   }
 
   entry.order = nextTouchOrder(sharedBudget);
+  // Map iteration yields the oldest entry first, even across task caches.
+  sharedBudget.entries.delete(entryId);
+  sharedBudget.entries.set(entryId, entry);
 }
 
 function removeBudgetEntry(
@@ -458,7 +451,7 @@ function removeBudgetEntriesForTask(
   sharedBudget: SharedCacheBudgetState,
   taskId: string,
 ) {
-  for (const entry of [...sharedBudget.entries.values()]) {
+  for (const entry of sharedBudget.entries.values()) {
     if (entry.taskId === taskId) {
       removeBudgetEntry(sharedBudget, taskId, entry.key);
     }
@@ -492,13 +485,15 @@ export function computeEntrySize(
   return calculated;
 }
 
-function getUtf8ByteLength(value: string) {
-  if (typeof TextEncoder !== "undefined") {
-    return new TextEncoder().encode(value).length;
-  }
+let textEncoder: TextEncoder | undefined;
 
+function getUtf8ByteLength(value: string) {
   if (typeof Buffer !== "undefined") {
     return Buffer.byteLength(value, "utf8");
+  }
+
+  if (typeof TextEncoder !== "undefined") {
+    return (textEncoder ??= new TextEncoder()).encode(value).length;
   }
 
   return encodeURIComponent(value).replace(/%[A-F\d]{2}/gi, "x").length;

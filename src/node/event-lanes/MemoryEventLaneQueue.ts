@@ -35,7 +35,7 @@ export class MemoryEventLaneQueue
     const message = this.inFlight.get(messageId);
     this.inFlight.delete(messageId);
     if (message && requeue) {
-      this.queue.push(message);
+      this.requeueMessage(message);
     }
     this.scheduleProcessing();
   }
@@ -47,7 +47,7 @@ export class MemoryEventLaneQueue
   async dispose(): Promise<void> {
     this.messageHandler = null;
     this.acceptingWork = false;
-    this.queue = [];
+    this.clearQueue();
     this.inFlight.clear();
   }
 

@@ -12,6 +12,21 @@ function makeTaskFrame(id: string) {
 }
 
 describe("ExecutionContextStore signal inheritance", () => {
+  it("uses the entered identity for cycle detection if a snapshot frame is mutated", () => {
+    const ctx = new ExecutionContextStore({ maxDepth: 10, maxRepetitions: 2 });
+
+    ctx.runWithFrame(makeTaskFrame("root"), () => {
+      const snapshot = ctx.getSnapshot();
+      expect(snapshot?.framesMode).toBe("full");
+      if (snapshot?.framesMode !== "full") return;
+      Reflect.set(snapshot.currentFrame, "id", "changed");
+
+      expect(() => ctx.runWithFrame(makeTaskFrame("root"), () => {})).toThrow(
+        /cycle detected/i,
+      );
+    });
+  });
+
   it("stores the first signal on the execution tree and keeps it for nested frames", () => {
     const ctx = new ExecutionContextStore(
       EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,

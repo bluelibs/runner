@@ -24,7 +24,7 @@ export type NonEmptyArrayElement<TPattern> = [TPattern] extends [undefined]
 export type MatchContext = {
   failures: MatchFailure[];
   collectAll: boolean;
-  activeComparisons: WeakMap<object, WeakSet<object>>;
+  activeComparisons?: WeakMap<object, WeakSet<object>>;
   messageOverride?: MatchMessageOverride;
   /** Current recursion depth of `matchesPattern`; guarded by maxDepth. */
   depth: number;
