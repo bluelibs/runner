@@ -23,7 +23,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `event-lanes/`, `rpc-lanes/`, `remote-lanes/`: lane routing, bindings, identity propagation, and transport behavior.
 - `exposure/`: HTTP request handlers, auth, CORS, lifecycle, multipart, and response streams.
 - `http/`, `files/`, `upload/`: Node clients, input-file utilities, and upload manifests.
-  `http-smart-client.request-lifecycle.test.ts` covers request hook timing, raw source errors, multipart response timeouts, and JSON input reuse.
+  `http-smart-client.request-lifecycle.test.ts` covers raw source errors, multipart
+  response timeouts, and JSON serialization timing with and without request hooks.
 - `core/`, `exports/`: Node entry-point and built-in resource contracts.
 - `type-tests/durable/`: compile-time workflow/resource/lifecycle contracts (`*.type-test.ts`, not Jest suites).
 
@@ -35,6 +36,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Capability suites cover legacy calls/types, task-step DI, progress/retry recovery, scheduled routing across versions, command state isolation when steps park, and replay/reset with parallel waits and pinned children. `RedisStore.capabilities.real.integration.test.ts` verifies atomic receipts, stale-owner fencing, and branch/index commits with child version metadata against live Redis.
 - Preserve deprecated task-definition step compatibility tests. `taskDependencySteps.test.ts` verifies the recommended injected-task callback pattern, explicit cancellation/idempotency forwarding, checkpoint replay after restart, and independent task invocation; type fixtures retain both call forms.
 - Command timer/waiting suites cover concurrent duplicate callers, final-drain admissions, polling while subscription is stalled, and new requests during older timer delivery. `RedisStore.commandTimers.real.integration.test.ts` checks shared FIFO/timer indexes across clients and uses Redis WATCH to prove repeated history phases do not write.
+- `SqliteStore.test.ts` verifies ordered batch timer claims on a connection with a 999-variable limit.
 - Test the public behavior and failure outcomes; use targeted internal tests for races and ownership.
 - Keep each `run(app)` isolated; dispose runtimes/backends, remove temporary files, and close sockets.
 - Preserve canonical runtime addressing versus durable persistence/delivery identities in fixtures.

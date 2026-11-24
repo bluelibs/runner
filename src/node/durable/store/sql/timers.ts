@@ -6,6 +6,9 @@ import { forUpdate, nowMsSql, type SqlExecutor, type SqlParam } from "./types";
 // Keep the parameter count bounded even for direct callers requesting a
 // larger batch than the polling manager typically uses.
 const MAX_CLAIM_BATCH_SIZE = 256;
+// Fit connections with a 999-variable limit. Each SQLite row binds five
+// values, and the conflict clause binds the expiry cutoff once more.
+const SQLITE_CLAIM_BATCH_SIZE = Math.floor((999 - 1) / 5);
 
 export async function upsertTimerInTx(
   runtime: SqlStoreRuntime,
@@ -137,8 +140,10 @@ export async function claimReadyTimers(
       ],
     );
     const claimed: Timer[] = [];
-    for (let offset = 0; offset < rows.length; offset += MAX_CLAIM_BATCH_SIZE) {
-      const batch = rows.slice(offset, offset + MAX_CLAIM_BATCH_SIZE);
+    const batchSize =
+      tx.dialect === "sqlite" ? SQLITE_CLAIM_BATCH_SIZE : MAX_CLAIM_BATCH_SIZE;
+    for (let offset = 0; offset < rows.length; offset += batchSize) {
+      const batch = rows.slice(offset, offset + batchSize);
       const resources = batch.map((row) => timerClaimResource(row.id));
       const claimClock = nowMsSql(tx.dialect);
       const tuple = `(?, ?, ?, (${claimClock.expr}) + ?)`;

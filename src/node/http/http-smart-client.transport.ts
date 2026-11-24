@@ -118,13 +118,13 @@ export async function postJson<T = any>(
     "application/json; charset=utf-8",
     headersOverride,
   );
+  if (cfg.onRequest) {
+    await cfg.onRequest({ url, headers: requestOptions.headers });
+  }
   const payload = Buffer.from(
     preSerializedBody ?? serializer.stringify(body),
     "utf8",
   );
-  if (cfg.onRequest) {
-    await cfg.onRequest({ url, headers: requestOptions.headers });
-  }
 
   return await new Promise<T>((resolve, reject) => {
     const { cleanup, resolveOnce, rejectOnce } = createSettledCallbacks(

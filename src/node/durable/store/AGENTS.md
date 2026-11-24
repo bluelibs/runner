@@ -39,6 +39,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Claimed timers and locks use owner tokens/leases; stale owners cannot renew or finalize another owner's work.
 - PostgreSQL schema creation uses one transaction and a shared advisory lock. Batch timer claims lock timer rows before conditionally inserting or taking over claims in the same transaction. SQL command FIFO/timer writes lock the target execution before queue rows. SQL adapters reuse a bounded cache of prepared SQLite statements and PostgreSQL placeholder rewrites.
 - SQLite adapters sharing an injected connection also share its transaction and read serialization.
+  Batch timer claims fit connections capped at 999 SQL variables.
 - Attempt-owned writes must atomically compare the live execution lease before mutation. Never replace this with a read/renew followed by an unguarded write. Optional custom stores without this capability cannot enable continuous recovery.
 - Schedule cadence/payload can change, but `ScheduleUpdate` does not permit replacing its id.
 - Metadata queries use indexes without scanning payloads; cursors preserve stable ordering.

@@ -23,6 +23,27 @@ function mockRequest(makeRequest: (respond: Respond) => Writable) {
     .mockImplementation(request as unknown as typeof http.request);
 }
 
+function captureJsonRequestBodies(serializer: Serializer): unknown[] {
+  const sent: unknown[] = [];
+  mockRequest((respond) => {
+    const response = jsonResponse();
+    return new Writable({
+      write(chunk, _encoding, done) {
+        sent.push(serializer.parse(chunk.toString()));
+        done();
+      },
+      final(done) {
+        done();
+        setImmediate(() => {
+          respond(response);
+          response.end(serializer.stringify({ ok: true }));
+        });
+      },
+    });
+  });
+  return sent;
+}
+
 describe("createHttpSmartClient request lifecycle", () => {
   const baseUrl = "http://127.0.0.1:7777/__runner";
   const serializer = new Serializer();
@@ -145,26 +166,7 @@ describe("createHttpSmartClient request lifecycle", () => {
   });
 
   it("serializes each JSON call before the caller reuses its input", async () => {
-    const sent: number[] = [];
-    mockRequest((respond) => {
-      const response = jsonResponse();
-      return new Writable({
-        write(chunk, _encoding, done) {
-          const body = serializer.parse(chunk.toString()) as {
-            input: { version: number };
-          };
-          sent.push(body.input.version);
-          done();
-        },
-        final(done) {
-          done();
-          setImmediate(() => {
-            respond(response);
-            response.end(serializer.stringify({ ok: true }));
-          });
-        },
-      });
-    });
+    const sent = captureJsonRequestBodies(serializer);
 
     const client = createHttpSmartClient({ baseUrl, serializer });
     const input = { version: 1 };
@@ -173,6 +175,26 @@ describe("createHttpSmartClient request lifecycle", () => {
     const second = client.task("write", input);
 
     await Promise.all([first, second]);
-    expect(sent).toEqual([1, 2]);
+    expect(sent).toEqual([
+      { input: { version: 1 } },
+      { input: { version: 2 } },
+    ]);
+  });
+
+  it("serializes fallback JSON after the request hook completes", async () => {
+    const sent = captureJsonRequestBodies(serializer);
+    const input = { version: 1 };
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer,
+      onRequest: async () => {
+        await nextTurn();
+        input.version = 2;
+      },
+    });
+
+    await client.task("write", input);
+
+    expect(sent).toEqual([{ input: { version: 2 } }]);
   });
 });

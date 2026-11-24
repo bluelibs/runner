@@ -39,9 +39,10 @@ lane topology, retries, and serving policies are owned by sibling modules.
   agree on sentinel ids/metadata; raw readable input uses octet-stream.
 - Preserve auth/default headers, request hooks, selected async contexts, typed
   remote errors, and caller signals across all transport paths.
-- Preserve synchronous request setup when there is no request hook. Observe raw
-  input errors before awaiting an asynchronous hook. Multipart timeouts stay active
-  until the request closes, including while the response body is being read.
+- Serialize fallback JSON after the request hook, with synchronous serialization
+  when no hook is configured. Use pre-serialized signed JSON verbatim.
+- Observe raw input errors before awaiting an asynchronous hook. Multipart timeouts
+  stay active until the request closes, including while the response body is being read.
 - HTTP status transport errors retain parsed Retry-After guidance for the portable retry wrapper.
 - These clients do not decide lane retry policy. RPC routing limits execution to one attempt (with the overall budget) for
   stream/upload sources, which may already be consumed after the first request.
