@@ -17,7 +17,6 @@ import type { Store } from "./store/Store";
 import type { TaskRunner } from "./TaskRunner";
 import {
   lazyResourceAccessDisabledError,
-  lazyResourceShutdownAccessError,
   lazyResourceSyncAccessError,
   runResultDisposeDuringBootstrapError,
   runResultDisposedError,
@@ -529,7 +528,7 @@ export class RunResult<V> implements IInspectableRuntime<V> {
     }
 
     this.assertRuntimeAccess(resourceId, "Resource");
-    this.assertLazyResourceWakeupAllowed(resourceId);
+    this.store.assertLazyResourceWakeupAllowed(resourceId);
 
     if (!this.lazyOptions.lazyResourceLoader) {
       return this.store.resources.get(resourceId)!.value;
@@ -539,21 +538,6 @@ export class RunResult<V> implements IInspectableRuntime<V> {
       Output extends Promise<infer U> ? U : Output
     >(resourceId);
   };
-
-  private assertLazyResourceWakeupAllowed(resourceId: string): void {
-    const phase = this.store.getLifecycleAdmissionController().getPhase();
-    if (
-      phase === RuntimeLifecyclePhase.CoolingDown ||
-      phase === RuntimeLifecyclePhase.Disposing ||
-      phase === RuntimeLifecyclePhase.Aborting ||
-      phase === RuntimeLifecyclePhase.Drained ||
-      phase === RuntimeLifecyclePhase.Disposed
-    ) {
-      lazyResourceShutdownAccessError.throw({
-        id: this.store.findIdByDefinition(resourceId),
-      });
-    }
-  }
 
   /**
    * Retrieves the configuration that was passed to a resource.
@@ -617,7 +601,7 @@ export class RunResult<V> implements IInspectableRuntime<V> {
     this.ensureRuntimeIsActive();
     this.ensureAdmissionControlIsAvailable();
 
-    const controller = this.store.getLifecycleAdmissionController();
+    const controller = this.store.admission;
     if (controller.getPhase() !== RuntimeLifecyclePhase.Running) {
       return;
     }
@@ -658,7 +642,7 @@ export class RunResult<V> implements IInspectableRuntime<V> {
   }
 
   private getRuntimeState(): RuntimeState {
-    const phase = this.store.getLifecycleAdmissionController().getPhase();
+    const phase = this.store.admission.getPhase();
     switch (phase) {
       case RuntimeLifecyclePhase.Paused:
         return "paused";

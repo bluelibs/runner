@@ -23,6 +23,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `event-lanes/`, `rpc-lanes/`, `remote-lanes/`: lane routing, bindings, identity propagation, and transport behavior.
 - `exposure/`: HTTP request handlers, auth, CORS, lifecycle, multipart, and response streams.
 - `http/`, `files/`, `upload/`: Node clients, input-file utilities, and upload manifests.
+  `http-smart-client.request-lifecycle.test.ts` covers request hook timing, raw source errors, multipart response timeouts, and JSON input reuse.
 - `core/`, `exports/`: Node entry-point and built-in resource contracts.
 - `type-tests/durable/`: compile-time workflow/resource/lifecycle contracts (`*.type-test.ts`, not Jest suites).
 

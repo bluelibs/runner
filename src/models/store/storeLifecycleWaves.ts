@@ -1,13 +1,11 @@
+import { normalizeError } from "../../tools/normalizeError";
 import type {
   DisposeWave,
   ResourceStoreElementType,
 } from "../../types/storeTypes";
 import { Logger } from "../Logger";
 
-/** Normalizes arbitrary lifecycle rejections into Error instances. */
-export function normalizeLifecycleError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
+export { normalizeError as normalizeLifecycleError };
 
 function collectWaveErrors(
   results: readonly PromiseSettledResult<void>[],
@@ -16,7 +14,7 @@ function collectWaveErrors(
     .filter(
       (result): result is PromiseRejectedResult => result.status === "rejected",
     )
-    .map((result) => normalizeLifecycleError(result.reason));
+    .map((result) => normalizeError(result.reason));
 }
 
 /** Runs one lifecycle wave sequentially or concurrently and gathers errors. */
@@ -36,7 +34,7 @@ export async function executeLifecycleWave(
     try {
       await action(resource);
     } catch (error) {
-      errors.push(normalizeLifecycleError(error));
+      errors.push(normalizeError(error));
     }
   }
 
@@ -60,7 +58,7 @@ export async function runReadyWave(
       if (runningReadyPromises.length > 0) {
         await Promise.allSettled(runningReadyPromises);
       }
-      throw normalizeLifecycleError(error);
+      throw normalizeError(error);
     }
 
     const settledResults = await Promise.allSettled(runningReadyPromises);
@@ -68,7 +66,7 @@ export async function runReadyWave(
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
     if (rejectedResult) {
-      throw normalizeLifecycleError(rejectedResult.reason);
+      throw normalizeError(rejectedResult.reason);
     }
 
     return;
@@ -79,7 +77,7 @@ export async function runReadyWave(
       options?.shouldStop?.();
       await runReadyResource(resource);
     } catch (error) {
-      throw normalizeLifecycleError(error);
+      throw normalizeError(error);
     }
   }
 }

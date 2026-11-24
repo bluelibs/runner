@@ -170,16 +170,20 @@ describe("DependencyExtractor coverage gaps", () => {
       async () => undefined,
     ) as unknown as {
       extractTagDependency: (tag: unknown, source: string) => Promise<any>;
-      makeOwnerAwareMiddlewareManager: (
-        value: unknown,
-        ownerResourceId: string,
-      ) => unknown;
       wrapResourceDependencies: (
         deps: Record<string, unknown>,
         extracted: Record<string, unknown>,
         ownerResourceId: string,
       ) => Record<string, unknown>;
-      createRuntimeTaggedResourceMatch: (entry: any) => any;
+      resourceDependencyWrapper: {
+        makeOwnerAwareMiddlewareManager: (
+          value: unknown,
+          ownerResourceId: string,
+        ) => unknown;
+      };
+      tagDependencyBuilder: {
+        createRuntimeTaggedResourceMatch: (entry: any) => any;
+      };
     };
 
     const ownerResource = defineResource({
@@ -333,17 +337,24 @@ describe("DependencyExtractor coverage gaps", () => {
     expect(middlewareManager.interceptMiddlewareOwned).toHaveBeenCalledTimes(2);
 
     expect(
-      extractor.makeOwnerAwareMiddlewareManager(null, ownerResource.id),
+      extractor.resourceDependencyWrapper.makeOwnerAwareMiddlewareManager(
+        null,
+        ownerResource.id,
+      ),
     ).toBeNull();
     const plainObject = { value: true };
     expect(
-      extractor.makeOwnerAwareMiddlewareManager(plainObject, ownerResource.id),
+      extractor.resourceDependencyWrapper.makeOwnerAwareMiddlewareManager(
+        plainObject,
+        ownerResource.id,
+      ),
     ).toBe(plainObject);
 
-    const runtimeEntry = extractor.createRuntimeTaggedResourceMatch({
-      definition: taggedResource,
-      config: undefined,
-    });
+    const runtimeEntry =
+      extractor.tagDependencyBuilder.createRuntimeTaggedResourceMatch({
+        definition: taggedResource,
+        config: undefined,
+      });
     store.resources.get(taggedResource.id)!.isInitialized = false;
     expect(runtimeEntry.value).toBeUndefined();
     store.resources.get(taggedResource.id)!.isInitialized = true;

@@ -12,8 +12,12 @@ lane topology, retries, and serving policies are owned by sibling modules.
 
 ## Start Here
 
-- [http-smart-client.model.ts](http-smart-client.model.ts): Node request transport,
-  JSON/multipart/octet-stream requests, response streams, and typed error mapping.
+- [http-smart-client.model.ts](http-smart-client.model.ts): Node smart client facade,
+  delegating request/response transport to
+  [http-smart-client.transport.ts](http-smart-client.transport.ts) and multipart
+  stream encoding to [http-smart-client.multipart.ts](http-smart-client.multipart.ts).
+- [http-smart-client.request.ts](http-smart-client.request.ts): request options,
+  headers, settlement, cancellation, and timeout listeners.
 - [http-mixed-client.ts](http-mixed-client.ts): task transport selection.
 - [nodeFileDetection.ts](nodeFileDetection.ts): Node-readable/file detection.
 - [http-smart-client.factory.resource.ts](http-smart-client.factory.resource.ts) and
@@ -35,8 +39,9 @@ lane topology, retries, and serving policies are owned by sibling modules.
   agree on sentinel ids/metadata; raw readable input uses octet-stream.
 - Preserve auth/default headers, request hooks, selected async contexts, typed
   remote errors, and caller signals across all transport paths.
-- Abort/timeout/source-error handling settles once and removes listeners. Streaming
-  response lifetime differs from a buffered JSON response; avoid premature cleanup.
+- Preserve synchronous request setup when there is no request hook. Observe raw
+  input errors before awaiting an asynchronous hook. Multipart timeouts stay active
+  until the request closes, including while the response body is being read.
 - HTTP status transport errors retain parsed Retry-After guidance for the portable retry wrapper.
 - These clients do not decide lane retry policy. RPC routing limits execution to one attempt (with the overall budget) for
   stream/upload sources, which may already be consumed after the first request.

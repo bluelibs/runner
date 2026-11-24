@@ -70,8 +70,15 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-expressions": "off",
       "@typescript-eslint/no-require-imports": "off",
       "@typescript-eslint/no-unsafe-function-type": "off",
-      // Allow @ts-expect-error without description (common in tests)
-      "@typescript-eslint/ban-ts-comment": "off",
+      // Require descriptions on @ts-expect-error in production code and forbid @ts-ignore/@ts-nocheck
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        {
+          "ts-expect-error": "allow-with-description",
+          "ts-ignore": true,
+          "ts-nocheck": true,
+        },
+      ],
 
       // Allow empty catch blocks (common pattern for ignoring errors)
       "no-empty": ["error", { allowEmptyCatch: true }],
@@ -81,8 +88,6 @@ export default tseslint.config(
       "no-useless-catch": "off",
       // Allow control characters in regex (used for ANSI color stripping)
       "no-control-regex": "off",
-      // Allow optional chaining in arithmetic (handled by TypeScript)
-      "no-unsafe-optional-chaining": "off",
       // Allow empty destructuring patterns (used for ignoring values)
       "no-empty-pattern": "off",
       // Allow constant conditions (sometimes used for debugging or feature flags)
@@ -117,6 +122,7 @@ export default tseslint.config(
     rules: {
       // Keep test ergonomics while enforcing strictness in non-test code.
       "unused-imports/no-unused-vars": "off",
+      "@typescript-eslint/ban-ts-comment": "off",
     },
   },
 

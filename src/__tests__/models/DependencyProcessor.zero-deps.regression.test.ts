@@ -198,16 +198,11 @@ describe("DependencyProcessor zero-dependency caching", () => {
       taskRunner,
       logger,
       async () => undefined,
-    ) as unknown as {
-      makeOwnerAwareMiddlewareManager: (
-        value: unknown,
-        ownerResourceId: string,
-      ) => unknown;
-    };
+    );
 
     const primitiveValue = "not-an-object";
     expect(
-      extractor.makeOwnerAwareMiddlewareManager(
+      extractor.resourceDependencyWrapper.makeOwnerAwareMiddlewareManager(
         primitiveValue,
         "tests-resources-owner-primitive",
       ),
@@ -218,7 +213,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
       interceptMiddleware: () => undefined,
     };
     expect(
-      extractor.makeOwnerAwareMiddlewareManager(
+      extractor.resourceDependencyWrapper.makeOwnerAwareMiddlewareManager(
         plainObject,
         "tests-resources-owner-plainObject",
       ),

@@ -1,3 +1,4 @@
+import { normalizeError } from "../tools/normalizeError";
 import { Logger } from "./Logger";
 
 export type UnhandledErrorKind =
@@ -18,16 +19,12 @@ export type OnUnhandledError = (
   info: OnUnhandledErrorInfo,
 ) => void | Promise<void>;
 
-function toError(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
-}
-
 function reportUnhandledErrorReporterFailure(
   reporterError: unknown,
   info: OnUnhandledErrorInfo,
 ): void {
-  const normalizedReporterError = toError(reporterError);
-  const normalizedOriginalError = toError(info.error);
+  const normalizedReporterError = normalizeError(reporterError);
+  const normalizedOriginalError = normalizeError(info.error);
   console.error("[runner] Failed to report unhandled error.", {
     reporterError: normalizedReporterError,
     originalError: normalizedOriginalError,
@@ -38,8 +35,7 @@ function reportUnhandledErrorReporterFailure(
 
 export function createDefaultUnhandledError(logger: Logger): OnUnhandledError {
   return async ({ error, kind, source }: OnUnhandledErrorInfo) => {
-    const normalizedError =
-      error instanceof Error ? error : new Error(String(error));
+    const normalizedError = normalizeError(error);
 
     await logger.error(`${normalizedError.toString()}`, {
       source,
