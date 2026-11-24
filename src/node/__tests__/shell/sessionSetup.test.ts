@@ -32,7 +32,7 @@ describeUnix("session setup and history failures", () => {
     jest.spyOn(history, "openShellHistory").mockResolvedValue(loaded);
     await startShellSession(socket, runtime, scope, false, true, "unused");
     expect(close).toHaveBeenCalledTimes(1);
-    runtime.store.beginCoolingDown();
+    runtime.store.admission.beginCoolingDown();
     const pending = new Socket();
     await startShellSession(pending, runtime, scope, false);
     expect(pending.destroyed).toBe(true);

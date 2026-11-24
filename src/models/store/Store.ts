@@ -24,11 +24,7 @@ import {
   ResourceStoreElementType,
   TaskStoreElementType,
 } from "../../types/storeTypes";
-import type { RuntimeCallSource } from "../../types/runtimeSource";
-import type {
-  IRuntimeInspectionLifecycle,
-  IRuntimeInspectionLifecycleWave,
-} from "../../types/runtimeInspection";
+import type { IRuntimeInspectionLifecycle } from "../../types/runtimeInspection";
 import { TaskRunner } from "../TaskRunner";
 import { OnUnhandledError } from "../UnhandledError";
 import { MiddlewareManager } from "../MiddlewareManager";
@@ -55,7 +51,7 @@ export type {
 };
 
 /**
- * Store class which is used to store all the resources, tasks, middleware and events.
+ * Central runtime registry, visibility facade, and coordinator hub for a single `run(app)` instance.
  */
 export class Store {
   root!: ResourceStoreElementType;
@@ -65,18 +61,13 @@ export class Store {
   private validator: StoreValidator;
   private taskRunner?: TaskRunner;
   private middlewareManager: MiddlewareManager;
-  private readonly initWaves: InitWave[] = [];
-  private readonly initializedResourceIds = new Set<string>();
-  private readonly readyResourceIds = new Set<string>();
-  private hasRunCooldown = false;
-  private readonly lifecycleAdmissionController: LifecycleAdmissionController;
+  public readonly admission: LifecycleAdmissionController;
   private readonly executionContextStore: ExecutionContextStore;
   private readonly healthReporter: HealthReporter;
-  private readonly bootstrapCoordinator: StoreBootstrapCoordinator;
-  private readonly lifecycleCoordinator: StoreLifecycleCoordinator;
+  public readonly bootstrap: StoreBootstrapCoordinator;
+  public readonly lifecycle: StoreLifecycleCoordinator;
 
   #isLocked = false;
-  #isInitialized = false;
   public mode: RunnerMode;
 
   constructor(
@@ -88,7 +79,7 @@ export class Store {
     executionContextStore?: ExecutionContextStore,
   ) {
     this.mode = detectRunnerMode(mode);
-    this.lifecycleAdmissionController =
+    this.admission =
       lifecycleAdmissionController ?? new LifecycleAdmissionController();
     this.executionContextStore =
       executionContextStore ?? new ExecutionContextStore(null);
@@ -98,7 +89,16 @@ export class Store {
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this);
     this.healthReporter = new HealthReporter(this);
-    this.bootstrapCoordinator = new StoreBootstrapCoordinator({
+    this.lifecycle = new StoreLifecycleCoordinator({
+      eventManager: this.eventManager,
+      admission: this.admission,
+      logger: this.logger,
+      resources: this.resources,
+      findIdByDefinition: (definition) => this.findIdByDefinition(definition),
+      resolveDefinitionId: (reference) =>
+        this.registry.resolveDefinitionId(reference),
+    });
+    this.bootstrap = new StoreBootstrapCoordinator({
       eventManager: this.eventManager,
       executionContextStore: this.executionContextStore,
       logger: this.logger,
@@ -109,32 +109,11 @@ export class Store {
       resources: this.resources,
       lookup: this.lookup,
       validator: this.validator,
+      lifecycle: this.lifecycle,
       getTaskRunner: () => this.taskRunner,
-      isInitialized: () => this.#isInitialized,
-      markInitialized: () => {
-        this.#isInitialized = true;
-      },
-      recordResourceInitialized: (resourceId) =>
-        this.recordResourceInitialized(resourceId),
       resolveStoreResource: () => this,
       resolveRegisteredDefinition: (definition) =>
         this.resolveRegisteredDefinition(definition),
-    });
-    this.lifecycleCoordinator = new StoreLifecycleCoordinator({
-      eventManager: this.eventManager,
-      initWaves: this.initWaves,
-      initializedResourceIds: this.initializedResourceIds,
-      lifecycleAdmissionController: this.lifecycleAdmissionController,
-      logger: this.logger,
-      readyResourceIds: this.readyResourceIds,
-      resources: this.resources,
-      getHasRunCooldown: () => this.hasRunCooldown,
-      setHasRunCooldown: (value) => {
-        this.hasRunCooldown = value;
-      },
-      findIdByDefinition: (definition) => this.findIdByDefinition(definition),
-      resolveDefinitionId: (reference) =>
-        this.registry.resolveDefinitionId(reference),
     });
   }
 
@@ -180,7 +159,7 @@ export class Store {
   }
 
   public getLifecycleAdmissionController(): LifecycleAdmissionController {
-    return this.lifecycleAdmissionController;
+    return this.admission;
   }
 
   public getExecutionContextStore(): ExecutionContextStore {
@@ -240,23 +219,7 @@ export class Store {
 
   /** Returns detached resource lifecycle waves retained by this runtime. @internal */
   public getLifecycleInspection(): IRuntimeInspectionLifecycle {
-    const toInspectionWaves = (
-      waves: DisposeWave[],
-    ): IRuntimeInspectionLifecycleWave[] =>
-      waves.map((wave, order) => ({
-        order,
-        resourceIds: wave.resources.map(({ resource }) => resource.id),
-        parallel: wave.parallel,
-      }));
-
-    return {
-      readyWaves: toInspectionWaves(
-        this.lifecycleCoordinator.getResourcesInReadyWaves(),
-      ),
-      shutdownWaves: toInspectionWaves(
-        this.lifecycleCoordinator.getResourcesInDisposeWaves(),
-      ),
-    };
+    return this.lifecycle.getLifecycleInspection();
   }
 
   public resolveHookTargets(
@@ -342,58 +305,6 @@ export class Store {
     return this.registry.visibilityTracker.hasExportsDeclaration(resourceId);
   }
 
-  public isInShutdownLockdown() {
-    return this.lifecycleCoordinator.isInShutdownLockdown();
-  }
-
-  public isDisposalStarted() {
-    return this.lifecycleCoordinator.isDisposalStarted();
-  }
-
-  public canAdmitTaskCall(source: RuntimeCallSource): boolean {
-    return this.lifecycleCoordinator.canAdmitTaskCall(source);
-  }
-
-  public beginDisposing() {
-    this.lifecycleCoordinator.beginDisposing();
-  }
-
-  public beginCoolingDown() {
-    this.lifecycleCoordinator.beginCoolingDown();
-  }
-
-  public beginAborting() {
-    this.lifecycleCoordinator.beginAborting();
-  }
-
-  public beginDrained() {
-    this.lifecycleCoordinator.beginDrained();
-  }
-
-  public async waitForDrain(drainingBudgetMs: number): Promise<boolean> {
-    return this.lifecycleCoordinator.waitForDrain(drainingBudgetMs);
-  }
-
-  public trackTaskAbortController(controller: AbortController): () => void {
-    return this.lifecycleCoordinator.trackTaskAbortController(controller);
-  }
-
-  public abortInFlightTaskSignals(reason: string): void {
-    this.lifecycleCoordinator.abortInFlightTaskSignals(reason);
-  }
-
-  public cancelDrainWaiters(): void {
-    this.lifecycleCoordinator.cancelDrainWaiters();
-  }
-
-  public markDisposed() {
-    this.lifecycleCoordinator.markDisposed();
-  }
-
-  public enterShutdownLockdown() {
-    this.lifecycleCoordinator.enterShutdownLockdown();
-  }
-
   lock() {
     this.#isLocked = true;
     this.registry.lockAll();
@@ -407,16 +318,6 @@ export class Store {
 
   public setTaskRunner(taskRunner: TaskRunner) {
     this.taskRunner = taskRunner;
-  }
-
-  protected createEventManagerFacade(): EventManager {
-    return this.bootstrapCoordinator.createEventManagerFacade();
-  }
-
-  protected resolveRootEntry(
-    rootDefinition: IResource<any>,
-  ): ResourceStoreElementType {
-    return this.bootstrapCoordinator.resolveRootEntry(rootDefinition);
   }
 
   public validateDependencyGraph() {
@@ -445,7 +346,7 @@ export class Store {
       identity?: IdentityAsyncContext | null;
     },
   ) {
-    this.root = this.bootstrapCoordinator.initializeStore(
+    this.root = this.bootstrap.initializeStore(
       root,
       config,
       runtimeResult,
@@ -454,45 +355,31 @@ export class Store {
   }
 
   public async dispose() {
-    await this.lifecycleCoordinator.dispose();
+    await this.lifecycle.dispose();
   }
 
   public recordResourceInitialized(resourceId: string) {
-    this.lifecycleCoordinator.recordResourceInitialized(resourceId);
+    this.lifecycle.recordResourceInitialized(resourceId);
   }
 
   public recordInitWave(resourceIds: readonly string[]) {
-    this.lifecycleCoordinator.recordInitWave(resourceIds);
+    this.lifecycle.recordInitWave(resourceIds);
   }
 
   public async ready(options?: { shouldStop?: () => void }) {
-    await this.lifecycleCoordinator.ready(options);
+    await this.lifecycle.ready(options);
   }
 
   public async readyResource(resourceId: string): Promise<void> {
-    await this.lifecycleCoordinator.readyResource(resourceId);
+    await this.lifecycle.readyResource(resourceId);
   }
 
   public async cooldown(options?: { shouldStop?: () => boolean }) {
-    await this.lifecycleCoordinator.cooldown(options);
-  }
-
-  protected async cooldownWave(
-    wave: DisposeWave,
-    options?: { shouldStop?: () => boolean },
-  ): Promise<Error[]> {
-    return this.lifecycleCoordinator.cooldownWave(wave, options);
-  }
-
-  protected async readyWave(
-    wave: DisposeWave,
-    options?: { shouldStop?: () => void },
-  ): Promise<void> {
-    await this.lifecycleCoordinator.readyWave(wave, options);
+    await this.lifecycle.cooldown(options);
   }
 
   public assertLazyResourceWakeupAllowed(resourceId: string): void {
-    this.lifecycleCoordinator.assertLazyResourceWakeupAllowed(resourceId);
+    this.lifecycle.assertLazyResourceWakeupAllowed(resourceId);
   }
 
   public processOverrides() {

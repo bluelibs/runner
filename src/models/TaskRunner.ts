@@ -103,7 +103,7 @@ export class TaskRunner {
     const taskId = this.store.findIdByDefinition(task);
     const source = options?.source ?? defaultTaskSource;
     const signal = this.executionContextStore.resolveSignal(options?.signal);
-    if (!this.store.canAdmitTaskCall(source)) {
+    if (!this.lifecycleAdmissionController.canAdmitTask(source)) {
       if (
         this.lifecycleAdmissionController.getPhase() ===
         RuntimeLifecyclePhase.Paused

@@ -32,15 +32,8 @@ describe("Store", () => {
     expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
   });
 
-  it("should delegate markDisposed to the lifecycle admission controller", () => {
-    const markDisposedSpy = jest.spyOn(
-      store.getLifecycleAdmissionController(),
-      "markDisposed",
-    );
-
-    store.markDisposed();
-
-    expect(markDisposedSpy).toHaveBeenCalledTimes(1);
+  it("should expose the lifecycle admission controller directly", () => {
+    expect(store.admission).toBe(store.getLifecycleAdmissionController());
   });
 
   it("should skip cooldown wave resources once force escalation requests a stop", async () => {
@@ -52,10 +45,10 @@ describe("Store", () => {
       },
     };
 
-    const errors = await (store as any).cooldownWave(
+    const errors = await store.lifecycle.cooldownWave(
       {
         parallel: false,
-        resources: [cooldownResource],
+        resources: [cooldownResource as any],
       },
       {
         shouldStop: () => true,
@@ -87,10 +80,10 @@ describe("Store", () => {
     let shouldStopCalls = 0;
     const stopError = genericError.new({ message: "stop-ready-wave" });
 
-    const readyWavePromise = (store as any).readyWave(
+    const readyWavePromise = store.lifecycle.readyWave(
       {
         parallel: true,
-        resources: [readyResource, skippedResource],
+        resources: [readyResource as any, skippedResource as any],
       },
       {
         shouldStop: () => {
@@ -121,10 +114,10 @@ describe("Store", () => {
     const stopError = genericError.new({ message: "stop-before-ready-wave" });
 
     await expect(
-      (store as any).readyWave(
+      store.lifecycle.readyWave(
         {
           parallel: true,
-          resources: [readyResource],
+          resources: [readyResource as any],
         },
         {
           shouldStop: () => {
@@ -209,26 +202,24 @@ describe("Store", () => {
   });
 
   it("should enter shutdown lockdown once and keep it idempotent", () => {
-    expect(store.isInShutdownLockdown()).toBe(false);
-    store.enterShutdownLockdown();
-    store.enterShutdownLockdown();
+    expect(store.admission.isShutdownLockdown()).toBe(false);
+    store.admission.beginDisposing();
+    store.admission.beginDisposing();
 
-    expect(store.isInShutdownLockdown()).toBe(true);
-    expect(store.getLifecycleAdmissionController().getPhase()).toBe(
-      "disposing",
-    );
+    expect(store.admission.isShutdownLockdown()).toBe(true);
+    expect(store.admission.getPhase()).toBe("disposing");
   });
 
   it("should switch to aborting once and keep it idempotent after shutdown progressed", () => {
-    store.beginAborting();
-    expect(store.getLifecycleAdmissionController().getPhase()).toBe("aborting");
+    store.admission.beginAborting();
+    expect(store.admission.getPhase()).toBe("aborting");
 
-    store.beginAborting();
-    expect(store.getLifecycleAdmissionController().getPhase()).toBe("aborting");
+    store.admission.beginAborting();
+    expect(store.admission.getPhase()).toBe("aborting");
 
-    store.beginDrained();
-    store.beginAborting();
-    expect(store.getLifecycleAdmissionController().getPhase()).toBe("drained");
+    store.admission.beginDrained();
+    store.admission.beginAborting();
+    expect(store.admission.getPhase()).toBe("drained");
   });
 
   it("should ignore duplicate calls to recordResourceInitialized", () => {
@@ -238,7 +229,7 @@ describe("Store", () => {
     store.recordResourceInitialized("dup");
 
     const initWaves = (
-      store as unknown as {
+      store.lifecycle as unknown as {
         initWaves: Array<{ resourceIds: string[]; parallel: boolean }>;
       }
     ).initWaves;
@@ -253,7 +244,8 @@ describe("Store", () => {
     store.recordResourceInitialized("wave-dup");
     store.recordInitWave(["wave-dup", "wave-dup"]);
 
-    const initWaves = (store as unknown as { initWaves: unknown[] }).initWaves;
+    const initWaves = (store.lifecycle as unknown as { initWaves: unknown[] })
+      .initWaves;
     expect(initWaves).toHaveLength(1);
   });
 

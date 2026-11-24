@@ -606,7 +606,7 @@ describe("RunResult", () => {
     fixture.store.storeGenericItem(resource);
     runtime.setLazyOptions({ lazyMode: true });
     runtime.setValue("ready");
-    fixture.store.beginCoolingDown();
+    fixture.store.admission.beginCoolingDown();
 
     await expect(runtime.getLazyResourceValue(resource)).rejects.toThrow(
       /cannot be lazy-initialized because shutdown has already started/i,

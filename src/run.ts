@@ -190,7 +190,7 @@ export async function run<C, V extends Promise<any>>(
       startupUnusedResourceIds,
       lazyResourceLoader: async (resourceId: string) => {
         const res = store.resources.get(resourceId)!.resource;
-        return processor.extractResourceDependency(res);
+        return processor.dependencyExtractor.extractResourceDependency(res);
       },
     });
     runtimeResult.setValue(store.root.value);

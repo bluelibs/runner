@@ -41,7 +41,7 @@ it("scopes evaluation and completion, preserves stricter nested scope, and refus
       Reflect.apply(session.completer, session, ["a", callback]),
     );
     expect(complete).toHaveLastReturnedWith(true);
-    runtime.store.beginCoolingDown();
+    runtime.store.admission.beginCoolingDown();
     session.eval("1", session.context, "shell", callback);
     expect(evaluate).toHaveBeenCalledTimes(2);
     expect(socket.destroyed).toBe(true);

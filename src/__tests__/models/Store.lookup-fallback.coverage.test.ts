@@ -52,17 +52,7 @@ describe("Store lookup fallback coverage", () => {
 
     store.storeGenericItem(event);
 
-    const facade = (
-      store as unknown as {
-        createEventManagerFacade: () => {
-          emit(
-            eventDefinition: unknown,
-            data: unknown,
-            sourceDefinition: unknown,
-          ): Promise<unknown>;
-        };
-      }
-    ).createEventManagerFacade();
+    const facade = store.bootstrap.createEventManagerFacade();
 
     jest
       .spyOn(lookup, "tryCanonicalId")
@@ -93,17 +83,7 @@ describe("Store lookup fallback coverage", () => {
 
     store.storeGenericItem(event);
 
-    const facade = (
-      store as unknown as {
-        createEventManagerFacade: () => {
-          emit(
-            eventDefinition: unknown,
-            data: unknown,
-            sourceDefinition: unknown,
-          ): Promise<unknown>;
-        };
-      }
-    ).createEventManagerFacade();
+    const facade = store.bootstrap.createEventManagerFacade();
 
     const emitSpy = jest
       .spyOn(eventManager, "emit")
@@ -129,14 +109,7 @@ describe("Store lookup fallback coverage", () => {
 
   it("falls back to root.id and requested ids when canonical lookup misses", () => {
     const { store } = createTestFixture();
-    const lookup = (
-      store as unknown as {
-        lookup: {
-          resolveCandidateId: (reference: unknown) => string | null;
-        };
-        resolveRootEntry: (definition: unknown) => unknown;
-      }
-    ).lookup;
+    const lookup = store.lookup;
     const root = defineResource({
       id: "store-fallback-root",
     });
@@ -151,13 +124,7 @@ describe("Store lookup fallback coverage", () => {
     store.resources.set(root.id, rootEntry as never);
     jest.spyOn(lookup, "resolveCandidateId").mockReturnValue(null);
 
-    expect(
-      (
-        store as unknown as {
-          resolveRootEntry: (definition: unknown) => unknown;
-        }
-      ).resolveRootEntry(root),
-    ).toBe(rootEntry);
+    expect(store.bootstrap.resolveRootEntry(root)).toBe(rootEntry);
 
     const definition = { id: "store-fallback-no-canonical" };
     expect(toCanonicalDefinitionFromStore(store, definition)).toEqual({

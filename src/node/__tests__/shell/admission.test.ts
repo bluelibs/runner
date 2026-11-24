@@ -18,13 +18,14 @@ describeUnix("shell lifecycle admission", () => {
       const shell = new ShellServer(join(directory, "shell.sock"), runtime);
       await shell.listen();
       try {
-        if (stage === "before connection") runtime.store.beginCoolingDown();
+        if (stage === "before connection")
+          runtime.store.admission.beginCoolingDown();
         const socket = net.createConnection(shell.socketPath);
         await once(socket, "connect");
         const closed = once(socket, "close");
         if (stage === "during handshake") {
           await readProtocolLine(socket);
-          runtime.store.beginCoolingDown();
+          runtime.store.admission.beginCoolingDown();
           socket.write('{"readOnly":true}\n');
         }
         socket.resume();

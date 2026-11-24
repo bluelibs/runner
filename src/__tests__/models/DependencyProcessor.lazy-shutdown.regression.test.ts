@@ -38,13 +38,14 @@ describe("DependencyProcessor lazy shutdown regressions", () => {
       logger,
     );
 
-    const wakeupPromise = processor.extractResourceDependency(lazyResource);
+    const wakeupPromise =
+      processor.dependencyExtractor.extractResourceDependency(lazyResource);
 
     while (!initStarted) {
       await Promise.resolve();
     }
 
-    store.beginCoolingDown();
+    store.admission.beginCoolingDown();
     releaseInit();
 
     await expect(wakeupPromise).rejects.toThrow(
@@ -93,7 +94,7 @@ describe("DependencyProcessor lazy shutdown regressions", () => {
     );
 
     await expect(
-      processor.extractResourceDependency(lazyResource),
+      processor.dependencyExtractor.extractResourceDependency(lazyResource),
     ).rejects.toThrow(/ready exploded/);
 
     expect(ready).toHaveBeenCalledTimes(1);
@@ -139,7 +140,7 @@ describe("DependencyProcessor lazy shutdown regressions", () => {
     );
 
     await expect(
-      processor.extractResourceDependency(lazyResource),
+      processor.dependencyExtractor.extractResourceDependency(lazyResource),
     ).rejects.toThrow(/ready exploded/);
     expect(dispose).toHaveBeenCalledTimes(1);
   });

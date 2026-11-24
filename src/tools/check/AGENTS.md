@@ -12,8 +12,10 @@ concise and accurate; if the guidance remains accurate, make no artificial edits
 
 ## Start Here
 
-- [engine.ts](engine.ts) defines public Match factories, `check`, option validation,
-  compiled parsers, and dispatch between schema-like parsers and patterns.
+- [engine.ts](engine.ts) exposes `check`, the `Match` facade, and delegates to:
+  - [checkOptions.ts](checkOptions.ts): option validation, `maxDepth` parsing, default error policy resolution, and schema-like detection.
+  - [compiledSchema.ts](compiledSchema.ts): `CompiledMatchPatternSchema`, `compileMatchPattern`, and `matchTest`.
+  - [patternFactories.ts](patternFactories.ts): Match pattern builders and assertions.
 - [types.ts](types.ts) owns pattern inference and public schema/decorator contracts;
   [legacy-types.ts](legacy-types.ts) describes legacy decorator signatures.
 - [matcher.ts](matcher.ts) is a facade over [matcher](matcher): `core.ts` manages

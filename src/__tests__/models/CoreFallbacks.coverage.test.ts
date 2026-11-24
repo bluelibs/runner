@@ -27,19 +27,7 @@ describe("core fallback coverage", () => {
     const emitSpy = jest
       .spyOn(eventManager, "emit")
       .mockResolvedValue(undefined as never);
-    const facade = (
-      store as unknown as {
-        createEventManagerFacade: () => {
-          emit(
-            eventDefinition: unknown,
-            data: { value: number },
-            options: {
-              source: ReturnType<typeof runtimeSource.runtime>;
-            },
-          ): Promise<void>;
-        };
-      }
-    ).createEventManagerFacade();
+    const facade = store.bootstrap.createEventManagerFacade();
 
     await facade.emit(
       event,
@@ -64,13 +52,7 @@ describe("core fallback coverage", () => {
     jest.spyOn(registry, "resolveDefinitionId").mockReturnValue(undefined);
     store.resources.set(root.id, rootEntry as never);
 
-    expect(
-      (
-        store as unknown as {
-          resolveRootEntry: (rootDefinition: unknown) => unknown;
-        }
-      ).resolveRootEntry(root),
-    ).toBe(rootEntry);
+    expect(store.bootstrap.resolveRootEntry(root)).toBe(rootEntry);
 
     const unresolvedDefinition = { id: "", path: "keep-original-path" };
     expect(toCanonicalDefinitionFromStore(store, unresolvedDefinition)).toBe(

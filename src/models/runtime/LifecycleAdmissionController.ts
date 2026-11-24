@@ -53,6 +53,16 @@ export class LifecycleAdmissionController {
     );
   }
 
+  public isDisposalStarted(): boolean {
+    return (
+      this.phase === RuntimeLifecyclePhase.CoolingDown ||
+      this.phase === RuntimeLifecyclePhase.Disposing ||
+      this.phase === RuntimeLifecyclePhase.Aborting ||
+      this.phase === RuntimeLifecyclePhase.Drained ||
+      this.phase === RuntimeLifecyclePhase.Disposed
+    );
+  }
+
   public beginPausing(): void {
     if (this.phase !== RuntimeLifecyclePhase.Running) {
       return;
