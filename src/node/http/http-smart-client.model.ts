@@ -17,7 +17,6 @@ import {
   postJson,
   postMultipart,
   postOctetStream,
-  rethrowTyped,
 } from "./http-smart-client.transport";
 
 export interface HttpSmartClientAuthConfig {
@@ -54,6 +53,20 @@ export interface HttpSmartClient {
     payload?: P,
     options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<P>;
+}
+
+function rethrowTyped(
+  registry: Map<string, IErrorHelper<any>> | undefined,
+  error: unknown,
+): never {
+  if (registry && error && typeof error === "object") {
+    const err = error as { id?: unknown; data?: unknown };
+    if (err.id && err.data) {
+      const helper = registry.get(String(err.id));
+      if (helper) helper.throw(err.data);
+    }
+  }
+  throw error;
 }
 
 /**
