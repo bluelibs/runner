@@ -12,8 +12,10 @@ lane topology, retries, and serving policies are owned by sibling modules.
 
 ## Start Here
 
-- [http-smart-client.model.ts](http-smart-client.model.ts): Node request transport,
-  JSON/multipart/octet-stream requests, response streams, and typed error mapping.
+- [http-smart-client.model.ts](http-smart-client.model.ts): Node smart client facade,
+  delegating request/response transport to
+  [http-smart-client.transport.ts](http-smart-client.transport.ts) and multipart
+  stream encoding to [http-smart-client.multipart.ts](http-smart-client.multipart.ts).
 - [http-mixed-client.ts](http-mixed-client.ts): task transport selection.
 - [nodeFileDetection.ts](nodeFileDetection.ts): Node-readable/file detection.
 - [http-smart-client.factory.resource.ts](http-smart-client.factory.resource.ts) and

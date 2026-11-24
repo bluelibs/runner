@@ -1,3 +1,4 @@
+import { normalizeError } from "../../tools/normalizeError";
 import type { Logger } from "../../models/Logger";
 import type { EventLanesResolvedBinding } from "./EventLanesInternals";
 import type { EventLaneMessage } from "./types";
@@ -25,7 +26,7 @@ export async function handleEventLaneConsumerFailure({
   logger,
   delay,
 }: HandleEventLaneConsumerFailureInput): Promise<void> {
-  const consumerError = toError(error);
+  const consumerError = normalizeError(error);
   const isPermanentFailure = isPermanentEventLaneFailure(error);
   const configuredMaxAttempts = binding.maxAttempts ?? 1;
 
@@ -120,10 +121,6 @@ async function tryRetry({
     },
   );
   return true;
-}
-
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }
 
 function isPermanentEventLaneFailure(error: unknown): boolean {

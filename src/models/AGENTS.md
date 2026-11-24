@@ -14,8 +14,9 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `store/Store.ts` is the registry and lifecycle facade; see `store/AGENTS.md`.
 - `DependencyProcessor.ts` coordinates dependency-computation order and exposes
   `resourceInitializer`, `dependencyExtractor`, `hookEventBuffer`, and
-  `resourceScheduler` directly. `HookEventBuffer` owns listener attachment and
-  buffered hook flush.
+  `resourceScheduler` directly. `dependency-processor/` splits extraction
+  (`ResourceDependencyWrapper`, `TagDependencyBuilder`), `HookEventBuffer`
+  (listener attachment and flush), and `ResourceScheduler`.
 - `TaskRunner.ts` owns admission, health checks, execution context, and composed
   task runner caching. `task-runner/TaskHealthPolicyChecker.ts` implements the
   `failWhenUnhealthy` gate.
@@ -37,7 +38,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
   `utils/` supplies dependency graphs and disposal ordering.
 - `validators/` owns boot-time constraints through the store validator.
 - `ExecutionContextStore.ts` tracks execution frames and signals via the
-  platform abstraction. `RuntimeCallSourceStore.ts` tracks who initiated work.
+  platform abstraction, delegating recording tree state and ALS snapshots to
+  `execution-context/recording.ts`. `RuntimeCallSourceStore.ts` tracks who initiated work.
 - `ExecutionJournal.ts` stores typed, identity-keyed metadata for one execution
   tree; forwarded journals deliberately share state with nested task calls.
 - `runtime-inspector/` builds runtime inspection views; `HealthReporter.ts`

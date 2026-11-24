@@ -5,7 +5,6 @@ import {
   isHook,
   isOptional,
   isResource,
-  isResourceWithConfig,
   isResourceMiddleware,
   isTag,
   isTagStartup,
@@ -24,6 +23,7 @@ import {
   extractRequestedId,
   resolveCanonicalIdFromStore,
 } from "../store/StoreLookup";
+import { readDefinitionSourceId } from "./readDefinitionSourceId";
 
 type DependencyTraversalState = {
   resourceIds: Set<string>;
@@ -35,29 +35,6 @@ type ResourceDependencyCollectionOptions = {
   includeTransitiveResourceDependencies?: boolean;
   targetSet?: Set<string>;
 };
-
-function readDefinitionSourceId(value: unknown): string | undefined {
-  if (typeof value === "string" && value.length > 0) {
-    return value;
-  }
-
-  if (isResourceWithConfig(value)) {
-    return value.resource.id;
-  }
-
-  if (
-    ((typeof value === "object" && value !== null) ||
-      typeof value === "function") &&
-    "id" in value
-  ) {
-    const sourceId = (value as { id?: unknown }).id;
-    if (typeof sourceId === "string" && sourceId.length > 0) {
-      return sourceId;
-    }
-  }
-
-  return undefined;
-}
 
 export class ResourceScheduler {
   constructor(

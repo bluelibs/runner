@@ -2,6 +2,17 @@ import type { IncomingHttpHeaders } from "http";
 import { PassThrough } from "node:stream";
 import * as Busboy from "busboy";
 import type { FileInfo, FieldInfo } from "busboy";
+import type { SerializerLike } from "../../serializer";
+import {
+  genericError,
+  nodeExposureMultipartLimitExceededError,
+} from "../../errors";
+// Import with explicit .ts extension to prevent tsup from resolving it
+// via the native-node-modules plugin (which looks for paths ending in .node)
+import { NodeInputFile } from "../files/inputFile.model";
+import type { InputFileMeta, RunnerFileSentinel } from "../../types/inputFile";
+import { jsonErrorResponse } from "./httpResponse";
+import type { JsonResponse } from "./types";
 
 interface BusboyInstance extends NodeJS.WritableStream {
   on(
@@ -45,22 +56,13 @@ function resolveBusboyFactory(moduleValue: unknown): BusboyFactory {
       return defaultExport;
     }
   }
-  throw new Error("Invalid Busboy module shape");
+  return genericError.throw({ message: "Invalid Busboy module shape" });
 }
 
 const busboyFactory: BusboyFactory = (cfg) => {
   const factory = resolveBusboyFactory(Busboy);
   return factory(cfg);
 };
-
-import type { SerializerLike } from "../../serializer";
-import { nodeExposureMultipartLimitExceededError } from "../../errors";
-// Import with explicit .ts extension to prevent tsup from resolving it
-// via the native-node-modules plugin (which looks for paths ending in .node)
-import { NodeInputFile } from "../files/inputFile.model";
-import type { InputFileMeta, RunnerFileSentinel } from "../../types/inputFile";
-import { jsonErrorResponse } from "./httpResponse";
-import type { JsonResponse } from "./types";
 
 interface MultipartFinalizeOk {
   ok: true;
