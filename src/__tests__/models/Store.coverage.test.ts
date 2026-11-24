@@ -210,11 +210,9 @@ describe("Store coverage", () => {
   it("resolves aliased roots and preserves the defensive fallback after validation errors", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
-    const resolveRootEntry = (
-      store as unknown as {
-        resolveRootEntry: (rootDefinition: unknown) => unknown;
-      }
-    ).resolveRootEntry.bind(store);
+    const resolveRootEntry = store.bootstrap.resolveRootEntry.bind(
+      store.bootstrap,
+    );
     const root = defineResource({
       id: "store-coverage-aliased-root",
     });
@@ -268,27 +266,23 @@ describe("Store coverage", () => {
 
     store.storeGenericItem(event);
 
-    const facade = (
-      store as unknown as {
-        createEventManagerFacade: () => {
-          enterShutdownLockdown(): void;
-          lock(): void;
-          emitLifecycle(
-            eventDefinition: unknown,
-            data: { value: number },
-            sourceDefinition: unknown,
-          ): Promise<unknown>;
-          emitWithResult(
-            eventDefinition: unknown,
-            data: { value: number },
-            sourceDefinition: unknown,
-          ): Promise<{ value: number }>;
-          addListener(eventDefinitions: unknown[], eventHandler: unknown): void;
-          hasListeners(eventDefinition: unknown): boolean;
-          readonly isLocked: boolean;
-        };
-      }
-    ).createEventManagerFacade();
+    const facade = store.bootstrap.createEventManagerFacade() as unknown as {
+      enterShutdownLockdown(): void;
+      lock(): void;
+      emitLifecycle(
+        eventDefinition: unknown,
+        data: { value: number },
+        sourceDefinition: unknown,
+      ): Promise<unknown>;
+      emitWithResult(
+        eventDefinition: unknown,
+        data: { value: number },
+        sourceDefinition: unknown,
+      ): Promise<{ value: number }>;
+      addListener(eventDefinitions: unknown[], eventHandler: unknown): void;
+      hasListeners(eventDefinition: unknown): boolean;
+      readonly isLocked: boolean;
+    };
 
     const shutdownSpy = jest.spyOn(eventManager, "enterShutdownLockdown");
     const lockSpy = jest.spyOn(eventManager, "lock");
@@ -339,13 +333,7 @@ describe("Store coverage", () => {
 
     store.storeGenericItem(event);
     const canonicalId = store.findIdByDefinition(event);
-    const facade = (
-      store as unknown as {
-        createEventManagerFacade: () => {
-          hasListeners(eventDefinition: unknown): boolean;
-        };
-      }
-    ).createEventManagerFacade();
+    const facade = store.bootstrap.createEventManagerFacade();
 
     jest.spyOn(store.events, "get").mockImplementation((eventId) => {
       if (eventId === canonicalId) {

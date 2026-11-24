@@ -12,13 +12,15 @@ import { ForceDisposalController } from "./ForceDisposalController";
 import { runtimeShutdownAbortReason } from "./runtimeShutdownAbortReason";
 
 type LifecycleStore = {
-  beginCoolingDown(): void;
-  beginDisposing(): void;
-  beginAborting(): void;
+  admission: {
+    beginCoolingDown(): void;
+    beginDisposing(): void;
+    beginAborting(): void;
+    beginDrained(): void;
+    waitForDrain(timeoutMs: number): Promise<boolean>;
+    abortInFlightTaskSignals(reason: string): void;
+  };
   cooldown(options?: { shouldStop?: () => boolean }): Promise<void>;
-  beginDrained(): void;
-  waitForDrain(timeoutMs: number): Promise<boolean>;
-  abortInFlightTaskSignals(reason: string): void;
   resolveRegisteredDefinition<TDefinition extends RegisterableItem>(
     definition: TDefinition,
   ): TDefinition;
@@ -65,7 +67,7 @@ export async function runShutdownDisposalLifecycle(
     return;
   }
 
-  input.store.beginCoolingDown();
+  input.store.admission.beginCoolingDown();
 
   await input.store.cooldown({
     shouldStop: () => input.forceDisposal.isRequested,
@@ -87,7 +89,7 @@ export async function runShutdownDisposalLifecycle(
 
   // Freeze admissions only after all cooldown hooks had a chance to stop ingress
   // and register any shutdown-specific source allowances.
-  input.store.beginDisposing();
+  input.store.admission.beginDisposing();
   if (input.forceDisposal.isRequested) {
     await disposeImmediately(input);
     return;
@@ -120,7 +122,7 @@ export async function runShutdownDisposalLifecycle(
   let abortWaitResult: ShutdownDrainWaitResult = { completed: false };
 
   if (drainWaitResult.completed && drainWaitResult.drained === false) {
-    input.store.beginAborting();
+    input.store.admission.beginAborting();
     await emitLifecycleEvent(
       input.store,
       input.eventManager,
@@ -128,7 +130,7 @@ export async function runShutdownDisposalLifecycle(
       input.runtimeLifecycleSource,
     );
 
-    input.store.abortInFlightTaskSignals(runtimeShutdownAbortReason);
+    input.store.admission.abortInFlightTaskSignals(runtimeShutdownAbortReason);
     if (input.forceDisposal.isRequested) {
       await disposeImmediately(input);
       return;
@@ -179,7 +181,7 @@ export async function runShutdownDisposalLifecycle(
     }
   }
 
-  input.store.beginDrained();
+  input.store.admission.beginDrained();
   await emitLifecycleEvent(
     input.store,
     input.eventManager,
@@ -261,19 +263,22 @@ async function waitForDrainWithinBudget(
   if (effectiveDrainBudgetMs <= 0) {
     return {
       completed: true,
-      drained: await waitForDisposeDrainBudget(store, 0),
+      drained: await waitForDisposeDrainBudget(store.admission, 0),
     };
   }
 
   return {
     completed: true,
-    drained: await waitForDisposeDrainBudget(store, effectiveDrainBudgetMs),
+    drained: await waitForDisposeDrainBudget(
+      store.admission,
+      effectiveDrainBudgetMs,
+    ),
   };
 }
 
 async function disposeImmediately(
   input: ShutdownDisposalLifecycleInput,
 ): Promise<void> {
-  input.store.beginDisposing();
+  input.store.admission.beginDisposing();
   await input.disposeAll();
 }

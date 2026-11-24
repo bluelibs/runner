@@ -61,7 +61,7 @@ describe("DependencyProcessor parallel init internals", () => {
       ResourceLifecycleMode.Parallel,
     ) as any;
 
-    await processor.initializeUninitializedResourcesParallel();
+    await processor.resourceScheduler.initializeUninitializedResourcesParallel();
 
     expect(recordInitWaveSpy).toHaveBeenCalledTimes(2);
     expect(recordInitWaveSpy.mock.calls[0]?.[0]).toEqual(
@@ -105,7 +105,7 @@ describe("DependencyProcessor parallel init internals", () => {
     ) as any;
 
     await expect(
-      processor.initializeUninitializedResourcesParallel(),
+      processor.resourceScheduler.initializeUninitializedResourcesParallel(),
     ).rejects.toThrow(
       "Could not schedule pending resources for initialization in parallel mode.",
     );
@@ -151,7 +151,7 @@ describe("DependencyProcessor parallel init internals", () => {
     ) as any;
 
     jest
-      .spyOn(processor, "ensureResourceInitialized")
+      .spyOn(processor.resourceInitializer, "ensureResourceInitialized")
       .mockImplementation(async (resource: any) => {
         if (resource.resource.id === first.id) {
           throw "non-error rejection";
@@ -161,7 +161,7 @@ describe("DependencyProcessor parallel init internals", () => {
 
     let caught: unknown;
     try {
-      await processor.initializeUninitializedResourcesParallel();
+      await processor.resourceScheduler.initializeUninitializedResourcesParallel();
     } catch (error: unknown) {
       caught = error;
     }
@@ -194,7 +194,7 @@ describe("DependencyProcessor parallel init internals", () => {
     ) as any;
 
     const initializeUninitializedResourcesParallelSpy = jest.spyOn(
-      processor,
+      processor.resourceScheduler,
       "initializeUninitializedResourcesParallel",
     );
 
@@ -279,7 +279,8 @@ describe("DependencyProcessor parallel init internals", () => {
         return originalGet(resourceId as any) as any;
       });
 
-    const required = processor.collectStartupRequiredResourceIds();
+    const required =
+      processor.resourceScheduler.collectStartupRequiredResourceIds();
     expect(required.has(existing.id)).toBe(true);
     expect(required.has(missing.id)).toBe(false);
   });
@@ -350,7 +351,8 @@ describe("DependencyProcessor parallel init internals", () => {
       true,
     ) as any;
 
-    const required = processor.collectStartupRequiredResourceIds();
+    const required =
+      processor.resourceScheduler.collectStartupRequiredResourceIds();
     expect(required.has(consumer.id)).toBe(true);
     expect(required.has(taggedResource.id)).toBe(true);
     expect(required.has(nestedTaskResource.id)).toBe(true);
@@ -621,7 +623,8 @@ describe("DependencyProcessor parallel init internals", () => {
       true,
     ) as any;
 
-    const required = processor.collectStartupRequiredResourceIds();
+    const required =
+      processor.resourceScheduler.collectStartupRequiredResourceIds();
     expect(required.has(consumer.id)).toBe(true);
     expect(required.has(taggedResource.id)).toBe(true);
     expect(required.has(taskDependencyResource.id)).toBe(true);
@@ -696,7 +699,8 @@ describe("DependencyProcessor parallel init internals", () => {
       true,
     ) as any;
 
-    const required = processor.collectStartupRequiredResourceIds();
+    const required =
+      processor.resourceScheduler.collectStartupRequiredResourceIds();
     expect(required.has(missingRequiredResource.id)).toBe(true);
     expect(required.has(missingOptionalResource.id)).toBe(false);
   });

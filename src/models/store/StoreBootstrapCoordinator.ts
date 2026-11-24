@@ -28,6 +28,7 @@ import { TaskRunner } from "../TaskRunner";
 import { StoreLookup, resolveRequestedIdFromStore } from "./StoreLookup";
 import { StoreRegistry } from "./StoreRegistry";
 import { StoreValidator } from "./StoreValidator";
+import { StoreLifecycleCoordinator } from "./StoreLifecycleCoordinator";
 
 type StoreBootstrapState = {
   readonly eventManager: EventManager;
@@ -40,10 +41,8 @@ type StoreBootstrapState = {
   readonly resources: Map<string, ResourceStoreElementType>;
   readonly lookup: StoreLookup;
   readonly validator: StoreValidator;
+  readonly lifecycle: StoreLifecycleCoordinator;
   getTaskRunner: () => TaskRunner | undefined;
-  isInitialized: () => boolean;
-  markInitialized: () => void;
-  recordResourceInitialized: (resourceId: string) => void;
   resolveStoreResource: () => unknown;
   resolveRegisteredDefinition: <TDefinition extends RegisterableItem>(
     definition: TDefinition,
@@ -51,6 +50,8 @@ type StoreBootstrapState = {
 };
 
 export class StoreBootstrapCoordinator {
+  private isInitialized = false;
+
   constructor(private readonly state: StoreBootstrapState) {}
 
   public initializeStore(
@@ -63,7 +64,7 @@ export class StoreBootstrapCoordinator {
       identity?: IdentityAsyncContext | null;
     },
   ): ResourceStoreElementType {
-    if (this.state.isInitialized()) {
+    if (this.isInitialized) {
       storeAlreadyInitializedError.throw();
     }
 
@@ -89,7 +90,7 @@ export class StoreBootstrapCoordinator {
       );
     }
 
-    this.state.markInitialized();
+    this.isInitialized = true;
     return rootEntry;
   }
 
@@ -133,7 +134,7 @@ export class StoreBootstrapCoordinator {
 
       entry.value = value;
       entry.isInitialized = true;
-      this.state.recordResourceInitialized(entry.resource.id);
+      this.state.lifecycle.recordResourceInitialized(entry.resource.id);
     }
   }
 

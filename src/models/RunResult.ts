@@ -703,7 +703,7 @@ export class RunResult<V> implements IInspectableRuntime<V> {
     if (options.force) {
       this.requestForceDispose();
 
-      const phase = this.store.getLifecycleAdmissionController().getPhase();
+      const phase = this.store.admission.getPhase();
       if (
         phase === RuntimeLifecyclePhase.Disposing ||
         phase === RuntimeLifecyclePhase.Aborting ||
@@ -713,7 +713,7 @@ export class RunResult<V> implements IInspectableRuntime<V> {
         // any drain wait immediately, but it must not skip ahead and mutate the
         // store phase here. The lifecycle runner remains the single place that
         // decides when coolingDown transitions into disposing.
-        this.store.cancelDrainWaiters();
+        this.store.admission.cancelDrainWaiters();
       }
     }
 
@@ -726,7 +726,7 @@ export class RunResult<V> implements IInspectableRuntime<V> {
     // Even a first-call force dispose still enters the shared shutdown story
     // here so cooldown hooks can register shutdown-specific admission targets
     // before the lifecycle decides which remaining waits to skip.
-    this.store.beginCoolingDown();
+    this.store.admission.beginCoolingDown();
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())

@@ -1,17 +1,8 @@
 import { defineResource, defineTag, defineTask } from "../../define";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { DependencyExtractor } from "../../models/dependency-processor/DependencyExtractor";
-import { ResourceStoreElementType } from "../../types/storeTypes";
 import { createTestFixture } from "../test-utils";
 import { globalResources } from "../../globals/globalResources";
-
-class TestDependencyProcessor extends DependencyProcessor {
-  public processResourceDependenciesForTest(
-    resource: ResourceStoreElementType<any, any, any>,
-  ) {
-    return this.processResourceDependencies(resource);
-  }
-}
 
 describe("DependencyProcessor zero-dependency caching", () => {
   it("does not recompute dependencies for a zero-dependency resource once computed", async () => {
@@ -26,18 +17,25 @@ describe("DependencyProcessor zero-dependency caching", () => {
 
     store.storeGenericItem(resource);
 
-    const processor = new TestDependencyProcessor(
+    const processor = new DependencyProcessor(
       store,
       eventManager,
       taskRunner,
       logger,
     );
 
-    const extractDependenciesSpy = jest.spyOn(processor, "extractDependencies");
+    const extractDependenciesSpy = jest.spyOn(
+      processor.dependencyExtractor,
+      "extractDependencies",
+    );
     const storeElement = store.resources.get(resource.id)!;
 
-    await processor.processResourceDependenciesForTest(storeElement);
-    await processor.processResourceDependenciesForTest(storeElement);
+    await processor.resourceInitializer.processResourceDependencies(
+      storeElement,
+    );
+    await processor.resourceInitializer.processResourceDependencies(
+      storeElement,
+    );
 
     expect(extractDependenciesSpy).toHaveBeenCalledTimes(1);
   });
@@ -64,14 +62,16 @@ describe("DependencyProcessor zero-dependency caching", () => {
     store.storeGenericItem(dependencyTask);
     store.storeGenericItem(consumerResource);
 
-    const processor = new TestDependencyProcessor(
+    const processor = new DependencyProcessor(
       store,
       eventManager,
       taskRunner,
       logger,
     );
     const storeElement = store.resources.get(consumerResource.id)!;
-    await processor.processResourceDependenciesForTest(storeElement);
+    await processor.resourceInitializer.processResourceDependencies(
+      storeElement,
+    );
 
     const wrappedTaskDependency = (
       storeElement.computedDependencies as {
@@ -120,7 +120,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
 
     store.storeGenericItem(resource);
 
-    const processor = new TestDependencyProcessor(
+    const processor = new DependencyProcessor(
       store,
       eventManager,
       taskRunner,
@@ -128,8 +128,8 @@ describe("DependencyProcessor zero-dependency caching", () => {
     );
 
     const [v1, v2] = await Promise.all([
-      processor.extractResourceDependency(resource),
-      processor.extractResourceDependency(resource),
+      processor.dependencyExtractor.extractResourceDependency(resource),
+      processor.dependencyExtractor.extractResourceDependency(resource),
     ]);
 
     expect(v1).toBe("ready");

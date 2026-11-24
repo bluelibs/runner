@@ -98,7 +98,8 @@ export class TaskMiddlewareComposer {
       const journal = options?.journal ?? new ExecutionJournalImpl();
       const cleanupTrackedTaskAbortController = retainActiveTaskAbortController(
         journal,
-        (controller) => this.store.trackTaskAbortController(controller),
+        (controller) =>
+          this.store.admission.trackTaskAbortController(controller),
       );
       const cleanupCallerSignal = setTaskCallerSignal(journal, options?.signal);
       const executionSource = options?.source ?? internalTaskRunnerSource;

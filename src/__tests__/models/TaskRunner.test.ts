@@ -351,7 +351,7 @@ describe("TaskRunner", () => {
       isInitialized: false,
     });
 
-    store.enterShutdownLockdown();
+    store.admission.beginDisposing();
 
     await expect(taskRunner.run(task)).rejects.toThrow(
       "Runtime is shutting down and no new task runs or event emissions are accepted.",

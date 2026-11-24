@@ -250,7 +250,7 @@ describe("Store disposal regressions", () => {
     store.storeGenericItem(resource);
     store.resources.get(resource.id)!.isInitialized = true;
     store.recordResourceInitialized(resource.id);
-    store.beginCoolingDown();
+    store.admission.beginCoolingDown();
 
     await expect(store.readyResource(resource.id)).rejects.toThrow(
       /cannot be lazy-initialized because shutdown has already started/i,

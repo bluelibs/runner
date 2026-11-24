@@ -1,6 +1,7 @@
 import type { IEventEmission } from "../../defs";
 import { hookEventBufferFlushAbortedError } from "../../errors";
 import { EventManager } from "../EventManager";
+import type { Store } from "../store/Store";
 import {
   HookDependencyState,
   HookStoreElementType,
@@ -16,6 +17,62 @@ export class HookEventBuffer {
     private readonly eventManager: EventManager,
     private readonly executionContextStore: ExecutionContextStore,
   ) {}
+
+  /**
+   * Attaches listeners for all registered hooks, buffering emissions until dependencies are ready.
+   */
+  attachListeners(store: Store): void {
+    for (const hookStoreElement of store.hooks.values()) {
+      const hook = hookStoreElement.hook;
+      if (hook.on) {
+        const handler = async (receivedEvent: IEventEmission<any>) => {
+          if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {
+            this.enqueue(hook.id, receivedEvent);
+            return;
+          }
+          await this.flush(hookStoreElement);
+          return this.eventManager.executeHookWithInterceptors(
+            hook,
+            receivedEvent,
+            hookStoreElement.computedDependencies,
+          );
+        };
+
+        const order = hook.order ?? 0;
+        const hookListenerId = hook.id;
+
+        if (hook.on === "*") {
+          this.eventManager.addGlobalListener(handler, {
+            order,
+            id: hookListenerId,
+          });
+        } else {
+          const resolvedEvents = store
+            .resolveHookTargets(hook)
+            .map((entry) => entry.event);
+
+          if (resolvedEvents.length === 0) {
+            // Selector-based hooks may resolve to no visible events after
+            // bootstrap narrowing, in which case no listener should be attached.
+            continue;
+          }
+
+          if (resolvedEvents.length === 1) {
+            this.eventManager.addListener(resolvedEvents[0], handler, {
+              order,
+              id: hookListenerId,
+            });
+            continue;
+          }
+
+          this.eventManager.addListener(resolvedEvents, handler, {
+            order,
+            id: hookListenerId,
+          });
+        }
+      }
+    }
+  }
 
   enqueue(hookId: string, event: IEventEmission<any>): void {
     const queue = this.pendingHookEvents.get(hookId);

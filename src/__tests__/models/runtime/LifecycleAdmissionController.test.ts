@@ -263,4 +263,27 @@ describe("LifecycleAdmissionController", () => {
     releaseC();
     expect(() => releaseB()).not.toThrow();
   });
+
+  it("reports isDisposalStarted only once coolingDown or later begins", () => {
+    const controller = new LifecycleAdmissionController();
+    expect(controller.isDisposalStarted()).toBe(false);
+
+    controller.beginPausing();
+    expect(controller.isDisposalStarted()).toBe(false);
+
+    controller.beginCoolingDown();
+    expect(controller.isDisposalStarted()).toBe(true);
+
+    controller.beginDisposing();
+    expect(controller.isDisposalStarted()).toBe(true);
+
+    controller.beginAborting();
+    expect(controller.isDisposalStarted()).toBe(true);
+
+    controller.beginDrained();
+    expect(controller.isDisposalStarted()).toBe(true);
+
+    controller.markDisposed();
+    expect(controller.isDisposalStarted()).toBe(true);
+  });
 });

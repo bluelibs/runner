@@ -20,13 +20,15 @@ function createController() {
 
   const controller = createRunShutdownController({
     store: {
-      beginCoolingDown: jest.fn(),
-      beginDisposing: jest.fn(),
-      beginAborting: jest.fn(),
+      admission: {
+        beginCoolingDown: jest.fn(),
+        beginDisposing: jest.fn(),
+        beginAborting: jest.fn(),
+        beginDrained: jest.fn(),
+        waitForDrain: jest.fn(async () => true),
+        abortInFlightTaskSignals: jest.fn(),
+      },
       cooldown: jest.fn(async () => undefined),
-      beginDrained: jest.fn(),
-      waitForDrain: jest.fn(async () => true),
-      abortInFlightTaskSignals: jest.fn(),
       resolveRegisteredDefinition: jest.fn((definition) => definition),
       dispose: jest.fn(async () => undefined),
     },

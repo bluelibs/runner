@@ -12,9 +12,10 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 - `../run.ts` constructs services and coordinates startup and shutdown.
 - `store/Store.ts` is the registry and lifecycle facade; see `store/AGENTS.md`.
-- `DependencyProcessor.ts` computes dependencies and initializes resources.
-  Its `dependency-processor/` helpers separate extraction, hook buffering, and
-  dependency-aware resource scheduling.
+- `DependencyProcessor.ts` coordinates dependency-computation order and exposes
+  `resourceInitializer`, `dependencyExtractor`, `hookEventBuffer`, and
+  `resourceScheduler` directly. `HookEventBuffer` owns listener attachment and
+  buffered hook flush.
 - `TaskRunner.ts` owns admission, health checks, execution context, and composed
   task runner caching. `task-runner/TaskHealthPolicyChecker.ts` implements the
   `failWhenUnhealthy` gate.
@@ -31,8 +32,9 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `BuiltinsRegistry.ts`, `createSyntheticFrameworkRoot.ts`, and
   `frameworkNamespaceMetaPolicy.ts` define builtin registration and ownership.
 - `OverrideManager.ts` resolves override winners before dependency wiring.
-- `ResourceInitializer.ts` creates resource context and runs middleware-wrapped
-  initialization. `utils/` supplies dependency graphs and disposal ordering.
+- `ResourceInitializer.ts` creates resource context, owns single-flight
+  resource initialization/rollback, and runs middleware-wrapped initialization.
+  `utils/` supplies dependency graphs and disposal ordering.
 - `validators/` owns boot-time constraints through the store validator.
 - `ExecutionContextStore.ts` tracks execution frames and signals via the
   platform abstraction. `RuntimeCallSourceStore.ts` tracks who initiated work.

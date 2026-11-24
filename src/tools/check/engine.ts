@@ -1,42 +1,20 @@
-import {
-  createCheckOptionsError,
-  createMatchError,
-  createMatchPatternError,
-} from "./errors";
-import { DEFAULT_MATCH_MAX_DEPTH } from "./matcher/shared";
-import {
-  getClassSchemaDefinition,
-  type MatchSchemaOptions,
-} from "./classSchema";
-import { createEsFieldDecorator, createEsSchemaDecorator } from "./decorators";
-import { hydrateMatchedValue } from "./hydration";
-import { isClassConstructor } from "../typeChecks";
+import { createMatchError } from "./errors";
 import {
   ClassPattern,
-  collectMatchFailures,
   collectMatchResult,
   isPlainObject,
-  LazyPattern,
   matchAnyToken,
   matchEmailToken,
-  matchIsoDateStringToken,
   matchIntegerToken,
-  matchPositiveIntegerToken,
+  matchIsoDateStringToken,
   matchNonEmptyStringToken,
+  matchPositiveIntegerToken,
   matchUrlToken,
   matchUuidToken,
-  MapOfPattern,
   MaybePattern,
-  NonEmptyArrayPattern,
   ObjectIncludingPattern,
-  ObjectStrictPattern,
   OneOfPattern,
   OptionalPattern,
-  RangePattern,
-  RegExpPattern,
-  WithErrorPolicyPattern,
-  WithMessagePattern,
-  WherePattern,
 } from "./matcher";
 import { matchToJsonSchema } from "./toJsonSchema";
 import type {
@@ -47,233 +25,38 @@ import type {
   InferCheckSchema,
   InferMatchPattern,
   MatchCompiledSchema,
-  MatchMessageDescriptor,
-  MatchMessageOptions,
   MatchJsonSchema,
   MatchPattern,
-  MatchPropertyDecorator,
-  MatchSchemaDecorator,
   MatchToJsonSchemaOptions,
 } from "./types";
-import { getMatchRangePatternError } from "./matcher/definitions/helpers";
+import {
+  type CheckOptions,
+  type MatchCompileOptions,
+  isCheckSchemaLike,
+  readOptions,
+  resolveDefaultCollectAll,
+} from "./checkOptions";
+import { compileMatchPattern, matchTest } from "./compiledSchema";
+import {
+  arrayOf,
+  assertPattern,
+  fieldDecorator,
+  fromSchema,
+  lazyPattern,
+  mapOf,
+  nonEmptyArray,
+  objectStrict,
+  rangePattern,
+  regexpPattern,
+  schemaDecorator,
+  where,
+  withErrorPolicyPattern,
+  withMessage,
+} from "./patternFactories";
 
-export interface CheckOptions {
-  errorPolicy?: "first" | "all";
-  /** @deprecated Use errorPolicy instead. */
-  throwAllErrors?: boolean;
-  /**
-   * Maximum pattern-matching recursion depth before matching aborts with
-   * `checkMaxDepthExceededError`. Defaults to 1000. Use `Infinity` to disable.
-   */
-  maxDepth?: number;
-}
+export type { CheckOptions, MatchCompileOptions } from "./checkOptions";
 
-export interface MatchCompileOptions {
-  /**
-   * Maximum pattern-matching recursion depth before matching aborts with
-   * `checkMaxDepthExceededError`. Defaults to 1000. Use `Infinity` to disable.
-   */
-  maxDepth?: number;
-}
-
-type WherePredicate = (value: unknown) => boolean;
-type WhereTypeGuard<TGuarded> = (value: unknown) => value is TGuarded;
 type NoInfer<T> = [T][T extends any ? 0 : never];
-
-function assertPattern(condition: boolean, message: string): void {
-  if (!condition) throw createMatchPatternError(message);
-}
-
-type ResolvedCheckOptions = {
-  errorPolicy?: "first" | "all";
-  hasExplicitPolicy: boolean;
-  maxDepth?: number;
-};
-
-function resolveMaxDepth(maxDepth: unknown): number | undefined {
-  if (maxDepth === undefined) {
-    return undefined;
-  }
-  if (maxDepth === Number.POSITIVE_INFINITY) {
-    return Number.POSITIVE_INFINITY;
-  }
-  if (
-    typeof maxDepth === "number" &&
-    Number.isFinite(maxDepth) &&
-    maxDepth >= 0
-  ) {
-    return Math.floor(maxDepth);
-  }
-  throw createCheckOptionsError(
-    'check() option "maxDepth" must be a non-negative number or Infinity when provided.',
-  );
-}
-
-function readOptions(options?: CheckOptions): ResolvedCheckOptions {
-  if (options === undefined) {
-    return {
-      errorPolicy: undefined,
-      hasExplicitPolicy: false,
-      maxDepth: undefined,
-    };
-  }
-  if (!isPlainObject(options)) {
-    throw createCheckOptionsError("check() options must be a plain object.");
-  }
-
-  const maxDepth = resolveMaxDepth(
-    (options as { maxDepth?: unknown }).maxDepth,
-  );
-
-  const errorPolicy = (options as { errorPolicy?: unknown }).errorPolicy;
-  if (
-    errorPolicy !== undefined &&
-    errorPolicy !== "first" &&
-    errorPolicy !== "all"
-  ) {
-    throw createCheckOptionsError(
-      'check() option "errorPolicy" must be "first" or "all" when provided.',
-    );
-  }
-
-  const throwAllErrors = (options as { throwAllErrors?: unknown })
-    .throwAllErrors;
-  if (throwAllErrors !== undefined && typeof throwAllErrors !== "boolean") {
-    throw createCheckOptionsError(
-      'check() option "throwAllErrors" must be a boolean when provided.',
-    );
-  }
-
-  if (errorPolicy !== undefined) {
-    return { errorPolicy, hasExplicitPolicy: true, maxDepth };
-  }
-
-  if (throwAllErrors !== undefined) {
-    return {
-      errorPolicy: throwAllErrors ? "all" : "first",
-      hasExplicitPolicy: true,
-      maxDepth,
-    };
-  }
-
-  return { errorPolicy: undefined, hasExplicitPolicy: false, maxDepth };
-}
-
-function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
-  if (value === null || typeof value !== "object") return false;
-
-  // All internal Match patterns/tokens carry a `kind` string starting
-  // with "Match." — skip them so they go through the normal pattern path.
-  if (
-    "kind" in value &&
-    typeof (value as { kind: unknown }).kind === "string" &&
-    (value as { kind: string }).kind.startsWith("Match.")
-  ) {
-    return false;
-  }
-
-  const candidate = value as {
-    parse?: unknown;
-    toJSONSchema?: unknown;
-  };
-
-  if (typeof candidate.parse !== "function") return false;
-  if (
-    candidate.toJSONSchema !== undefined &&
-    typeof candidate.toJSONSchema !== "function"
-  ) {
-    return false;
-  }
-
-  // Keep plain object patterns deterministic unless the intent is explicit.
-  if (!isPlainObject(value)) return true;
-  const keys = Object.keys(value);
-  return keys.every((key) => key === "parse" || key === "toJSONSchema");
-}
-
-class CompiledMatchPatternSchema<
-  TPattern extends MatchPattern,
-> implements MatchCompiledSchema<TPattern> {
-  constructor(
-    public readonly pattern: TPattern,
-    private readonly maxDepth: number,
-  ) {}
-
-  parse(input: unknown): InferMatchPattern<TPattern> {
-    const collectAll = resolveDefaultCollectAll(this.pattern);
-    const { failures, messageOverride } = collectMatchResult(
-      input,
-      this.pattern,
-      collectAll,
-      this.maxDepth,
-    );
-    if (failures.length === 0) {
-      return hydrateMatchedValue(
-        input,
-        this.pattern,
-      ) as InferMatchPattern<TPattern>;
-    }
-    throw createMatchError(failures, messageOverride);
-  }
-
-  test(input: unknown): input is InferMatchPattern<TPattern> {
-    return (
-      collectMatchFailures(input, this.pattern, false, this.maxDepth).length ===
-      0
-    );
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this.pattern, options);
-  }
-}
-
-function compileMatchPattern<TPattern extends MatchPattern>(
-  pattern: TPattern,
-  options?: MatchCompileOptions,
-): MatchCompiledSchema<TPattern> {
-  const maxDepth =
-    resolveMaxDepth(options?.maxDepth) ?? DEFAULT_MATCH_MAX_DEPTH;
-  return Object.freeze(new CompiledMatchPatternSchema(pattern, maxDepth));
-}
-
-function resolvePatternDefaultErrorPolicy(
-  pattern: unknown,
-  depth: number = DEFAULT_MATCH_MAX_DEPTH,
-): "first" | "all" | undefined {
-  if (pattern instanceof WithErrorPolicyPattern) {
-    return pattern.errorPolicy;
-  }
-
-  if (pattern instanceof WithMessagePattern) {
-    // Depth budget: a chain of fresh WithMessage/Lazy wrappers can recurse
-    // without triggering LazyPattern's same-instance cycle guard, so bound the
-    // unwrap below the stack ceiling. Exhausted → treat as "first" and bail.
-    if (depth <= 0) return undefined;
-    return resolvePatternDefaultErrorPolicy(pattern.pattern, depth - 1);
-  }
-
-  if (pattern instanceof LazyPattern) {
-    if (depth <= 0) return undefined;
-    return resolvePatternDefaultErrorPolicy(pattern.resolve(), depth - 1);
-  }
-
-  if (pattern instanceof ClassPattern) {
-    if (pattern.options?.errorPolicy !== undefined) {
-      return pattern.options.errorPolicy;
-    }
-    if (pattern.options?.throwAllErrors !== undefined) {
-      return pattern.options.throwAllErrors ? "all" : "first";
-    }
-    return getClassSchemaDefinition(pattern.ctor).errorPolicy;
-  }
-
-  return undefined;
-}
-
-function resolveDefaultCollectAll(pattern: unknown): boolean {
-  return resolvePatternDefaultErrorPolicy(pattern) === "all";
-}
 
 export function check<TSchema extends CheckSchemaLike<unknown>>(
   value: unknown,
@@ -311,241 +94,6 @@ export function check(
   );
   if (failures.length === 0) return value;
   throw createMatchError(failures, messageOverride);
-}
-
-function matchTest<TPattern extends MatchPattern>(
-  value: unknown,
-  pattern: TPattern,
-  options?: MatchCompileOptions,
-): value is InferMatchPattern<TPattern> {
-  const maxDepth =
-    resolveMaxDepth(options?.maxDepth) ?? DEFAULT_MATCH_MAX_DEPTH;
-  return collectMatchFailures(value, pattern, false, maxDepth).length === 0;
-}
-
-function where<TGuarded>(
-  condition: WhereTypeGuard<TGuarded>,
-): WherePattern<TGuarded>;
-function where<TGuarded>(
-  condition: WhereTypeGuard<TGuarded>,
-  message: MatchMessageOptions<WherePattern<TGuarded>>,
-): WithMessagePattern<WherePattern<TGuarded>>;
-function where(condition: WherePredicate): WherePattern<unknown>;
-function where(
-  condition: WherePredicate,
-  message: MatchMessageOptions<WherePattern<unknown>>,
-): WithMessagePattern<WherePattern<unknown>>;
-function where(
-  condition: unknown,
-  message?: MatchMessageOptions<WherePattern<unknown>>,
-): WherePattern<unknown> | WithMessagePattern<WherePattern<unknown>> {
-  assertPattern(
-    typeof condition === "function",
-    "Bad pattern: Match.Where requires a function condition.",
-  );
-
-  const pattern = new WherePattern(condition as WherePredicate);
-  if (message === undefined) {
-    return pattern;
-  }
-
-  return withMessage(pattern, message);
-}
-
-function withMessage<TPattern extends MatchPattern>(
-  pattern: TPattern,
-  message: MatchMessageOptions<TPattern>,
-): WithMessagePattern<TPattern> {
-  assertPattern(
-    isValidMatchMessageValue(message),
-    "Bad pattern: Match.WithMessage value must be a string, plain object, or function.",
-  );
-  return new WithMessagePattern(pattern, message as MatchMessageOptions);
-}
-
-function isValidMatchMessageValue(value: unknown): boolean {
-  if (typeof value === "string" || typeof value === "function") {
-    return true;
-  }
-
-  return isMatchMessageDescriptor(value);
-}
-
-function isMatchMessageDescriptor(
-  value: unknown,
-): value is MatchMessageDescriptor {
-  if (!isPlainObject(value)) {
-    return false;
-  }
-
-  if (typeof value.message !== "string") {
-    return false;
-  }
-
-  if (value.code !== undefined && typeof value.code !== "string") {
-    return false;
-  }
-
-  if (value.params !== undefined && !isPlainObject(value.params)) {
-    return false;
-  }
-
-  return true;
-}
-
-function withErrorPolicyPattern<TPattern extends MatchPattern>(
-  pattern: TPattern,
-  errorPolicy: "first" | "all",
-): WithErrorPolicyPattern<TPattern> {
-  assertPattern(
-    errorPolicy === "first" || errorPolicy === "all",
-    'Bad pattern: Match.WithErrorPolicy requires "first" or "all".',
-  );
-
-  return new WithErrorPolicyPattern(pattern, errorPolicy);
-}
-
-function nonEmptyArray(): NonEmptyArrayPattern<undefined>;
-function nonEmptyArray<TPattern extends MatchPattern>(
-  pattern: TPattern,
-): NonEmptyArrayPattern<TPattern>;
-function nonEmptyArray(pattern?: MatchPattern): NonEmptyArrayPattern<unknown> {
-  return new NonEmptyArrayPattern(pattern);
-}
-
-function arrayOf<TPattern extends MatchPattern>(
-  pattern: TPattern,
-): readonly [TPattern] {
-  return [pattern] as const;
-}
-
-function regexpPattern(expression: RegExp | string): RegExpPattern<RegExp> {
-  if (typeof expression === "string") {
-    try {
-      return new RegExpPattern(new RegExp(expression));
-    } catch {
-      throw createMatchPatternError(
-        "Bad pattern: Match.RegExp requires a valid regular expression source string.",
-      );
-    }
-  }
-
-  if (expression instanceof RegExp) {
-    return new RegExpPattern(expression);
-  }
-
-  throw createMatchPatternError(
-    "Bad pattern: Match.RegExp requires a RegExp instance or source string.",
-  );
-}
-
-/**
- * Creates a numeric matcher with optional minimum/maximum bounds.
- * Use `inclusive: false` when both bounds should be strict, and `integer: true`
- * when the range should only allow integers.
- */
-function rangePattern(options: {
-  min?: number;
-  max?: number;
-  inclusive?: boolean;
-  integer?: boolean;
-}): RangePattern {
-  const optionsError = getMatchRangePatternError(options);
-  assertPattern(optionsError === null, optionsError ?? "Bad pattern.");
-  return new RangePattern(options);
-}
-
-function lazyPattern<TPattern extends MatchPattern>(
-  resolver: () => TPattern,
-): LazyPattern<TPattern> {
-  assertPattern(
-    typeof resolver === "function",
-    "Bad pattern: Match.Lazy requires a resolver function.",
-  );
-  return new LazyPattern(resolver);
-}
-
-type MatchSchemaClass = abstract new (...args: never[]) => unknown;
-type MatchSchemaResolver<TClass extends MatchSchemaClass = MatchSchemaClass> =
-  () => TClass;
-
-function resolveSchemaTarget<TClass extends MatchSchemaClass>(
-  target: TClass | MatchSchemaResolver<TClass>,
-): TClass {
-  if (isClassConstructor(target)) {
-    return target;
-  }
-
-  const resolved = target();
-  assertPattern(
-    isClassConstructor(resolved),
-    "Bad pattern: Match.fromSchema resolver must return a class constructor.",
-  );
-
-  return resolved;
-}
-
-function isSchemaTargetResolver<TClass extends MatchSchemaClass>(
-  target: TClass | MatchSchemaResolver<TClass>,
-): target is MatchSchemaResolver<TClass> {
-  return typeof target === "function" && !isClassConstructor(target);
-}
-
-function createSchemaPattern<TClass extends MatchSchemaClass>(
-  target: TClass | MatchSchemaResolver<TClass>,
-  options?: MatchSchemaOptions,
-): ClassPattern<TClass> {
-  return new ClassPattern(resolveSchemaTarget(target), options);
-}
-
-function fromSchema<TClass extends MatchSchemaClass>(
-  target: TClass,
-  options?: MatchSchemaOptions,
-): ClassPattern<TClass>;
-function fromSchema<TClass extends MatchSchemaClass>(
-  target: MatchSchemaResolver<TClass>,
-  options?: MatchSchemaOptions,
-): LazyPattern<ClassPattern<TClass>>;
-function fromSchema<TClass extends abstract new (...args: never[]) => unknown>(
-  target: TClass | MatchSchemaResolver<TClass>,
-  options?: MatchSchemaOptions,
-): ClassPattern<TClass> | LazyPattern<ClassPattern<TClass>> {
-  assertPattern(
-    typeof target === "function",
-    "Bad pattern: Match.fromSchema requires a class constructor or resolver.",
-  );
-
-  if (isSchemaTargetResolver(target)) {
-    return lazyPattern(() => createSchemaPattern(target, options));
-  }
-
-  return createSchemaPattern(target, options);
-}
-
-function schemaDecorator(options?: MatchSchemaOptions): MatchSchemaDecorator {
-  return createEsSchemaDecorator(options);
-}
-
-function fieldDecorator<TPattern extends MatchPattern>(
-  pattern: TPattern,
-): MatchPropertyDecorator {
-  return createEsFieldDecorator(pattern);
-}
-
-function mapOf<TPattern extends MatchPattern>(
-  pattern: TPattern,
-): MapOfPattern<TPattern> {
-  return new MapOfPattern(pattern);
-}
-
-function objectStrict<const TObjectPattern extends Record<string, unknown>>(
-  pattern: TObjectPattern,
-): ObjectStrictPattern<TObjectPattern> {
-  assertPattern(
-    isPlainObject(pattern),
-    "Bad pattern: Match.ObjectStrict requires a plain object pattern.",
-  );
-  return new ObjectStrictPattern(pattern);
 }
 
 export const Match = Object.freeze({

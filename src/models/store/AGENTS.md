@@ -10,16 +10,19 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 
 ## Entry Points
 
-- `Store.ts` exposes registered maps, lookup, bootstrap, lifecycle, and locks.
+- `Store.ts` exposes registered maps, `lookup`, `admission`, `bootstrap`,
+  `lifecycle`, and locks.
 - `StoreRegistry.ts` owns registry maps, definition identity/source lookup,
   ownership tracking, tags, and graph construction.
 - `StoreLookup.ts` distinguishes extracting a requested ID from finding a
   registered canonical ID. A candidate alone does not prove registration.
 - The EventManager facade also exposes dispatch-adapter installation and effective hook snapshots for Node integrations.
-- `StoreBootstrapCoordinator.ts` registers framework/app definitions, applies
-  overrides, validates, and starts dependency processing.
-- `StoreLifecycleCoordinator.ts` owns ready/cooldown/dispose waves and resource
-  lifecycle execution. Ordering helpers also live in `../utils/`.
+- `StoreBootstrapCoordinator.ts` owns store initialization state, registers
+  framework/app definitions, applies overrides, validates, and starts dependency
+  processing.
+- `StoreLifecycleCoordinator.ts` owns init/ready/dispose wave state and resource
+  lifecycle execution, delegating wave iteration to `storeLifecycleWaves.ts`.
+  Ordering helpers also live in `../utils/`.
 - `StoreValidator.ts` delegates constraints to `../validators/`.
 
 ## Registration Compiler

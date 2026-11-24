@@ -44,7 +44,7 @@ describe("Store fallback coverage", () => {
       .spyOn((store as any).lookup, "resolveCandidateId")
       .mockReturnValueOnce(null);
 
-    expect((store as any).resolveRootEntry(root)).toBe(rootEntry);
+    expect(store.bootstrap.resolveRootEntry(root)).toBe(rootEntry);
   });
 
   it("preserves unresolved definitions in canonical projection fallback", () => {
@@ -65,7 +65,7 @@ describe("Store fallback coverage", () => {
     const sourceId = { unknown: true };
 
     store.storeGenericItem(event);
-    const facade = (store as any).createEventManagerFacade() as {
+    const facade = store.bootstrap.createEventManagerFacade() as unknown as {
       emitLifecycle(
         eventDefinition: unknown,
         data: { value: number },
@@ -109,7 +109,7 @@ describe("Store fallback coverage", () => {
     });
 
     store.storeGenericItem(event);
-    const facade = (store as any).createEventManagerFacade() as {
+    const facade = store.bootstrap.createEventManagerFacade() as unknown as {
       emitWithResult(
         eventDefinition: unknown,
         data: { value: number },

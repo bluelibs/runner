@@ -416,10 +416,11 @@ describe("DependencyProcessor Consistency", () => {
       seenSources.push(received.source);
     });
 
-    const emitFromUnknownOwner = processor.extractEventDependency(
-      event,
-      "unknown-owner-id",
-    );
+    const emitFromUnknownOwner =
+      processor.dependencyExtractor.extractEventDependency(
+        event,
+        "unknown-owner-id",
+      );
 
     await emitFromUnknownOwner({ ok: true });
 
@@ -449,14 +450,13 @@ describe("DependencyProcessor Consistency", () => {
       computedDependencies: Record<string, never>;
       dependencyState: string;
     };
-    type DependencyProcessorInternals = {
-      flushBufferedHookEvents: (
-        hookStoreElement: HookStoreElementShape,
-      ) => Promise<void>;
+    type HookEventBufferInternals = {
+      flush: (hookStoreElement: HookStoreElementShape) => Promise<void>;
       pendingHookEvents: Map<string, HookEvent[]>;
       drainingHookIds: Set<string>;
     };
-    const internals = processor as unknown as DependencyProcessorInternals;
+    const internals =
+      processor.hookEventBuffer as unknown as HookEventBufferInternals;
 
     const hook = {
       id: "test-hook-flush",
@@ -468,9 +468,7 @@ describe("DependencyProcessor Consistency", () => {
       dependencyState: "pending",
     };
 
-    await expect(
-      internals.flushBufferedHookEvents(hookStoreElement),
-    ).resolves.toBeUndefined();
+    await expect(internals.flush(hookStoreElement)).resolves.toBeUndefined();
 
     hookStoreElement.dependencyState = "ready";
     internals.pendingHookEvents.set(hook.id, [
@@ -478,9 +476,7 @@ describe("DependencyProcessor Consistency", () => {
     ]);
     internals.drainingHookIds.add(hook.id);
 
-    await expect(
-      internals.flushBufferedHookEvents(hookStoreElement),
-    ).resolves.toBeUndefined();
+    await expect(internals.flush(hookStoreElement)).resolves.toBeUndefined();
     expect(internals.pendingHookEvents.get(hook.id)).toHaveLength(1);
 
     internals.drainingHookIds.delete(hook.id);
@@ -493,7 +489,7 @@ describe("DependencyProcessor Consistency", () => {
       .spyOn(eventManager, "executeHookWithInterceptors")
       .mockResolvedValue(undefined);
 
-    await internals.flushBufferedHookEvents(hookStoreElement);
+    await internals.flush(hookStoreElement);
 
     expect(executeSpy).toHaveBeenCalledTimes(1);
     expect(executeSpy).toHaveBeenCalledWith(
@@ -526,14 +522,13 @@ describe("DependencyProcessor Consistency", () => {
       computedDependencies: Record<string, never>;
       dependencyState: string;
     };
-    type DependencyProcessorInternals = {
-      flushBufferedHookEvents: (
-        hookStoreElement: HookStoreElementShape,
-      ) => Promise<void>;
+    type HookEventBufferInternals = {
+      flush: (hookStoreElement: HookStoreElementShape) => Promise<void>;
       pendingHookEvents: Map<string, HookEvent[]>;
       drainingHookIds: Set<string>;
     };
-    const internals = processor as unknown as DependencyProcessorInternals;
+    const internals =
+      processor.hookEventBuffer as unknown as HookEventBufferInternals;
 
     const hook = {
       id: "test-hook-loop",
@@ -557,9 +552,7 @@ describe("DependencyProcessor Consistency", () => {
         ]);
       });
 
-    await expect(
-      internals.flushBufferedHookEvents(hookStoreElement),
-    ).rejects.toThrow(
+    await expect(internals.flush(hookStoreElement)).rejects.toThrow(
       `Buffered hook event flush for "${hook.id}" exceeded 128 passes while runtime event cycle detection is disabled.`,
     );
 

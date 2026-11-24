@@ -1,5 +1,8 @@
 import { defineResource, defineTag } from "../../define";
-import { runtimeSource } from "../../types/runtimeSource";
+import {
+  logCooldownErrors,
+  normalizeLifecycleError,
+} from "../../models/store/storeLifecycleWaves";
 import { createTestFixture } from "../test-utils";
 
 describe("Store private seam coverage", () => {
@@ -9,8 +12,8 @@ describe("Store private seam coverage", () => {
     const privateStore = store as any;
     const registry = privateStore.registry;
     const visibilityTracker = registry.visibilityTracker;
-    const lifecycle = privateStore.lifecycleCoordinator;
-    const bootstrap = privateStore.bootstrapCoordinator;
+    const lifecycle = store.lifecycle;
+    const bootstrap = store.bootstrap;
     const taskRunner = fixture.createTaskRunner();
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
     const root = defineResource({ id: "store-private-seam-root" });
@@ -43,9 +46,7 @@ describe("Store private seam coverage", () => {
     );
     expect(store.isLocked).toBe(false);
     expect(store.getMiddlewareManager()).toBe(privateStore.middlewareManager);
-    expect(store.getLifecycleAdmissionController()).toBe(
-      privateStore.lifecycleAdmissionController,
-    );
+    expect(store.getLifecycleAdmissionController()).toBe(store.admission);
     expect(store.getExecutionContextStore()).toBe(
       privateStore.executionContextStore,
     );
@@ -74,29 +75,6 @@ describe("Store private seam coverage", () => {
     expect(store.getRootAccessInfo("a", "b")).toBe(rootAccess);
     expect(store.hasExportsDeclaration("a")).toBe(true);
 
-    jest.spyOn(lifecycle, "isInShutdownLockdown").mockReturnValue(true);
-    jest.spyOn(lifecycle, "isDisposalStarted").mockReturnValue(true);
-    jest.spyOn(lifecycle, "canAdmitTaskCall").mockReturnValue(false);
-    jest.spyOn(lifecycle, "beginDisposing").mockImplementation(() => undefined);
-    jest
-      .spyOn(lifecycle, "beginCoolingDown")
-      .mockImplementation(() => undefined);
-    jest.spyOn(lifecycle, "beginAborting").mockImplementation(() => undefined);
-    jest.spyOn(lifecycle, "beginDrained").mockImplementation(() => undefined);
-    jest.spyOn(lifecycle, "waitForDrain").mockResolvedValue(true);
-    jest
-      .spyOn(lifecycle, "trackTaskAbortController")
-      .mockReturnValue(() => undefined);
-    jest
-      .spyOn(lifecycle, "abortInFlightTaskSignals")
-      .mockImplementation(() => undefined);
-    jest
-      .spyOn(lifecycle, "cancelDrainWaiters")
-      .mockImplementation(() => undefined);
-    jest.spyOn(lifecycle, "markDisposed").mockImplementation(() => undefined);
-    jest
-      .spyOn(lifecycle, "enterShutdownLockdown")
-      .mockImplementation(() => undefined);
     jest.spyOn(lifecycle, "ready").mockResolvedValue(undefined);
     jest.spyOn(lifecycle, "readyResource").mockResolvedValue(undefined);
     jest.spyOn(lifecycle, "cooldown").mockResolvedValue(undefined);
@@ -111,21 +89,6 @@ describe("Store private seam coverage", () => {
       .mockImplementation(() => undefined);
     jest.spyOn(lifecycle, "recordInitWave").mockImplementation(() => undefined);
 
-    expect(store.isInShutdownLockdown()).toBe(true);
-    expect(store.isDisposalStarted()).toBe(true);
-    expect(store.canAdmitTaskCall(runtimeSource.runtime("x"))).toBe(false);
-    store.beginDisposing();
-    store.beginCoolingDown();
-    store.beginAborting();
-    store.beginDrained();
-    await expect(store.waitForDrain(1)).resolves.toBe(true);
-    expect(
-      store.trackTaskAbortController(new AbortController())(),
-    ).toBeUndefined();
-    store.abortInFlightTaskSignals("reason");
-    store.cancelDrainWaiters();
-    store.markDisposed();
-    store.enterShutdownLockdown();
     await expect(store.ready()).resolves.toBeUndefined();
     await expect(store.readyResource("x")).resolves.toBeUndefined();
     await expect(store.cooldown()).resolves.toBeUndefined();
@@ -141,10 +104,10 @@ describe("Store private seam coverage", () => {
       .mockReturnValue({ emit: jest.fn() } as any);
     jest.spyOn(bootstrap, "resolveRootEntry").mockReturnValue(rootEntry as any);
 
-    expect(privateStore.createEventManagerFacade().emit).toBeDefined();
-    expect(privateStore.resolveRootEntry(root)).toBe(rootEntry);
-    await expect(privateStore.cooldownWave(wave)).resolves.toEqual([]);
-    await expect(privateStore.readyWave(wave)).resolves.toBeUndefined();
+    expect(bootstrap.createEventManagerFacade().emit).toBeDefined();
+    expect(bootstrap.resolveRootEntry(root)).toBe(rootEntry);
+    await expect(lifecycle.cooldownWave(wave as any)).resolves.toEqual([]);
+    await expect(lifecycle.readyWave(wave as any)).resolves.toBeUndefined();
 
     jest
       .spyOn(privateStore.overrideManager, "processOverrides")
@@ -170,9 +133,9 @@ describe("Store private seam coverage", () => {
     const fixture = createTestFixture();
     const { store, logger } = fixture;
     const privateStore = store as any;
-    const lifecycle = privateStore.lifecycleCoordinator as any;
+    const lifecycle = store.lifecycle;
     const registry = privateStore.registry as any;
-    const controller = store.getLifecycleAdmissionController();
+    const controller = store.admission;
     const target = defineResource({ id: "store-lifecycle-target" });
     const readyResource = {
       isInitialized: true,
@@ -188,26 +151,26 @@ describe("Store private seam coverage", () => {
       context: { scope: "ctx" },
     };
 
-    expect(lifecycle.normalizeError("boom")).toBeInstanceOf(Error);
+    expect(normalizeLifecycleError("boom")).toBeInstanceOf(Error);
     const originalError = new Error("original");
-    expect(lifecycle.normalizeError(originalError)).toBe(originalError);
+    expect(normalizeLifecycleError(originalError)).toBe(originalError);
 
     jest.spyOn(logger, "warn").mockRejectedValueOnce(new Error("log-failure"));
     await expect(
-      lifecycle.logCooldownErrors([new Error("cooldown")]),
+      logCooldownErrors(logger, [new Error("cooldown")]),
     ).resolves.toBeUndefined();
 
     await expect(
-      lifecycle.runReadyResource(readyResource),
+      lifecycle.runReadyResource(readyResource as any),
     ).resolves.toBeUndefined();
     expect(readyResource.resource.ready).toHaveBeenCalledTimes(1);
     await expect(
-      lifecycle.runReadyResource(readyResource),
+      lifecycle.runReadyResource(readyResource as any),
     ).resolves.toBeUndefined();
     expect(readyResource.resource.ready).toHaveBeenCalledTimes(1);
 
     await expect(
-      lifecycle.disposeResource(readyResource),
+      lifecycle.disposeResource(readyResource as any),
     ).resolves.toBeUndefined();
     expect(readyResource.resource.dispose).toHaveBeenCalledTimes(1);
 
@@ -227,7 +190,7 @@ describe("Store private seam coverage", () => {
       );
     const allowSpy = jest.spyOn(controller, "allowShutdownResourceSource");
     await expect(
-      lifecycle.cooldownResource(readyResource),
+      lifecycle.cooldownResource(readyResource as any),
     ).resolves.toBeUndefined();
     expect(readyResource.resource.cooldown).toHaveBeenCalledTimes(1);
     expect(allowSpy).toHaveBeenNthCalledWith(1, readyResource.resource.id);
@@ -236,7 +199,7 @@ describe("Store private seam coverage", () => {
     jest.spyOn(registry, "resolveDefinitionId").mockReturnValueOnce(undefined);
     expect(() =>
       lifecycle.resolveCooldownAdmissionTargetPath(
-        readyResource.resource,
+        readyResource.resource as any,
         target,
       ),
     ).toThrow(/cooldown/i);
@@ -244,7 +207,7 @@ describe("Store private seam coverage", () => {
 
   it("waits for all parallel ready hooks to settle before surfacing a failure", async () => {
     const fixture = createTestFixture();
-    const lifecycle = (fixture.store as any).lifecycleCoordinator as any;
+    const lifecycle = fixture.store.lifecycle;
     let releaseSlowReady!: () => void;
     let slowReadyCompleted = false;
     const slowReadyGate = new Promise<void>((resolve) => {
@@ -281,7 +244,7 @@ describe("Store private seam coverage", () => {
 
     const readyWavePromise = lifecycle.readyWave({
       parallel: true,
-      resources: [fastFailingResource, slowResource],
+      resources: [fastFailingResource as any, slowResource as any],
     });
 
     const pendingState = await Promise.race([

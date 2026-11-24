@@ -18,27 +18,29 @@ function createLifecycleInput(options?: {
   );
 
   const store = {
-    beginCoolingDown: jest.fn(() => {
-      calls.push("beginCoolingDown");
-    }),
-    beginDisposing: jest.fn(() => {
-      calls.push("beginDisposing");
-    }),
-    beginAborting: jest.fn(() => {
-      calls.push("beginAborting");
-    }),
+    admission: {
+      beginCoolingDown: jest.fn(() => {
+        calls.push("beginCoolingDown");
+      }),
+      beginDisposing: jest.fn(() => {
+        calls.push("beginDisposing");
+      }),
+      beginAborting: jest.fn(() => {
+        calls.push("beginAborting");
+      }),
+      beginDrained: jest.fn(() => {
+        calls.push("beginDrained");
+      }),
+      waitForDrain: jest.fn(async () => {
+        calls.push("waitForDrain");
+        return true;
+      }),
+      abortInFlightTaskSignals: jest.fn((reason: string) => {
+        calls.push(`abort:${reason}`);
+      }),
+    },
     cooldown: jest.fn(async () => {
       calls.push("cooldown");
-    }),
-    beginDrained: jest.fn(() => {
-      calls.push("beginDrained");
-    }),
-    waitForDrain: jest.fn(async () => {
-      calls.push("waitForDrain");
-      return true;
-    }),
-    abortInFlightTaskSignals: jest.fn((reason: string) => {
-      calls.push(`abort:${reason}`);
     }),
     resolveRegisteredDefinition,
   };
@@ -150,7 +152,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
   it("switches to direct disposal when force is requested right after beginDisposing", async () => {
     const context = createLifecycleInput();
 
-    context.store.beginDisposing.mockImplementation(() => {
+    context.store.admission.beginDisposing.mockImplementation(() => {
       context.calls.push("beginDisposing");
       context.forceDisposal.request();
     });
@@ -193,7 +195,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
   it("switches to direct disposal when force is requested after drain wait", async () => {
     const context = createLifecycleInput();
 
-    context.store.waitForDrain.mockImplementation(async () => {
+    context.store.admission.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
       context.forceDisposal.request();
       return false;
@@ -219,7 +221,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain
+    context.store.admission.waitForDrain
       .mockImplementationOnce(async () => {
         context.calls.push("waitForDrain");
         return false;
@@ -254,7 +256,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain.mockImplementation(async () => {
+    context.store.admission.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
       return false;
     });
@@ -281,7 +283,9 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       "beginDisposing",
       "disposeAll",
     ]);
-    expect(context.store.abortInFlightTaskSignals).toHaveBeenCalledTimes(1);
+    expect(
+      context.store.admission.abortInFlightTaskSignals,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it("enters the abort window immediately when drain waiting is disabled", async () => {
@@ -292,7 +296,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain
+    context.store.admission.waitForDrain
       .mockImplementationOnce(async (...args: [number?]) => {
         const timeoutMs = args[0];
         context.calls.push(`waitForDrain:${timeoutMs}`);
@@ -329,7 +333,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain.mockImplementation(async () => {
+    context.store.admission.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
       return false;
     });
@@ -385,7 +389,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain.mockImplementation(async () => {
+    context.store.admission.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
       return false;
     });
@@ -415,7 +419,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain
+    context.store.admission.waitForDrain
       .mockImplementationOnce(async () => {
         context.calls.push("waitForDrain");
         return false;
@@ -450,7 +454,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain.mockImplementation(async () => {
+    context.store.admission.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
       return false;
     });
@@ -507,7 +511,9 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       `emit:${globalEvents.drained.id}`,
       "disposeAll",
     ]);
-    expect(context.store.abortInFlightTaskSignals).not.toHaveBeenCalled();
+    expect(
+      context.store.admission.abortInFlightTaskSignals,
+    ).not.toHaveBeenCalled();
   });
 
   it("still aborts in-flight task signals when drain timed out but no abort wait budget remains", async () => {
@@ -521,7 +527,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain.mockImplementation(async () => {
+    context.store.admission.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
       await new Promise((resolve) => setTimeout(resolve, 25));
       return false;
@@ -541,7 +547,9 @@ describe("runShutdownDisposalLifecycle force handling", () => {
     expect(
       context.calls.filter((call) => call === "waitForDrain"),
     ).toHaveLength(1);
-    expect(context.store.abortInFlightTaskSignals).toHaveBeenCalledTimes(1);
+    expect(
+      context.store.admission.abortInFlightTaskSignals,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it("awaits aborting hooks before continuing toward drained", async () => {
@@ -557,7 +565,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
 
     let abortingHookCompleted = false;
 
-    context.store.waitForDrain.mockImplementation(
+    context.store.admission.waitForDrain.mockImplementation(
       async (...args: [number?]) => {
         const timeoutMs = args[0];
         context.calls.push(`waitForDrain:${timeoutMs}`);
@@ -607,7 +615,7 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       },
     });
 
-    context.store.waitForDrain.mockImplementation(async () => {
+    context.store.admission.waitForDrain.mockImplementation(async () => {
       context.calls.push("waitForDrain");
       return true;
     });
@@ -624,7 +632,9 @@ describe("runShutdownDisposalLifecycle force handling", () => {
       `emit:${globalEvents.drained.id}`,
       "disposeAll",
     ]);
-    expect(context.store.abortInFlightTaskSignals).not.toHaveBeenCalled();
+    expect(
+      context.store.admission.abortInFlightTaskSignals,
+    ).not.toHaveBeenCalled();
   });
 
   it("ignores late force requests after cooldownWindowMs already finished", async () => {

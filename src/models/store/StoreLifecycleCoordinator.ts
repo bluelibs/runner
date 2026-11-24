@@ -4,7 +4,10 @@ import {
   resourceCooldownAdmissionTargetInvalidError,
 } from "../../errors";
 import type { ResourceCooldownAdmissionTargets } from "../../types/resource";
-import type { RuntimeCallSource } from "../../types/runtimeSource";
+import type {
+  IRuntimeInspectionLifecycle,
+  IRuntimeInspectionLifecycleWave,
+} from "../../types/runtimeInspection";
 import type {
   DisposeWave,
   InitWave,
@@ -16,120 +19,32 @@ import {
   getResourcesInDisposeWaves as computeDisposeWaves,
   getResourcesInReadyWaves as computeReadyWaves,
 } from "../utils/disposeOrder";
+import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
 import {
-  LifecycleAdmissionController,
-  RuntimeLifecyclePhase,
-} from "../runtime/LifecycleAdmissionController";
+  executeLifecycleWave,
+  logCooldownErrors,
+  runReadyWave,
+} from "./storeLifecycleWaves";
 
 type StoreLifecycleState = {
   readonly eventManager: EventManager;
-  readonly initWaves: InitWave[];
-  readonly initializedResourceIds: Set<string>;
-  readonly lifecycleAdmissionController: LifecycleAdmissionController;
+  readonly admission: LifecycleAdmissionController;
   readonly logger: Logger;
-  readonly readyResourceIds: Set<string>;
   readonly resources: Map<string, ResourceStoreElementType>;
-  getHasRunCooldown: () => boolean;
-  setHasRunCooldown: (value: boolean) => void;
   findIdByDefinition: (definition: unknown) => string;
   resolveDefinitionId: (reference: unknown) => string | undefined;
 };
 
+/**
+ * Owns resource initialization waves and `ready`/`cooldown`/`dispose` lifecycle choreography.
+ */
 export class StoreLifecycleCoordinator {
+  private readonly initWaves: InitWave[] = [];
+  private readonly initializedResourceIds = new Set<string>();
+  private readonly readyResourceIds = new Set<string>();
+  private hasRunCooldown = false;
+
   constructor(private readonly state: StoreLifecycleState) {}
-
-  public isInShutdownLockdown(): boolean {
-    return this.state.lifecycleAdmissionController.isShutdownLockdown();
-  }
-
-  public isDisposalStarted(): boolean {
-    const phase = this.state.lifecycleAdmissionController.getPhase();
-    return (
-      phase === RuntimeLifecyclePhase.CoolingDown ||
-      phase === RuntimeLifecyclePhase.Disposing ||
-      phase === RuntimeLifecyclePhase.Aborting ||
-      phase === RuntimeLifecyclePhase.Drained ||
-      phase === RuntimeLifecyclePhase.Disposed
-    );
-  }
-
-  public canAdmitTaskCall(source: RuntimeCallSource): boolean {
-    return this.state.lifecycleAdmissionController.canAdmitTask(source);
-  }
-
-  public beginDisposing(): void {
-    const phase = this.state.lifecycleAdmissionController.getPhase();
-    if (
-      phase === RuntimeLifecyclePhase.Disposing ||
-      phase === RuntimeLifecyclePhase.Aborting ||
-      phase === RuntimeLifecyclePhase.Drained ||
-      phase === RuntimeLifecyclePhase.Disposed
-    ) {
-      return;
-    }
-
-    this.state.lifecycleAdmissionController.beginDisposing();
-  }
-
-  public beginCoolingDown(): void {
-    const phase = this.state.lifecycleAdmissionController.getPhase();
-    if (
-      phase === RuntimeLifecyclePhase.CoolingDown ||
-      phase === RuntimeLifecyclePhase.Disposing ||
-      phase === RuntimeLifecyclePhase.Aborting ||
-      phase === RuntimeLifecyclePhase.Drained ||
-      phase === RuntimeLifecyclePhase.Disposed
-    ) {
-      return;
-    }
-
-    this.state.lifecycleAdmissionController.beginCoolingDown();
-  }
-
-  public beginAborting(): void {
-    const phase = this.state.lifecycleAdmissionController.getPhase();
-    if (
-      phase === RuntimeLifecyclePhase.Aborting ||
-      phase === RuntimeLifecyclePhase.Drained ||
-      phase === RuntimeLifecyclePhase.Disposed
-    ) {
-      return;
-    }
-
-    this.state.lifecycleAdmissionController.beginAborting();
-  }
-
-  public beginDrained(): void {
-    this.state.lifecycleAdmissionController.beginDrained();
-  }
-
-  public waitForDrain(drainingBudgetMs: number): Promise<boolean> {
-    return this.state.lifecycleAdmissionController.waitForDrain(
-      drainingBudgetMs,
-    );
-  }
-
-  public trackTaskAbortController(controller: AbortController): () => void {
-    return this.state.lifecycleAdmissionController.trackTaskAbortController(
-      controller,
-    );
-  }
-
-  public abortInFlightTaskSignals(reason: string): void {
-    this.state.lifecycleAdmissionController.abortInFlightTaskSignals(reason);
-  }
-
-  public cancelDrainWaiters(): void {
-    this.state.lifecycleAdmissionController.cancelDrainWaiters();
-  }
-
-  public markDisposed(): void {
-    this.state.lifecycleAdmissionController.markDisposed();
-  }
-
-  public enterShutdownLockdown(): void {
-    this.beginDisposing();
-  }
 
   public async dispose(): Promise<void> {
     const disposalErrors: Error[] = [];
@@ -159,12 +74,12 @@ export class StoreLifecycleCoordinator {
   }
 
   public recordResourceInitialized(resourceId: string): void {
-    if (this.state.initializedResourceIds.has(resourceId)) {
+    if (this.initializedResourceIds.has(resourceId)) {
       return;
     }
 
-    this.state.initializedResourceIds.add(resourceId);
-    this.state.initWaves.push({
+    this.initializedResourceIds.add(resourceId);
+    this.initWaves.push({
       resourceIds: [resourceId],
       parallel: false,
     });
@@ -172,30 +87,44 @@ export class StoreLifecycleCoordinator {
 
   public recordInitWave(resourceIds: readonly string[]): void {
     const uniqueResourceIds = Array.from(
-      new Set(
-        resourceIds.filter((id) => !this.state.initializedResourceIds.has(id)),
-      ),
+      new Set(resourceIds.filter((id) => !this.initializedResourceIds.has(id))),
     );
     if (uniqueResourceIds.length === 0) {
       return;
     }
 
     for (const resourceId of uniqueResourceIds) {
-      this.state.initializedResourceIds.add(resourceId);
+      this.initializedResourceIds.add(resourceId);
     }
 
-    this.state.initWaves.push({
+    this.initWaves.push({
       resourceIds: uniqueResourceIds,
       parallel: uniqueResourceIds.length > 1,
     });
   }
 
   public getResourcesInDisposeWaves(): DisposeWave[] {
-    return computeDisposeWaves(this.state.resources, this.state.initWaves);
+    return computeDisposeWaves(this.state.resources, this.initWaves);
   }
 
   public getResourcesInReadyWaves(): DisposeWave[] {
-    return computeReadyWaves(this.state.resources, this.state.initWaves);
+    return computeReadyWaves(this.state.resources, this.initWaves);
+  }
+
+  public getLifecycleInspection(): IRuntimeInspectionLifecycle {
+    const toInspectionWaves = (
+      waves: DisposeWave[],
+    ): IRuntimeInspectionLifecycleWave[] =>
+      waves.map((wave, order) => ({
+        order,
+        resourceIds: wave.resources.map(({ resource }) => resource.id),
+        parallel: wave.parallel,
+      }));
+
+    return {
+      readyWaves: toInspectionWaves(this.getResourcesInReadyWaves()),
+      shutdownWaves: toInspectionWaves(this.getResourcesInDisposeWaves()),
+    };
   }
 
   public async ready(options?: { shouldStop?: () => void }): Promise<void> {
@@ -218,11 +147,11 @@ export class StoreLifecycleCoordinator {
   public async cooldown(options?: {
     shouldStop?: () => boolean;
   }): Promise<void> {
-    if (this.state.getHasRunCooldown()) {
+    if (this.hasRunCooldown) {
       return;
     }
 
-    this.state.setHasRunCooldown(true);
+    this.hasRunCooldown = true;
 
     for (const wave of this.getResourcesInDisposeWaves()) {
       if (options?.shouldStop?.()) {
@@ -230,7 +159,7 @@ export class StoreLifecycleCoordinator {
       }
 
       const waveErrors = await this.cooldownWave(wave, options);
-      await this.logCooldownErrors(waveErrors);
+      await logCooldownErrors(this.state.logger, waveErrors);
     }
   }
 
@@ -242,53 +171,18 @@ export class StoreLifecycleCoordinator {
       resource.isInitialized = false;
     }
 
-    this.state.initWaves.length = 0;
-    this.state.initializedResourceIds.clear();
-    this.state.readyResourceIds.clear();
-    this.state.setHasRunCooldown(false);
-    this.markDisposed();
-  }
-
-  public async executeWave(
-    wave: DisposeWave,
-    action: (resource: ResourceStoreElementType) => Promise<void>,
-  ): Promise<Error[]> {
-    const normalizeError = (error: unknown): Error =>
-      error instanceof Error ? error : new Error(String(error));
-    const collectWaveErrors = (
-      results: readonly PromiseSettledResult<void>[],
-    ): Error[] =>
-      results
-        .filter(
-          (result): result is PromiseRejectedResult =>
-            result.status === "rejected",
-        )
-        .map((result) => normalizeError(result.reason));
-
-    if (wave.parallel) {
-      const results = await Promise.allSettled(
-        wave.resources.map((resource) => action(resource)),
-      );
-      return collectWaveErrors(results);
-    }
-
-    const errors: Error[] = [];
-    for (const resource of wave.resources) {
-      try {
-        await action(resource);
-      } catch (error) {
-        errors.push(normalizeError(error));
-      }
-    }
-
-    return errors;
+    this.initWaves.length = 0;
+    this.initializedResourceIds.clear();
+    this.readyResourceIds.clear();
+    this.hasRunCooldown = false;
+    this.state.admission.markDisposed();
   }
 
   public cooldownWave(
     wave: DisposeWave,
     options?: { shouldStop?: () => boolean },
   ): Promise<Error[]> {
-    return this.executeWave(wave, async (resource) => {
+    return executeLifecycleWave(wave, async (resource) => {
       if (options?.shouldStop?.()) {
         return;
       }
@@ -301,64 +195,17 @@ export class StoreLifecycleCoordinator {
     wave: DisposeWave,
     options?: { shouldStop?: () => void },
   ): Promise<void> {
-    if (wave.parallel) {
-      const runningReadyPromises: Promise<void>[] = [];
-      try {
-        for (const resource of wave.resources) {
-          options?.shouldStop?.();
-          runningReadyPromises.push(this.runReadyResource(resource));
-        }
-      } catch (error) {
-        if (runningReadyPromises.length > 0) {
-          await Promise.allSettled(runningReadyPromises);
-        }
-        throw this.normalizeError(error);
-      }
-
-      const settledResults = await Promise.allSettled(runningReadyPromises);
-      const rejectedResult = settledResults.find(
-        (result): result is PromiseRejectedResult =>
-          result.status === "rejected",
-      );
-      if (rejectedResult) {
-        throw this.normalizeError(rejectedResult.reason);
-      }
-
-      return;
-    }
-
-    for (const resource of wave.resources) {
-      try {
-        options?.shouldStop?.();
-        await this.runReadyResource(resource);
-      } catch (error) {
-        throw this.normalizeError(error);
-      }
-    }
+    await runReadyWave(
+      wave,
+      (resource) => this.runReadyResource(resource),
+      options,
+    );
   }
 
   public disposeWave(wave: DisposeWave): Promise<Error[]> {
-    return this.executeWave(wave, (resource) => this.disposeResource(resource));
-  }
-
-  public normalizeError(error: unknown): Error {
-    return error instanceof Error ? error : new Error(String(error));
-  }
-
-  public async logCooldownErrors(errors: readonly Error[]): Promise<void> {
-    for (const error of errors) {
-      try {
-        await this.state.logger.warn(
-          "Resource cooldown failed; continuing shutdown.",
-          {
-            source: "store.cooldown",
-            error,
-          },
-        );
-      } catch {
-        // Logging must never promote cooldown failures into shutdown failures.
-      }
-    }
+    return executeLifecycleWave(wave, (resource) =>
+      this.disposeResource(resource),
+    );
   }
 
   public async runReadyResource(
@@ -369,7 +216,7 @@ export class StoreLifecycleCoordinator {
     }
 
     const resourceId = resource.resource.id;
-    if (this.state.readyResourceIds.has(resourceId)) {
+    if (this.readyResourceIds.has(resourceId)) {
       return;
     }
 
@@ -379,11 +226,11 @@ export class StoreLifecycleCoordinator {
       resource.computedDependencies ?? {},
       resource.context,
     );
-    this.state.readyResourceIds.add(resourceId);
+    this.readyResourceIds.add(resourceId);
   }
 
   public assertLazyResourceWakeupAllowed(resourceId: string): void {
-    if (!this.isDisposalStarted()) {
+    if (!this.state.admission.isDisposalStarted()) {
       return;
     }
 
@@ -433,9 +280,7 @@ export class StoreLifecycleCoordinator {
     resource: IResource<any, any, any, any, any>,
     targets: void | ResourceCooldownAdmissionTargets,
   ): void {
-    this.state.lifecycleAdmissionController.allowShutdownResourceSource(
-      resourceRuntimePath,
-    );
+    this.state.admission.allowShutdownResourceSource(resourceRuntimePath);
 
     if (!targets || targets.length === 0) {
       return;
@@ -446,9 +291,7 @@ export class StoreLifecycleCoordinator {
         resource,
         target,
       );
-      this.state.lifecycleAdmissionController.allowShutdownResourceSource(
-        resolvedRuntimePath,
-      );
+      this.state.admission.allowShutdownResourceSource(resolvedRuntimePath);
     }
   }
 

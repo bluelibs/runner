@@ -22,7 +22,7 @@ export const healthResource = defineResource<
               runtimeHealthDuringBootstrapError.throw();
             }
 
-            if (store.isDisposalStarted()) {
+            if (store.admission.isDisposalStarted()) {
               runResultDisposedError.throw();
             }
           },
