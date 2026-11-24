@@ -16,7 +16,6 @@ export function collectMatchResult(
   const context: MatchContext = {
     failures: [],
     collectAll,
-    activeComparisons: new WeakMap<object, WeakSet<object>>(),
     depth: 0,
     maxDepth,
   };

@@ -9,19 +9,17 @@ import type {
   SerializationContext,
   SerializedNode,
 } from "./types";
-import { assertDepth } from "./validation";
+import { assertDepth, isUnsafeKey } from "./validation";
 import type { TypeRegistry } from "./type-registry";
 import {
   serializeBigInt,
   serializeNonFiniteNumber,
   serializeUndefined,
 } from "./special-values";
-import {
-  serializeArrayItems,
-  serializeRecordEntries,
-  serializeSymbolValue,
-} from "./serialize-utils";
+import { serializeSymbolValue } from "./serialize-utils";
 import { escapeReservedMarkerKey } from "./marker-key-escapes";
+
+const hasOwn = Object.prototype.hasOwnProperty;
 
 export interface SerializeState {
   serializingValueTypes: WeakSet<object>;
@@ -199,9 +197,18 @@ export const serializeValue = (
   context.objectIds.set(objectValue, objectId);
 
   if (Array.isArray(objectValue)) {
-    const items = serializeArrayItems(objectValue, (nested) =>
-      serializeValue(nested, context, state, depth + 1, options),
-    );
+    const length = objectValue.length;
+    const items: SerializedValue[] = new Array(length);
+    const nextDepth = depth + 1;
+    for (let index = 0; index < length; index += 1) {
+      items[index] = serializeValue(
+        objectValue[index],
+        context,
+        state,
+        nextDepth,
+        options,
+      );
+    }
     storeNode(context, objectId, { kind: "array", value: items });
     return { __ref: objectId };
   }
@@ -210,12 +217,24 @@ export const serializeValue = (
     ? options.mapObjectForSerialization(objectValue)
     : (objectValue as Record<string, unknown>);
 
-  const record = serializeRecordEntries(
-    recordSource,
-    options.unsafeKeys,
-    (nested) => serializeValue(nested, context, state, depth + 1, options),
-    escapeReservedMarkerKey,
-  );
+  const record: Record<string, SerializedValue> = {};
+  const nextDepth = depth + 1;
+  for (const key in recordSource) {
+    if (!hasOwn.call(recordSource, key)) {
+      continue;
+    }
+    if (isUnsafeKey(key, options.unsafeKeys)) {
+      continue;
+    }
+    const outputKey = escapeReservedMarkerKey(key);
+    record[outputKey] = serializeValue(
+      recordSource[key],
+      context,
+      state,
+      nextDepth,
+      options,
+    );
+  }
 
   storeNode(context, objectId, { kind: "object", value: record });
   return { __ref: objectId };

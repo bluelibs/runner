@@ -15,6 +15,40 @@ export function registerSqlTimersAndCommandsContractTests(
   factory: SqlContractFactory,
 ): void {
   describe(`${label}: timers and schedules`, () => {
+    it("claims a large batch in due order while excluding live claims", async () => {
+      const store = await factory.createStore({ namespace: "batched-claims" });
+      const dueIds = Array.from({ length: 258 }, (_, index) =>
+        String(index).padStart(3, "0"),
+      );
+      try {
+        for (const id of dueIds.slice().reverse()) {
+          await store.createTimer({
+            id,
+            type: TimerType.Sleep,
+            fireAt: contractT0,
+            status: TimerStatus.Pending,
+          });
+        }
+        await expect(store.claimTimer!("001", "first", 60_000)).resolves.toBe(
+          true,
+        );
+        const claimed = await store.claimReadyTimers(
+          contractT0,
+          dueIds.length,
+          "second",
+          60_000,
+        );
+        expect(claimed.map((timer) => timer.id)).toEqual(
+          dueIds.filter((id) => id !== "001"),
+        );
+        await expect(
+          store.renewTimerClaim!("001", "first", 60_000),
+        ).resolves.toBe(true);
+      } finally {
+        await store.dispose!();
+      }
+    });
+
     it("handles timers, claims, and schedules", async () => {
       const store = await factory.createStore({ namespace: "coord-ops" });
       try {

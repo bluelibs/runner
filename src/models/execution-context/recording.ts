@@ -30,6 +30,9 @@ export type ActiveExecutionRecording = {
 
 export type ActiveFrameNode = {
   readonly frame: ExecutionFrame;
+  // Cycle detection uses the identity that was entered, even if tracing code edits a snapshot frame.
+  readonly kind: ExecutionFrame["kind"];
+  readonly id: string;
   readonly parent: ActiveFrameNode | undefined;
 };
 
@@ -40,7 +43,6 @@ export type ActiveExecutionContext = {
   readonly framesMode: ExecutionContextFramesMode;
   readonly frameNode: ActiveFrameNode | undefined;
   readonly depth: number;
-  readonly frameCounts?: ReadonlyMap<string, number>;
   readonly frameNodeId?: string;
   readonly recording?: ActiveExecutionRecording;
 };
@@ -150,11 +152,6 @@ function createProvidedContext(
     framesMode: current?.framesMode ?? defaultFramesMode,
     frameNode: current?.frameNode,
     depth: current?.depth ?? 0,
-    frameCounts:
-      current?.frameCounts ??
-      (current?.framesMode === "off" || defaultFramesMode === "off"
-        ? undefined
-        : new Map()),
     frameNodeId: current?.frameNodeId,
     recording: current?.recording,
   };
@@ -178,7 +175,6 @@ function promoteContextForRecording(
     framesMode: "full",
     frameNode: undefined,
     depth: 0,
-    frameCounts: new Map(),
     frameNodeId: undefined,
     recording,
   };
@@ -289,10 +285,6 @@ export function isPromiseLike<T>(value: T): value is T & PromiseLike<unknown> {
   );
 }
 
-export function getFrameKey(frame: ExecutionFrame): string {
-  return `${frame.kind}:${frame.id}`;
-}
-
 export function provideExecutionContext<T>(
   options: ExecutionContextProvideOptions | undefined,
   fn: () => T,
@@ -335,7 +327,6 @@ export async function recordExecutionContext<T>(
           ...baseContext,
           recording,
           framesMode: "full",
-          frameCounts: new Map(),
         },
     fn,
   );

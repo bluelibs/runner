@@ -15,7 +15,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `EmissionContext.ts` connects interceptor progression, the deepest emission
   wrapper, dispatch, and execution reporting.
 - `EventManager.setDispatchAdapter()` installs one platform dispatch owner before locking; unselected events preserve their synchronous dispatch progression.
-- `InterceptorPipeline.ts` composes emission and hook interceptors.
+- `InterceptorPipeline.ts` composes the hook pipeline, which EventManager
+  reuses until hook interceptors change.
 - `EmissionExecutor.ts` implements sequential, parallel, and transactional
   execution, filtering, cancellation, failure reports, and rollback.
 - `types.ts` defines listener storage, handler options, and interceptor types.

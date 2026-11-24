@@ -95,15 +95,14 @@ function normalizeSchemaOption(schema: unknown): unknown {
   }
 
   if (isClassConstructor(schema)) {
+    const schemaCtor = schema as SerializerClassConstructor;
+    let schemaPattern: SerializerSchemaLike | undefined;
     return {
       parse(input: unknown): unknown {
-        const remapped = remapValueForSchemaDeserialize(
-          input,
-          schema as SerializerClassConstructor,
-        );
+        const remapped = remapValueForSchemaDeserialize(input, schemaCtor);
 
         if (hasClassSchemaMetadata(schema)) {
-          return Match.fromSchema(schema as SerializerClassConstructor).parse(
+          return (schemaPattern ??= Match.fromSchema(schemaCtor)).parse(
             remapped,
           );
         }
@@ -173,6 +172,8 @@ function toSchemaTypeDefinition<TInstance>(
   }
 
   const schemaDefinition = getClassSchemaDefinition(schemaClass);
+  const schemaCtor = schemaClass as SerializerClassConstructor;
+  const schemaPattern = Match.fromSchema(schemaCtor);
   const placeholderStack: TInstance[] = [];
 
   return {
@@ -181,21 +182,14 @@ function toSchemaTypeDefinition<TInstance>(
     serialize: (value: TInstance) => cloneSchemaPayload(value as object),
     deserialize: (value: unknown) => {
       const placeholder = placeholderStack.pop();
-      const remapped = remapValueForSchemaDeserialize(
-        value,
-        schemaClass as SerializerClassConstructor,
-      );
+      const remapped = remapValueForSchemaDeserialize(value, schemaCtor);
 
-      if (placeholder !== undefined && placeholder !== null) {
+      if (placeholder !== undefined) {
         seedSchemaPlaceholder(placeholder as object, remapped);
-        return Match.fromSchema(
-          schemaClass as SerializerClassConstructor,
-        ).parse(placeholder) as TInstance;
+        return schemaPattern.parse(placeholder) as TInstance;
       }
 
-      return Match.fromSchema(schemaClass as SerializerClassConstructor).parse(
-        remapped,
-      ) as TInstance;
+      return schemaPattern.parse(remapped) as TInstance;
     },
     create: () => {
       const placeholder = Object.create(schemaClass.prototype) as TInstance;

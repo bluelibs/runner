@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 
+const COMPACTION_THRESHOLD = 1024;
+
 /**
  * Minimum message shape every in-memory queue message must satisfy.
  * Individual queue types extend this with domain-specific fields.
@@ -18,6 +20,9 @@ export interface BaseQueueMessage {
  */
 export abstract class BaseMemoryQueue<TMsg extends BaseQueueMessage> {
   protected queue: TMsg[] = [];
+  /** Index of the next undelivered message; avoids O(n) Array.shift(). */
+  private queueHead = 0;
+  private processingScheduled = false;
   protected messageHandler: ((msg: TMsg) => Promise<void>) | null = null;
   protected isProcessing = false;
   protected readonly inFlight = new Map<string, TMsg>();
@@ -61,7 +66,7 @@ export abstract class BaseMemoryQueue<TMsg extends BaseQueueMessage> {
 
   /** Override to stop an active loop (for example after cooldown). */
   protected canContinueProcessing(): boolean {
-    return !!this.messageHandler && this.queue.length > 0;
+    return !!this.messageHandler && this.queue.length > this.queueHead;
   }
 
   protected toDeliveredMessage(message: TMsg): TMsg {
@@ -87,8 +92,36 @@ export abstract class BaseMemoryQueue<TMsg extends BaseQueueMessage> {
     this.queue.push(message);
   }
 
+  /** Drops every pending message (used by disposal). */
+  protected clearQueue(): void {
+    this.queue.length = 0;
+    this.queueHead = 0;
+  }
+
+  private takeNextMessage(): TMsg {
+    const message = this.queue[this.queueHead]!;
+    delete this.queue[this.queueHead];
+    this.queueHead += 1;
+    if (this.queueHead === this.queue.length) {
+      this.clearQueue();
+    } else if (
+      this.queueHead >= COMPACTION_THRESHOLD &&
+      this.queueHead * 2 >= this.queue.length
+    ) {
+      // Amortize copying over the messages delivered since the last compaction.
+      this.queue = this.queue.slice(this.queueHead);
+      this.queueHead = 0;
+    }
+    return message;
+  }
+
   protected scheduleProcessing(): void {
-    setImmediate(() => void this.processNext());
+    if (this.processingScheduled) return;
+    this.processingScheduled = true;
+    setImmediate(() => {
+      this.processingScheduled = false;
+      void this.processNext();
+    });
   }
 
   protected async processNext(): Promise<void> {
@@ -97,7 +130,7 @@ export abstract class BaseMemoryQueue<TMsg extends BaseQueueMessage> {
     this.isProcessing = true;
     try {
       while (this.canContinueProcessing()) {
-        const msg = this.queue.shift()!;
+        const msg = this.takeNextMessage();
         const next = this.toDeliveredMessage(msg);
         if (!this.shouldDeliver(next)) {
           continue;

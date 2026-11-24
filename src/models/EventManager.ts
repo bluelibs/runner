@@ -23,13 +23,17 @@ import {
   EventEmissionInterceptor,
   HandlerOptionsDefaults,
   HookExecutionInterceptor,
+  HookExecutor,
   IEventHandlerOptions,
 } from "./event/types";
 import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
-import { composeInterceptors } from "./event/InterceptorPipeline";
+import { composeHookInterceptors } from "./event/InterceptorPipeline";
 import { ExecutionContextStore } from "./ExecutionContextStore";
-import { runWithRuntimeCallSource } from "./RuntimeCallSourceStore";
-import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
+import {
+  EmissionContext,
+  EventEmissionImpl,
+  executeEventListeners,
+} from "./event/EmissionContext";
 import {
   createAggregateError,
   createEmptyReport,
@@ -64,6 +68,11 @@ export class EventManager {
   private dispatchAdapter?: EventDispatchAdapter;
   private emissionInterceptors: EventEmissionInterceptor[] = [];
   private hookInterceptors: HookExecutionInterceptor[] = [];
+  private hookExecutor: HookExecutor | undefined;
+  private readonly hookSources = new WeakMap<
+    IHook<any, any>,
+    RuntimeCallSource
+  >();
 
   private readonly registry: ListenerRegistry;
   private readonly executionContextStore: ExecutionContextStore;
@@ -232,12 +241,13 @@ export class EventManager {
 
   intercept(interceptor: EventEmissionInterceptor): void {
     this.checkLock();
-    this.emissionInterceptors.push(interceptor);
+    this.emissionInterceptors = [...this.emissionInterceptors, interceptor];
   }
 
   interceptHook(interceptor: HookExecutionInterceptor): void {
     this.checkLock();
     this.hookInterceptors.push(interceptor);
+    this.hookExecutor = undefined;
   }
 
   /**
@@ -248,32 +258,24 @@ export class EventManager {
     event: IEventEmission<any>,
     computedDependencies: DependencyValuesType<any>,
   ): Promise<any> {
-    const baseExecute = async (
-      hookToExecute: IHook<any, any>,
-      eventForHook: IEventEmission<any>,
-    ): Promise<any> => hookToExecute.run(eventForHook, computedDependencies);
-
-    // Skip composition overhead when no interceptors are registered.
-    const execute =
-      this.hookInterceptors.length > 0
-        ? composeInterceptors(this.hookInterceptors, baseExecute)
-        : baseExecute;
-
-    const hookSource: RuntimeCallSource = runtimeSource.hook(hook.id);
+    const execute = (this.hookExecutor ??= composeHookInterceptors(
+      this.hookInterceptors,
+    ));
+    const hookId = hook.id;
+    let hookSource = this.hookSources.get(hook);
+    if (!hookSource || hookSource.id !== hookId) {
+      hookSource = runtimeSource.hook(hookId);
+      this.hookSources.set(hook, hookSource);
+    }
 
     return this.lifecycleAdmissionController.trackHookExecution(
       hookSource,
       () =>
-        runWithRuntimeCallSource(hookSource, () =>
-          this.executionContextStore.runWithFrameFactory(
-            () => ({
-              kind: "hook",
-              id: hookSource.id,
-              source: hookSource,
-              timestamp: Date.now(),
-            }),
-            () => execute(hook, event),
-          ),
+        this.executionContextStore.runInFrame(
+          "hook",
+          hookSource.id,
+          hookSource,
+          () => execute(hook, event, computedDependencies),
         ),
     );
   }
@@ -281,8 +283,9 @@ export class EventManager {
   dispose(): void {
     this.dispatchAdapter = undefined;
     this.registry.clear();
-    this.emissionInterceptors.length = 0;
+    this.emissionInterceptors = [];
     this.hookInterceptors.length = 0;
+    this.hookExecutor = undefined;
   }
 
   // ==================== PRIVATE ====================
@@ -317,7 +320,6 @@ export class EventManager {
   ): Promise<{
     emission: IEventEmission<TInput>;
     report: IEventEmitReport;
-    executionContext?: ReturnType<ExecutionContextStore["getSnapshot"]>;
   }> {
     if (
       !this.lifecycleAdmissionController.canAdmitEvent(options.source, {
@@ -350,12 +352,9 @@ export class EventManager {
       data = this.validatePayload(eventDefinition, metadata.id, data);
     }
 
-    // Snapshot interceptors so in-flight emissions stay deterministic even if
-    // dispose() clears interceptor registries mid-emission.
-    const interceptors =
-      this.emissionInterceptors.length > 0
-        ? this.emissionInterceptors.slice()
-        : [];
+    // Interceptor registration and disposal replace this array so an in-flight
+    // emission can continue on the original pipeline.
+    const interceptors = this.emissionInterceptors;
 
     const emissionConfig = this.resolveEmissionConfig(eventDefinition, options);
 
@@ -364,7 +363,6 @@ export class EventManager {
     const processEmission = async (): Promise<{
       emission: IEventEmission<TInput>;
       report: IEventEmitReport;
-      executionContext?: ReturnType<ExecutionContextStore["getSnapshot"]>;
     }> => {
       const allListeners = this.registry.getListenersForEmit(eventDefinition);
       const event = this.createEmission(
@@ -376,17 +374,22 @@ export class EventManager {
         identity,
       );
 
-      // Fast path: no listeners and no interceptors — no executor needed.
-      if (
-        allListeners.length === 0 &&
-        interceptors.length === 0 &&
-        !this.dispatchAdapter
-      ) {
-        return {
-          emission: event as IEventEmission<TInput>,
-          report: createEmptyReport(0),
-          executionContext: this.executionContextStore.getSnapshot(),
-        };
+      if (interceptors.length === 0 && !this.dispatchAdapter) {
+        const report =
+          allListeners.length === 0
+            ? createEmptyReport(0)
+            : await executeEventListeners(
+                eventDefinition,
+                allListeners,
+                event,
+                emissionConfig.failureMode,
+              );
+        this.throwOnAggregateErrors(
+          report,
+          emissionConfig.shouldThrow,
+          emissionConfig.failureMode,
+        );
+        return { emission: event, report };
       }
 
       // The context keeps the deepest event object seen so interceptors can
@@ -412,29 +415,17 @@ export class EventManager {
       return {
         emission: context.deepestEvent as IEventEmission<TInput>,
         report: context.executionReport,
-        executionContext: this.executionContextStore.getSnapshot(),
       };
     };
 
-    return this.lifecycleAdmissionController.trackEventEmission(
-      source,
-      async () => {
-        const result = await this.executionContextStore.runWithFrameFactory(
-          () => ({
-            kind: "event",
-            id: metadata.id,
-            source,
-            timestamp: Date.now(),
-          }),
-          processEmission,
-          { signal },
-        );
-        return {
-          emission: result.emission,
-          report: result.report,
-          executionContext: result.executionContext,
-        };
-      },
+    return this.lifecycleAdmissionController.trackEventEmission(source, () =>
+      this.executionContextStore.runInFrame(
+        "event",
+        metadata.id,
+        source,
+        processEmission,
+        signal,
+      ),
     );
   }
 

@@ -1,7 +1,14 @@
 import { TimerStatus, type Timer } from "../../core/types";
 import { acquireOrRenewClaimInTx, timerClaimResource } from "./locks";
 import type { SqlStoreRuntime } from "./runtime";
-import { forUpdate, nowMsSql, type SqlExecutor } from "./types";
+import { forUpdate, nowMsSql, type SqlExecutor, type SqlParam } from "./types";
+
+// Keep the parameter count bounded even for direct callers requesting a
+// larger batch than the polling manager typically uses.
+const MAX_CLAIM_BATCH_SIZE = 256;
+// Fit connections with a 999-variable limit. Each SQLite row binds five
+// values, and the conflict clause binds the expiry cutoff once more.
+const SQLITE_CLAIM_BATCH_SIZE = Math.floor((999 - 1) / 5);
 
 export async function upsertTimerInTx(
   runtime: SqlStoreRuntime,
@@ -133,16 +140,41 @@ export async function claimReadyTimers(
       ],
     );
     const claimed: Timer[] = [];
-    for (const row of rows) {
-      const acquired = await acquireOrRenewClaimInTx(
-        runtime,
-        tx,
-        timerClaimResource(row.id),
-        workerId,
-        ttlMs,
-        false,
+    const batchSize =
+      tx.dialect === "sqlite" ? SQLITE_CLAIM_BATCH_SIZE : MAX_CLAIM_BATCH_SIZE;
+    for (let offset = 0; offset < rows.length; offset += batchSize) {
+      const batch = rows.slice(offset, offset + batchSize);
+      const resources = batch.map((row) => timerClaimResource(row.id));
+      const claimClock = nowMsSql(tx.dialect);
+      const tuple = `(?, ?, ?, (${claimClock.expr}) + ?)`;
+      const params: SqlParam[] = [];
+      for (const resource of resources) {
+        params.push(
+          runtime.namespace,
+          resource,
+          workerId,
+          ...claimClock.params,
+          ttlMs,
+        );
+      }
+      // Timer rows are already locked. Recheck the claim at the conflicting
+      // row since a direct claim can race with the initial SELECT.
+      const acquired = await tx.all<{ resource: string }>(
+        `INSERT INTO runner_durable_locks (namespace, resource, lock_id, expires_at_ms)
+         VALUES ${batch.map(() => tuple).join(", ")}
+         ON CONFLICT (namespace, resource) DO UPDATE SET
+           lock_id = EXCLUDED.lock_id,
+           expires_at_ms = EXCLUDED.expires_at_ms
+         WHERE runner_durable_locks.expires_at_ms <= ${claimClock.expr}
+         RETURNING resource`,
+        [...params, ...claimClock.params],
       );
-      if (acquired) claimed.push(runtime.parse<Timer>(row.payload));
+      const acquiredResources = new Set(acquired.map((row) => row.resource));
+      for (const [index, row] of batch.entries()) {
+        if (acquiredResources.has(resources[index])) {
+          claimed.push(runtime.parse<Timer>(row.payload));
+        }
+      }
     }
     return claimed;
   });

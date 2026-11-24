@@ -20,6 +20,45 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     jest.restoreAllMocks();
   });
 
+  it.each([
+    [
+      "http://127.0.0.1:9999/runner?token=value",
+      "hello",
+      "/runner?token=value/task/hello",
+    ],
+    ["http://127.0.0.1:9999/runner", "..", "/runner/"],
+    ["http://127.0.0.1:9999", "hello", "/task/hello"],
+  ])("preserves URL parsing for %s with id %s", async (baseUrl, id, path) => {
+    const serializer = new Serializer();
+    const response = serializer.stringify({ ok: true, result: 1 });
+    const request = jest
+      .spyOn(http, "request")
+      .mockImplementation((options: unknown, callback: unknown) => {
+        expect(options).toMatchObject({
+          path,
+          headers: { "x-runner-test": "yes" },
+        });
+        (callback as (response: http.IncomingMessage) => void)(
+          asIncoming(Readable.from([response]), {
+            "content-type": "application/json",
+          }),
+        );
+        const sink = new Writable({
+          write: (_chunk, _encoding, next) => next(),
+        });
+        return Object.assign(sink, {
+          setTimeout: () => sink,
+        }) as unknown as http.ClientRequest;
+      });
+
+    await expect(
+      createHttpSmartClient({ baseUrl, serializer }).task(id, undefined, {
+        headers: { "x-runner-test": "yes" },
+      }),
+    ).resolves.toBe(1);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it("event(): aggregates mixed string+buffer chunks as JSON", async () => {
     jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       const payload = new Serializer().stringify({

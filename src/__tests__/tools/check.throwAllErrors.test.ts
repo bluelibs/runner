@@ -43,6 +43,7 @@ describe("tools/check errorPolicy", () => {
           user: {
             name: String,
             age: Number,
+            score: Number,
           },
           tags: [String],
         },
@@ -51,12 +52,13 @@ describe("tools/check errorPolicy", () => {
     );
 
     expect(error.id).toBe(MATCH_ERROR_ID);
-    expect(error.data.failures.length).toBe(5);
+    expect(error.data.failures.length).toBe(6);
     expect(error.data.failures.map((f) => f.path)).toEqual(
       expect.arrayContaining([
         "$.extra",
         "$.user.name",
         "$.user.age",
+        "$.user.score",
         "$.tags[0]",
         "$.tags[2]",
       ]),

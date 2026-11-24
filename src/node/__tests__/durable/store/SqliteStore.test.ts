@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { r, run } from "../../../../public";
 import { resources, tags } from "../../../node";
+import { TimerStatus, TimerType } from "../../../durable/core/types";
 import { SqliteStore } from "../../../durable/store/SqliteStore";
 import { createSqliteBackend } from "../../../durable/store/sql/sqliteBackend";
 import {
@@ -25,6 +26,49 @@ describe("durable: SqliteStore", () => {
   registerSqlRetentionContractTests("SqliteStore", factory);
   registerSqlSignalContractTests("SqliteStore", factory);
   registerSqlTimersAndCommandsContractTests("SqliteStore", factory);
+
+  it("claims timers across the SQLite 999-variable bind limit", async () => {
+    const database = new DatabaseSync(":memory:");
+    const store = new SqliteStore({
+      database: {
+        exec: (sql) => database.exec(sql),
+        prepare: (sql) => {
+          if ((sql.match(/\?/g)?.length ?? 0) > 999) {
+            throw new Error("too many SQL variables");
+          }
+          return database.prepare(sql);
+        },
+        close: () => database.close(),
+      },
+    });
+    const fireAt = new Date(0);
+    const ids = Array.from({ length: 200 }, (_, index) =>
+      String(index).padStart(3, "0"),
+    );
+    try {
+      for (const id of ids) {
+        await store.createTimer({
+          id,
+          type: TimerType.Sleep,
+          fireAt,
+          status: TimerStatus.Pending,
+        });
+      }
+      const claimed = await store.claimReadyTimers(
+        fireAt,
+        ids.length,
+        "worker",
+        60_000,
+      );
+      expect(claimed.map((timer) => timer.id)).toEqual(ids);
+      await expect(
+        store.claimReadyTimers(fireAt, ids.length, "other-worker", 60_000),
+      ).resolves.toEqual([]);
+    } finally {
+      await store.dispose();
+      database.close();
+    }
+  });
 
   it("serializes stores sharing the same injected connection", async () => {
     const database = new DatabaseSync(":memory:");

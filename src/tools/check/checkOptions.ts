@@ -35,6 +35,12 @@ export type ResolvedCheckOptions = {
   maxDepth?: number;
 };
 
+const DEFAULT_RESOLVED_OPTIONS: ResolvedCheckOptions = Object.freeze({
+  errorPolicy: undefined,
+  hasExplicitPolicy: false,
+  maxDepth: undefined,
+});
+
 export function resolveMaxDepth(maxDepth: unknown): number | undefined {
   if (maxDepth === undefined) {
     return undefined;
@@ -56,11 +62,7 @@ export function resolveMaxDepth(maxDepth: unknown): number | undefined {
 
 export function readOptions(options?: CheckOptions): ResolvedCheckOptions {
   if (options === undefined) {
-    return {
-      errorPolicy: undefined,
-      hasExplicitPolicy: false,
-      maxDepth: undefined,
-    };
+    return DEFAULT_RESOLVED_OPTIONS;
   }
   if (!isPlainObject(options)) {
     throw createCheckOptionsError("check() options must be a plain object.");

@@ -36,7 +36,7 @@ function hydrateObjectShape(
   pattern: Record<string, unknown>,
   allowUnknownKeys: boolean,
   state: HydrationState,
-  target: object = Object.create(Object.getPrototypeOf(value)),
+  targetPrototype: object | null = Object.getPrototypeOf(value),
 ): object {
   const existing = getSeenHydratedValue(value, state.seen);
   if (existing !== undefined) {
@@ -45,6 +45,7 @@ function hydrateObjectShape(
 
   // Store the shell before hydrating children so self-references can point
   // back to the final instance instead of recursing forever.
+  const target = Object.create(targetPrototype);
   rememberHydratedValue(value, target, state.seen);
 
   for (const [key, childPattern] of Object.entries(pattern)) {
@@ -143,7 +144,7 @@ function hydrateOneOf(
 export function hydrateMatchedValue(
   value: unknown,
   pattern: unknown,
-  state: HydrationState = createState(),
+  state?: HydrationState,
 ): unknown {
   // Avoid constructors during parse-time hydration so schema parsing stays a
   // pure shape/materialization step with deterministic behavior.
@@ -154,6 +155,8 @@ export function hydrateMatchedValue(
   if (value === null || value === undefined) {
     return value;
   }
+
+  state ??= createState();
 
   if (pattern instanceof OptionalPattern || pattern instanceof MaybePattern) {
     return hydrateMatchedValue(value, pattern.pattern, state);
@@ -183,7 +186,7 @@ export function hydrateMatchedValue(
       state,
       // Validation already proved the shape; hydration should only attach the
       // class prototype and field values, not run user constructors.
-      Object.create(pattern.ctor.prototype),
+      pattern.ctor.prototype,
     );
   }
   if (pattern instanceof NonEmptyArrayPattern) {

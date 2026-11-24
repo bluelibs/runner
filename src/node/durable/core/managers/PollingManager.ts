@@ -48,6 +48,7 @@ export class PollingManager {
   private readonly inFlightTimers = new Set<Promise<void>>();
   private isRunning = false;
   private pollRequested = false;
+  private lastClaimWasFull = true;
   private pollingTimer: ReturnType<typeof setTimeout> | null = null;
   private pollingWake: (() => void) | null = null;
   private readonly logger: Logger;
@@ -83,6 +84,7 @@ export class PollingManager {
     this.getClaimTtlMs();
     this.isRunning = true;
     this.pollRequested = false;
+    this.lastClaimWasFull = true;
     void this.poll();
   }
 
@@ -287,17 +289,19 @@ export class PollingManager {
 
         if (persistedSignalId) {
           safeToFinalizeCurrentTimer = true;
-          const execution = await this.store.getExecution(timer.executionId);
-          const attempt = execution ? execution.attempt : 0;
-          await this.auditLogger.log({
-            kind: DurableAuditEntryKind.SignalTimedOut,
-            executionId: timer.executionId,
-            workflowKey: execution?.workflowKey,
-            attempt,
-            stepId: timer.stepId,
-            signalId: persistedSignalId,
-            timerId: timer.id,
-          });
+          if (this.auditLogger.isEnabled()) {
+            const execution = await this.store.getExecution(timer.executionId);
+            const attempt = execution ? execution.attempt : 0;
+            await this.auditLogger.log({
+              kind: DurableAuditEntryKind.SignalTimedOut,
+              executionId: timer.executionId,
+              workflowKey: execution?.workflowKey,
+              attempt,
+              stepId: timer.stepId,
+              signalId: persistedSignalId,
+              timerId: timer.id,
+            });
+          }
         }
       }
 
@@ -461,6 +465,7 @@ export class PollingManager {
     );
 
     if (availableSlots === 0) {
+      this.lastClaimWasFull = true;
       return;
     }
 
@@ -470,6 +475,9 @@ export class PollingManager {
       this.workerId,
       this.getClaimTtlMs(),
     );
+    // Refill immediately after saturation. Otherwise the regular poll will
+    // discover timers that became available since the last claim.
+    this.lastClaimWasFull = claimedTimers.length >= availableSlots;
 
     claimedTimers.forEach((timer) => {
       this.trackInFlightTimer(this.handleClaimedTimer(timer));
@@ -522,7 +530,7 @@ export class PollingManager {
     this.inFlightTimers.add(handling);
     void handling.finally(() => {
       this.inFlightTimers.delete(handling);
-      if (this.isRunning) {
+      if (this.isRunning && this.lastClaimWasFull) {
         this.wakePollingLoop();
       }
     });

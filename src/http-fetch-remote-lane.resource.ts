@@ -12,6 +12,10 @@ import type {
 import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
 import { buildAsyncContextHeader } from "./node/remote-lanes/asyncContextAllowlist";
 import { postFetch } from "./remote-lanes/http/postFetch";
+import {
+  readInternalRequestMetadata,
+  readPreSerializedBody,
+} from "./remote-lanes/http/requestMetadata";
 import { RUNNER_ASYNC_CONTEXT_HEADER } from "./remote-lanes/http/constants";
 export { normalizeError } from "./tools/normalizeError";
 export type {
@@ -26,6 +30,7 @@ function postSerialized<T>(options: {
   fetch: typeof fetch;
   url: string;
   body: unknown;
+  serializedBody?: string;
   headers: Record<string, string>;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -38,7 +43,8 @@ function postSerialized<T>(options: {
 }): Promise<T> {
   return postFetch<T>({
     ...options,
-    body: () => options.serializer.stringify(options.body),
+    body: () =>
+      options.serializedBody ?? options.serializer.stringify(options.body),
     headers: {
       "content-type": "application/json; charset=utf-8",
       ...options.headers,
@@ -99,6 +105,10 @@ export function createExposureFetch(
         fetch: fetchImpl,
         url,
         body: { input },
+        serializedBody: readPreSerializedBody(
+          readInternalRequestMetadata(options, "task", id, input),
+          cfg.serializer,
+        ),
         headers: {
           ...buildHeaders(),
           ...(options?.headers ?? {}),
@@ -133,6 +143,10 @@ export function createExposureFetch(
         fetch: fetchImpl,
         url,
         body: buildEventRequestBody(payload),
+        serializedBody: readPreSerializedBody(
+          readInternalRequestMetadata(options, "event", id, payload),
+          cfg.serializer,
+        ),
         headers: {
           ...buildHeaders(),
           ...(options?.headers ?? {}),
@@ -166,6 +180,10 @@ export function createExposureFetch(
         fetch: fetchImpl,
         url,
         body: buildEventRequestBody(payload, { returnPayload: true }),
+        serializedBody: readPreSerializedBody(
+          readInternalRequestMetadata(options, "eventWithResult", id, payload),
+          cfg.serializer,
+        ),
         headers: {
           ...buildHeaders(),
           ...(options?.headers ?? {}),

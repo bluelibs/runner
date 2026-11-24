@@ -51,15 +51,21 @@ function readJsonResponseBody<T>(params: {
   const { res, serializer, contentType, onResolve, onReject, onResponseError } =
     params;
   const chunks: Buffer[] = [];
+  let totalBytes = 0;
   const statusCode = res.statusCode ?? 0;
 
   res.on("data", (c: unknown) => {
-    chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c)));
+    const chunk = Buffer.isBuffer(c) ? c : Buffer.from(String(c));
+    totalBytes += chunk.length;
+    chunks.push(chunk);
   });
   res.on("end", () => {
-    const text = Buffer.concat(chunks as readonly Uint8Array[]).toString(
-      "utf8",
-    );
+    const text =
+      chunks.length === 1
+        ? chunks[0].toString("utf8")
+        : Buffer.concat(chunks as readonly Uint8Array[], totalBytes).toString(
+            "utf8",
+          );
     if (!text) {
       if (statusCode >= 400) {
         onReject(
@@ -103,6 +109,7 @@ export async function postJson<T = any>(
   body: unknown,
   headersOverride?: Record<string, string>,
   signal?: AbortSignal,
+  preSerializedBody?: string,
 ): Promise<T> {
   const serializer = cfg.serializer;
   const { lib, requestOptions } = prepareNodeRequest(
@@ -114,6 +121,10 @@ export async function postJson<T = any>(
   if (cfg.onRequest) {
     await cfg.onRequest({ url, headers: requestOptions.headers });
   }
+  const payload = Buffer.from(
+    preSerializedBody ?? serializer.stringify(body),
+    "utf8",
+  );
 
   return await new Promise<T>((resolve, reject) => {
     const { cleanup, resolveOnce, rejectOnce } = createSettledCallbacks(
@@ -137,8 +148,7 @@ export async function postJson<T = any>(
     );
     attachRequestAbort(req, cleanup, signal);
     cleanup.push(attachRequestTimeout(req, url, cfg.timeoutMs));
-    req.write(serializer.stringify(body));
-    req.end();
+    req.end(payload);
   });
 }
 

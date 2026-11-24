@@ -15,9 +15,9 @@ export function matchesObjectPattern(
     childPath: readonly PathSegment[],
     parent?: unknown,
   ) => boolean,
-  isMatchableObject: (value: unknown) => value is Record<string, unknown> = (
-    candidate,
-  ): candidate is Record<string, unknown> => isPlainObject(candidate),
+  isMatchableObject: (
+    value: unknown,
+  ) => value is Record<string, unknown> = isPlainObject,
 ): boolean {
   if (!isMatchableObject(value)) {
     return fail(context, path, "plain object", value);
@@ -29,12 +29,13 @@ export function matchesObjectPattern(
     // (e.g. "constructor") must not be treated as a known pattern key.
     if (Object.prototype.hasOwnProperty.call(pattern, key) || allowUnknownKeys)
       continue;
+    const failurePath = appendPath(path, key);
     fail(
       context,
-      appendPath(path, key),
+      failurePath,
       "known key",
       value[key],
-      `Unknown key "${key}" found at ${formatPath(appendPath(path, key))}.`,
+      `Unknown key "${key}" found at ${formatPath(failurePath)}.`,
     );
     if (!context.collectAll) return false;
   }

@@ -47,6 +47,7 @@ describe("durable: PollingManager timer handlers (unit)", () => {
   it("clears matching suspended current when a sleep timer completes", async () => {
     const store = new MemoryStore();
     const auditLogger = new AuditLogger({}, store);
+    const getExecution = jest.spyOn(store, "getExecution");
     await store.saveExecution({
       id: "e1",
       workflowKey: "t",
@@ -95,6 +96,7 @@ describe("durable: PollingManager timer handlers (unit)", () => {
       }),
     ).resolves.toBe(true);
 
+    expect(getExecution).toHaveBeenCalledTimes(1);
     expect((await store.getExecution("e1"))?.current).toBeUndefined();
   });
 

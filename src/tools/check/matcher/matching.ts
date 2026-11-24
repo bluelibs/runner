@@ -4,13 +4,28 @@ import {
 } from "../errors";
 import { isMatchDefinedPattern } from "./contracts";
 import type { MatchContext, PathSegment } from "./shared";
-import {
-  describeType,
-  fail,
-  isPlainObject,
-  trackActiveComparison,
-} from "./utils";
+import { describeType, fail, isPlainObject } from "./utils";
 import { matchesObjectPattern } from "./matchingObject";
+
+// Lazily allocated so primitive-only checks never pay for the maps.
+// Returns the pattern set to release later, or undefined if the pair is
+// already being compared (cycle).
+function enterComparison(
+  context: MatchContext,
+  value: object,
+  pattern: object,
+): WeakSet<object> | undefined {
+  const comparisons = (context.activeComparisons ??= new WeakMap());
+  let patterns = comparisons.get(value);
+  if (!patterns) {
+    patterns = new WeakSet();
+    comparisons.set(value, patterns);
+  } else if (patterns.has(pattern)) {
+    return undefined;
+  }
+  patterns.add(pattern);
+  return patterns;
+}
 
 export function matchesPattern(
   value: unknown,
@@ -26,14 +41,20 @@ export function matchesPattern(
   }
   context.depth += 1;
 
-  const releaseActiveComparison = trackActiveComparison(
-    context,
-    value,
-    pattern,
-  );
-  if (releaseActiveComparison === "active") {
-    context.depth -= 1;
-    return true;
+  let activePatterns: WeakSet<object> | undefined;
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    typeof pattern === "object" &&
+    pattern !== null
+  ) {
+    activePatterns = enterComparison(context, value, pattern);
+    // An already-seen pair is treated as matched to stop infinite recursion
+    // while the surrounding branch still collects concrete failures.
+    if (!activePatterns) {
+      context.depth -= 1;
+      return true;
+    }
   }
 
   try {
@@ -141,6 +162,6 @@ export function matchesPattern(
     );
   } finally {
     context.depth -= 1;
-    releaseActiveComparison();
+    activePatterns?.delete(pattern as object);
   }
 }

@@ -230,7 +230,9 @@ export class Store {
 
   public findIdByDefinition(definition: unknown): string {
     const canonicalId = this.lookup.resolveCandidateId(definition) ?? undefined;
-    check(canonicalId, Match.NonEmptyString);
+    if (canonicalId === undefined || canonicalId.length === 0) {
+      check(canonicalId, Match.NonEmptyString);
+    }
     const resolvedCanonicalId = canonicalId as string;
     if (!this.hasId(resolvedCanonicalId)) {
       runtimeElementNotFoundError.throw({

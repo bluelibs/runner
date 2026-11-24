@@ -41,7 +41,9 @@ export async function readRequestBody(
     const onEnd = () => {
       if (aborted) return;
       cleanup();
-      resolve(Buffer.concat(chunks as readonly Uint8Array[]));
+      resolve(
+        chunks.length === 1 ? chunks[0] : Buffer.concat(chunks, received),
+      );
     };
     const onData = (chunk: unknown) => {
       if (aborted) return;

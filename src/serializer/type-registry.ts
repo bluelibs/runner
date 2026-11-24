@@ -18,6 +18,24 @@ import {
 } from "./regexp-validator";
 import { SpecialTypeId } from "./special-values";
 
+const BUILT_IN_TYPE_IDS = new Set(builtInTypes.map((typeDef) => typeDef.id));
+
+function hasOrdinaryPrototype(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    return (
+      prototype === Object.prototype ||
+      prototype === null ||
+      prototype === Array.prototype
+    );
+  } catch {
+    // A Proxy can reject prototype inspection while still matching a custom
+    // guard. In that case preserve the original registered lookup order.
+    return false;
+  }
+}
+
 export interface TypeRegistryOptions {
   allowedTypes: ReadonlySet<string> | null;
   regExpValidator: RegExpValidatorOptions;
@@ -37,6 +55,7 @@ export class TypeRegistry {
     TypeDefinition<unknown, unknown>
   >();
   private typeList: TypeDefinition<unknown, unknown>[] = [];
+  private customTypes: TypeDefinition<unknown, unknown>[] = [];
 
   private readonly allowedTypes: ReadonlySet<string> | null;
   private readonly regExpOptions: RegExpValidatorOptions;
@@ -100,8 +119,14 @@ export class TypeRegistry {
     value: unknown,
     excludedTypeIds: readonly string[],
   ): TypeDefinition<unknown, unknown> | undefined {
-    for (const typeDef of this.typeList) {
-      if (excludedTypeIds.includes(typeDef.id)) {
+    // Built-ins use their respective constructors. Plain objects and
+    // ordinary arrays only need the custom guards, in registration order.
+    const candidates = hasOrdinaryPrototype(value)
+      ? this.customTypes
+      : this.typeList;
+    const hasExclusions = excludedTypeIds.length > 0;
+    for (const typeDef of candidates) {
+      if (hasExclusions && excludedTypeIds.includes(typeDef.id)) {
         continue;
       }
       try {
@@ -174,11 +199,16 @@ export class TypeRegistry {
   private refreshTypeCache(): void {
     this.typeMap.clear();
     const list: TypeDefinition<unknown, unknown>[] = [];
+    const customTypes: TypeDefinition<unknown, unknown>[] = [];
     for (const typeDef of this.typeRegistry.values()) {
       this.typeMap.set(typeDef.id, typeDef);
       list.push(typeDef);
+      if (!BUILT_IN_TYPE_IDS.has(typeDef.id)) {
+        customTypes.push(typeDef);
+      }
     }
     this.typeList = list;
+    this.customTypes = customTypes;
   }
 
   private assertSymbolPolicyValue(policy: SymbolPolicy): void {

@@ -196,6 +196,30 @@ describe("cache.shared", () => {
     expect(firstCache.invalidateRefs(["user:1"])).toBe(0);
   });
 
+  it("keeps recently accessed entries across separate task caches", () => {
+    const sharedBudget = createSharedCacheBudgetState(2);
+    const options = { max: 10, sizeCalculation: () => 1 };
+    const first = createBudgetedCacheInstance({
+      taskId: "first",
+      options,
+      sharedBudget,
+    });
+    const second = createBudgetedCacheInstance({
+      taskId: "second",
+      options,
+      sharedBudget,
+    });
+
+    first.set("a", "first");
+    second.set("b", "second");
+    expect(first.get("a")).toBe("first");
+    first.set("c", "third");
+
+    expect(second.get("b")).toBeUndefined();
+    expect(first.get("a")).toBe("first");
+    expect(first.get("c")).toBe("third");
+  });
+
   it("covers the shared budget enforcement edge cases", () => {
     const emptyState = createSharedCacheBudgetState(1);
     emptyState.totalBytesUsed = 5;
@@ -281,6 +305,14 @@ describe("cache.shared", () => {
     try {
       expect(cacheSharedInternals.computeEntrySize({}, "k", "value")).toBe(9);
 
+      Object.defineProperty(globalThis, "Buffer", {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+      expect(cacheSharedInternals.computeEntrySize({}, "é", "🙂")).toBe(9);
+      expect(cacheSharedInternals.computeEntrySize({}, "é", "🙂")).toBe(9);
+
       expect(
         cacheSharedInternals.computeEntrySize(
           { sizeCalculation: () => 5 },
@@ -291,6 +323,12 @@ describe("cache.shared", () => {
 
       Object.defineProperty(globalThis, "TextEncoder", {
         value: undefined,
+        configurable: true,
+        writable: true,
+      });
+
+      Object.defineProperty(globalThis, "Buffer", {
+        value: originalBuffer,
         configurable: true,
         writable: true,
       });

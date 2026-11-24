@@ -19,6 +19,7 @@ import { IndexedExecutions } from "./IndexedExecutions";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DurableExecutionOwnership } from "../../core/interfaces/ownership";
 import { IndexedTimers } from "./IndexedTimers";
+import { ExpiringLocks } from "./ExpiringLocks";
 import type { DurableHistoryEntry } from "../../core/interfaces/history";
 import type { DurableCommandRecord } from "../../core/interfaces/commands";
 
@@ -118,11 +119,15 @@ export class MemoryStoreRuntime {
     for (const [id, timer] of timers) this.timerRecords.set(id, timer);
   }
   schedules = new Map<string, Schedule>();
-  locks = new Map<string, { id: string; expires: number }>();
+  locks: Map<string, { id: string; expires: number }> = new ExpiringLocks();
   private readonly signalStateSemaphore = new Semaphore(1);
   private readonly executionWaiterSemaphore = new Semaphore(1);
 
   constructor(private readonly hooks: MemoryStoreDurableMutationHooks) {}
+
+  resetLocks(): void {
+    this.locks = new ExpiringLocks();
+  }
 
   async withSignalStatePermit<T>(fn: () => T | Promise<T>): Promise<T> {
     return this.signalStateSemaphore.withPermit(async () => await fn());
@@ -178,6 +183,10 @@ export class MemoryStoreRuntime {
   }
 
   pruneExpiredLocks(now: number): void {
+    if (this.locks instanceof ExpiringLocks) {
+      this.locks.prune(now);
+      return;
+    }
     for (const [resource, lock] of this.locks.entries()) {
       if (lock.expires <= now) {
         this.locks.delete(resource);

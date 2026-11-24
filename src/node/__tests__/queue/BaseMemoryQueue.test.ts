@@ -45,4 +45,24 @@ describe("queue: BaseMemoryQueue", () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     expect(attempts).toEqual([1, 2]);
   });
+
+  it("delivers a large backlog in order across lazy compaction", async () => {
+    const queue = new TestMemoryQueue();
+    const total = 2500;
+    const received: string[] = [];
+    const expected = Array.from({ length: total }, (_, index) => String(index));
+
+    for (const payload of expected) {
+      await queue.enqueue(payload);
+    }
+    await new Promise<void>((resolve) => {
+      void queue.consume(async (message) => {
+        received.push(message.payload);
+        await queue.ack(message.id);
+        if (received.length === total) resolve();
+      });
+    });
+
+    expect(received).toEqual(expected);
+  });
 });

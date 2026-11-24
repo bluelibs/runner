@@ -55,16 +55,24 @@ export async function recordExecutionHistoryInTx(
   executionId: string,
   update: DurableHistoryUpdate,
 ): Promise<boolean> {
-  // Claim/lock the per-execution sequence row first so concurrent writes cannot
-  // observe a missing row or emit duplicate startedOrder values under Postgres.
-  const seqRow = await tx.get<{ seq: number | string }>(
-    `INSERT INTO runner_durable_history_seq (namespace, execution_id, seq)
-     VALUES (?, ?, 0)
-     ON CONFLICT (namespace, execution_id) DO UPDATE SET
-       seq = runner_durable_history_seq.seq
-     RETURNING seq`,
-    [runtime.namespace, executionId],
-  );
+  const sequenceKey = [runtime.namespace, executionId];
+  // Lock the sequence first; replaying an existing phase can then return without
+  // updating the row. The upsert acquires the same lock if first writers race.
+  type SequenceRow = { seq: number | string };
+  const seqRow =
+    (await tx.get<SequenceRow>(
+      `SELECT seq FROM runner_durable_history_seq
+       WHERE namespace = ? AND execution_id = ?${forUpdate(tx.dialect)}`,
+      sequenceKey,
+    )) ??
+    (await tx.get<SequenceRow>(
+      `INSERT INTO runner_durable_history_seq (namespace, execution_id, seq)
+       VALUES (?, ?, 0)
+       ON CONFLICT (namespace, execution_id) DO UPDATE SET
+         seq = runner_durable_history_seq.seq
+       RETURNING seq`,
+      sequenceKey,
+    ));
   let seq = Number(seqRow!.seq);
 
   const existingRow = await tx.get<{ payload: string }>(

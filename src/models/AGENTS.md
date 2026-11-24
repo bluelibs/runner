@@ -39,7 +39,8 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - `validators/` owns boot-time constraints through the store validator.
 - `ExecutionContextStore.ts` tracks execution frames and signals via the
   platform abstraction, delegating recording tree state and ALS snapshots to
-  `execution-context/recording.ts`. `RuntimeCallSourceStore.ts` tracks who initiated work.
+  `execution-context/recording.ts`. Admission and frames receive their call
+  sources directly from the runtime wrappers.
 - `ExecutionJournal.ts` stores typed, identity-keyed metadata for one execution
   tree; forwarded journals deliberately share state with nested task calls.
 - `runtime-inspector/` builds runtime inspection views; `HealthReporter.ts`

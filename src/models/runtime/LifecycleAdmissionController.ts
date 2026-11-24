@@ -161,28 +161,28 @@ export class LifecycleAdmissionController {
     return this.canAdmit(source);
   }
 
-  public async trackTaskExecution<T>(
+  public trackTaskExecution<T>(
     source: RuntimeCallSource,
     execute: () => Promise<T>,
   ): Promise<T> {
     return this.track(source, "task", execute);
   }
 
-  public async trackEventEmission<T>(
+  public trackEventEmission<T>(
     source: RuntimeCallSource,
     execute: () => Promise<T>,
   ): Promise<T> {
     return this.track(source, "event", execute);
   }
 
-  public async trackHookExecution<T>(
+  public trackHookExecution<T>(
     source: RuntimeCallSource,
     execute: () => Promise<T>,
   ): Promise<T> {
     return this.trackInternalSource(source, execute);
   }
 
-  public async trackMiddlewareExecution<T>(
+  public trackMiddlewareExecution<T>(
     source: RuntimeCallSource,
     execute: () => Promise<T>,
   ): Promise<T> {
@@ -234,7 +234,7 @@ export class LifecycleAdmissionController {
   }
 
   public cancelDrainWaiters(): void {
-    for (const waiter of Array.from(this.drainWaiters)) {
+    for (const waiter of this.drainWaiters) {
       clearTimeout(waiter.timeout);
       waiter.resolve(false);
       this.drainWaiters.delete(waiter);
@@ -282,11 +282,11 @@ export class LifecycleAdmissionController {
     execute: () => Promise<T>,
   ): Promise<T> {
     this.incrementInFlight(counter);
-    this.incrementActiveInternalSource(source);
+    const sourceKey = this.incrementActiveInternalSource(source);
     try {
       return await execute();
     } finally {
-      this.decrementActiveInternalSource(source);
+      this.decrementActiveInternalSource(sourceKey);
       this.decrementInFlight(counter);
       this.resolveDrainWaitersIfDrained();
     }
@@ -296,11 +296,11 @@ export class LifecycleAdmissionController {
     source: RuntimeCallSource,
     execute: () => Promise<T>,
   ): Promise<T> {
-    this.incrementActiveInternalSource(source);
+    const sourceKey = this.incrementActiveInternalSource(source);
     try {
       return await execute();
     } finally {
-      this.decrementActiveInternalSource(source);
+      this.decrementActiveInternalSource(sourceKey);
     }
   }
 
@@ -325,7 +325,9 @@ export class LifecycleAdmissionController {
     return count ?? 0;
   }
 
-  private incrementActiveInternalSource(source: RuntimeCallSource): void {
+  private incrementActiveInternalSource(
+    source: RuntimeCallSource,
+  ): string | undefined {
     if (!internalSourceKinds.has(source.kind)) {
       return;
     }
@@ -333,14 +335,14 @@ export class LifecycleAdmissionController {
     const key = this.sourceKey(source);
     const current = this.activeInternalSources.get(key) ?? 0;
     this.activeInternalSources.set(key, current + 1);
+    return key;
   }
 
-  private decrementActiveInternalSource(source: RuntimeCallSource): void {
-    if (!internalSourceKinds.has(source.kind)) {
+  private decrementActiveInternalSource(key: string | undefined): void {
+    if (key === undefined) {
       return;
     }
 
-    const key = this.sourceKey(source);
     const current = this.activeInternalSources.get(key);
     if (!current || current <= 1) {
       this.activeInternalSources.delete(key);
@@ -359,11 +361,11 @@ export class LifecycleAdmissionController {
   }
 
   private resolveDrainWaitersIfDrained(): void {
-    if (!this.isBusinessWorkDrained()) {
+    if (this.drainWaiters.size === 0 || !this.isBusinessWorkDrained()) {
       return;
     }
 
-    for (const waiter of Array.from(this.drainWaiters)) {
+    for (const waiter of this.drainWaiters) {
       clearTimeout(waiter.timeout);
       waiter.resolve(true);
       this.drainWaiters.delete(waiter);

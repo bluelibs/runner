@@ -1,8 +1,33 @@
 import { Readable } from "stream";
 import type { buildNodeManifest } from "../upload/manifest";
 
+const CRLF = "\r\n";
+const CRLF_BUFFER = Buffer.from(CRLF, "utf8");
+
 function escapeHeaderValue(value: string): string {
   return value.replace(/[\\"]/g, "\\$&").replace(/[\r\n]+/g, " ");
+}
+
+function formatPartHeader(
+  boundaryLine: string,
+  name: string,
+  options?: { headers?: Record<string, string>; filename?: string },
+): string {
+  const h: string[] = [boundaryLine + CRLF];
+  const cd: string[] = [
+    `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"`,
+  ];
+  if (options?.filename) {
+    cd.push(`; filename="${escapeHeaderValue(options.filename)}"`);
+  }
+  h.push(cd.join("") + CRLF);
+  if (options?.headers) {
+    for (const k of Object.keys(options.headers)) {
+      h.push(`${k}: ${options.headers[k]}` + CRLF);
+    }
+  }
+  h.push(CRLF);
+  return h.join("");
 }
 
 /**
@@ -14,42 +39,24 @@ export function encodeMultipart(
   boundary: string,
 ): Readable {
   async function* gen(): AsyncGenerator<Buffer> {
-    const CRLF = "\r\n";
     const boundaryLine = `--${boundary}`;
 
-    const partHeader = (
-      name: string,
-      options?: { headers?: Record<string, string>; filename?: string },
-    ) => {
-      const h: string[] = [boundaryLine + CRLF];
-      const cd: string[] = [
-        `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"`,
-      ];
-      if (options?.filename) {
-        cd.push(`; filename="${escapeHeaderValue(options.filename)}"`);
-      }
-      h.push(cd.join("") + CRLF);
-      if (options?.headers) {
-        for (const k of Object.keys(options.headers)) {
-          h.push(`${k}: ${options.headers[k]}` + CRLF);
-        }
-      }
-      h.push(CRLF);
-      return Buffer.from(h.join(""), "utf8");
-    };
-
-    // __manifest field
-    yield partHeader("__manifest");
-    yield Buffer.from(manifestText, "utf8");
-    yield Buffer.from(CRLF, "utf8");
+    // Coalesce static manifest header, JSON text, and trailing CRLF into one buffer.
+    yield Buffer.from(
+      formatPartHeader(boundaryLine, "__manifest") + manifestText + CRLF,
+      "utf8",
+    );
 
     for (const entry of files) {
       const filename = entry.meta?.name ?? "upload";
       const contentType = entry.meta?.type ?? "application/octet-stream";
-      const headers: Record<string, string> = {
-        "Content-Type": contentType,
-      };
-      yield partHeader(`file:${entry.id}`, { headers, filename });
+      yield Buffer.from(
+        formatPartHeader(boundaryLine, `file:${entry.id}`, {
+          headers: { "Content-Type": contentType },
+          filename,
+        }),
+        "utf8",
+      );
       if (entry.source.type === "buffer") {
         yield entry.source.buffer;
       } else {
@@ -57,10 +64,10 @@ export function encodeMultipart(
           yield Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
         }
       }
-      yield Buffer.from(CRLF, "utf8");
+      yield CRLF_BUFFER;
     }
     // Closing boundary
-    yield Buffer.from(boundaryLine + "--" + CRLF, "utf8");
+    yield Buffer.from(`${boundaryLine}--${CRLF}`, "utf8");
   }
   return Readable.from(gen());
 }

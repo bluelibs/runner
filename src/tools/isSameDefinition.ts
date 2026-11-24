@@ -33,25 +33,27 @@ function isObjectLike(value: unknown): value is Record<PropertyKey, unknown> {
 
 function unwrapDefinitionReference(value: unknown): unknown {
   let current: unknown = value;
-  const visited = new Set<object>();
+  // Most references are plain definitions that never hop, so the cycle guard
+  // is only allocated once we actually follow a wrapper.
+  let visited: Set<object> | undefined;
 
-  while (isObjectLike(current) && !visited.has(current)) {
-    visited.add(current);
-
+  while (isObjectLike(current) && !visited?.has(current)) {
     const carrier = current as DefinitionIdentityCarrier;
+    let next: unknown;
     if (carrier[symbolResourceWithConfig] === true) {
-      current = carrier.resource;
-      continue;
+      next = carrier.resource;
+    } else {
+      const lineage =
+        carrier[symbolMiddlewareConfiguredFrom] ??
+        carrier[symbolTagConfiguredFrom];
+      if (!isObjectLike(lineage)) {
+        break;
+      }
+      next = lineage;
     }
 
-    const lineage =
-      carrier[symbolMiddlewareConfiguredFrom] ??
-      carrier[symbolTagConfiguredFrom];
-    if (!isObjectLike(lineage)) {
-      break;
-    }
-
-    current = lineage;
+    (visited ??= new Set<object>()).add(current);
+    current = next;
   }
 
   return current;

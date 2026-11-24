@@ -131,4 +131,16 @@ describe("LockableMap", () => {
       'Cannot modify "testMap" — the map is locked.',
     );
   });
+
+  it("supports exact reads and keeps stored undefined values from resolving through aliases", () => {
+    const aliases = new LockableMap<string, number | undefined>();
+    aliases.set("canonical", 1);
+    aliases.set("shadowed", undefined);
+    aliases.setLookupResolver(() => "canonical");
+
+    expect(aliases.get("alias")).toBe(1);
+    expect(aliases.getExact("alias")).toBeUndefined();
+    expect(aliases.getExact("canonical")).toBe(1);
+    expect(aliases.get("shadowed")).toBeUndefined();
+  });
 });

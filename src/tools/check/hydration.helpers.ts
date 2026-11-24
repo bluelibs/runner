@@ -38,7 +38,7 @@ function hasHydratableEntries(
 
 export function patternCanHydrate(
   pattern: unknown,
-  activePatterns: PatternVisitState = new WeakSet<object>(),
+  activePatterns?: PatternVisitState,
   depth = MAX_HYDRATION_PATTERN_PROBE_DEPTH,
 ): boolean {
   if (depth <= 0) {
@@ -48,7 +48,9 @@ export function patternCanHydrate(
     // means "skip hydration probing here", not "schema validation fails".
     return false;
   }
+  if (!isObjectReference(pattern)) return false;
   if (pattern instanceof ClassPattern) return true;
+  activePatterns ??= new WeakSet();
   if (pattern instanceof OptionalPattern || pattern instanceof MaybePattern) {
     return patternCanHydrate(pattern.pattern, activePatterns, depth - 1);
   }
@@ -91,17 +93,13 @@ export function patternCanHydrate(
       patternCanHydrate(pattern[0], activePatterns, depth - 1)
     );
   }
-  if (isObjectReference(pattern)) {
-    if (activePatterns.has(pattern)) return false;
-    activePatterns.add(pattern);
-    return hasHydratableEntries(
-      pattern as Record<string, unknown>,
-      activePatterns,
-      depth,
-    );
-  }
-
-  return false;
+  if (activePatterns.has(pattern)) return false;
+  activePatterns.add(pattern);
+  return hasHydratableEntries(
+    pattern as Record<string, unknown>,
+    activePatterns,
+    depth,
+  );
 }
 
 export function copyHydratedProperty(

@@ -68,34 +68,3 @@ export function appendPath(
 ): PathSegment[] {
   return [...path, segment];
 }
-
-function isObjectReference(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
-}
-
-export function trackActiveComparison(
-  context: MatchContext,
-  value: unknown,
-  pattern: unknown,
-): (() => void) | "active" {
-  if (!isObjectReference(value) || !isObjectReference(pattern)) {
-    return () => undefined;
-  }
-
-  let patternSet = context.activeComparisons.get(value);
-  if (!patternSet) {
-    patternSet = new WeakSet<object>();
-    context.activeComparisons.set(value, patternSet);
-  }
-
-  // We treat an already-seen pair as matched to prevent infinite recursion
-  // while still allowing the surrounding branch to collect concrete failures.
-  if (patternSet.has(pattern)) {
-    return "active";
-  }
-
-  patternSet.add(pattern);
-  return () => {
-    patternSet?.delete(pattern);
-  };
-}

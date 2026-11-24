@@ -6,11 +6,13 @@ import {
 import type { IAsyncLocalStorage } from "../platform";
 import type {
   ExecutionFrame,
+  ExecutionFrameKind,
   ExecutionContextFramesMode,
   ExecutionContextSnapshot,
   ExecutionContextConfig,
   CycleDetectionConfig,
 } from "../types/executionContext";
+import type { RuntimeCallSource } from "../types/runtimeSource";
 import {
   type ActiveExecutionContext,
   createFallbackCorrelationId,
@@ -18,7 +20,6 @@ import {
   finishRecordNode,
   getCurrentExecutionContext,
   getExistingSharedExecutionContextStore,
-  getFrameKey,
   getSharedExecutionContextStore,
   isPromiseLike,
   markRecordNodeFailed,
@@ -105,81 +106,50 @@ export class ExecutionContextStore {
     const currentContext = store.getStore();
     const framesMode = currentContext?.framesMode ?? this.framesModeValue;
     const currentDepth = currentContext?.depth ?? 0;
-    const currentRepetitions =
-      framesMode === "full"
-        ? (currentContext?.frameCounts?.get(getFrameKey(frame)) ?? 0)
-        : 0;
-
     if (framesMode === "full" && this.cycleDetectionValue) {
       this.assertDepthLimit(currentDepth, frame);
-      this.assertNoExcessiveRepetition(
-        currentRepetitions,
-        frame,
-        currentContext,
-      );
+      this.assertNoExcessiveRepetition(frame, currentContext);
     }
 
     const currentRecording = currentContext?.recording;
-    let frameNodeId: string | undefined;
-    if (currentRecording) {
-      const node = createRecordNode(currentRecording, frame);
-      currentRecording.nodes.set(node.id, node);
-      if (currentContext?.frameNodeId) {
-        currentRecording.nodes
-          .get(currentContext.frameNodeId)
-          ?.childIds.push(node.id);
-      } else {
-        currentRecording.rootIds.push(node.id);
-      }
-      frameNodeId = node.id;
-    }
-    const nextFrameCounts =
-      framesMode === "full" ? new Map(currentContext?.frameCounts) : undefined;
-    if (framesMode === "full") {
-      nextFrameCounts!.set(getFrameKey(frame), currentRepetitions + 1);
-    }
-    const nextContext = currentContext
-      ? {
-          correlationId: currentContext.correlationId,
-          startedAt: currentContext.startedAt,
-          signal: currentContext.signal ?? options?.signal,
-          framesMode,
-          frameNode:
-            framesMode === "full"
-              ? {
-                  frame,
-                  parent: currentContext.frameNode,
-                }
-              : undefined,
-          depth: currentDepth + 1,
-          frameCounts: nextFrameCounts,
-          frameNodeId: framesMode === "full" ? frameNodeId : undefined,
-          recording: currentRecording,
-        }
-      : {
-          correlationId: this.createCorrelationIdValue(),
-          startedAt: frame.timestamp,
-          signal: options?.signal,
-          framesMode,
-          frameNode:
-            framesMode === "full"
-              ? {
-                  frame,
-                  parent: undefined,
-                }
-              : undefined,
-          depth: 1,
-          frameCounts: nextFrameCounts,
-          frameNodeId: undefined,
-          recording: undefined,
-        };
+    const nextContext: ActiveExecutionContext = {
+      correlationId:
+        currentContext?.correlationId ?? this.createCorrelationIdValue(),
+      startedAt: currentContext?.startedAt ?? frame.timestamp,
+      signal: currentContext?.signal ?? options?.signal,
+      framesMode,
+      frameNode:
+        framesMode === "full"
+          ? {
+              frame,
+              kind: frame.kind,
+              id: frame.id,
+              parent: currentContext?.frameNode,
+            }
+          : undefined,
+      depth: currentDepth + 1,
+      recording: currentRecording,
+    };
 
-    return store.run(nextContext, () => {
-      const markFailed = (error: unknown) => {
-        if (currentRecording && frameNodeId) {
-          markRecordNodeFailed(currentRecording, frameNodeId, error);
-        }
-      };
+    if (!currentRecording) {
+      return store.run(nextContext, fn);
+    }
+    const node = createRecordNode(currentRecording, frame);
+    currentRecording.nodes.set(node.id, node);
+    if (currentContext.frameNodeId) {
+      currentRecording.nodes
+        .get(currentContext.frameNodeId)
+        ?.childIds.push(node.id);
+    } else {
+      currentRecording.rootIds.push(node.id);
+    }
+    const recordNodeId = node.id;
+    const recordedContext: ActiveExecutionContext = {
+      ...nextContext,
+      frameNodeId: recordNodeId,
+    };
+
+    return store.run(recordedContext, () => {
       let isAsyncResult = false;
 
       try {
@@ -188,23 +158,21 @@ export class ExecutionContextStore {
           isAsyncResult = true;
           return Promise.resolve(result)
             .catch((error) => {
-              markFailed(error);
+              markRecordNodeFailed(currentRecording, recordNodeId, error);
               throw error;
             })
-            .finally(() => {
-              if (currentRecording && frameNodeId) {
-                finishRecordNode(currentRecording, frameNodeId);
-              }
-            }) as T;
+            .finally(() =>
+              finishRecordNode(currentRecording, recordNodeId),
+            ) as T;
         }
 
         return result;
       } catch (error) {
-        markFailed(error);
+        markRecordNodeFailed(currentRecording, recordNodeId, error);
         throw error;
       } finally {
-        if (!isAsyncResult && currentRecording && frameNodeId) {
-          finishRecordNode(currentRecording, frameNodeId);
+        if (!isAsyncResult) {
+          finishRecordNode(currentRecording, recordNodeId);
         }
       }
     });
@@ -236,6 +204,26 @@ export class ExecutionContextStore {
     }
 
     return this.runWithFrame(createFrame(), fn, options);
+  }
+
+  /** Runs a runtime operation without allocating a frame when tracking is off. */
+  runInFrame<T>(
+    kind: ExecutionFrameKind,
+    id: string,
+    source: RuntimeCallSource,
+    fn: () => T,
+    signal?: AbortSignal,
+  ): T {
+    if (!this.isEnabled) {
+      return this.runWithoutContext(
+        fn,
+        getExistingSharedExecutionContextStore(),
+      );
+    }
+
+    return this.runWithFrame({ kind, id, source, timestamp: Date.now() }, fn, {
+      signal,
+    });
   }
 
   /**
@@ -308,14 +296,18 @@ export class ExecutionContextStore {
   }
 
   private assertNoExcessiveRepetition(
-    currentRepetitions: number,
     frame: ExecutionFrame,
     currentContext: ActiveExecutionContext | null | undefined,
   ): void {
-    const nextRepetitions = currentRepetitions + 1;
+    let repetitions = 1;
+    for (let node = currentContext?.frameNode; node; node = node.parent) {
+      if (node.kind === frame.kind && node.id === frame.id) {
+        repetitions += 1;
+      }
+    }
     if (
       this.cycleDetectionValue &&
-      nextRepetitions >= this.cycleDetectionValue.maxRepetitions
+      repetitions >= this.cycleDetectionValue.maxRepetitions
     ) {
       const traceSnapshot = toSnapshot(currentContext);
       /* istanbul ignore next -- cycle detection only runs with full frame tracking */
@@ -326,7 +318,7 @@ export class ExecutionContextStore {
       }
       executionCycleError.throw({
         frame,
-        repetitions: nextRepetitions,
+        repetitions,
         maxRepetitions: this.cycleDetectionValue.maxRepetitions,
         trace: traceSnapshot.frames,
       });

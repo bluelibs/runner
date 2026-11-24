@@ -61,6 +61,10 @@ export async function handleSleepTimer(params: {
     },
   );
 
+  if (!params.auditLogger.isEnabled()) {
+    return true;
+  }
+
   const execution = await params.store.getExecution(params.timer.executionId);
   await params.auditLogger.log({
     kind: DurableAuditEntryKind.SleepCompleted,

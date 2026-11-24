@@ -8,6 +8,11 @@ import {
   httpBaseUrlRequiredError,
   httpEventWithResultUnavailableError,
 } from "../../errors";
+import { isReadable, hasNodeFile } from "./nodeFileDetection";
+import {
+  defineInternalRequestMetadata,
+  readInternalRequestMetadata,
+} from "../../remote-lanes/http/requestMetadata";
 
 export interface MixedHttpClientAuthConfig {
   header?: string; // default: x-runner-token
@@ -65,18 +70,6 @@ export interface MixedHttpClient {
   ): Promise<P>;
 }
 
-import { isReadable, hasNodeFile } from "./nodeFileDetection";
-
-async function shouldForceSmart(
-  cfg: MixedHttpClientConfig,
-  id: string,
-  input: unknown,
-): Promise<boolean> {
-  if (!cfg.forceSmart) return false;
-  if (cfg.forceSmart === true) return true;
-  return await cfg.forceSmart({ id, input });
-}
-
 /**
  * Unified Node client that mixes JSON fetch for standard calls and
  * Smart client for streaming/multipart. Keeps transport details out of app code.
@@ -116,13 +109,36 @@ export function createHttpMixedClient(
       input?: I,
       options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<O | Readable | ReadableStream<Uint8Array>> {
-      // Prefer Smart path only when needed (streams or Node file sentinels)
-      if (
-        isReadable(input) ||
-        hasNodeFile(input) ||
-        (await shouldForceSmart(cfg, id, input))
-      ) {
+      const readable = isReadable(input);
+      if (readable) {
         return await smartClient.task<I, O>(id, input as I, options);
+      }
+
+      const metadata = readInternalRequestMetadata(options, "task", id, input);
+      const hasFile = metadata?.hasNodeFile ?? hasNodeFile(input);
+      const { forceSmart } = cfg;
+
+      // Prefer Smart path only when needed (streams, Node file sentinels, or forceSmart)
+      if (
+        hasFile ||
+        forceSmart === true ||
+        (forceSmart && (await forceSmart({ id, input })))
+      ) {
+        let smartOptions = options;
+        if (
+          metadata?.hasNodeFile === undefined &&
+          (hasFile || forceSmart === true)
+        ) {
+          smartOptions = { ...options };
+          defineInternalRequestMetadata(smartOptions, {
+            ...metadata,
+            kind: "task",
+            id,
+            payload: input,
+            hasNodeFile: hasFile,
+          });
+        }
+        return await smartClient.task<I, O>(id, input as I, smartOptions);
       }
       // Otherwise, lean JSON path
       return await fetchClient.task<I, O>(id, input as I, options);

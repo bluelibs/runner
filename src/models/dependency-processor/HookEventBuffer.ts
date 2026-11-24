@@ -30,7 +30,9 @@ export class HookEventBuffer {
             this.enqueue(hook.id, receivedEvent);
             return;
           }
-          await this.flush(hookStoreElement);
+          if (this.pendingHookEvents.has(hook.id)) {
+            await this.flush(hookStoreElement);
+          }
           return this.eventManager.executeHookWithInterceptors(
             hook,
             receivedEvent,

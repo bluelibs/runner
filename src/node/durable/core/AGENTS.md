@@ -55,6 +55,7 @@ If you make changes within this directory, update this AGENTS.md in the same cha
 - Repeated history phases are storage no-ops. Replay advances a cursor and skips cached descendants through a parent index, including interleaved parallel operations.
 - Retain compatibility with optional store methods: unsupported requested features fail clearly.
 - Runtime admission, polling timers, cancellation listeners, workers, and async context belong to this service instance.
+- Timer polling refills saturated slots as handlers finish. A partial claim returns to the configured polling cadence.
 
 ## Tests And Acceptance
 

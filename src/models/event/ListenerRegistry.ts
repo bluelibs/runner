@@ -73,7 +73,11 @@ export class ListenerRegistry {
   }
 
   getListenersForEmit(eventDefinition: IEvent<any>): IListenerStorage[] {
-    const excludeGlobal = this.isExcludedFromGlobal(eventDefinition);
+    // Without global listeners the exclusion tag cannot change the result, so
+    // skip the tag lookup entirely.
+    const excludeGlobal =
+      this.globalListeners.length > 0 &&
+      this.isExcludedFromGlobal(eventDefinition);
     if (excludeGlobal) {
       return (this.listeners.get(eventDefinition.id) || []).slice();
     }

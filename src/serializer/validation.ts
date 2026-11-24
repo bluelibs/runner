@@ -53,6 +53,32 @@ export const isObjectReference = (value: unknown): value is ObjectReference => {
 };
 
 /**
+ * Fast reference guard for JSON-parsed graph records, which have no symbol
+ * or non-enumerable properties. The sole own key must be `__ref`.
+ */
+export const isJsonObjectReference = (
+  value: unknown,
+): value is ObjectReference => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  const hasOwn = Object.prototype.hasOwnProperty;
+  if (!hasOwn.call(record, "__ref") || typeof record.__ref !== "string") {
+    return false;
+  }
+
+  for (const key in record) {
+    if (key !== "__ref" && hasOwn.call(record, key)) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+/**
  * Check if a value is a serialized graph payload.
  */
 export const isGraphPayload = (value: unknown): value is SerializedGraph => {

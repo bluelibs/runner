@@ -4,6 +4,7 @@ import { Semaphore } from "../../../../models/Semaphore";
 import {
   openSqliteDatabase,
   type SqliteDatabaseLike,
+  type SqliteStatementLike,
 } from "../../optionalDeps/sqlite";
 import type { SqlBackend, SqlExecutor, SqlParam, SqlRow } from "./types";
 
@@ -27,24 +28,37 @@ function getDatabasePermit(database: SqliteDatabaseLike): Semaphore {
   return permit;
 }
 
-function createSqliteExecutor(db: SqliteDatabaseLike): SqlExecutor {
+const MAX_CACHED_STATEMENTS = 256;
+
+function createSqliteExecutor(
+  db: SqliteDatabaseLike,
+  statements: Map<string, SqliteStatementLike>,
+): SqlExecutor {
+  const prepare = (sql: string): SqliteStatementLike => {
+    const cached = statements.get(sql);
+    if (cached) return cached;
+    const statement = db.prepare(sql);
+    if (statements.size >= MAX_CACHED_STATEMENTS) statements.clear();
+    statements.set(sql, statement);
+    return statement;
+  };
   return {
     dialect: "sqlite",
     async all<TRow extends SqlRow = SqlRow>(
       sql: string,
       params: readonly SqlParam[] = [],
     ): Promise<TRow[]> {
-      return db.prepare(sql).all(...params) as TRow[];
+      return prepare(sql).all(...params) as TRow[];
     },
     async get<TRow extends SqlRow = SqlRow>(
       sql: string,
       params: readonly SqlParam[] = [],
     ): Promise<TRow | null> {
-      const row = db.prepare(sql).get(...params) as TRow | undefined;
+      const row = prepare(sql).get(...params) as TRow | undefined;
       return row ?? null;
     },
     async run(sql: string, params: readonly SqlParam[] = []): Promise<void> {
-      db.prepare(sql).run(...params);
+      prepare(sql).run(...params);
     },
   };
 }
@@ -60,8 +74,12 @@ export function createSqliteBackend(
   const txSemaphore = config.database
     ? getDatabasePermit(config.database)
     : new Semaphore(1);
+  // Prepared statements belong to a connection and must be dropped on dispose.
+  const statements = new Map<string, SqliteStatementLike>();
   let db: SqliteDatabaseLike | null = config.database ?? null;
-  let executor: SqlExecutor | null = db ? createSqliteExecutor(db) : null;
+  let executor: SqlExecutor | null = db
+    ? createSqliteExecutor(db, statements)
+    : null;
 
   const getExecutor = (): SqlExecutor => executor!;
   const getDb = (): SqliteDatabaseLike => db!;
@@ -75,7 +93,7 @@ export function createSqliteBackend(
             mkdirSync(dirname(location), { recursive: true });
           }
           db = openSqliteDatabase(location);
-          executor = createSqliteExecutor(db);
+          executor = createSqliteExecutor(db, statements);
         }
         db.exec(
           `PRAGMA busy_timeout = ${Math.max(0, Math.floor(busyTimeoutMs))};`,
@@ -127,6 +145,7 @@ export function createSqliteBackend(
     },
     async dispose(): Promise<void> {
       await txSemaphore.withPermit(async () => {
+        statements.clear();
         if (ownsDatabase && db) {
           db.close();
           db = null;
