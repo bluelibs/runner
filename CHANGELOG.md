@@ -1,6 +1,6 @@
 # Changelog
 
-## 6.10.0 - 2026-11-25 - "The Durable Dopamine Release"
+## 6.10.0 - 2026-11-25
 
 Workflows that survive crashes, stores that speak SQL, and a framework that got noticeably leaner. Highlights: SQLite and PostgreSQL durable stores, receipt retention, workflow commands/versioning/replay tooling, cluster recovery, durable events, and a faster hot path.
 
