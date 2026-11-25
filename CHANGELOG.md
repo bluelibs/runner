@@ -1,6 +1,8 @@
 # Changelog
 
-## 6.10.0 (unreleased)
+## 6.10.0 - 2026-11-25 - "The Durable Dopamine Release"
+
+Workflows that survive crashes, stores that speak SQL, and a framework that got noticeably leaner. Highlights: SQLite and PostgreSQL durable stores, receipt retention, workflow commands/versioning/replay tooling, cluster recovery, durable events, and a faster hot path.
 
 ### Features
 
@@ -10,8 +12,19 @@
 - Add optional two-stage durable receipt expiry via `retention.receipts` (`"retain" | "delete" | { afterMs }`) and `IDurableStore.collectExpiredReceipts(now, limit)` across Memory, PersistentMemory, Redis, SQLite, and PostgreSQL stores. Validates at tag/resource/service admission that `receipts` cannot expire earlier than `onComplete`, while permitting one-stage full cleanup (`{ onComplete: "retain", receipts: { afterMs } }`) and atomically releasing idempotency keys, command receipts, execution indexes, timers, and dependent execution records.
 - Add a PostgreSQL 17 integration test suite and service container to `.github/workflows/real-infrastructure.yml`.
 
+### Performance
+
+- Reduce Runner dispatch, serialization, and storage overhead across event emission, middleware composition, execution-context tracking, hook buffering, serializer paths, the cache middleware, and durable polling ([#164](https://github.com/bluelibs/runner/pull/164)). Public behavior is unchanged.
+
+### Internal
+
+- Split the core `Store`, `DependencyProcessor`, `Match` engine, HTTP smart client, `DependencyExtractor`, and `ExecutionContextStore` into focused modules and dedupe shared helpers ([#162](https://github.com/bluelibs/runner/pull/162), [#163](https://github.com/bluelibs/runner/pull/163)). Public exports are unchanged.
+
 ### Fixes
 
+- Fix HTTP smart client request lifetimes: build requests synchronously when no hook is configured, observe raw upload source errors before awaiting hooks, and keep multipart timeouts active until the request closes.
+- Fit SQLite timer claim batches within the 999-variable bind budget and encode fallback JSON after the configured request hook.
+- Deploy documentation from a dedicated CI job with serialized concurrency, removing the racy Pages artifact cleanup that intermittently failed `main`.
 - Revalidate source execution ownership before returning replay fixtures in `withCheckpointLease`, release acquired step-concurrency permits if `createStepProgress` initialization fails, and verify candidate workflow version before falling back to `externalResolver` in `TaskRegistry.find()`.
 - Serialize PostgreSQL schema startup, first signal writes, and command FIFO wakeups. Preserve exclusive ownership during contested PostgreSQL lease and timer claims and serialize stores that share a SQLite connection.
 - Let a same-backend child's history and receipt expire after its verified parent's receipt expires. Reject a mismatched starting version in typed child execution waits.

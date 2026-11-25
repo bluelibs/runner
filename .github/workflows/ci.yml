@@ -89,21 +89,6 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: npm run typedoc
 
-      - name: Delete existing GitHub Pages artifacts
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Get the list of artifacts for this repository
-          artifacts=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-            https://api.github.com/repos/${{ github.repository }}/actions/artifacts)
-
-          # Filter for "github-pages" artifacts and delete them
-          echo "$artifacts" | jq -r '.artifacts[] | select(.name == "github-pages") | .id' | while read id; do
-            curl -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
-              https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$id
-          done
-
       - name: Setup Pages
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/configure-pages@v4
@@ -114,8 +99,19 @@ jobs:
         with:
           path: "./docs"
 
-      # Deploy to GitHub Pages
+  # Deploy runs as its own job so a flaky Pages API call can be re-run without repeating the 5-minute suite,
+  # and the concurrency group serializes deployments instead of racing artifact cleanup between pushes.
+  deploy-docs:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: deployment
         uses: actions/deploy-pages@v4
