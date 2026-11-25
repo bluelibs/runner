@@ -14,7 +14,20 @@ Workflows that survive crashes, stores that speak SQL, and a framework that got 
 
 ### Performance
 
-- Reduce Runner dispatch, serialization, and storage overhead across event emission, middleware composition, execution-context tracking, hook buffering, serializer paths, the cache middleware, and durable polling ([#164](https://github.com/bluelibs/runner/pull/164)). Public behavior is unchanged.
+Runner got fast. Measured against `main` before [#164](https://github.com/bluelibs/runner/pull/164) (Apple M1 Max, Node 24.11, medians of six fresh processes per revision, alternating run order):
+
+| Workload | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| Basic task via `runTask()` | 367,198 tasks/s | 964,692 tasks/s | **2.63x** |
+| Task with five middleware layers | 119,132 tasks/s | 285,648 tasks/s | **2.40x** |
+| Task emitting one event with one hook | 126,180 events/s | 265,934 events/s | **2.11x** |
+| Cache hit | 5.11 µs | 2.59 µs | 49% less time |
+| 5,000 task calls without execution context | 14.72 ms | 5.88 ms | 60% less time |
+| Serializer `stringify` + `parse`, 1 KB JSON | 40,109 round trips/s | 86,619 round trips/s | **2.16x** |
+| In-memory SQLite, claim 1,024 due timers | 16.80 ms | 5.50 ms | 67% less time |
+| MemoryStore renewals with 1,024 live locks | 183,606/s | 2,785,065/s | **15.17x** |
+
+The gains come from reusing runtime context and middleware work, fewer allocations in serializer and validation paths, batched SQL timer claims with prepared-statement reuse, signed-JSON reuse across remote calls and retries, and cheaper cache eviction and invalidation. Cache misses, resource initialization, and parallel runtime lifecycle are at parity. These numbers measure local Runner overhead; application-level gains depend on how much time you spend in these paths. Public behavior is unchanged.
 
 ### Internal
 
